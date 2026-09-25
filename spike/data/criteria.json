@@ -1,0 +1,131 @@
+[
+  {
+    "id": "c1",
+    "name": "answer_correct",
+    "instructions": "The reference answer for this case is: {{reference}}. Does the answer state the same fact as the reference answer, even if worded differently?",
+    "escape": "reference not comparable",
+    "provenance": null
+  },
+  {
+    "id": "c2",
+    "name": "abstains_when_unanswerable",
+    "instructions": "Does the answer say that the provided documents contain no such information, rather than stating a fact?",
+    "escape": "unclear",
+    "provenance": null
+  },
+  {
+    "id": "c3",
+    "name": "faithful_to_context",
+    "instructions": "Is every factual claim in the answer supported by the provided contexts?",
+    "escape": "no factual claims",
+    "provenance": null
+  },
+  {
+    "id": "c4",
+    "name": "Hallucinated factual claims",
+    "instructions": "Mark true if the answer asserts specific factual details (names, dates, counts) that lack support in the visible provenance.",
+    "escape": "No factual assertions",
+    "provenance": [
+      "bm25:en01-f1",
+      "bm25:ru03-f1",
+      "bm25:kk05-f1",
+      "bm25:hard-ru-02",
+      "embedding:en03-f2",
+      "embedding:ru05-f3",
+      "embedding:kk07-f3",
+      "embedding:hard-ru-09",
+      "hybrid:en06-f1",
+      "hybrid:ru08-f1",
+      "hybrid:hard-kk-05",
+      "hybrid-norerank:en08-f2",
+      "hybrid-norerank:kk02-f3",
+      "hybrid-norerank:hard-en-06"
+    ]
+  },
+  {
+    "id": "c5",
+    "name": "Bare numeric citations",
+    "instructions": "Mark true if the answer uses opaque numeric citations (for example, [1] or [2]) without attaching source metadata or clear provenance for the claimed facts.",
+    "escape": "No citations used",
+    "provenance": [
+      "bm25:en01-f1",
+      "bm25:ru03-f1",
+      "bm25:kk05-f1",
+      "bm25:hard-ru-02",
+      "embedding:en03-f2",
+      "embedding:ru05-f3",
+      "embedding:kk07-f3",
+      "embedding:hard-ru-09",
+      "hybrid:en06-f1",
+      "hybrid:ru08-f1",
+      "hybrid:un-kk-01",
+      "hybrid:hard-kk-05",
+      "hybrid-norerank:en08-f2",
+      "hybrid-norerank:kk02-f3",
+      "hybrid-norerank:hard-en-06"
+    ]
+  },
+  {
+    "id": "c6",
+    "name": "Overprecise numeric claim",
+    "instructions": "Mark true if the answer provides exact numeric values (years, counts, measurements) without expressing uncertainty or citing supporting evidence.",
+    "escape": "No numeric claims",
+    "provenance": [
+      "bm25:en01-f1",
+      "bm25:ru03-f1",
+      "bm25:kk05-f1",
+      "embedding:kk07-f3",
+      "hybrid:en06-f1",
+      "hybrid:ru08-f1",
+      "hybrid:hard-kk-05",
+      "hybrid-norerank:hard-en-06"
+    ]
+  },
+  {
+    "id": "c7",
+    "name": "Invented named entities",
+    "instructions": "Mark true if the answer presents person, company, or product names that have no matching evidence in the visible provenance.",
+    "escape": "No named entities asserted",
+    "provenance": [
+      "bm25:hard-ru-02",
+      "embedding:hard-ru-09",
+      "embedding:ru05-f3",
+      "hybrid-norerank:en08-f2",
+      "hybrid:hard-kk-05",
+      "hybrid-norerank:hard-en-06",
+      "embedding:en03-f2"
+    ]
+  },
+  {
+    "id": "c8",
+    "name": "Place-name confusion",
+    "instructions": "Mark true if the answer conflates or mixes up similarly named places or institutions in a way that contradicts the provenance.",
+    "escape": "No place names mentioned",
+    "provenance": [
+      "bm25:ru03-f1",
+      "bm25:hard-ru-02"
+    ]
+  },
+  {
+    "id": "c9",
+    "name": "Inconsistent refusal",
+    "instructions": "Mark true if the answer either refuses despite visible supporting provenance or asserts facts despite no visible supporting provenance.",
+    "escape": "Refusal not applicable",
+    "provenance": [
+      "hybrid:un-kk-01",
+      "bm25:kk05-f1",
+      "hybrid:hard-kk-05",
+      "hybrid-norerank:kk02-f3"
+    ]
+  },
+  {
+    "id": "c10",
+    "name": "Coreference mixing",
+    "instructions": "Mark true if the answer conflates distinct entities or treats separate mentions as the same person or organization contrary to the provenance.",
+    "escape": "No conflation observed",
+    "provenance": [
+      "hybrid:hard-kk-05",
+      "embedding:hard-ru-09"
+    ]
+  }
+]
