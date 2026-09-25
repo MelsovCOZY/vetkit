@@ -1,0 +1,48 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "import", "unicorn", "oxc"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error"
+  },
+  "ignorePatterns": [
+    "scripts/fixtures/lint-bad/**",
+    "scripts/fixtures/tsconfig-bad/**",
+    "scripts/manifests.test.ts",
+    "scripts/tsconfig.test.ts",
+    "spike/**"
+  ],
+  "rules": {
+    "typescript/no-explicit-any": "error",
+    "typescript/no-non-null-assertion": "error",
+    "import/no-cycle": "error",
+    "oxc/no-barrel-file": ["error", { "threshold": 0 }]
+  },
+  "overrides": [
+    {
+      "files": [
+        "**/judge-jev/src/**",
+        "**/generator-openai-compatible/src/**",
+        "**/sink-langfuse/src/**",
+        "**/sink-otel/src/**",
+        "**/source-jsonl/src/**",
+        "**/source-langfuse/src/**",
+        "**/source-otlp/src/**",
+        "**/export-vitest/src/**"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@vetkit/core",
+                "message": "adapters import only @vetkit/spec"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
