@@ -173,6 +173,10 @@ describe.each(packageNames.length ? packageNames : EXPECTED_PACKAGE_NAMES)('pack
       expect(all).not.toHaveProperty(forbidden);
     }
   });
+
+  it('declares scripts.build as tsdown', () => {
+    expect(pkg?.scripts?.build).toBe('tsdown');
+  });
 });
 
 describe('dependency budget', () => {
