@@ -48,21 +48,8 @@ beforeAll(() => {
   ensureBinBuilt();
 }, 60_000);
 
-// scripts/tsconfig.test.ts (a sibling project) deletes packages/*/dist mid-run to
-// exercise typecheck on an unbuilt tree; when vitest runs both projects concurrently
-// that can remove this package's dist between a check above and a test actually
-// spawning it. A bin missing at spawn time fails node's ESM loader with ENOENT (or,
-// depending on timing, a CJS-style "Cannot find module"), never a --version/--help/
-// unknown-command outcome, so it's unambiguous to detect and retry: rebuild and spawn
-// again, bounded, to close that remaining TOCTOU gap.
 function runBin(args: string[]): { stdout: string; stderr: string; status: number | null } {
-  for (let attempt = 0; ; attempt++) {
-    ensureBinBuilt();
-    const result = spawnSync(process.execPath, [binPath, ...args], { encoding: 'utf8' });
-    const binWasDeletedMidRace =
-      result.status === 1 && /ENOENT|Cannot find module/.test(result.stderr);
-    if (!binWasDeletedMidRace || attempt >= 5) return result;
-  }
+  return spawnSync(process.execPath, [binPath, ...args], { encoding: 'utf8' });
 }
 
 describe('vet bin', () => {
