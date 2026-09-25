@@ -1,9 +1,9 @@
-import { defineConfig } from "tsdown";
+import { defineConfig } from 'tsdown';
 
 export default defineConfig({
-  entry: ["src/index.ts", "src/bin.ts"],
-  format: ["esm"],
-  platform: "node",
+  entry: ['src/index.ts', 'src/bin.ts'],
+  format: ['esm'],
+  platform: 'node',
   unbundle: true,
   dts: true,
   publint: true,
