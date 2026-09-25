@@ -221,12 +221,13 @@ describe('.github/workflows/release.yml', () => {
       expect(rawText).not.toMatch(/\bchangeset publish\b/);
     });
 
-    it('every publish command targets a .tgz path with --provenance --access public', () => {
+    it('every publish command targets a tarball path under dist-tarballs with --provenance --access public', () => {
       const publishStep = workflow.jobs.publish.steps.find((s: any) =>
         String(s.run ?? '').includes('npm publish'),
       );
       expect(publishStep).toBeDefined();
-      expect(publishStep.run).toMatch(/npm publish\s+"?[^\s"]*\.tgz"?.*--provenance.*--access public/);
+      expect(publishStep.run).toMatch(/npm publish\s+"\$\{?tgzPath\}?"\s+--provenance\s+--access public/);
+      expect(publishStep.run).toMatch(/dist-tarballs/);
     });
 
     it('skips a tarball whose version already exists on the registry (R4)', () => {
