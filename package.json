@@ -10,7 +10,7 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "oxlint --type-aware .",
+    "lint": "oxlint --type-aware . && sh scripts/ban-raw-json-parse.sh",
     "fmt": "oxfmt --check .",
     "fmt:write": "oxfmt .",
     "test": "vitest run",

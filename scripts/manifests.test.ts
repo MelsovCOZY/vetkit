@@ -65,6 +65,12 @@ describe('root package.json', () => {
     }
   });
 
+  it('lint script runs oxlint --type-aware and scripts/ban-raw-json-parse.sh', () => {
+    const lintScript = rootPkg?.scripts?.lint;
+    expect(lintScript).toContain('oxlint --type-aware');
+    expect(lintScript).toContain('scripts/ban-raw-json-parse.sh');
+  });
+
   it('pins exact root devDependency versions from the toolchain probe', () => {
     const expected: Record<string, string> = {
       typescript: '7.0.2',
