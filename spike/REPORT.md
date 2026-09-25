@@ -62,4 +62,12 @@ Jev is reached only through the gateway alias typesafe-ai/jev (TypeSafe registra
 
 The Gemini baseline is near ceiling: per-variant aggregate faithfulness across the four haystack-hypothesis runs is 0.991, 0.991, 0.982, 0.991 (bm25/embedding/hybrid/hybrid-norerank) - the baseline comparison (block c) shows Jev reads references and abstentions reliably where the baseline rarely scores unfaithful, not that it catches subtle hallucinations.
 
+## Decision rule
+
+GO if ≥7 of 10 criteria reach κ ≥ 0.6 with TPR ≥ 0.8 and TNR ≥ 0.8 on the labelled set and the boolean flip rate at threshold is ≤ 5%; AMEND (criteria need wording rules) if 4–6 criteria pass; NO-GO if median κ < 0.4
+
+Extended per this bead's acceptance criteria with a NO-GO override when c1 accuracy < 0.9.
+
+Precedence: INCONCLUSIVE (fewer than 30 human-labelled traces or 300 total label rows) first; then c1 accuracy < 0.9 -> NO-GO; then median kappa < 0.4 -> NO-GO; then >=7 criteria passing -> GO; otherwise AMEND.
+
 Decision: INCONCLUSIVE
