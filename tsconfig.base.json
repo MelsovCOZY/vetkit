@@ -17,6 +17,12 @@
     "declarationMap": true,
     "types": ["node"],
     "customConditions": ["@vetkit/source"],
-    "composite": true
+    "composite": true,
+    // tsc -b is a type-check-only step here; tsdown owns packages/*/dist. emitDeclarationOnly
+    // plus a declarationDir/tsBuildInfoFile outside dist keeps outDir unused so no .js or
+    // .d.ts ever lands in dist (see the "leaves no build output behind" tsconfig.test.ts spec).
+    "emitDeclarationOnly": true,
+    "declarationDir": "${configDir}/.tsbuild",
+    "tsBuildInfoFile": "${configDir}/.tsbuild/tsconfig.tsbuildinfo"
   }
 }
