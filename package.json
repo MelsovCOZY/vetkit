@@ -16,6 +16,7 @@
     "test": "vitest run",
     "build": "bun run --filter './packages/*' build",
     "pack": "bun scripts/pack.ts",
+    "version": "changeset version && bun install --no-frozen-lockfile",
     "check": "bun run typecheck && bun run lint && bun run fmt && bun run test",
     "codegen": "bun packages/spec/scripts/codegen.ts"
   },
