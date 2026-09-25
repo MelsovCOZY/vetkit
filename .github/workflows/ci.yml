@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+jobs:
+  check-build-pack:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [22, 24, 26]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.2'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Codegen is up to date
+        run: bun run codegen && git diff --exit-code
+
+      - name: Check (typecheck, lint, fmt, test)
+        run: bun run check
+
+      - name: Build
+        run: bun run build
+
+      - name: Pack
+        run: bun run pack
+
+      - name: Upload dist-tarballs
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-tarballs-${{ matrix.node }}
+          path: dist-tarballs
+
+  consumer-matrix:
+    needs: check-build-pack
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [22, 24, 26]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.2'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Download dist-tarballs
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-tarballs-${{ matrix.node }}
+          path: dist-tarballs
+
+      - name: Consumer install matrix (npm, pnpm, yarn, bun)
+        run: bash scripts/consumer-matrix.sh dist-tarballs
