@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
@@ -15,7 +15,51 @@ const PACKAGES_DIR = join(ROOT, 'packages');
 const WORKFLOW_PATH = join(ROOT, '.github/workflows/release.yml');
 const CHANGESET_CONFIG_PATH = join(ROOT, '.changeset/config.json');
 
-function readJson(path: string): unknown {
+interface WorkflowStep {
+  name?: string;
+  uses?: string;
+  id?: string;
+  run?: string;
+  with?: Record<string, string>;
+}
+
+interface WorkflowJob {
+  needs?: string | string[];
+  if?: string;
+  permissions?: Record<string, string>;
+  outputs?: Record<string, string>;
+  steps: WorkflowStep[];
+}
+
+interface Workflow {
+  on?: { push?: { branches?: string[] } };
+  jobs: Record<string, WorkflowJob>;
+}
+
+interface ChangesetConfig {
+  access?: string;
+  baseBranch?: string;
+  updateInternalDependencies?: string;
+  ignore?: string[];
+}
+
+interface RootPackageJson {
+  scripts?: Record<string, string>;
+}
+
+function readPackageManifest(path: string): PackageManifest {
+  return JSON.parse(readFileSync(path, 'utf8'));
+}
+
+function loadWorkflow(path: string): Workflow {
+  return parseYaml(readFileSync(path, 'utf8'));
+}
+
+function loadChangesetConfig(path: string): ChangesetConfig {
+  return JSON.parse(readFileSync(path, 'utf8'));
+}
+
+function loadRootPackageJson(path: string): RootPackageJson {
   return JSON.parse(readFileSync(path, 'utf8'));
 }
 
@@ -25,7 +69,7 @@ function loadRealManifests(): Record<string, PackageManifest> {
     .map((d) => d.name);
   const out: Record<string, PackageManifest> = {};
   for (const dir of dirs) {
-    out[dir] = readJson(join(PACKAGES_DIR, dir, 'package.json')) as PackageManifest;
+    out[dir] = readPackageManifest(join(PACKAGES_DIR, dir, 'package.json'));
   }
   return out;
 }
@@ -89,7 +133,7 @@ describe('topoSortPackages', () => {
 });
 
 describe('.changeset/config.json', () => {
-  const config = readJson(CHANGESET_CONFIG_PATH) as Record<string, unknown>;
+  const config = loadChangesetConfig(CHANGESET_CONFIG_PATH);
 
   it('sets access to public', () => {
     expect(config.access).toBe('public');
@@ -109,7 +153,7 @@ describe('.changeset/config.json', () => {
 });
 
 describe('root package.json scripts.version', () => {
-  const rootPkg = readJson(join(ROOT, 'package.json')) as { scripts?: Record<string, string> };
+  const rootPkg = loadRootPackageJson(join(ROOT, 'package.json'));
   const versionScript = rootPkg.scripts?.version ?? '';
 
   it('runs changeset version', () => {
@@ -126,10 +170,7 @@ describe('root package.json scripts.version', () => {
 
 describe('.github/workflows/release.yml', () => {
   const rawText = readFileSync(WORKFLOW_PATH, 'utf8');
-  const workflow = parseYaml(rawText) as {
-    on?: { push?: { branches?: string[] } };
-    jobs: Record<string, any>;
-  };
+  const workflow = loadWorkflow(WORKFLOW_PATH);
 
   it('triggers on push to master', () => {
     expect(workflow.on?.push?.branches).toContain('master');
@@ -142,21 +183,22 @@ describe('.github/workflows/release.yml', () => {
 
   describe('version job', () => {
     const versionJob = workflow.jobs.version;
-    const steps: any[] = versionJob.steps;
-    const changesetsStep = steps.find((s) => String(s.uses ?? '').startsWith('changesets/action'));
+    const changesetsStep = versionJob?.steps.find((s) =>
+      (s.uses ?? '').startsWith('changesets/action'),
+    );
 
     it('runs changesets/action with version: bun run version', () => {
       expect(changesetsStep).toBeDefined();
-      expect(changesetsStep.with.version).toBe('bun run version');
+      expect(changesetsStep?.with?.version).toBe('bun run version');
     });
 
     it('has no publish input', () => {
-      expect(changesetsStep.with.publish).toBeUndefined();
+      expect(changesetsStep?.with?.publish).toBeUndefined();
     });
 
     it('exposes hasChangesets as a job output sourced from the changesets step', () => {
-      expect(versionJob.outputs?.hasChangesets).toContain('steps.');
-      expect(versionJob.outputs?.hasChangesets).toContain('outputs.hasChangesets');
+      expect(versionJob?.outputs?.hasChangesets).toContain('steps.');
+      expect(versionJob?.outputs?.hasChangesets).toContain('outputs.hasChangesets');
     });
   });
 
@@ -164,13 +206,13 @@ describe('.github/workflows/release.yml', () => {
     const publishJob = workflow.jobs.publish;
 
     it('needs the version job', () => {
-      const needs = publishJob.needs;
+      const needs = publishJob?.needs;
       expect(Array.isArray(needs) ? needs : [needs]).toContain('version');
     });
 
     it('only runs when there are no pending changesets, on master', () => {
-      expect(publishJob.if).toContain("needs.version.outputs.hasChangesets == 'false'");
-      expect(publishJob.if).toContain("github.ref == 'refs/heads/master'");
+      expect(publishJob?.if).toContain("needs.version.outputs.hasChangesets == 'false'");
+      expect(publishJob?.if).toContain("github.ref == 'refs/heads/master'");
     });
   });
 
@@ -178,7 +220,7 @@ describe('.github/workflows/release.yml', () => {
     const publishJob = workflow.jobs.publish;
 
     it('grants id-token: write', () => {
-      expect(publishJob.permissions?.['id-token']).toBe('write');
+      expect(publishJob?.permissions?.['id-token']).toBe('write');
     });
 
     it('never references NPM_TOKEN or NODE_AUTH_TOKEN', () => {
@@ -192,8 +234,8 @@ describe('.github/workflows/release.yml', () => {
   });
 
   describe('publish job step order (R2)', () => {
-    const steps: any[] = workflow.jobs.publish.steps;
-    const runTexts: string[] = steps.map((s) => String(s.run ?? ''));
+    const steps = workflow.jobs.publish?.steps ?? [];
+    const runTexts: string[] = steps.map((s) => s.run ?? '');
 
     const prePackIdx = runTexts.findIndex(
       (t) => t.includes('release-preflight') && !t.includes('--tarballs'),
@@ -216,25 +258,25 @@ describe('.github/workflows/release.yml', () => {
   });
 
   describe('publish command shape (never bun publish / changeset publish)', () => {
+    const publishStep = workflow.jobs.publish?.steps.find((s) =>
+      (s.run ?? '').includes('npm publish'),
+    );
+
     it('never invokes bun publish or changeset publish', () => {
       expect(rawText).not.toMatch(/\bbun publish\b/);
       expect(rawText).not.toMatch(/\bchangeset publish\b/);
     });
 
     it('every publish command targets a tarball path under dist-tarballs with --provenance --access public', () => {
-      const publishStep = workflow.jobs.publish.steps.find((s: any) =>
-        String(s.run ?? '').includes('npm publish'),
-      );
       expect(publishStep).toBeDefined();
-      expect(publishStep.run).toMatch(/npm publish\s+"\$\{?tgzPath\}?"\s+--provenance\s+--access public/);
-      expect(publishStep.run).toMatch(/dist-tarballs/);
+      expect(publishStep?.run).toMatch(
+        /npm publish\s+"\$\{?tgzPath\}?"\s+--provenance\s+--access public/,
+      );
+      expect(publishStep?.run).toMatch(/dist-tarballs/);
     });
 
     it('skips a tarball whose version already exists on the registry (R4)', () => {
-      const publishStep = workflow.jobs.publish.steps.find((s: any) =>
-        String(s.run ?? '').includes('npm publish'),
-      );
-      expect(publishStep.run).toMatch(/npm view/);
+      expect(publishStep?.run).toMatch(/npm view/);
     });
   });
 });
