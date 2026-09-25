@@ -236,9 +236,19 @@ export async function runJudge(
   const repeats = opts.repeats ?? REPEATS;
   const jobs = repeats > 0 ? traces.flatMap((trace) => Array.from({ length: repeats }, (_, repeat) => ({ trace, repeat }))) : [];
 
-  const outcomes = await withConcurrency(opts.concurrency ?? CONCURRENCY, jobs, (job) =>
-    judgeOne(job.trace, job.repeat, criteria, cacheDir, opts),
-  );
+  const total = jobs.length;
+  const startedAt = Date.now();
+  let completed = 0;
+
+  const outcomes = await withConcurrency(opts.concurrency ?? CONCURRENCY, jobs, async (job) => {
+    const outcome = await judgeOne(job.trace, job.repeat, criteria, cacheDir, opts);
+    completed += 1;
+    if (completed % 50 === 0 || completed === total) {
+      const elapsedS = Math.round((Date.now() - startedAt) / 1000);
+      console.log(`${completed}/${total} calls (${elapsedS}s elapsed)`);
+    }
+    return outcome;
+  });
 
   const summary: JudgeSummary = {
     rows: [],

@@ -373,4 +373,24 @@ describe('runJudge (integration, fetch stubbed, real second-run cache proof)', (
     logSpy.mockRestore();
     errSpy.mockRestore();
   });
+
+  test('prints a progress line naming the completed and total call count, for polling during a long live run', async () => {
+    fetchSpy.mockImplementation(async () =>
+      stubResponse({
+        model: MODEL,
+        answers: { c1: choiceAnswer('yes'), c2: choiceAnswer('no') },
+        usage: { input_tokens: 10, output_tokens: 1 },
+        provider_metadata: { gateway: {} },
+      }),
+    );
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const traces = [trace(), trace({ traceId: 'bm25:en02-f1', goldenId: 'en02-f1' })];
+
+    await runJudge(traces, CRITERIA, cacheDir, { base: 'https://gw.example', apiKey: 'k', concurrency: 2, repeats: 1 });
+
+    const lines = logSpy.mock.calls.flat().map(String);
+    expect(lines.some((line) => line.startsWith('2/2 calls'))).toBe(true);
+
+    logSpy.mockRestore();
+  });
 });
