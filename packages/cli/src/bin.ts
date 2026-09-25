@@ -1,3 +1,4 @@
 #!/usr/bin/env node
-// Placeholder bin entry; real implementation lands in mol-fou.9.
-void 0;
+import { run } from './program.ts';
+
+run(process.argv);
