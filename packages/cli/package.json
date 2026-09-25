@@ -1,0 +1,24 @@
+{
+  "name": "vetkit",
+  "version": "0.0.0",
+  "type": "module",
+  "sideEffects": ["./dist/bin.js"],
+  "engines": { "node": ">=22.12" },
+  "files": ["dist"],
+  "bin": {
+    "vet": "./dist/bin.js"
+  },
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": { "access": "public" },
+  "dependencies": {
+    "commander": "15.0.0",
+    "@clack/prompts": "1.8.1",
+    "picocolors": "1.1.1",
+    "c12": "^3.3.4",
+    "@vetkit/core": "workspace:^",
+    "@vetkit/spec": "workspace:^"
+  }
+}
