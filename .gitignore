@@ -17,3 +17,11 @@ graphify-out/.graphify_*
 # backups
 *.bak
 *.graphify-bak
+
+# JS toolchain
+node_modules/
+dist/
+dist-tarballs/
+.vet/
+coverage/
+*.tsbuildinfo
