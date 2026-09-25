@@ -1,0 +1,29 @@
+name: PR title
+
+# Squash-merge turns the PR title into the commit that lands on master, so the
+# title -- not each individual commit -- is what must be a conventional commit.
+# The regex below is the single source of truth: scripts/bots.test.ts reads it
+# straight out of this file, so the two can never drift apart.
+
+on:
+  pull_request:
+    branches: [master]
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  pr-title:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR title is a conventional commit
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          regex='^(feat|fix|docs|chore|refactor|test|ci|build|perf)(\([^)]+\))?: .+$'
+          if ! [[ "$TITLE" =~ $regex ]]; then
+            echo "PR title '$TITLE' is not a conventional commit: type(scope)?: subject" >&2
+            echo "Allowed types: feat fix docs chore refactor test ci build perf" >&2
+            exit 1
+          fi

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "schedule:weekly"],
+  "packageRules": [
+    {
+      "groupName": "oxc toolchain",
+      "matchPackageNames": ["oxlint", "oxfmt"]
+    },
+    {
+      "groupName": "opentelemetry",
+      "matchPackagePatterns": ["^@opentelemetry/"]
+    },
+    {
+      "matchDepTypes": ["devDependencies"],
+      "rangeStrategy": "pin"
+    },
+    {
+      "matchPackageNames": ["evalite", "@typesafe-ai/sdk"],
+      "dependencyDashboardApproval": true
+    }
+  ]
+}

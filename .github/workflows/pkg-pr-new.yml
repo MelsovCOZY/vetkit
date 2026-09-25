@@ -1,0 +1,27 @@
+name: pkg-pr-new preview
+
+# Every PR gets install-able preview builds of all packed packages, published
+# from the same tarballs the release chain would ship (bun pm pack -> tarball
+# checks), never from bun publish.
+
+on:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Pack all packages
+        run: bun run pack
+      - name: Publish previews
+        run: bunx pkg-pr-new publish './dist-tarballs/*.tgz'
