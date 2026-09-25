@@ -71,6 +71,7 @@ describe('root package.json', () => {
       typescript6: 'npm:@typescript/typescript6@6.0.2',
       oxlint: '1.85.0',
       oxfmt: '0.70.0',
+      'oxlint-tsgolint': '7.0.2003',
       tsdown: '0.23.0',
       vitest: '5.0.2',
       '@vitest/coverage-v8': '5.0.2',
