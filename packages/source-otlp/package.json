@@ -1,0 +1,16 @@
+{
+  "name": "@vetkit/source-otlp",
+  "version": "0.0.0",
+  "type": "module",
+  "sideEffects": false,
+  "engines": { "node": ">=22.12" },
+  "files": ["dist"],
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": { "access": "public" },
+  "dependencies": {
+    "@vetkit/spec": "workspace:^"
+  }
+}
