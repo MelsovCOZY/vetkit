@@ -10,7 +10,7 @@ import { afterEach, describe, expect, test } from 'vitest';
 const rootDir = path.resolve(import.meta.dirname, '..');
 const oxlintBin = path.join(rootDir, 'node_modules/.bin/oxlint');
 const tsgolintBin = path.join(rootDir, 'node_modules/.bin/tsgolint');
-const fixturesConfig = path.join(rootDir, 'scripts/fixtures/lint-bad/.oxlintrc.json');
+const fixturesConfig = path.join(rootDir, 'scripts/fixtures/lint-bad/oxlintrc.fixtures.json');
 const banScript = path.join(rootDir, 'scripts/ban-raw-json-parse.sh');
 
 function runOxlintOnFixture(relativeFile: string) {
@@ -78,10 +78,8 @@ describe('type-aware linting', () => {
 
 describe('.oxlintrc.json', () => {
   test('lists correctness and suspicious categories at error', () => {
-    const config = JSON.parse(readFileSync(path.join(rootDir, '.oxlintrc.json'), 'utf8')) as {
-      categories?: Record<string, string>;
-    };
-    expect(config.categories?.correctness).toBe('error');
-    expect(config.categories?.suspicious).toBe('error');
+    const config = JSON.parse(readFileSync(path.join(rootDir, '.oxlintrc.json'), 'utf8'));
+    expect(config.categories.correctness).toBe('error');
+    expect(config.categories.suspicious).toBe('error');
   });
 });
