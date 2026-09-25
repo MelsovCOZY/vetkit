@@ -10,6 +10,28 @@
         ],
         "matcher": ""
       }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/yernur/.local/bin/graphify hook-guard search",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/yernur/.local/bin/graphify hook-guard read",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   }
 }
