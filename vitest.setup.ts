@@ -11,6 +11,8 @@ beforeEach(() => {
   if (process.env.CEV_E2E === '1') return;
 
   vi.stubGlobal('fetch', () => {
-    throw new Error("CevTestNetworkBlocked: use vi.stubGlobal('fetch', …) to stub fetch in this test");
+    throw new Error(
+      "CevTestNetworkBlocked: use vi.stubGlobal('fetch', …) to stub fetch in this test",
+    );
   });
 });

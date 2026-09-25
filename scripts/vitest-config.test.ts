@@ -11,7 +11,7 @@ test('runs under Node, not Bun', () => {
 });
 
 test('blocks an unstubbed global fetch call with a guard naming vi.stubGlobal', () => {
-  expect(() => (globalThis.fetch as (...args: unknown[]) => unknown)()).toThrow(
+  expect(() => globalThis.fetch('http://cev-test-network-blocked.invalid')).toThrow(
     /CevTestNetworkBlocked.*vi\.stubGlobal/,
   );
 });

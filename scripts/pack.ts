@@ -1,13 +1,13 @@
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join, relative } from "node:path";
-import { fileURLToPath } from "node:url";
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const PACKAGES_DIR = join(ROOT, "packages");
-const TARBALL_DIR = join(ROOT, "dist-tarballs");
-const LOCK_PATH = join(ROOT, "bun.lock");
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const PACKAGES_DIR = join(ROOT, 'packages');
+const TARBALL_DIR = join(ROOT, 'dist-tarballs');
+const LOCK_PATH = join(ROOT, 'bun.lock');
 
 // Matches the release-blocker checks in docs/contracts/j0.md: a packed tarball must
 // contain no unresolved workspace/catalog protocol, no Bun-only type packages, and
@@ -30,7 +30,7 @@ export function checkVersionSync(
   pkg: { name: string; version: string },
   lockText: string,
 ): VersionMismatch | undefined {
-  const escapedName = pkg.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escapedName = pkg.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const nameToVersion = new RegExp(`"name":\\s*"${escapedName}"[\\s\\S]*?"version":\\s*"([^"]+)"`);
   const match = lockText.match(nameToVersion);
   if (!match) return undefined;
@@ -41,7 +41,7 @@ export function checkVersionSync(
   return {
     packageName: pkg.name,
     manifestVersion: pkg.version,
-    lockVersion: lockVersion as string,
+    lockVersion,
   };
 }
 
@@ -62,8 +62,8 @@ export function findForbiddenStrings(dir: string): string[] {
     }
     if (!entry.isFile()) continue;
 
-    const text = readFileSync(fullPath, "utf8");
-    const lines = text.split("\n");
+    const text = readFileSync(fullPath, 'utf8');
+    const lines = text.split('\n');
     for (const [index, line] of lines.entries()) {
       if (FORBIDDEN_PATTERN.test(line)) {
         matches.push(`${relative(dir, fullPath)}:${index + 1}: ${line.trim()}`);
@@ -75,13 +75,13 @@ export function findForbiddenStrings(dir: string): string[] {
 }
 
 function readJson(path: string): { name: string; version: string } {
-  return JSON.parse(readFileSync(path, "utf8"));
+  return JSON.parse(readFileSync(path, 'utf8'));
 }
 
 function packOne(pkgDir: string, pkg: { name: string; version: string }): boolean {
-  const packResult = spawnSync("bun", ["pm", "pack", "--quiet", "--destination", TARBALL_DIR], {
+  const packResult = spawnSync('bun', ['pm', 'pack', '--quiet', '--destination', TARBALL_DIR], {
     cwd: pkgDir,
-    encoding: "utf8",
+    encoding: 'utf8',
   });
   if (packResult.status !== 0) {
     console.error(`pack: bun pm pack failed for ${pkg.name}`);
@@ -91,9 +91,9 @@ function packOne(pkgDir: string, pkg: { name: string; version: string }): boolea
   const tgzPath = packResult.stdout.trim();
 
   const publintResult = spawnSync(
-    join(ROOT, "node_modules/.bin/publint"),
-    ["run", tgzPath, "--strict", "--pack", "false"],
-    { stdio: "inherit" },
+    join(ROOT, 'node_modules/.bin/publint'),
+    ['run', tgzPath, '--strict', '--pack', 'false'],
+    { stdio: 'inherit' },
   );
   if (publintResult.status !== 0) {
     console.error(`pack: publint --strict failed for ${pkg.name}`);
@@ -103,28 +103,28 @@ function packOne(pkgDir: string, pkg: { name: string; version: string }): boolea
   // --format table: attw's default "auto" format can print JSON in a non-TTY, and a
   // FalseESM/NoResolution failure must be human-diagnosable, not just a bare exit code.
   const attwResult = spawnSync(
-    join(ROOT, "node_modules/.bin/attw"),
-    [tgzPath, "--profile", "esm-only", "--format", "table"],
-    { stdio: "inherit" },
+    join(ROOT, 'node_modules/.bin/attw'),
+    [tgzPath, '--profile', 'esm-only', '--format', 'table'],
+    { stdio: 'inherit' },
   );
   if (attwResult.status !== 0) {
     console.error(`pack: attw --profile esm-only failed for ${pkg.name}`);
     return false;
   }
 
-  const extractDir = mkdtempSync(join(tmpdir(), "vetkit-pack-extract-"));
+  const extractDir = mkdtempSync(join(tmpdir(), 'vetkit-pack-extract-'));
   try {
-    const tarResult = spawnSync("tar", ["-xzf", tgzPath, "-C", extractDir]);
+    const tarResult = spawnSync('tar', ['-xzf', tgzPath, '-C', extractDir]);
     if (tarResult.status !== 0) {
       console.error(`pack: failed to extract ${tgzPath}`);
       return false;
     }
-    const extractedPkgDir = join(extractDir, "package");
+    const extractedPkgDir = join(extractDir, 'package');
 
     const vpeResult = spawnSync(
-      join(ROOT, "node_modules/.bin/validate-package-exports"),
-      [join(extractedPkgDir, "package.json")],
-      { stdio: "inherit" },
+      join(ROOT, 'node_modules/.bin/validate-package-exports'),
+      [join(extractedPkgDir, 'package.json')],
+      { stdio: 'inherit' },
     );
     if (vpeResult.status !== 0) {
       console.error(`pack: validate-package-exports failed for ${pkg.name}`);
@@ -145,23 +145,23 @@ function packOne(pkgDir: string, pkg: { name: string; version: string }): boolea
 }
 
 async function main(): Promise<number> {
-  const lockText = readFileSync(LOCK_PATH, "utf8");
+  const lockText = readFileSync(LOCK_PATH, 'utf8');
   const packageNames = readdirSync(PACKAGES_DIR, { withFileTypes: true })
     .filter((d) => d.isDirectory())
     .map((d) => d.name)
-    .sort();
+    .toSorted();
 
   let attempted = 0;
   let passed = 0;
 
   for (const name of packageNames) {
     const pkgDir = join(PACKAGES_DIR, name);
-    if (!statSync(join(pkgDir, "src", "index.ts"), { throwIfNoEntry: false })) {
+    if (!statSync(join(pkgDir, 'src', 'index.ts'), { throwIfNoEntry: false })) {
       console.warn(`WARNING: skipping ${name} (no src/index.ts yet)`);
       continue;
     }
 
-    const pkg = readJson(join(pkgDir, "package.json"));
+    const pkg = readJson(join(pkgDir, 'package.json'));
     attempted++;
 
     const mismatch = checkVersionSync(pkg, lockText);
@@ -185,7 +185,6 @@ async function main(): Promise<number> {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  main().then((code) => {
-    process.exit(code);
-  });
+  const code = await main();
+  process.exit(code);
 }
