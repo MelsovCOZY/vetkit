@@ -302,7 +302,12 @@ function computeCriterionRow(
   corpus: Corpus,
 ): CriterionRow {
   const n = traces.length;
-  let excluded = 0;
+  // Two different reasons a trace contributes nothing to the fit, tracked separately: no truth
+  // label exists at all for this criterion (c3's baseline-sourced truth and c4-c10's not-yet-
+  // human-labelled truth both land here, reported as 'pending', not as an escape), vs a truth
+  // label of 'review' or a fully-escaped judge answer (the "unknown/review rows excluded from
+  // kappa but counted in escape%" edge case) - only the latter counts toward escape%.
+  let reviewOrEscaped = 0;
   const scoresForFit: number[] = [];
   const labelsForFit: boolean[] = [];
   const repeatsForFlip: number[][] = [];
@@ -315,8 +320,9 @@ function computeCriterionRow(
       nonEscaped.length > 0 ? nonEscaped.reduce((s, r) => s + r.pYes, 0) / nonEscaped.length : null;
     const allEscaped = repeats.length > 0 && nonEscaped.length === 0;
 
-    if (!labelRow || labelRow.label === 'review' || allEscaped || meanPYes === null) {
-      excluded++;
+    if (!labelRow) continue; // no truth for this trace at all (reported as 'pending', not an escape)
+    if (labelRow.label === 'review' || allEscaped || meanPYes === null) {
+      reviewOrEscaped++;
       continue;
     }
 
@@ -325,7 +331,7 @@ function computeCriterionRow(
     if (repeats.length > 0) repeatsForFlip.push(repeats.map((r) => r.pYes));
   }
 
-  const escapePct = n > 0 ? excluded / n : 0;
+  const escapePct = n > 0 ? reviewOrEscaped / n : 0;
 
   if (scoresForFit.length === 0) {
     return {
@@ -646,9 +652,9 @@ async function main(): Promise<void> {
   for (const variant of VARIANTS) {
     const summary = JSON.parse(
       await readFile(join(haystackDir, 'report', `eval-${variant}.json`), 'utf8'),
-    ) as { aggregate?: { faithfulness?: number } };
-    if (typeof summary.aggregate?.faithfulness === 'number') {
-      haystackAggregates.push(summary.aggregate.faithfulness);
+    ) as { aggregate?: { scores?: { faithfulness?: number } } };
+    if (typeof summary.aggregate?.scores?.faithfulness === 'number') {
+      haystackAggregates.push(summary.aggregate.scores.faithfulness);
     }
   }
   const limitationsMarkdown = limitationsParagraph(haystackAggregates);
@@ -668,6 +674,13 @@ async function main(): Promise<void> {
     '## (a) Per-criterion table (human/auto labels as truth)',
     '',
     criterionTableMarkdown(criterionRows),
+    '',
+    "c3's truth is the Gemini baseline, not a human/auto label, so it has no row-fitted stats here " +
+      "and is reported separately in block (c); c4-c10 have no truth yet (pending classified-evals-" +
+      "mol-vv7.7). c2's auto label is a *correctness* judgment (abstained-when-it-should, or didn't-" +
+      "when-it-shouldn't), which flips sign between answerable and unanswerable rows, so its raw " +
+      "P(yes)-vs-label kappa above is not directly comparable to c1's; see block (b) for the c2 " +
+      'accuracy computed only on the unambiguous (golden-unanswerable) subset.',
     '',
     '## (b) Ground-truth block',
     '',
