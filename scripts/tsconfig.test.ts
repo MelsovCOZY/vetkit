@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
 
@@ -217,5 +217,22 @@ describe("tsconfig-bad fixtures", () => {
     );
     expect(result.status).not.toBe(0);
     expect(result.stdout).toContain("TS2835");
+  });
+});
+
+describe("bun run typecheck catches a planted type error", () => {
+  test("a type error in packages/spec/src fails the typecheck script with TS2322", () => {
+    const plantedFile = path.join(packagesDir, "spec/src/__tmp_te.ts");
+    writeFileSync(plantedFile, 'export const x: number = "s";\n');
+    try {
+      const result = spawnSync("bun", ["run", "typecheck"], {
+        cwd: rootDir,
+        encoding: "utf8",
+      });
+      expect(result.status).not.toBe(0);
+      expect(result.stdout + result.stderr).toContain("TS2322");
+    } finally {
+      rmSync(plantedFile, { force: true });
+    }
   });
 });
