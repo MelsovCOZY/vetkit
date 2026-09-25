@@ -23,7 +23,16 @@ const JEV_INPUT_COST_PER_MILLION = 0.042;
 const MIN_HUMAN_TRACES = 30;
 const MIN_TOTAL_LABEL_ROWS = 300;
 const KAPPA_PASS_BAR = 0.6;
+const TPR_PASS_BAR = 0.8;
+const TNR_PASS_BAR = 0.8;
+const FLIP_PASS_BAR = 0.05;
+const MEDIAN_KAPPA_NO_GO_BAR = 0.4;
 const ESCAPE_UNANSWERABLE_BAR = 0.3;
+/** Contract classified-evals-mol-xy5 AC-2 (docs/contracts/js.md), quoted verbatim. */
+export const CONTRACT_RULE_TEXT =
+  'GO if ≥7 of 10 criteria reach κ ≥ 0.6 with TPR ≥ 0.8 and TNR ≥ 0.8 on ' +
+  'the labelled set and the boolean flip rate at threshold is ≤ 5%; AMEND (criteria need ' +
+  'wording rules) if 4–6 criteria pass; NO-GO if median κ < 0.4';
 const JEV_RELEASE_DATE = '2026-09-15';
 const JEV_RELEASE_DATE_SOURCE = 'docs/research/fixtures/2026-09-25-gateway-models.json';
 
@@ -152,27 +161,57 @@ export function flipRate(repeatsPerTrace: number[][], t: number): number {
   return flips / repeatsPerTrace.length;
 }
 
+/** A criterion passes iff kappa, TPR and TNR clear their bars and the flip rate does not. */
+export function criterionPasses(row: {
+  kappa: number | null;
+  tpr: number | null;
+  tnr: number | null;
+  flipPct: number;
+}): boolean {
+  return (
+    row.kappa !== null &&
+    row.kappa >= KAPPA_PASS_BAR &&
+    row.tpr !== null &&
+    row.tpr >= TPR_PASS_BAR &&
+    row.tnr !== null &&
+    row.tnr >= TNR_PASS_BAR &&
+    row.flipPct <= FLIP_PASS_BAR
+  );
+}
+
+/** Median over the non-null values; null (undefined/n-a values are excluded, not treated as 0). */
+export function medianOfDefined(values: (number | null)[]): number | null {
+  const defined = values.filter((v): v is number => v !== null).sort((a, b) => a - b);
+  const n = defined.length;
+  if (n === 0) return null;
+  const mid = Math.floor(n / 2);
+  return n % 2 === 0 ? (defined[mid - 1]! + defined[mid]!) / 2 : defined[mid]!;
+}
+
 export type Outcome = 'GO' | 'AMEND' | 'NO-GO' | 'INCONCLUSIVE';
 
 /**
  * Contract classified-evals-mol-xy5's GO/AMEND/NO-GO rule (>=7 of 10 criteria passing -> GO,
- * 4-6 -> AMEND, <4 -> NO-GO), extended per this bead's acceptance criteria with a NO-GO override
- * when c1 accuracy < 0.9, and INCONCLUSIVE when there are not yet enough human labels to trust
- * the pass count (fewer than 30 human-labelled traces or fewer than 300 total label rows).
+ * else AMEND), extended per this bead's acceptance criteria with a NO-GO override when c1
+ * accuracy < 0.9 or the median kappa across criteria (undefined kappas excluded) is < 0.4, and
+ * INCONCLUSIVE when there are not yet enough human labels to trust the pass count (fewer than 30
+ * human-labelled traces or fewer than 300 total label rows). Precedence: INCONCLUSIVE, then the
+ * c1-accuracy override, then the median-kappa override, then the pass count.
  */
 export function decideOutcome(input: {
   humanTraces: number;
   totalLabelRows: number;
   c1Accuracy: number | null;
   passCount: number;
+  medianKappa: number | null;
 }): Outcome {
   if (input.humanTraces < MIN_HUMAN_TRACES || input.totalLabelRows < MIN_TOTAL_LABEL_ROWS) {
     return 'INCONCLUSIVE';
   }
   if (input.c1Accuracy !== null && input.c1Accuracy < 0.9) return 'NO-GO';
+  if (input.medianKappa !== null && input.medianKappa < MEDIAN_KAPPA_NO_GO_BAR) return 'NO-GO';
   if (input.passCount >= 7) return 'GO';
-  if (input.passCount >= 4) return 'AMEND';
-  return 'NO-GO';
+  return 'AMEND';
 }
 
 export type LabelCheck = { humanTraces: number; totalRows: number; ok: boolean };
@@ -360,7 +399,7 @@ function computeCriterionRow(
       ? 'unanswerable'
       : kappa === null
         ? 'n/a'
-        : kappa >= KAPPA_PASS_BAR
+        : criterionPasses({ kappa, tpr, tnr, flipPct })
           ? 'pass'
           : 'fail';
 
@@ -661,11 +700,13 @@ async function main(): Promise<void> {
 
   const check = checkLabels(labelRows);
   const passCount = criterionRows.filter((r) => r.verdict === 'pass').length;
+  const medianKappa = medianOfDefined(criterionRows.map((r) => r.kappa));
   const decision = decideOutcome({
     humanTraces: check.humanTraces,
     totalLabelRows: check.totalRows,
     c1Accuracy,
     passCount,
+    medianKappa,
   });
 
   const markdown = [
@@ -697,6 +738,16 @@ async function main(): Promise<void> {
     '## (e) Limitations',
     '',
     limitationsMarkdown,
+    '',
+    '## Decision rule',
+    '',
+    CONTRACT_RULE_TEXT,
+    '',
+    "Extended per this bead's acceptance criteria with a NO-GO override when c1 accuracy < 0.9.",
+    '',
+    'Precedence: INCONCLUSIVE (fewer than 30 human-labelled traces or 300 total label rows) first; ' +
+      'then c1 accuracy < 0.9 -> NO-GO; then median kappa < 0.4 -> NO-GO; then >=7 criteria passing ' +
+      '-> GO; otherwise AMEND.',
     '',
     `Decision: ${decision}`,
     '',
