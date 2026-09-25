@@ -2,10 +2,12 @@ import { describe, expect, test } from 'vitest';
 import {
   checkLabels,
   cohenKappa,
+  criterionPasses,
   decideOutcome,
   fitThreshold,
   flipRate,
   krippendorffAlphaNominal,
+  medianOfDefined,
   rates,
 } from './report.ts';
 import type { LabelRow } from './label.ts';
@@ -112,38 +114,111 @@ describe('flipRate', () => {
   });
 });
 
+describe('criterionPasses', () => {
+  const passing = { kappa: 0.7, tpr: 0.9, tnr: 0.9, flipPct: 0.02 };
+
+  test('kappa, TPR, TNR and flip rate all within bars -> passes', () => {
+    expect(criterionPasses(passing)).toBe(true);
+  });
+
+  test('kappa below 0.6 alone -> not a pass', () => {
+    expect(criterionPasses({ ...passing, kappa: 0.59 })).toBe(false);
+  });
+
+  test('TPR below 0.8 alone -> not a pass', () => {
+    expect(criterionPasses({ ...passing, tpr: 0.79 })).toBe(false);
+  });
+
+  test('TNR below 0.8 alone -> not a pass', () => {
+    expect(criterionPasses({ ...passing, tnr: 0.79 })).toBe(false);
+  });
+
+  test('flip rate above 0.05 alone -> not a pass', () => {
+    expect(criterionPasses({ ...passing, flipPct: 0.051 })).toBe(false);
+  });
+
+  test('undefined (null) kappa -> not a pass', () => {
+    expect(criterionPasses({ ...passing, kappa: null })).toBe(false);
+  });
+});
+
+describe('medianOfDefined', () => {
+  test('excludes null values before taking the median', () => {
+    expect(medianOfDefined([0.6, null, 0.4, null, 0.8])).toBeCloseTo(0.6, 6);
+  });
+
+  test('all values null -> null', () => {
+    expect(medianOfDefined([null, null])).toBeNull();
+  });
+});
+
 describe('decideOutcome', () => {
   const enoughLabels = { humanTraces: 40, totalLabelRows: 400 };
+  const highMedianKappa = 0.6;
 
-  test('7 passing criteria with c1 accuracy >= 0.9 -> GO', () => {
-    expect(decideOutcome({ ...enoughLabels, c1Accuracy: 0.95, passCount: 7 })).toBe('GO');
+  test('7 passing criteria with c1 accuracy >= 0.9 and median kappa >= 0.4 -> GO', () => {
+    expect(
+      decideOutcome({ ...enoughLabels, c1Accuracy: 0.95, passCount: 7, medianKappa: highMedianKappa }),
+    ).toBe('GO');
   });
 
   test('6 passing criteria -> AMEND', () => {
-    expect(decideOutcome({ ...enoughLabels, c1Accuracy: 0.95, passCount: 6 })).toBe('AMEND');
+    expect(
+      decideOutcome({ ...enoughLabels, c1Accuracy: 0.95, passCount: 6, medianKappa: highMedianKappa }),
+    ).toBe('AMEND');
   });
 
   test('4 passing criteria (AMEND lower boundary) -> AMEND', () => {
-    expect(decideOutcome({ ...enoughLabels, c1Accuracy: 0.95, passCount: 4 })).toBe('AMEND');
+    expect(
+      decideOutcome({ ...enoughLabels, c1Accuracy: 0.95, passCount: 4, medianKappa: highMedianKappa }),
+    ).toBe('AMEND');
   });
 
-  test('3 passing criteria -> NO-GO', () => {
-    expect(decideOutcome({ ...enoughLabels, c1Accuracy: 0.95, passCount: 3 })).toBe('NO-GO');
+  test('3 passing criteria with median kappa 0.5 -> AMEND (median at/above the 0.4 bar)', () => {
+    expect(decideOutcome({ ...enoughLabels, c1Accuracy: 0.95, passCount: 3, medianKappa: 0.5 })).toBe(
+      'AMEND',
+    );
+  });
+
+  test('5 passing criteria with median kappa 0.35 -> NO-GO (median below 0.4 overrides pass count)', () => {
+    expect(decideOutcome({ ...enoughLabels, c1Accuracy: 0.95, passCount: 5, medianKappa: 0.35 })).toBe(
+      'NO-GO',
+    );
   });
 
   test('c1 accuracy below 0.9 overrides an otherwise-passing count -> NO-GO', () => {
-    expect(decideOutcome({ ...enoughLabels, c1Accuracy: 0.85, passCount: 8 })).toBe('NO-GO');
+    expect(
+      decideOutcome({ ...enoughLabels, c1Accuracy: 0.85, passCount: 8, medianKappa: highMedianKappa }),
+    ).toBe('NO-GO');
+  });
+
+  test('c1 accuracy 0.89 -> NO-GO even with 8 criteria passing', () => {
+    expect(
+      decideOutcome({ ...enoughLabels, c1Accuracy: 0.89, passCount: 8, medianKappa: highMedianKappa }),
+    ).toBe('NO-GO');
   });
 
   test('fewer than 30 human-labelled traces -> INCONCLUSIVE regardless of the rest', () => {
     expect(
-      decideOutcome({ humanTraces: 10, totalLabelRows: 400, c1Accuracy: 0.95, passCount: 8 }),
+      decideOutcome({
+        humanTraces: 10,
+        totalLabelRows: 400,
+        c1Accuracy: 0.95,
+        passCount: 8,
+        medianKappa: highMedianKappa,
+      }),
     ).toBe('INCONCLUSIVE');
   });
 
   test('fewer than 300 total label rows -> INCONCLUSIVE', () => {
     expect(
-      decideOutcome({ humanTraces: 40, totalLabelRows: 200, c1Accuracy: 0.95, passCount: 8 }),
+      decideOutcome({
+        humanTraces: 40,
+        totalLabelRows: 200,
+        c1Accuracy: 0.95,
+        passCount: 8,
+        medianKappa: highMedianKappa,
+      }),
     ).toBe('INCONCLUSIVE');
   });
 });
