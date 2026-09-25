@@ -22,10 +22,14 @@ describe('defineAdapter', () => {
 
     expect(defined).toBe(adapter);
     expect(Object.isFrozen(defined)).toBe(true);
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     expect((defined as Record<symbol, unknown>)[ADAPTER_MARKER]).toBe(true);
   });
 
   test('rejects specVersion "v0" with E_ADAPTER_SPEC_VERSION naming the id and both versions', () => {
+    // A non-'v1' specVersion cannot be expressed as a well-typed AdapterBase; this
+    // simulates the untyped config/JSON input the runtime check guards against.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const adapter = { ...makeAdapter(), specVersion: 'v0' } as unknown as AdapterBase;
 
     expect(() => defineAdapter(adapter)).toThrow(VetError);
@@ -33,15 +37,16 @@ describe('defineAdapter', () => {
       defineAdapter(adapter);
       throw new Error('expected defineAdapter to throw');
     } catch (err) {
-      expect(VetError.isInstance(err)).toBe(true);
-      expect((err as VetError).code).toBe('E_ADAPTER_SPEC_VERSION');
-      expect((err as VetError).message).toContain('acme/widget');
-      expect((err as VetError).message).toContain('v0');
-      expect((err as VetError).message).toContain('v1');
+      if (!VetError.isInstance(err)) throw err;
+      expect(err.code).toBe('E_ADAPTER_SPEC_VERSION');
+      expect(err.message).toContain('acme/widget');
+      expect(err.message).toContain('v0');
+      expect(err.message).toContain('v1');
     }
   });
 
   test('rejects specVersion "v2" the same way', () => {
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const adapter = { ...makeAdapter(), specVersion: 'v2' } as unknown as AdapterBase;
 
     expect(() => defineAdapter(adapter)).toThrow(
@@ -85,18 +90,16 @@ describe('requireCapabilities', () => {
       requireCapabilities(adapter, { questionTypes: ['score'] });
       throw new Error('expected requireCapabilities to throw');
     } catch (err) {
-      expect(VetError.isInstance(err)).toBe(true);
-      expect((err as VetError).code).toBe('E_ADAPTER_CAPABILITY');
-      expect((err as VetError).message).toContain('questionTypes');
+      if (!VetError.isInstance(err)) throw err;
+      expect(err.code).toBe('E_ADAPTER_CAPABILITY');
+      expect(err.message).toContain('questionTypes');
     }
   });
 
   test('checks boolean capabilities by equality and number capabilities by >=', () => {
     const adapter = makeAdapter({ capabilities: { streaming: true, maxTokens: 4096 } });
 
-    expect(() =>
-      requireCapabilities(adapter, { streaming: true, maxTokens: 2048 }),
-    ).not.toThrow();
+    expect(() => requireCapabilities(adapter, { streaming: true, maxTokens: 2048 })).not.toThrow();
     expect(() => requireCapabilities(adapter, { streaming: false })).toThrow(
       expect.objectContaining({ code: 'E_ADAPTER_CAPABILITY' }),
     );
@@ -112,9 +115,9 @@ describe('requireCapabilities', () => {
       requireCapabilities(adapter, { questionTypes: ['score'] });
       throw new Error('expected requireCapabilities to throw');
     } catch (err) {
-      expect(VetError.isInstance(err)).toBe(true);
-      expect((err as VetError).code).toBe('E_ADAPTER_CAPABILITY');
-      expect((err as VetError).message).toContain('questionTypes');
+      if (!VetError.isInstance(err)) throw err;
+      expect(err.code).toBe('E_ADAPTER_CAPABILITY');
+      expect(err.message).toContain('questionTypes');
     }
   });
 });
