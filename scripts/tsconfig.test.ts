@@ -1,5 +1,16 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
 
@@ -237,96 +248,109 @@ describe("bun run typecheck catches a planted type error", () => {
   });
 });
 
-describe("bun run typecheck on an unbuilt tree reports cross-package errors correctly", () => {
-  const specIndexPath = path.join(packagesDir, "spec/src/index.ts");
-  const specTypeFile = path.join(packagesDir, "spec/src/__tmp_cross_type.ts");
-  const coreUseFile = path.join(packagesDir, "core/src/__tmp_cross_use.ts");
+const rootPackageJson = JSON.parse(readFileSync(path.join(rootDir, "package.json"), "utf8")) as {
+  scripts: Record<string, string>;
+};
+const typecheckScript = rootPackageJson.scripts.typecheck;
 
-  // Removes any dist/ and *.tsbuildinfo left by a previous build so each test starts
-  // from the "no packages/*/dist" precondition the acceptance criteria requires.
-  function clearBuildArtifacts(): void {
-    for (const folder of packageFolders) {
-      rmSync(path.join(packagesDir, folder, "dist"), { recursive: true, force: true });
-      rmSync(path.join(packagesDir, folder, "tsconfig.tsbuildinfo"), { force: true });
+// The unbuilt-tree tests below need to delete packages/*/dist and plant files inside
+// packages/*/src to exercise a from-scratch typecheck, but scripts/**/*.test.ts and
+// packages/cli/src/program.test.ts run as concurrent vitest projects — the latter spawns
+// packages/cli/dist/bin.js, so deleting or rewriting the real tree here would race it.
+// Instead these tests copy just the files `tsc -b` needs (tsconfig.base.json, the root
+// solution tsconfig, and each package's package.json/tsconfig.json/src) into a throwaway
+// temp directory, with the repo's node_modules symlinked in for resolution, and run the
+// same command the "typecheck" script runs (read from package.json, not hard-coded)
+// there. The real packages/*/dist and packages/*/src are never touched.
+function createIsolatedWorkspace(): { dir: string; cleanup: () => void } {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "vetkit-typecheck-"));
+  cpSync(path.join(rootDir, "tsconfig.base.json"), path.join(dir, "tsconfig.base.json"));
+  cpSync(path.join(rootDir, "tsconfig.json"), path.join(dir, "tsconfig.json"));
+  symlinkSync(path.join(rootDir, "node_modules"), path.join(dir, "node_modules"), "dir");
+  const tempPackagesDir = path.join(dir, "packages");
+  mkdirSync(tempPackagesDir);
+  for (const folder of packageFolders) {
+    const srcPkgDir = path.join(packagesDir, folder);
+    const destPkgDir = path.join(tempPackagesDir, folder);
+    mkdirSync(destPkgDir);
+    cpSync(path.join(srcPkgDir, "package.json"), path.join(destPkgDir, "package.json"));
+    cpSync(path.join(srcPkgDir, "tsconfig.json"), path.join(destPkgDir, "tsconfig.json"));
+    cpSync(path.join(srcPkgDir, "src"), path.join(destPkgDir, "src"), { recursive: true });
+    const pkgNodeModules = path.join(srcPkgDir, "node_modules");
+    if (existsSync(pkgNodeModules)) {
+      symlinkSync(pkgNodeModules, path.join(destPkgDir, "node_modules"), "dir");
     }
   }
+  return { dir, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+}
 
+function runTypecheckIn(cwd: string): { status: number | null; stdout: string; stderr: string } {
+  const [command, ...args] = typecheckScript.split(" ");
+  const resolvedCommand = command === "tsc" ? tscBin : command;
+  return spawnSync(resolvedCommand as string, args, { cwd, encoding: "utf8" });
+}
+
+describe("bun run typecheck on an unbuilt tree reports cross-package errors correctly", () => {
   // packages/spec/src/index.ts is currently a placeholder with no exports (real exports
   // land in mol-fou.8), so the temp type is reachable via "@vetkit/spec" only by
   // temporarily re-exporting it from that public entry, the same way a real consumer
   // would import a type — never via a package.json edit (out of scope for this bead).
-  function plantCrossPackageFiles(value: string): string {
-    clearBuildArtifacts();
+  // This plants into the isolated temp copy of the workspace, never the real
+  // packages/spec/src or packages/core/src.
+  function plantCrossPackageFiles(dir: string, value: string): void {
+    const specIndexPath = path.join(dir, "packages/spec/src/index.ts");
     const originalIndex = readFileSync(specIndexPath, "utf8");
-    writeFileSync(specTypeFile, "export type TmpCrossType = { value: number };\n");
+    writeFileSync(
+      path.join(dir, "packages/spec/src/__tmp_cross_type.ts"),
+      "export type TmpCrossType = { value: number };\n",
+    );
     writeFileSync(specIndexPath, `${originalIndex}export * from "./__tmp_cross_type.ts";\n`);
     writeFileSync(
-      coreUseFile,
+      path.join(dir, "packages/core/src/__tmp_cross_use.ts"),
       `import type { TmpCrossType } from "@vetkit/spec";\nexport const tmpCrossUse: TmpCrossType = ${value};\n`,
     );
-    return originalIndex;
-  }
-
-  function cleanup(originalIndex: string): void {
-    writeFileSync(specIndexPath, originalIndex);
-    rmSync(specTypeFile, { force: true });
-    rmSync(coreUseFile, { force: true });
-    clearBuildArtifacts();
   }
 
   test("a type error in packages/core/src via an @vetkit/spec import is TS2322, not TS6305", () => {
-    const originalIndex = plantCrossPackageFiles('{ value: "not a number" }');
+    const { dir, cleanup } = createIsolatedWorkspace();
     try {
-      const result = spawnSync("bun", ["run", "typecheck"], {
-        cwd: rootDir,
-        encoding: "utf8",
-      });
+      plantCrossPackageFiles(dir, '{ value: "not a number" }');
+      const result = runTypecheckIn(dir);
       const output = result.stdout + result.stderr;
       expect(result.status).not.toBe(0);
       expect(output).toContain("TS2322");
       expect(output).not.toContain("TS6305");
     } finally {
-      cleanup(originalIndex);
+      cleanup();
     }
   });
 
   test("a correct cross-package import typechecks with exit 0", () => {
-    const originalIndex = plantCrossPackageFiles("{ value: 1 }");
+    const { dir, cleanup } = createIsolatedWorkspace();
     try {
-      const result = spawnSync("bun", ["run", "typecheck"], {
-        cwd: rootDir,
-        encoding: "utf8",
-      });
+      plantCrossPackageFiles(dir, "{ value: 1 }");
+      const result = runTypecheckIn(dir);
       expect(result.status).toBe(0);
     } finally {
-      cleanup(originalIndex);
+      cleanup();
     }
   });
 });
 
 describe("bun run typecheck leaves no build output behind", () => {
-  function clearBuildArtifacts(): void {
-    for (const folder of packageFolders) {
-      rmSync(path.join(packagesDir, folder, "dist"), { recursive: true, force: true });
-      rmSync(path.join(packagesDir, folder, "tsconfig.tsbuildinfo"), { force: true });
-    }
-  }
-
   test("a clean typecheck run creates no packages/*/dist and writes no .js into any package src", () => {
-    clearBuildArtifacts();
+    const { dir, cleanup } = createIsolatedWorkspace();
     try {
-      const result = spawnSync("bun", ["run", "typecheck"], {
-        cwd: rootDir,
-        encoding: "utf8",
-      });
+      const result = runTypecheckIn(dir);
       expect(result.status).toBe(0);
       for (const folder of packageFolders) {
-        expect(existsSync(path.join(packagesDir, folder, "dist"))).toBe(false);
-        const srcEntries = readdirSync(path.join(packagesDir, folder, "src"));
+        const pkgDir = path.join(dir, "packages", folder);
+        expect(existsSync(path.join(pkgDir, "dist"))).toBe(false);
+        const srcEntries = readdirSync(path.join(pkgDir, "src"));
         expect(srcEntries.some((entry) => entry.endsWith(".js"))).toBe(false);
       }
     } finally {
-      clearBuildArtifacts();
+      cleanup();
     }
   });
 });
