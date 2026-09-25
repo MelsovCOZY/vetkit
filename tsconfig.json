@@ -1,0 +1,16 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/cli" },
+    { "path": "./packages/core" },
+    { "path": "./packages/export-vitest" },
+    { "path": "./packages/generator-openai-compatible" },
+    { "path": "./packages/judge-jev" },
+    { "path": "./packages/sink-langfuse" },
+    { "path": "./packages/sink-otel" },
+    { "path": "./packages/source-jsonl" },
+    { "path": "./packages/source-langfuse" },
+    { "path": "./packages/source-otlp" },
+    { "path": "./packages/spec" }
+  ]
+}
