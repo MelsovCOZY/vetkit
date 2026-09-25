@@ -241,12 +241,17 @@ describe('dependency budget', () => {
 });
 
 describe('bun.lock', () => {
-  it('never references ai, @types/bun or bun-types', () => {
+  it('never resolves ai, @types/bun or bun-types as an installed package', () => {
+    // A resolved package is its own top-level lockfile entry: `"<name>": ["<name>@<version>", ...]`.
+    // This deliberately does not flag a package's own (unresolved, optional) peer dependency *named*
+    // "ai" appearing inside another entry's metadata (e.g. evalite's optional peer on `ai`) - that
+    // string is never installed and resolves to nothing, so it is not a dependency of this tree.
     const lockPath = join(ROOT, 'bun.lock');
     expect(existsSync(lockPath)).toBe(true);
     const lock = readFileSync(lockPath, 'utf8');
-    for (const forbidden of ['"ai"', '"@types/bun"', 'bun-types']) {
-      expect(lock.includes(forbidden)).toBe(false);
+    for (const forbidden of ['ai', '@types/bun', 'bun-types']) {
+      const resolvedEntry = new RegExp(`"${forbidden.replace(/[/]/g, '\\/')}":\\s*\\["${forbidden.replace(/[/]/g, '\\/')}@`);
+      expect(resolvedEntry.test(lock)).toBe(false);
     }
   });
 });
