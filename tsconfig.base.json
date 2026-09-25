@@ -1,0 +1,22 @@
+{
+  // isolatedDeclarations requires an explicit return type on every exported declaration;
+  // every packages/*/src file (later beads) must comply.
+  // types is ["node"] ONLY — never add "bun" here, it would leak Bun globals into published .d.ts.
+  "compilerOptions": {
+    "module": "node20",
+    "target": "es2023",
+    "strict": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "erasableSyntaxOnly": true,
+    "isolatedDeclarations": true,
+    "rewriteRelativeImportExtensions": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "declaration": true,
+    "declarationMap": true,
+    "types": ["node"],
+    "customConditions": ["@vetkit/source"],
+    "composite": true
+  }
+}
