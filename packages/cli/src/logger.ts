@@ -1,7 +1,7 @@
 import { styleText } from 'node:util';
+import { redact } from './redact.ts';
 const LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const;
 export type LogLevel = (typeof LOG_LEVELS)[number];
-
 export interface LoggerOptions {
   readonly level?: LogLevel;
   readonly format?: 'pretty' | 'json';
@@ -37,8 +37,8 @@ export function createLogger(options: LoggerOptions = {}): Logger {
   const threshold = LOG_LEVELS.indexOf(level);
   const write = (lvl: LogLevel, message: string, data?: Record<string, unknown>): void => {
     if (LOG_LEVELS.indexOf(lvl) < threshold) return;
-    const safeMessage = redactString(message);
-    const safeData = data ? redactData(data) : undefined;
+    const safeMessage = redact(redactString(message));
+    const safeData = data ? redact(redactData(data)) : undefined;
     if (format === 'json') {
       stream.write(`${JSON.stringify({ level: lvl, message: safeMessage, ...safeData })}\n`);
       return;
