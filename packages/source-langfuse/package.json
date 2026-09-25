@@ -3,13 +3,22 @@
   "version": "0.0.0",
   "type": "module",
   "sideEffects": false,
-  "engines": { "node": ">=22.12" },
-  "files": ["dist"],
+  "engines": {
+    "node": ">=22.12"
+  },
+  "files": [
+    "dist"
+  ],
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
     "./package.json": "./package.json"
   },
-  "publishConfig": { "access": "public" },
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@vetkit/spec": "workspace:^"
   },
@@ -17,9 +26,14 @@
     "langfuse": "^3.39.2"
   },
   "peerDependenciesMeta": {
-    "langfuse": { "optional": true }
+    "langfuse": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "langfuse": "3.39.2"
+  },
+  "scripts": {
+    "build": "tsdown"
   }
 }

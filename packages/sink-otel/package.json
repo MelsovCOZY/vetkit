@@ -3,13 +3,22 @@
   "version": "0.0.0",
   "type": "module",
   "sideEffects": false,
-  "engines": { "node": ">=22.12" },
-  "files": ["dist"],
+  "engines": {
+    "node": ">=22.12"
+  },
+  "files": [
+    "dist"
+  ],
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
     "./package.json": "./package.json"
   },
-  "publishConfig": { "access": "public" },
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@opentelemetry/api-logs": "0.222.0",
     "@opentelemetry/exporter-logs-otlp-http": "0.222.0",
@@ -18,5 +27,8 @@
   },
   "peerDependencies": {
     "@opentelemetry/api": "^1.9.1"
+  },
+  "scripts": {
+    "build": "tsdown"
   }
 }
