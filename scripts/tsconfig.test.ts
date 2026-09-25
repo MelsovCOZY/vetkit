@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
 
@@ -233,6 +233,100 @@ describe("bun run typecheck catches a planted type error", () => {
       expect(result.stdout + result.stderr).toContain("TS2322");
     } finally {
       rmSync(plantedFile, { force: true });
+    }
+  });
+});
+
+describe("bun run typecheck on an unbuilt tree reports cross-package errors correctly", () => {
+  const specIndexPath = path.join(packagesDir, "spec/src/index.ts");
+  const specTypeFile = path.join(packagesDir, "spec/src/__tmp_cross_type.ts");
+  const coreUseFile = path.join(packagesDir, "core/src/__tmp_cross_use.ts");
+
+  // Removes any dist/ and *.tsbuildinfo left by a previous build so each test starts
+  // from the "no packages/*/dist" precondition the acceptance criteria requires.
+  function clearBuildArtifacts(): void {
+    for (const folder of packageFolders) {
+      rmSync(path.join(packagesDir, folder, "dist"), { recursive: true, force: true });
+      rmSync(path.join(packagesDir, folder, "tsconfig.tsbuildinfo"), { force: true });
+    }
+  }
+
+  // packages/spec/src/index.ts is currently a placeholder with no exports (real exports
+  // land in mol-fou.8), so the temp type is reachable via "@vetkit/spec" only by
+  // temporarily re-exporting it from that public entry, the same way a real consumer
+  // would import a type — never via a package.json edit (out of scope for this bead).
+  function plantCrossPackageFiles(value: string): string {
+    clearBuildArtifacts();
+    const originalIndex = readFileSync(specIndexPath, "utf8");
+    writeFileSync(specTypeFile, "export type TmpCrossType = { value: number };\n");
+    writeFileSync(specIndexPath, `${originalIndex}export * from "./__tmp_cross_type.ts";\n`);
+    writeFileSync(
+      coreUseFile,
+      `import type { TmpCrossType } from "@vetkit/spec";\nexport const tmpCrossUse: TmpCrossType = ${value};\n`,
+    );
+    return originalIndex;
+  }
+
+  function cleanup(originalIndex: string): void {
+    writeFileSync(specIndexPath, originalIndex);
+    rmSync(specTypeFile, { force: true });
+    rmSync(coreUseFile, { force: true });
+    clearBuildArtifacts();
+  }
+
+  test("a type error in packages/core/src via an @vetkit/spec import is TS2322, not TS6305", () => {
+    const originalIndex = plantCrossPackageFiles('{ value: "not a number" }');
+    try {
+      const result = spawnSync("bun", ["run", "typecheck"], {
+        cwd: rootDir,
+        encoding: "utf8",
+      });
+      const output = result.stdout + result.stderr;
+      expect(result.status).not.toBe(0);
+      expect(output).toContain("TS2322");
+      expect(output).not.toContain("TS6305");
+    } finally {
+      cleanup(originalIndex);
+    }
+  });
+
+  test("a correct cross-package import typechecks with exit 0", () => {
+    const originalIndex = plantCrossPackageFiles("{ value: 1 }");
+    try {
+      const result = spawnSync("bun", ["run", "typecheck"], {
+        cwd: rootDir,
+        encoding: "utf8",
+      });
+      expect(result.status).toBe(0);
+    } finally {
+      cleanup(originalIndex);
+    }
+  });
+});
+
+describe("bun run typecheck leaves no build output behind", () => {
+  function clearBuildArtifacts(): void {
+    for (const folder of packageFolders) {
+      rmSync(path.join(packagesDir, folder, "dist"), { recursive: true, force: true });
+      rmSync(path.join(packagesDir, folder, "tsconfig.tsbuildinfo"), { force: true });
+    }
+  }
+
+  test("a clean typecheck run creates no packages/*/dist and writes no .js into any package src", () => {
+    clearBuildArtifacts();
+    try {
+      const result = spawnSync("bun", ["run", "typecheck"], {
+        cwd: rootDir,
+        encoding: "utf8",
+      });
+      expect(result.status).toBe(0);
+      for (const folder of packageFolders) {
+        expect(existsSync(path.join(packagesDir, folder, "dist"))).toBe(false);
+        const srcEntries = readdirSync(path.join(packagesDir, folder, "src"));
+        expect(srcEntries.some((entry) => entry.endsWith(".js"))).toBe(false);
+      }
+    } finally {
+      clearBuildArtifacts();
     }
   });
 });
