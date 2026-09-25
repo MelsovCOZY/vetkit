@@ -85,7 +85,9 @@ describe('renovate.json', () => {
       const patterns = [...(r.matchPackagePatterns ?? []), ...(r.matchPackageNames ?? [])];
       return (
         typeof r.groupName === 'string' &&
-        patterns.some((p: string) => new RegExp(p.replace(/^\/|\/$/g, '')).test('@opentelemetry/api'))
+        patterns.some((p: string) =>
+          new RegExp(p.replace(/^\/|\/$/g, '')).test('@opentelemetry/api'),
+        )
       );
     });
     expect(rule).toBeDefined();
