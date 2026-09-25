@@ -142,9 +142,11 @@ describe('generated spike/data/corpus-text.json (integration, produced by extrac
 });
 
 describe('spike/corpus.ts never touches env files or Langfuse', () => {
-  test('source contains no reference to .env or LANGFUSE', async () => {
+  test('source contains no reference to a .env file or LANGFUSE (process.env var access is fine)', async () => {
     const source = await readFile(CORPUS_TS_PATH, 'utf8');
-    expect(source).not.toMatch(/\.env/);
+    const nonEnvVarLines = source.split('\n').filter((line) => !line.includes('process.env'));
+    const suspectDotEnvLines = nonEnvVarLines.filter((line) => line.includes('.env'));
+    expect(suspectDotEnvLines).toEqual([]);
     expect(source).not.toMatch(/LANGFUSE/);
   });
 });
