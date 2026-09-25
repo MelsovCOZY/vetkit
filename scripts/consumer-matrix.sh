@@ -43,34 +43,42 @@ corepack enable
 
 FAILURES=()
 
-# One "<package-name>" or "<package-name>/<subpath>" import specifier per line, read
-# from every tarball's own package.json exports map - never packages/ in the checked
-# out repo - so this script only depends on the tarball directory it is given.
-IMPORT_SPECIFIERS="$(mktemp)"
-trap 'rm -f "$IMPORT_SPECIFIERS"' EXIT
+# packages: "<package-name>" -> absolute tarball path. specifiers: one
+# "<package-name>" or "<package-name>/<subpath>" import specifier per entry, both read
+# from every tarball's own package.json (name, exports) - never packages/ in the
+# checked out repo - so this script only depends on the tarball directory it is given.
+MANIFEST="$(mktemp)"
+trap 'rm -f "$MANIFEST"' EXIT
 
-for tgz in "${TARBALLS[@]}"; do
-  tar -xzOf "$tgz" package/package.json | node -e '
-    let data = "";
-    process.stdin.on("data", (chunk) => { data += chunk; });
-    process.stdin.on("end", () => {
-      const pkg = JSON.parse(data);
-      for (const entry of Object.keys(pkg.exports ?? {})) {
-        if (entry === "./package.json") continue;
-        console.log(entry === "." ? pkg.name : `${pkg.name}/${entry.slice(2)}`);
-      }
-    });
-  ' >>"$IMPORT_SPECIFIERS"
-done
+node -e '
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const { execFileSync } = require("node:child_process");
+  const dir = process.argv[1];
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith(".tgz")).sort();
+  const packages = {};
+  const specifiers = [];
+  for (const file of files) {
+    const full = path.join(dir, file);
+    const text = execFileSync("tar", ["-xzOf", full, "package/package.json"], { encoding: "utf8" });
+    const pkg = JSON.parse(text);
+    packages[pkg.name] = full;
+    for (const entry of Object.keys(pkg.exports ?? {})) {
+      if (entry === "./package.json") continue;
+      specifiers.push(entry === "." ? pkg.name : `${pkg.name}/${entry.slice(2)}`);
+    }
+  }
+  fs.writeFileSync(process.argv[2], JSON.stringify({ packages, specifiers }));
+' "$TARBALL_DIR" "$MANIFEST"
 
 write_index_mjs() {
-  {
-    while IFS= read -r specifier; do
-      [[ -z "$specifier" ]] && continue
-      printf "import '%s';\n" "$specifier"
-    done <"$IMPORT_SPECIFIERS"
-    echo "console.log('consumer-matrix: all exports entries imported ok');"
-  } >"$1"
+  node -e '
+    const fs = require("node:fs");
+    const { specifiers } = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    const lines = specifiers.map((specifier) => `import ${JSON.stringify(specifier)};`);
+    lines.push("console.log(\"consumer-matrix: all exports entries imported ok\");");
+    fs.writeFileSync(process.argv[2], `${lines.join("\n")}\n`);
+  ' "$MANIFEST" "$1"
 }
 
 write_tsconfig() {
@@ -81,11 +89,47 @@ write_tsconfig() {
     "moduleResolution": "nodenext",
     "target": "es2023",
     "strict": $2,
+    "allowJs": true,
     "noEmit": true
   },
   "include": ["index.mjs"]
 }
 JSON
+}
+
+# Writes a consumer package.json (dependencies pinned to every tarball's absolute
+# `file:` path) plus whatever override mechanism that package manager needs so a
+# package's own internal @vetkit/* dependency range never falls through to the
+# registry (those packages are not published): npm/bun read root "overrides", Yarn
+# reads "resolutions" (and is pinned to Yarn Berry via "packageManager" so the
+# nodeLinker override below applies), and pnpm reads "overrides" from
+# pnpm-workspace.yaml, not from package.json.
+write_consumer_manifest() {
+  local pm="$1"
+  local out_dir="$2"
+  node -e '
+    const fs = require("node:fs");
+    const path = require("node:path");
+    const [manifestPath, outDir, pm] = process.argv.slice(1);
+    const { packages } = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    const deps = Object.fromEntries(
+      Object.entries(packages).map(([name, tarballPath]) => [name, `file:${tarballPath}`]),
+    );
+    const manifest = { name: `consumer-${pm}`, private: true, type: "module", dependencies: deps };
+    if (pm === "npm" || pm === "bun") manifest.overrides = deps;
+    if (pm === "yarn") {
+      manifest.packageManager = "yarn@4.5.0";
+      manifest.resolutions = deps;
+    }
+    fs.writeFileSync(path.join(outDir, "package.json"), JSON.stringify(manifest, null, 2));
+    if (pm === "pnpm") {
+      const lines = ["overrides:"];
+      for (const [name, spec] of Object.entries(deps)) {
+        lines.push(`  ${JSON.stringify(name)}: ${JSON.stringify(spec)}`);
+      }
+      fs.writeFileSync(path.join(outDir, "pnpm-workspace.yaml"), `${lines.join("\n")}\n`);
+    }
+  ' "$MANIFEST" "$out_dir" "$pm"
 }
 
 # Runs one step; on failure, records "<label>" in FAILURES and returns 1 instead of
@@ -109,25 +153,23 @@ for pm in npm pnpm yarn bun; do
   echo "consumer-matrix: === ${pm} ==="
   pushd "$project_dir" >/dev/null
 
-  echo "{\"name\":\"consumer-${pm}\",\"private\":true,\"type\":\"module\"}" >package.json
+  write_consumer_manifest "$pm" "$project_dir"
 
   case "$pm" in
   npm)
-    run_step "${pm} install" npm install --no-audit --no-fund "${TARBALLS[@]}" || true
+    run_step "${pm} install" npm install --no-audit --no-fund || true
     ;;
   pnpm)
     printf 'shamefully-hoist=true\n' >.npmrc
-    run_step "${pm} install" pnpm add "${TARBALLS[@]}" || true
+    run_step "${pm} install" pnpm install || true
     ;;
   yarn)
-    # Yarn Berry defaults to PnP, which a plain tarball install does not support.
+    # Yarn Berry defaults to PnP, which the file:-tarball dependencies above do not support.
     printf 'nodeLinker: node-modules\n' >.yarnrc.yml
-    run_step "${pm} install" yarn add "${TARBALLS[@]}" || true
+    run_step "${pm} install" yarn install || true
     ;;
   bun)
-    for tgz in "${TARBALLS[@]}"; do
-      run_step "${pm} add $(basename "${tgz}")" bun add "${tgz}" || true
-    done
+    run_step "${pm} install" bun install || true
     ;;
   esac
 
