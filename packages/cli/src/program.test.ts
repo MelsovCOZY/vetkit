@@ -5,7 +5,12 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 
 const require = createRequire(import.meta.url);
-const pkg = require('../package.json') as { version: string };
+
+function readVersion(): string {
+  const pkgJson = require('../package.json');
+  return pkgJson.version;
+}
+
 const binPath = fileURLToPath(new URL('../dist/bin.js', import.meta.url));
 
 function runBin(args: string[]): { stdout: string; stderr: string; status: number | null } {
@@ -15,7 +20,7 @@ function runBin(args: string[]): { stdout: string; stderr: string; status: numbe
 describe('vet bin', () => {
   test('--version prints the cli package version and exits 0', () => {
     const result = runBin(['--version']);
-    expect(result.stdout.trim()).toBe(pkg.version);
+    expect(result.stdout.trim()).toBe(readVersion());
     expect(result.status).toBe(0);
   });
 
