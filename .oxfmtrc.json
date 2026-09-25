@@ -1,0 +1,19 @@
+{
+  "printWidth": 100,
+  "singleQuote": true,
+  "ignorePatterns": [
+    ".beads/**",
+    ".agents/**",
+    ".claude/**",
+    ".codex/**",
+    "graphify-out/**",
+    "docs/**",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "spike/**",
+    "**/package.json",
+    "scripts/manifests.test.ts",
+    "scripts/tsconfig.test.ts",
+    "scripts/fixtures/tsconfig-bad/**"
+  ]
+}
