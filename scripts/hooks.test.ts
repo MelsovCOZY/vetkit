@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -95,7 +103,13 @@ describe('git hook chain: bd markers + advisory lefthook (fou.13)', () => {
           join(clonePath, 'packages/spec/src/__hooktest__.ts'),
           'export function hookTestSymbol(): number {\n  return 42;\n}\n',
         );
-        spawnSync('git', ['-C', clonePath, 'add', 'lefthook.yml', 'packages/spec/src/__hooktest__.ts']);
+        spawnSync('git', [
+          '-C',
+          clonePath,
+          'add',
+          'lefthook.yml',
+          'packages/spec/src/__hooktest__.ts',
+        ]);
         const commit = spawnSync(
           'git',
           ['-C', clonePath, 'commit', '-m', 'test: hooktest fixture (fou.13)'],
