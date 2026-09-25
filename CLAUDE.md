@@ -1,4 +1,4 @@
-# classified-evals
+# vetkit
 
 Unopinionated TypeScript library + CLI that generates, validates and runs LLM evals. TypeSafe AI's Jev
 (System One typed decisions) is the judge; any chat model is the generator. Nothing is hard-coded to one
