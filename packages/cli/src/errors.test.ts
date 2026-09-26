@@ -19,8 +19,10 @@ function markerError(code: string, message: string, cause?: unknown): unknown {
 }
 
 class ExitCalled extends Error {
-  constructor(readonly code: number) {
+  readonly code: number;
+  constructor(code: number) {
     super(`exit ${code}`);
+    this.code = code;
   }
 }
 
