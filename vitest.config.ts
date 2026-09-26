@@ -89,6 +89,22 @@ export default defineConfig({
           include: ['spike/**/*.test.ts'],
         },
       },
+      // Final-gate smokes against the real Jev endpoint. Opt-in only: without
+      // CEV_E2E=1, `bun run test` must not collect e2e/** at all (the fetch guard
+      // in vitest.setup.ts already lets CEV_E2E=1 tests through). Gate smokes can
+      // take minutes, hence the long timeout.
+      ...(process.env.CEV_E2E === '1'
+        ? [
+            {
+              extends: true,
+              test: {
+                name: 'e2e',
+                include: ['e2e/**/*.e2e.test.ts'],
+                testTimeout: 900_000,
+              },
+            },
+          ]
+        : []),
     ],
   },
 });
