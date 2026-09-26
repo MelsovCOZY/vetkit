@@ -11,12 +11,18 @@ export const EXIT_SINK_SOURCE_STRICT = 1;
 export const EXIT_SIGINT = 130;
 export const EXIT_INTERNAL = 70;
 
+// Structural stand-in for NodeJS.WritableStream so this public declaration doesn't
+// depend on @types/node ambient globals (consumers without @types/node get TS2503).
+interface WritableLike {
+  write(chunk: string): unknown;
+}
+
 export interface HandleErrorContext {
   readonly json: boolean;
   readonly verbose: boolean;
   readonly strict: boolean;
-  readonly stdout: NodeJS.WritableStream;
-  readonly stderr: NodeJS.WritableStream;
+  readonly stdout: WritableLike;
+  readonly stderr: WritableLike;
   readonly exit: (code: number) => never;
 }
 
@@ -78,7 +84,7 @@ function causeMessage(cause: unknown): string | undefined {
 }
 
 function writeJson(
-  stdout: NodeJS.WritableStream,
+  stdout: WritableLike,
   code: string,
   message: string,
   hint: string,
@@ -90,7 +96,7 @@ function writeJson(
   stdout.write(`${JSON.stringify({ error: body })}\n`);
 }
 
-function writeCauseChain(stderr: NodeJS.WritableStream, cause: unknown): void {
+function writeCauseChain(stderr: WritableLike, cause: unknown): void {
   let current = cause;
   while (current instanceof Error) {
     stderr.write(`  caused by: ${current.message}\n`);
@@ -99,7 +105,7 @@ function writeCauseChain(stderr: NodeJS.WritableStream, cause: unknown): void {
 }
 
 function writePretty(
-  stderr: NodeJS.WritableStream,
+  stderr: WritableLike,
   label: 'error' | 'warning',
   code: string,
   message: string,

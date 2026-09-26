@@ -2,10 +2,16 @@ import { styleText } from 'node:util';
 import { redact } from './redact.ts';
 const LOG_LEVELS = ['debug', 'info', 'warn', 'error'] as const;
 export type LogLevel = (typeof LOG_LEVELS)[number];
+// Structural stand-in for NodeJS.WritableStream so this public declaration doesn't
+// depend on @types/node ambient globals (consumers without @types/node get TS2503).
+export interface LogStream {
+  write(chunk: string): unknown;
+  isTTY?: boolean;
+}
 export interface LoggerOptions {
   readonly level?: LogLevel;
   readonly format?: 'pretty' | 'json';
-  readonly stream?: NodeJS.WritableStream;
+  readonly stream?: LogStream;
 }
 export interface Logger {
   readonly debug: (message: string, data?: Record<string, unknown>) => void;
