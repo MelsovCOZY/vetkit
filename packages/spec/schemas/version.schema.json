@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vetkit.dev/schemas/version.schema.json",
+  "title": "SpecVersionDoc",
+  "type": "object",
+  "properties": {
+    "specVersion": {
+      "const": "v1"
+    }
+  },
+  "required": ["specVersion"],
+  "additionalProperties": false
+}
