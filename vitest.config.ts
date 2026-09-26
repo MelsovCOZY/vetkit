@@ -1,4 +1,5 @@
-import { readdirSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
@@ -6,6 +7,28 @@ import { defineConfig } from 'vitest/config';
 // (packages/<name>), so a relative './vitest.setup.ts' would resolve against
 // each package directory instead of the repo root.
 const setupFile = fileURLToPath(new URL('./vitest.setup.ts', import.meta.url));
+
+const repoRoot = fileURLToPath(new URL('.', import.meta.url));
+
+// Cross-package imports (e.g. packages/cli/src/errors.ts importing @vetkit/spec) resolve
+// through each workspace package's package.json `exports`, which point at ./dist — build
+// output that doesn't exist before `bun run build`. Alias every @vetkit/<name> workspace
+// package straight to its source entry point instead, mirroring the tsconfig `paths`
+// precedent (packages/cli/tsconfig.json), so tests behave like tsc: no build required.
+// Derived from packages/*/package.json so new packages are covered automatically; the
+// cli package (npm name "vetkit", not scoped) is naturally excluded.
+const packageAliases = Object.fromEntries(
+  readdirSync(join(repoRoot, 'packages'), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => {
+      const pkgJson: { name: string } = JSON.parse(
+        readFileSync(join(repoRoot, 'packages', entry.name, 'package.json'), 'utf8'),
+      );
+      return { name: pkgJson.name, dir: entry.name };
+    })
+    .filter(({ name }) => name.startsWith('@vetkit/'))
+    .map(({ name, dir }) => [name, join(repoRoot, 'packages', dir, 'src', 'index.ts')]),
+);
 
 // A bare `packages/*` glob project does NOT inherit root `test` options (setupFiles,
 // restoreMocks, etc.) - each matched directory becomes an independent project that only
@@ -30,6 +53,9 @@ const packageProjects = readdirSync('packages', { withFileTypes: true })
   }));
 
 export default defineConfig({
+  resolve: {
+    alias: packageAliases,
+  },
   test: {
     // Empty `packages/*` projects (no tests yet - each package's own bead adds them)
     // must not fail the run; scripts/spike below always have test files, so this is
