@@ -19,6 +19,13 @@ const packageProjects = readdirSync('packages', { withFileTypes: true })
     root: `packages/${entry.name}`,
     test: {
       name: entry.name,
+      // The named verify command for generated type tests (e.g. generated.test-d.ts)
+      // needs this enabled per-package, or vitest reports "No test files found" and
+      // exits 0 without type-checking anything.
+      typecheck: {
+        enabled: true,
+        include: ['**/*.test-d.ts'],
+      },
     },
   }));
 
