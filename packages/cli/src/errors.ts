@@ -54,13 +54,18 @@ function resolveExit(code: string, strict: boolean): Resolved {
   if (INTERNAL_EXIT_CODES.has(code)) {
     return { category: 'internal', exitCode: EXIT_INTERNAL, warn: false };
   }
-  if (code === 'E_NOT_INTERACTIVE' || code.startsWith('E_CONFIG') || code.startsWith('E_GATE_')) {
+  const unprefixed = code.startsWith('E_') ? code.slice(2) : code;
+  if (
+    unprefixed === 'NOT_INTERACTIVE' ||
+    unprefixed.startsWith('CONFIG') ||
+    unprefixed.startsWith('GATE_')
+  ) {
     return { category: 'config', exitCode: EXIT_USAGE, warn: false };
   }
-  if (code === 'E_UNSCORED_ONLY') {
+  if (unprefixed === 'UNSCORED_ONLY') {
     return { category: 'unscored', exitCode: EXIT_UNSCORED_ONLY, warn: false };
   }
-  if (code.startsWith('E_SINK_') || code.startsWith('E_SOURCE_')) {
+  if (unprefixed.startsWith('SINK_') || unprefixed.startsWith('SOURCE_')) {
     return strict
       ? { category: 'sinkSource', exitCode: EXIT_SINK_SOURCE_STRICT, warn: false }
       : { category: 'sinkSource', exitCode: EXIT_OK, warn: true };
