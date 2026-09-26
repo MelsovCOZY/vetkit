@@ -2,7 +2,12 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
+
+// This repo's vitest.config.ts only ever builds the plain-object project form.
+type ProjectConfig = {
+  test?: { name?: string; include?: string[]; testTimeout?: number };
+};
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -59,4 +64,25 @@ test('every @vetkit/<name> workspace package aliases to its own packages/<name>/
   for (const { name, dir } of scopedPackages) {
     expect(alias[name]).toBe(join(repoRoot, 'packages', dir, 'src', 'index.ts'));
   }
+});
+
+test('adds an e2e project reading e2e/**/*.e2e.test.ts with a long timeout when CEV_E2E=1', async () => {
+  vi.stubEnv('CEV_E2E', '1');
+  vi.resetModules();
+  const config = (await import('../vitest.config.ts')).default;
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  const projects = (config.test?.projects ?? []) as ProjectConfig[];
+  const e2eProject = projects.find((p) => p.test?.name === 'e2e');
+
+  expect(e2eProject?.test?.include).toEqual(['e2e/**/*.e2e.test.ts']);
+  expect(e2eProject?.test?.testTimeout).toBe(900_000);
+});
+
+test('omits the e2e project when CEV_E2E is unset', async () => {
+  vi.resetModules();
+  const config = (await import('../vitest.config.ts')).default;
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  const projects = (config.test?.projects ?? []) as ProjectConfig[];
+
+  expect(projects.some((p) => p.test?.name === 'e2e')).toBe(false);
 });
