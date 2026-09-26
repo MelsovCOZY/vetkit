@@ -1,0 +1,164 @@
+import { CommanderError } from 'commander';
+import { VetError } from '@vetkit/spec';
+import { redact } from './redact.ts';
+
+// Exit codes are local to the CLI until the app-shell leaf (classified-evals-mol-uu0)
+// centralizes them. EX_SOFTWARE (70) is the BSD sysexits fallback for "internal error".
+export const EXIT_OK = 0;
+export const EXIT_USAGE = 2;
+export const EXIT_UNSCORED_ONLY = 3;
+export const EXIT_SINK_SOURCE_STRICT = 1;
+export const EXIT_SIGINT = 130;
+export const EXIT_INTERNAL = 70;
+
+export interface HandleErrorContext {
+  readonly json: boolean;
+  readonly verbose: boolean;
+  readonly strict: boolean;
+  readonly stdout: NodeJS.WritableStream;
+  readonly stderr: NodeJS.WritableStream;
+  readonly exit: (code: number) => never;
+}
+
+type Category = 'config' | 'unscored' | 'sinkSource' | 'internal';
+
+interface Resolved {
+  readonly category: Category;
+  readonly exitCode: number;
+  readonly warn: boolean;
+}
+
+// Existing @vetkit/spec codes (packages/spec/src/errors.ts), folded into this table
+// so exact entries win before the prefix rules below run.
+const CONFIG_EXIT_CODES = new Set([
+  'E_CONFIG',
+  'E_ADAPTER_SPEC_VERSION',
+  'E_ADAPTER_CAPABILITY',
+  'E_SCHEMA_INVALID',
+  'E_JSON_PARSE',
+  'E_AUTH',
+  'E_UNPINNED_LOCK',
+  'E_UNCALIBRATED',
+]);
+const INTERNAL_EXIT_CODES = new Set(['E_IO', 'E_NETWORK', 'E_TIMEOUT', 'E_RATE_LIMIT']);
+
+const HINTS: Readonly<Record<Category, string>> = {
+  config: 'check your configuration and CLI flags, then retry.',
+  unscored: 'no scored cases matched; add scored evals or relax the filter.',
+  sinkSource: 'a sink or source adapter failed; rerun with --strict to treat this as fatal.',
+  internal: 'this looks like an internal error; rerun with --verbose and file an issue.',
+};
+
+function resolveExit(code: string, strict: boolean): Resolved {
+  if (CONFIG_EXIT_CODES.has(code)) return { category: 'config', exitCode: EXIT_USAGE, warn: false };
+  if (INTERNAL_EXIT_CODES.has(code)) {
+    return { category: 'internal', exitCode: EXIT_INTERNAL, warn: false };
+  }
+  if (code === 'E_NOT_INTERACTIVE' || code.startsWith('E_CONFIG') || code.startsWith('E_GATE_')) {
+    return { category: 'config', exitCode: EXIT_USAGE, warn: false };
+  }
+  if (code === 'E_UNSCORED_ONLY') {
+    return { category: 'unscored', exitCode: EXIT_UNSCORED_ONLY, warn: false };
+  }
+  if (code.startsWith('E_SINK_') || code.startsWith('E_SOURCE_')) {
+    return strict
+      ? { category: 'sinkSource', exitCode: EXIT_SINK_SOURCE_STRICT, warn: false }
+      : { category: 'sinkSource', exitCode: EXIT_OK, warn: true };
+  }
+  return { category: 'internal', exitCode: EXIT_INTERNAL, warn: false };
+}
+
+function causeMessage(cause: unknown): string | undefined {
+  return cause instanceof Error ? cause.message : undefined;
+}
+
+function writeJson(
+  stdout: NodeJS.WritableStream,
+  code: string,
+  message: string,
+  hint: string,
+  cause: unknown,
+): void {
+  const body: Record<string, unknown> = { code, message, hint };
+  const cm = causeMessage(cause);
+  if (cm !== undefined) body.cause = redact(cm);
+  stdout.write(`${JSON.stringify({ error: body })}\n`);
+}
+
+function writeCauseChain(stderr: NodeJS.WritableStream, cause: unknown): void {
+  let current = cause;
+  while (current instanceof Error) {
+    stderr.write(`  caused by: ${current.message}\n`);
+    current = current.cause;
+  }
+}
+
+function writePretty(
+  stderr: NodeJS.WritableStream,
+  label: 'error' | 'warning',
+  code: string,
+  message: string,
+  hint: string,
+  cause: unknown,
+  verbose: boolean,
+  stack?: string,
+): void {
+  stderr.write(`${label} ${code}: ${message}\n`);
+  stderr.write(`${hint}\n`);
+  if (!verbose) return;
+  writeCauseChain(stderr, cause);
+  if (stack !== undefined) stderr.write(`${stack}\n`);
+}
+
+function renderResolved(err: VetError, resolved: Resolved, ctx: HandleErrorContext): void {
+  const hint = HINTS[resolved.category];
+  if (ctx.json) {
+    writeJson(ctx.stdout, err.code, err.message, hint, err.cause);
+    return;
+  }
+  writePretty(
+    ctx.stderr,
+    resolved.warn ? 'warning' : 'error',
+    err.code,
+    err.message,
+    hint,
+    err.cause,
+    ctx.verbose,
+  );
+}
+
+function renderUnknown(err: unknown, ctx: HandleErrorContext): void {
+  const message = err instanceof Error ? err.message : 'unknown error';
+  const cause = err instanceof Error ? err.cause : undefined;
+  const stack = ctx.verbose && err instanceof Error ? err.stack : undefined;
+  if (ctx.json) {
+    writeJson(ctx.stdout, 'INTERNAL', message, HINTS.internal, cause);
+    return;
+  }
+  writePretty(ctx.stderr, 'error', 'INTERNAL', message, HINTS.internal, cause, ctx.verbose, stack);
+}
+
+export function handleError(err: unknown, ctx: HandleErrorContext): never {
+  // ctx.exit is called exactly once, after this block, so a test double that throws
+  // to unwind (rather than truly never returning, like process.exit) can't be mistaken
+  // for a rendering failure and caught below.
+  let exitCode: number;
+  try {
+    if (err instanceof CommanderError) {
+      exitCode = EXIT_USAGE;
+    } else if (err instanceof Error && err.name === 'AbortError') {
+      exitCode = EXIT_SIGINT;
+    } else if (VetError.isInstance(err)) {
+      const resolved = resolveExit(err.code, ctx.strict);
+      renderResolved(err, resolved, ctx);
+      exitCode = resolved.exitCode;
+    } else {
+      renderUnknown(err, ctx);
+      exitCode = EXIT_INTERNAL;
+    }
+  } catch {
+    ctx.stderr.write('error INTERNAL: failed to render error\n');
+    exitCode = EXIT_INTERNAL;
+  }
+  return ctx.exit(exitCode);
+}
