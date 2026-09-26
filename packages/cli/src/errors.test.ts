@@ -118,6 +118,50 @@ describe('handleError code classes', () => {
   });
 });
 
+describe('handleError unprefixed literal codes', () => {
+  test('an unprefixed CONFIG_INVALID code exits 2', () => {
+    const result = run(markerError('CONFIG_INVALID', 'bad config'));
+    expect(result.code).toBe(EXIT_USAGE);
+  });
+
+  test('an unprefixed GATE_REFUSED code exits 2', () => {
+    const result = run(markerError('GATE_REFUSED', 'gate refused'));
+    expect(result.code).toBe(EXIT_USAGE);
+  });
+
+  test('an unprefixed UNSCORED_ONLY code exits 3', () => {
+    const result = run(markerError('UNSCORED_ONLY', 'nothing scored'));
+    expect(result.code).toBe(EXIT_UNSCORED_ONLY);
+  });
+
+  test('an unprefixed NOT_INTERACTIVE code exits 2', () => {
+    const result = run(markerError('NOT_INTERACTIVE', 'no tty'));
+    expect(result.code).toBe(EXIT_USAGE);
+  });
+
+  test('an unprefixed SINK_WRITE code exits 0 with a warning line by default', () => {
+    const result = run(markerError('SINK_WRITE', 'sink dropped a batch'));
+    expect(result.code).toBe(EXIT_OK);
+    expect(result.stderr).toContain('warning SINK_WRITE: sink dropped a batch\n');
+  });
+
+  test('an unprefixed SINK_WRITE code exits 1 under --strict', () => {
+    const result = run(markerError('SINK_WRITE', 'sink dropped a batch'), { strict: true });
+    expect(result.code).toBe(EXIT_SINK_SOURCE_STRICT);
+  });
+
+  test('an unprefixed SOURCE_READ code exits 0 with a warning line by default', () => {
+    const result = run(markerError('SOURCE_READ', 'source truncated'));
+    expect(result.code).toBe(EXIT_OK);
+    expect(result.stderr).toContain('warning SOURCE_READ: source truncated\n');
+  });
+
+  test('an unprefixed unknown class code falls back to INTERNAL exit 70', () => {
+    const result = run(markerError('FOO_BAR', 'never seen this one'));
+    expect(result.code).toBe(EXIT_INTERNAL);
+  });
+});
+
 describe('handleError verbosity', () => {
   test('a plain Error has no stack on stderr without --verbose', () => {
     const err = new Error('boom');
