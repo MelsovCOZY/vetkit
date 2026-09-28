@@ -24,8 +24,11 @@ beforeAll(async () => {
   await ensureCliBuilt();
 }, 180_000);
 
-function runBin(args: string[]): { stdout: string; stderr: string; status: number | null } {
-  return spawnSync(process.execPath, [binPath, ...args], { encoding: 'utf8' });
+function runBin(
+  args: string[],
+  stdio: 'pipe' | ['ignore', 'pipe', 'pipe'] = 'pipe',
+): { stdout: string; stderr: string; status: number | null } {
+  return spawnSync(process.execPath, [binPath, ...args], { encoding: 'utf8', stdio });
 }
 
 describe('vet bin', () => {
@@ -39,6 +42,18 @@ describe('vet bin', () => {
     const result = runBin(['--help']);
     expect(result.status).toBe(0);
     expect(result.stdout).toMatch(/^\s+doctor\b/m);
+  });
+
+  test('--help lists the label command', () => {
+    const result = runBin(['--help']);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toMatch(/^\s+label\b/m);
+  });
+
+  test('label --tty with a closed stdin exits 2 with NOT_INTERACTIVE on stderr', () => {
+    const result = runBin(['label', '--tty'], ['ignore', 'pipe', 'pipe']);
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain('NOT_INTERACTIVE');
   });
 
   test('doctor --help exits 0', () => {
