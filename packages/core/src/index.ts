@@ -199,3 +199,15 @@ export type {
   PolarityResult,
   WordingJudgeOptions,
 } from './validate/gauntlet-wording.ts';
+
+export { proposeFailureModes } from './generate/failure-modes.ts';
+export type { FailureMode, ProposeFailureModesInput } from './generate/failure-modes.ts';
+export { proposeCriteria } from './generate/criteria.ts';
+export type { ProposeCriteriaInput, ProposeCriteriaResult } from './generate/criteria.ts';
+export {
+  CRITERIA_PROMPT,
+  CRITERIA_SCHEMA,
+  FAILURE_MODES_PROMPT,
+  FAILURE_MODES_SCHEMA,
+  promptHash,
+} from './generate/prompts.ts';
