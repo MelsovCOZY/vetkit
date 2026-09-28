@@ -150,7 +150,7 @@ describe('createLangfuseSink doWrite', () => {
   it('unscored: a verdict with status != ok is not posted and is rejected', async () => {
     const { fetch, calls } = fakeFetch(ok);
     const ack = await sink(fetch).doWrite(
-      [verdict({ id: 'v-bad', status: 'infra_failure', answer: undefined }), verdict()],
+      [verdict({ id: 'v-bad', status: 'infra_failure' }), verdict()],
       {},
     );
     expect(calls).toHaveLength(1);
