@@ -41,12 +41,20 @@ function describeCause(cause: unknown): string | undefined {
     : message;
 }
 
+// vet cases quarantine (mol-p4a.1) moves a case's line into <dir>/quarantine.jsonl; excluding
+// it here is what makes `vet run` (which loads cases through this same function) skip
+// quarantined cases, without run.ts (not an owned path for that bead) needing a change.
+const QUARANTINE_FILE = 'quarantine.jsonl';
+
 export async function loadCases(dir: string): Promise<LoadCasesResult> {
   let names: string[];
   try {
     const entries = await readdir(dir, { withFileTypes: true });
     names = entries
-      .filter((entry) => entry.isFile() && entry.name.endsWith('.jsonl'))
+      .filter(
+        (entry) =>
+          entry.isFile() && entry.name.endsWith('.jsonl') && entry.name !== QUARANTINE_FILE,
+      )
       .map((entry) => entry.name)
       .toSorted();
   } catch (cause) {
