@@ -361,6 +361,9 @@ export const criterionSchema: JsonSchema = {
     channel: {
       enum: ['outcome', 'safety', 'quality'],
     },
+    enabled: {
+      type: 'boolean',
+    },
     provenance: {
       type: 'object',
       properties: {

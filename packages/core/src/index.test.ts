@@ -378,3 +378,27 @@ describe('@vetkit/core run-record exports (mol-p4a.16)', () => {
     expect(paths.criteriaPath).toBe('a');
   });
 });
+
+import {
+  formatCriteriaDocument,
+  markUncalibrated,
+  parseCriteriaDocument,
+  removeCriterion,
+  removeLockEntry,
+  setEnabled,
+} from './index.ts';
+
+describe('@vetkit/core criteria edit exports (mol-e3g)', () => {
+  it('re-exports the criteria edit functions', () => {
+    for (const fn of [
+      formatCriteriaDocument,
+      markUncalibrated,
+      parseCriteriaDocument,
+      removeCriterion,
+      removeLockEntry,
+      setEnabled,
+    ]) {
+      expect(typeof fn).toBe('function');
+    }
+  });
+});

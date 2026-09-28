@@ -3,6 +3,20 @@
 
 export { computeWordingHash, loadCriteria } from './criteria/load.ts';
 export type { CriteriaIssue, LoadCriteriaResult, WordingFields } from './criteria/load.ts';
+export {
+  formatCriteriaDocument,
+  markUncalibrated,
+  parseCriteriaDocument,
+  removeCriterion,
+  removeLockEntry,
+  setEnabled,
+} from './criteria/edit.ts';
+export type {
+  CriteriaDocument,
+  EditResult,
+  MarkUncalibratedResult,
+  ParseCriteriaDocumentResult,
+} from './criteria/edit.ts';
 
 export { loadCases, MAX_STATE_TOKENS } from './cases/load.ts';
 export type { CaseIssue, CaseLocation, LoadCasesResult } from './cases/load.ts';

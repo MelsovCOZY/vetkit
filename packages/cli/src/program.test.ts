@@ -133,3 +133,11 @@ describe('vet bin: check --outbox and lock refresh (p4a.2)', () => {
     expect(lock.stdout).toMatch(/^\s+refresh\b/m);
   });
 });
+
+describe('vet bin: criteria (mol-e3g)', () => {
+  test('--help lists the criteria command', () => {
+    const result = runBin(['--help']);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toMatch(/^\s+criteria\s/m);
+  });
+});
