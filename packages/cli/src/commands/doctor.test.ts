@@ -1,5 +1,9 @@
 import { readFileSync } from 'node:fs';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { JEV_PRESETS } from '@vetkit/judge-jev';
 import { safeParseJson } from '@vetkit/spec';
 import { Command } from 'commander';
 import { describe, expect, test, vi } from 'vitest';
@@ -289,5 +293,198 @@ describe('doctor.ts vendor neutrality', () => {
     const source = readFileSync(fileURLToPath(new URL('./doctor.ts', import.meta.url)), 'utf8');
     const code = source.replaceAll(/\/\*[\s\S]*?\*\//g, '').replaceAll(/(^|\s)\/\/.*$/gm, '$1');
     expect(code).not.toMatch(/vercel|typesafe\.ai|openrouter|cloudflare/i);
+  });
+});
+
+async function configProject(config: string): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), 'vetkit-doctor-'));
+  await mkdir(root, { recursive: true });
+  await writeFile(join(root, 'vetkit.config.ts'), config);
+  return root;
+}
+
+function adapter(id: string, extra: string): string {
+  return `{ specVersion: 'v1', id: '${id}', ${extra} }`;
+}
+
+const INLINE_JUDGE = adapter(
+  'inline-judge',
+  `capabilities: { questionTypes: ['boolean'], maxStateTokens: 1000, pinned: true, transport: 'inline', model: 'm' },
+  async doJudge() { throw new Error('not called'); }`,
+);
+const PRESET_JUDGE = `{ kind: 'typesafe-compatible', preset: 'typesafe', apiKeyEnv: 'MY_JUDGE_KEY' }`;
+const GENERATOR_ENDPOINT = `{ kind: 'openai-compatible', baseURL: 'https://gen.example.test/v1', apiKeyEnv: 'MY_GEN_KEY', model: 'g' }`;
+const GENERATOR_ADAPTER = adapter(
+  'inline-generator',
+  `capabilities: { structured: 'json_schema' }, async doGenerate() { return {}; }`,
+);
+
+function configSource(fields: Record<string, string>): string {
+  const body = Object.entries(fields)
+    .map(([key, value]) => `  ${key}: ${value},`)
+    .join('\n');
+  return `export default {\n${body}\n};\n`;
+}
+
+const OK_HEALTH = () => vi.fn(async () => jsonResponse(200, { name: 'jev' }));
+
+describe('runDoctor with a resolved config (--config)', () => {
+  const BASE = { nodeVersion: 'v22.23.2', bunPresent: () => true, lefthookInstalled: () => true };
+
+  test('judge credential row names the env var the config selects, not the priority list', async () => {
+    const cwd = await configProject(configSource({ judge: PRESET_JUDGE }));
+    const result = await runDoctor({
+      ...BASE,
+      cwd,
+      config: true,
+      env: { MY_JUDGE_KEY: 'fake-judge-key' },
+      fetchImpl: OK_HEALTH(),
+    });
+    const row = statusOf(result.checks, 'judge credential');
+    expect(row.status).toBe('pass');
+    expect(row.detail).toContain('MY_JUDGE_KEY=<set>');
+    expect(row.detail).toContain('typesafe');
+    expect(row.detail).not.toContain('AI_GATEWAY_API_KEY');
+  });
+
+  test('the configured judge key unset is a fail row even when a priority-list key is set', async () => {
+    const cwd = await configProject(configSource({ judge: PRESET_JUDGE }));
+    const result = await runDoctor({
+      ...BASE,
+      cwd,
+      config: true,
+      env: { AI_GATEWAY_API_KEY: 'fake-gw-key' },
+      fetchImpl: OK_HEALTH(),
+    });
+    const row = statusOf(result.checks, 'judge credential');
+    expect(row.status).toBe('fail');
+    expect(row.detail).toContain('MY_JUDGE_KEY=<unset>');
+    expect(result.exitCode).toBe(1);
+  });
+
+  test('health probes the configured preset with the configured key as the bearer', async () => {
+    const cwd = await configProject(configSource({ judge: PRESET_JUDGE }));
+    const fetchImpl = OK_HEALTH();
+    await runDoctor({
+      ...BASE,
+      cwd,
+      config: true,
+      env: { MY_JUDGE_KEY: 'fake-judge-key', AI_GATEWAY_API_KEY: 'fake-gw-key' },
+      fetchImpl,
+    });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      JEV_PRESETS.typesafe.health.url({}),
+      expect.objectContaining({ headers: { Authorization: 'Bearer fake-judge-key' } }),
+    );
+  });
+
+  test('an adapter judge whose transport is no preset supplies its own credential: no probe', async () => {
+    const cwd = await configProject(configSource({ judge: INLINE_JUDGE }));
+    const fetchImpl = OK_HEALTH();
+    const result = await runDoctor({ ...BASE, cwd, config: true, env: {}, fetchImpl });
+    expect(statusOf(result.checks, 'judge credential').status).toBe('pass');
+    expect(statusOf(result.checks, 'judge credential').detail).toContain('inline-judge');
+    expect(statusOf(result.checks, 'judge endpoint health').status).toBe('info');
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  test('generator endpoint: its apiKeyEnv set is a pass row naming the variable', async () => {
+    const cwd = await configProject(
+      configSource({ judge: INLINE_JUDGE, generator: GENERATOR_ENDPOINT }),
+    );
+    const result = await runDoctor({
+      ...BASE,
+      cwd,
+      config: true,
+      env: { MY_GEN_KEY: 'fake-gen-key' },
+      fetchImpl: OK_HEALTH(),
+    });
+    const row = statusOf(result.checks, 'generator credential');
+    expect(row.status).toBe('pass');
+    expect(row.detail).toContain('MY_GEN_KEY=<set>');
+  });
+
+  test('generator endpoint: its apiKeyEnv unset is a fail row naming the variable', async () => {
+    const cwd = await configProject(
+      configSource({ judge: INLINE_JUDGE, generator: GENERATOR_ENDPOINT }),
+    );
+    const result = await runDoctor({ ...BASE, cwd, config: true, env: {}, fetchImpl: OK_HEALTH() });
+    const row = statusOf(result.checks, 'generator credential');
+    expect(row.status).toBe('fail');
+    expect(row.detail).toContain('MY_GEN_KEY=<unset>');
+  });
+
+  test('generator adapter object is a pass row naming the adapter', async () => {
+    const cwd = await configProject(
+      configSource({ judge: INLINE_JUDGE, generator: GENERATOR_ADAPTER }),
+    );
+    const result = await runDoctor({ ...BASE, cwd, config: true, env: {}, fetchImpl: OK_HEALTH() });
+    const row = statusOf(result.checks, 'generator credential');
+    expect(row.status).toBe('pass');
+    expect(row.detail).toContain('inline-generator');
+  });
+
+  test('no generator and no sinks configured are info rows', async () => {
+    const cwd = await configProject(configSource({ judge: INLINE_JUDGE }));
+    const result = await runDoctor({ ...BASE, cwd, config: true, env: {}, fetchImpl: OK_HEALTH() });
+    expect(statusOf(result.checks, 'generator credential').status).toBe('info');
+    expect(statusOf(result.checks, 'sink credentials').status).toBe('info');
+  });
+
+  test('sink adapter objects pass; a bare sink name is a warn row naming it', async () => {
+    const cwd = await configProject(
+      configSource({ judge: INLINE_JUDGE, sinks: `[{ specVersion: 'v1', id: 'otel/logs' }]` }),
+    );
+    const ok = await runDoctor({ ...BASE, cwd, config: true, env: {}, fetchImpl: OK_HEALTH() });
+    expect(statusOf(ok.checks, 'sink credentials').status).toBe('pass');
+    expect(statusOf(ok.checks, 'sink credentials').detail).toContain('otel/logs');
+
+    const named = await configProject(configSource({ judge: INLINE_JUDGE, sinks: `['my-sink'] ` }));
+    const warn = await runDoctor({
+      ...BASE,
+      cwd: named,
+      config: true,
+      env: {},
+      fetchImpl: OK_HEALTH(),
+    });
+    expect(statusOf(warn.checks, 'sink credentials').status).toBe('warn');
+    expect(statusOf(warn.checks, 'sink credentials').detail).toContain('my-sink');
+  });
+
+  test('a set credential is never printed in full in any config-derived row', async () => {
+    const cwd = await configProject(
+      configSource({ judge: PRESET_JUDGE, generator: GENERATOR_ENDPOINT }),
+    );
+    const result = await runDoctor({
+      ...BASE,
+      cwd,
+      config: true,
+      env: { MY_JUDGE_KEY: 'fake-judge-secret-1111', MY_GEN_KEY: 'fake-gen-secret-2222' },
+      fetchImpl: OK_HEALTH(),
+    });
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain('fake-judge-secret-1111');
+    expect(serialized).not.toContain('fake-gen-secret-2222');
+  });
+});
+
+describe('runDoctor without a config file', () => {
+  test('generator and sink rows keep their no-config text', async () => {
+    const result = await runDoctor({
+      ...PASSING_DEPS,
+      configExists: () => false,
+      env: { TYPESAFE_API_KEY: 'fake-key' },
+      fetchImpl: vi.fn(async () => jsonResponse(200, { name: 'jev' })),
+    });
+    expect(statusOf(result.checks, 'generator credential')).toEqual({
+      name: 'generator credential',
+      status: 'warn',
+      detail: 'no vetkit.config.ts — cannot determine which generator credential is required',
+    });
+    expect(statusOf(result.checks, 'sink credentials')).toEqual({
+      name: 'sink credentials',
+      status: 'warn',
+      detail: 'no vetkit.config.ts — cannot determine which sink credentials are required',
+    });
   });
 });

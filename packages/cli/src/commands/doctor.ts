@@ -1,7 +1,10 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { describeConfig, type ResolvedConfig } from '@vetkit/core';
 import { JEV_CREDENTIAL_PRIORITY, JEV_PRESETS, type JevPresetName } from '@vetkit/judge-jev';
 import type { Command } from 'commander';
+import { loadVetConfig, type LoadedVetConfig } from '../config-load.ts';
 import { colors } from '../output.ts';
 
 // Structural stand-in for NodeJS.WritableStream (see errors.ts / logger.ts): keeps this
@@ -18,9 +21,17 @@ export interface DoctorCheck {
   readonly detail: string;
 }
 
+/** The `--config` section: the resolved config with every *Env value as <set>/<unset>. */
+export interface DoctorConfigReport {
+  readonly file: string;
+  readonly resolved: unknown;
+  readonly warnings: readonly string[];
+}
+
 export interface DoctorResult {
   readonly checks: readonly DoctorCheck[];
   readonly exitCode: 0 | 1;
+  readonly config?: DoctorConfigReport;
 }
 
 export interface EnvVarDoc {
@@ -86,6 +97,161 @@ function checkJudgeCredential(env: Env, revealSuffix: boolean): DoctorCheck {
   return { name: 'judge credential', status: 'pass', detail: `${parts} — transport: ${selected}` };
 }
 
+function isPresetName(name: unknown): name is JudgeTransport {
+  return typeof name === 'string' && Object.hasOwn(JEV_PRESETS, name);
+}
+
+// What the resolved config says about the judge's credential and endpoint probe:
+// - an endpoint names its own key variable (and, for a preset, the preset to probe);
+// - an adapter object whose transport is a known preset needs that preset's credentials;
+// - any other adapter object holds its own credential and has no probe here.
+type JudgePlan =
+  | {
+      readonly kind: 'endpoint';
+      readonly keyEnv: string;
+      readonly transport: string;
+      readonly probe?: JudgeTransport;
+    }
+  | { readonly kind: 'preset'; readonly transport: JudgeTransport }
+  | { readonly kind: 'adapter'; readonly id: string; readonly transport: string };
+
+function judgePlan(judge: ResolvedConfig['judge']): JudgePlan {
+  if ('specVersion' in judge) {
+    const transport = judge.capabilities.transport;
+    return isPresetName(transport)
+      ? { kind: 'preset', transport }
+      : { kind: 'adapter', id: judge.id, transport };
+  }
+  const preset = judge.preset;
+  return {
+    kind: 'endpoint',
+    keyEnv: judge.apiKeyEnv,
+    transport: preset ?? `custom ${judge.baseURL ?? ''}`.trim(),
+    ...(isPresetName(preset) ? { probe: preset } : {}),
+  };
+}
+
+function checkPlannedJudgeCredential(
+  plan: JudgePlan,
+  env: Env,
+  revealSuffix: boolean,
+): DoctorCheck {
+  const name = 'judge credential';
+  if (plan.kind === 'adapter') {
+    return {
+      name,
+      status: 'pass',
+      detail: `adapter ${plan.id} (transport ${plan.transport}) supplies its own credential`,
+    };
+  }
+  const names =
+    plan.kind === 'endpoint'
+      ? [plan.keyEnv]
+      : JEV_PRESETS[plan.transport].credentials.map((c) => c.name);
+  const parts = names.map((n) => credentialStatusText(n, env, revealSuffix)).join(', ');
+  const ok = names.every((n) => isSet(env[n]));
+  return ok
+    ? { name, status: 'pass', detail: `${parts} — transport: ${plan.transport} (from config)` }
+    : {
+        name,
+        status: 'fail',
+        detail: `${parts} — the config's ${plan.transport} judge needs ${names.join(', ')}`,
+      };
+}
+
+async function checkPlannedJudgeHealth(
+  plan: JudgePlan,
+  env: Env,
+  fetchImpl: typeof fetch,
+): Promise<DoctorCheck> {
+  const name = 'judge endpoint health';
+  if (plan.kind === 'adapter') {
+    return { name, status: 'info', detail: `adapter ${plan.id} judge — no endpoint probe` };
+  }
+  if (plan.kind === 'preset') {
+    return transportCredentialPresent(plan.transport, env)
+      ? checkJudgeHealth(plan.transport, env, fetchImpl)
+      : { name, status: 'fail', detail: 'judge credential unset — cannot probe endpoint health' };
+  }
+  if (plan.probe === undefined) {
+    return { name, status: 'info', detail: `no health probe for ${plan.transport}` };
+  }
+  if (!isSet(env[plan.keyEnv])) {
+    return {
+      name,
+      status: 'fail',
+      detail: 'judge credential unset — cannot probe endpoint health',
+    };
+  }
+  // The preset's probe authenticates with its first credential name; point that at the key
+  // variable the config names.
+  const bearer = JEV_PRESETS[plan.probe].credentials[0]?.name;
+  const probeEnv = bearer === undefined ? env : { ...env, [bearer]: env[plan.keyEnv] };
+  return checkJudgeHealth(plan.probe, probeEnv, fetchImpl);
+}
+
+function checkConfiguredGenerator(
+  generator: ResolvedConfig['generator'],
+  env: Env,
+  revealSuffix: boolean,
+): DoctorCheck {
+  const name = 'generator credential';
+  if (generator === undefined) {
+    return { name, status: 'info', detail: 'no generator configured' };
+  }
+  if ('specVersion' in generator) {
+    return { name, status: 'pass', detail: `adapter ${generator.id} supplies its own credential` };
+  }
+  const text = credentialStatusText(generator.apiKeyEnv, env, revealSuffix);
+  return isSet(env[generator.apiKeyEnv])
+    ? { name, status: 'pass', detail: `${text} — ${generator.kind} model ${generator.model}` }
+    : {
+        name,
+        status: 'fail',
+        detail: `${text} — the config's ${generator.kind} generator needs ${generator.apiKeyEnv}`,
+      };
+}
+
+function checkConfiguredSinks(sinks: ResolvedConfig['sinks']): DoctorCheck {
+  const name = 'sink credentials';
+  if (sinks.length === 0) return { name, status: 'info', detail: 'no sinks configured' };
+  const bare = sinks.filter((s): s is string => typeof s === 'string');
+  if (bare.length > 0) {
+    return {
+      name,
+      status: 'warn',
+      detail: `sink name(s) ${bare.join(', ')} resolve to no adapter object — cannot verify their credentials`,
+    };
+  }
+  const ids = sinks.map((s) => (typeof s === 'string' ? s : s.id));
+  return {
+    name,
+    status: 'pass',
+    detail: `sink adapter(s) ${ids.join(', ')} supply their own credentials`,
+  };
+}
+
+// Every `*Env` string becomes <set>/<unset> (the variable name is dropped too); an adapter
+// object is reduced to its {specVersion, id, capabilities} identity so no property it
+// holds (a client, a key) can print.
+function redactConfig(value: unknown, env: Env): unknown {
+  if (Array.isArray(value)) return value.map((item: unknown) => redactConfig(item, env));
+  if (!isRecord(value)) return value;
+  const entries = Object.entries(value).filter(
+    ([key]) => !('specVersion' in value) || ['specVersion', 'id', 'capabilities'].includes(key),
+  );
+  return Object.fromEntries(
+    entries.map(([key, v]) => [
+      key,
+      key.endsWith('Env') && typeof v === 'string'
+        ? isSet(env[v])
+          ? '<set>'
+          : '<unset>'
+        : redactConfig(v, env),
+    ]),
+  );
+}
+
 function checkNode(nodeVersion: string): DoctorCheck {
   const match = /^v?(\d+)\.(\d+)\.(\d+)/.exec(nodeVersion);
   if (!match)
@@ -120,16 +286,14 @@ function checkConfig(configExists: boolean): DoctorCheck {
     : { name: 'config', status: 'fail', detail: 'no vetkit.config.ts' };
 }
 
-// Config resolution (defineConfig/describeConfig) lives in a separate, not-yet-landed
-// leaf (classified-evals-mol-p15.1/.2), so these two rows can't yet name the actual
-// generator/sink adapters a project configures. They stay a non-fatal warn until that
-// leaf lands and this file is extended to call describeConfig().
+// Without --config the config is not resolved, so these two rows can only say how to get
+// a real per-adapter check (checkConfiguredGenerator / checkConfiguredSinks).
 function checkGeneratorCredential(configExists: boolean): DoctorCheck {
   return {
     name: 'generator credential',
     status: 'warn',
     detail: configExists
-      ? 'config resolution is not available yet — cannot verify the generator credential'
+      ? 'config not resolved — pass --config to verify the generator credential'
       : 'no vetkit.config.ts — cannot determine which generator credential is required',
   };
 }
@@ -139,7 +303,7 @@ function checkSinkCredentials(configExists: boolean): DoctorCheck {
     name: 'sink credentials',
     status: 'warn',
     detail: configExists
-      ? 'config resolution is not available yet — cannot verify sink credentials'
+      ? 'config not resolved — pass --config to verify sink credentials'
       : 'no vetkit.config.ts — cannot determine which sink credentials are required',
   };
 }
@@ -249,8 +413,35 @@ async function checkJudgeHealth(
   }
 }
 
-function defaultConfigExists(): boolean {
-  return ['vetkit.config.ts', 'vetkit.config.js', 'vetkit.config.mjs'].some((f) => existsSync(f));
+function defaultConfigExists(cwd: string): boolean {
+  return ['vetkit.config.ts', 'vetkit.config.js', 'vetkit.config.mjs'].some((f) =>
+    existsSync(join(cwd, f)),
+  );
+}
+
+// Doctor must resolve the config even when a key it names is unset (reporting that is its
+// job), but loadVetConfig builds the judge and so reads each apiKeyEnv. It gets an env where
+// every name reads as a placeholder; the judge built from it is discarded, never called.
+const PLACEHOLDER_ENV: Env = new Proxy<Env>(
+  {},
+  { get: (_target, key) => (typeof key === 'string' ? 'doctor-placeholder' : undefined) },
+);
+
+type ConfigLoad =
+  | { readonly ok: true; readonly loaded: LoadedVetConfig }
+  | { readonly ok: false; readonly message: string };
+
+async function loadForDoctor(cwd: string, config: true | string): Promise<ConfigLoad> {
+  try {
+    const loaded = await loadVetConfig({
+      cwd,
+      env: PLACEHOLDER_ENV,
+      ...(config === true ? {} : { configPath: config }),
+    });
+    return { ok: true, loaded };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : 'unknown error' };
+  }
 }
 
 function commandOk(bin: string, args: readonly string[]): boolean {
@@ -278,39 +469,93 @@ export interface DoctorDeps {
   readonly configExists?: () => boolean;
   readonly revealSuffix?: boolean;
   readonly strict?: boolean;
+  /** Directory the config is discovered in (and `config` paths resolve against). */
+  readonly cwd?: string;
+  /** `--config`: true discovers vetkit.config.*, a string names the file. */
+  readonly config?: boolean | string;
+}
+
+interface DoctorRun {
+  readonly result: DoctorResult;
+  /** Text form of the --config section, when the config resolved. */
+  readonly configText?: string;
 }
 
 export async function runDoctor(deps: DoctorDeps = {}): Promise<DoctorResult> {
+  return (await inspect(deps)).result;
+}
+
+async function inspect(deps: DoctorDeps): Promise<DoctorRun> {
   const env = deps.env ?? process.env;
   const fetchImpl = deps.fetchImpl ?? fetch;
   const revealSuffix = deps.revealSuffix ?? false;
   const strict = deps.strict ?? false;
-  const configExists = (deps.configExists ?? defaultConfigExists)();
+  const cwd = deps.cwd ?? process.cwd();
   const bunPresent = (deps.bunPresent ?? defaultBunPresent)();
   const lefthookInstalled = (deps.lefthookInstalled ?? defaultLefthookInstalled)();
+  const nodeCheck = checkNode(deps.nodeVersion ?? process.version);
 
-  const selected = selectTransport(env);
-  const checks: DoctorCheck[] = [
-    checkNode(deps.nodeVersion ?? process.version),
-    checkBun(bunPresent),
-    checkConfig(configExists),
-    checkJudgeCredential(env, revealSuffix),
-    checkGeneratorCredential(configExists),
-    checkSinkCredentials(configExists),
-    checkLefthook(lefthookInstalled),
-    selected
-      ? await checkJudgeHealth(selected, env, fetchImpl)
-      : {
-          name: 'judge endpoint health',
-          status: 'fail',
-          detail: 'no judge credential set — cannot probe endpoint health',
-        },
-  ];
+  const requested = deps.config ?? false;
+  const load = requested === false ? undefined : await loadForDoctor(cwd, requested);
+  let checks: DoctorCheck[];
+  let report: DoctorConfigReport | undefined;
+  let configText: string | undefined;
+  if (load?.ok === true) {
+    const { config, configFile, warnings } = load.loaded;
+    const plan = judgePlan(config.judge);
+    checks = [
+      nodeCheck,
+      checkBun(bunPresent),
+      { name: 'config', status: 'pass', detail: `loaded ${configFile}` },
+      checkPlannedJudgeCredential(plan, env, revealSuffix),
+      checkConfiguredGenerator(config.generator, env, revealSuffix),
+      checkConfiguredSinks(config.sinks),
+      checkLefthook(lefthookInstalled),
+      await checkPlannedJudgeHealth(plan, env, fetchImpl),
+    ];
+    report = { file: configFile, resolved: redactConfig(config, env), warnings };
+    configText = renderConfigText(report, config);
+  } else {
+    const configExists =
+      load === undefined ? (deps.configExists ?? (() => defaultConfigExists(cwd)))() : true;
+    const selected = selectTransport(env);
+    checks = [
+      nodeCheck,
+      checkBun(bunPresent),
+      load === undefined
+        ? checkConfig(configExists)
+        : { name: 'config', status: 'fail', detail: load.message },
+      checkJudgeCredential(env, revealSuffix),
+      checkGeneratorCredential(configExists),
+      checkSinkCredentials(configExists),
+      checkLefthook(lefthookInstalled),
+      selected
+        ? await checkJudgeHealth(selected, env, fetchImpl)
+        : {
+            name: 'judge endpoint health',
+            status: 'fail',
+            detail: 'no judge credential set — cannot probe endpoint health',
+          },
+    ];
+  }
 
   const hasFail = checks.some((c) => c.status === 'fail');
   const hasWarn = checks.some((c) => c.status === 'warn');
   const exitCode: 0 | 1 = hasFail || (strict && hasWarn) ? 1 : 0;
-  return { checks, exitCode };
+  return report === undefined || configText === undefined
+    ? { result: { checks, exitCode } }
+    : { result: { checks, exitCode, config: report }, configText };
+}
+
+// Text form of the `--config` section: the file, describeConfig lines (env var names, never
+// values) and resolveConfig warnings.
+function renderConfigText(report: DoctorConfigReport, config: ResolvedConfig): string {
+  const lines = [
+    `config ${report.file}`,
+    ...describeConfig(config).map((line) => `  ${line}`),
+    ...report.warnings.map((w) => `  warning: ${w}`),
+  ];
+  return lines.join('\n');
 }
 
 // `paint` colours only the status word; the padding stays outside it so the plain text
@@ -350,22 +595,29 @@ export function registerDoctor(program: Command, deps: RegisterDoctorDeps = {}):
     .description('check environment, judge credentials and judge endpoint health')
     .option('--reveal-suffix', 'show the last 4 characters of a set credential')
     .option('--strict', 'treat warnings as failures for the exit code')
+    .option(
+      '--config [path]',
+      'resolve the vetkit config (default: vetkit.config.* here) and print it, *Env values as <set>/<unset>',
+    )
     .action(async (_options: unknown, command: Command) => {
       // --json is a global program option; optsWithGlobals merges it with doctor's own.
       const options = command.optsWithGlobals<{
         json?: boolean;
         revealSuffix?: boolean;
         strict?: boolean;
+        config?: boolean | string;
       }>();
-      const result = await runDoctor({
+      const { result, configText } = await inspect({
         ...deps,
         revealSuffix: options.revealSuffix ?? deps.revealSuffix ?? false,
         strict: options.strict ?? deps.strict ?? false,
+        config: options.config ?? deps.config ?? false,
       });
+      const table = renderTable(result.checks, statusPainter());
       stdout.write(
         options.json
           ? `${renderJson(result)}\n`
-          : `${renderTable(result.checks, statusPainter())}\n`,
+          : `${configText === undefined ? table : `${table}\n\n${configText}`}\n`,
       );
       setExitCode(result.exitCode);
     });
