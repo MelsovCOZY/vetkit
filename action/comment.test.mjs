@@ -58,7 +58,7 @@ const current = runDoc([
   verdict('case-e', 'tone', 'fail'),
 ]);
 
-test('computeDeltas classifies each case by id against the baseline', () => {
+void test('computeDeltas classifies each case by id against the baseline', () => {
   const changes = Object.fromEntries(computeDeltas(current, baseline).map((r) => [r.caseId, r]));
   assert.equal(changes['case-a']?.change, 'new-fail');
   assert.equal(changes['case-b']?.change, 'new-pass');
@@ -68,18 +68,18 @@ test('computeDeltas classifies each case by id against the baseline', () => {
   assert.equal(changes['case-e']?.base, 'absent');
 });
 
-test('computeDeltas leaves unchanged passing cases out', () => {
+void test('computeDeltas leaves unchanged passing cases out', () => {
   const same = runDoc([verdict('case-a', 'tone', 'pass')]);
   assert.deepEqual(computeDeltas(same, same), []);
 });
 
-test('a case with any failed verdict fails even when another is unscored', () => {
+void test('a case with any failed verdict fails even when another is unscored', () => {
   const doc = runDoc([verdict('case-x', 'tone', 'unscored'), verdict('case-x', 'len', 'fail')]);
   const [row] = computeDeltas(doc, runDoc([]));
   assert.equal(row?.change, 'new-fail');
 });
 
-test('renderComment starts with the hidden marker and shows counts, model and pinned flag', () => {
+void test('renderComment starts with the hidden marker and shows counts, model and pinned flag', () => {
   const body = renderComment({ current, baseline, env: {} });
   assert.ok(body.startsWith(MARKER));
   assert.equal(MARKER, '<!-- vetkit-report -->');
@@ -90,7 +90,7 @@ test('renderComment starts with the hidden marker and shows counts, model and pi
   assert.match(body, /pinned: false/);
 });
 
-test('renderComment renders the delta table against the baseline', () => {
+void test('renderComment renders the delta table against the baseline', () => {
   const body = renderComment({ current, baseline, env: {} });
   assert.match(body, /\| Case \| Change \| Base \| Now \|/);
   assert.match(body, /\| `case-a` \| new-fail \| pass \| fail \|/);
@@ -100,13 +100,13 @@ test('renderComment renders the delta table against the baseline', () => {
   assert.doesNotMatch(body, /no baseline/i);
 });
 
-test('renderComment says no baseline when none was restored', () => {
+void test('renderComment says no baseline when none was restored', () => {
   const body = renderComment({ current, baseline: undefined, env: {} });
   assert.match(body, /no baseline/i);
   assert.doesNotMatch(body, /\| Case \| Change \|/);
 });
 
-test('renderComment never contains a seeded key value or judge request bodies', () => {
+void test('renderComment never contains a seeded key value or judge request bodies', () => {
   const leaky = runDoc(
     [
       {
@@ -126,7 +126,7 @@ test('renderComment never contains a seeded key value or judge request bodies', 
   assert.ok(!body.includes('Authorization'), 'judge request body leaked into the comment');
 });
 
-test('renderComment truncates the table with a note when the body would exceed the limit', () => {
+void test('renderComment truncates the table with a note when the body would exceed the limit', () => {
   const many = runDoc(
     Array.from({ length: 5000 }, (_, i) =>
       verdict(`case-${String(i)}-${'x'.repeat(20)}`, 't', 'fail'),
@@ -138,14 +138,14 @@ test('renderComment truncates the table with a note when the body would exceed t
   assert.ok(body.startsWith(MARKER));
 });
 
-test('renderComment keeps a large table under 40 lines', () => {
+void test('renderComment keeps a large table under 40 lines', () => {
   const many = runDoc(Array.from({ length: 100 }, (_, i) => verdict(`c${String(i)}`, 't', 'fail')));
   const body = renderComment({ current: many, baseline: runDoc([]), env: {} });
   assert.ok(body.split('\n').length <= 40, `${String(body.split('\n').length)} lines`);
   assert.match(body, /more cases? not shown/);
 });
 
-test('runOutputs exposes the summary counts', () => {
+void test('runOutputs exposes the summary counts', () => {
   assert.deepEqual(runOutputs(current), { passed: 1, failed: 3, unscored: 1 });
 });
 
@@ -159,7 +159,7 @@ function ghStub(responses) {
   return { gh, calls };
 }
 
-test('upsertComment updates the existing marked comment', async () => {
+void test('upsertComment updates the existing marked comment', async () => {
   const { gh, calls } = ghStub([{ code: 0, stdout: '42\n', stderr: '' }]);
   const result = await upsertComment({ gh, repo: 'o/r', issueNumber: 7, body: `${MARKER}\nhi` });
   assert.equal(result, 'updated');
@@ -170,7 +170,7 @@ test('upsertComment updates the existing marked comment', async () => {
   assert.match(calls[1]?.stdin ?? '', /vetkit-report/);
 });
 
-test('upsertComment creates a comment when none carries the marker', async () => {
+void test('upsertComment creates a comment when none carries the marker', async () => {
   const { gh, calls } = ghStub([{ code: 0, stdout: '', stderr: '' }]);
   const result = await upsertComment({ gh, repo: 'o/r', issueNumber: 7, body: `${MARKER}\nhi` });
   assert.equal(result, 'created');
@@ -178,7 +178,7 @@ test('upsertComment creates a comment when none carries the marker', async () =>
   assert.ok(calls[1]?.args.includes('repos/o/r/issues/7/comments'));
 });
 
-test('upsertComment warns and continues when the token cannot write', async () => {
+void test('upsertComment warns and continues when the token cannot write', async () => {
   const warnings = [];
   const { gh } = ghStub([
     { code: 0, stdout: '', stderr: '' },
@@ -204,7 +204,7 @@ function workspace(files) {
   return dir;
 }
 
-test('main skips silently outside a pull_request event', async () => {
+void test('main skips silently outside a pull_request event', async () => {
   const dir = workspace({ 'run.json': JSON.stringify(current) });
   const { gh, calls } = ghStub([]);
   const warnings = [];
@@ -219,7 +219,7 @@ test('main skips silently outside a pull_request event', async () => {
   assert.deepEqual(warnings, []);
 });
 
-test('main posts on a pull_request event with the baseline file', async () => {
+void test('main posts on a pull_request event with the baseline file', async () => {
   const dir = workspace({
     'run.json': JSON.stringify(current),
     'base.json': JSON.stringify(baseline),
