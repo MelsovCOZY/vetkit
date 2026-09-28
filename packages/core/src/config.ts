@@ -9,6 +9,7 @@ import {
   configSchema,
   validateJson,
   VetError,
+  type ConfigDoc,
   type GateConfig,
   type GeneratorEndpoint,
   type JsonSchema,
@@ -20,6 +21,13 @@ import {
 } from '@vetkit/spec';
 
 export type { GeneratorEndpoint, JudgeEndpoint } from '@vetkit/spec';
+
+// A configured sink: an opaque name, an adapter object (option A, mol-yxn.7), or a
+// `{kind,*Env}` descriptor the CLI resolves by reading the named env vars (OPEN-9 DECISION,
+// mol-yxn.13). Derived structurally from ConfigDoc so the descriptor shapes never need a
+// second hand-written declaration here.
+export type SinkRef = NonNullable<ConfigDoc['sinks']>[number];
+export type SinkDescriptor = Exclude<SinkRef, PluginRef>;
 
 // No GeneratorV1 port exists in @vetkit/spec yet; this is the structural minimum config checks.
 export interface GeneratorAdapter {
@@ -36,7 +44,7 @@ export interface VetkitConfig {
   readonly judge: string | JudgeEndpoint | JudgeV1;
   readonly registry?: Readonly<Record<string, RegistryEntry>>;
   readonly sources?: readonly PluginRef[];
-  readonly sinks?: readonly PluginRef[];
+  readonly sinks?: readonly SinkRef[];
   readonly thresholds?: ThresholdsPolicy;
   readonly watch?: WatchConfig;
   readonly gate?: GateConfig;
@@ -47,7 +55,7 @@ export interface ResolvedConfig {
   readonly generator?: GeneratorEndpoint | GeneratorAdapter;
   readonly judge: JudgeEndpoint | JudgeV1;
   readonly sources: readonly PluginRef[];
-  readonly sinks: readonly PluginRef[];
+  readonly sinks: readonly SinkRef[];
   readonly thresholds: { default: number; perCriterion: Record<string, number> };
   readonly watch: { sampleRate?: number; upstreamSampleRate?: number; maxInFlight: number };
   readonly gate: { minPass?: number; requireCalibrated: boolean; allowUnpinned: boolean };
@@ -350,10 +358,10 @@ function describeRole(
   return `${value.kind}${preset}${model}${at} (key from $${value.apiKeyEnv})`;
 }
 
-function describeRefs(refs: readonly PluginRef[]): string {
+function describeRefs(refs: readonly (PluginRef | SinkDescriptor)[]): string {
   return refs.length === 0
     ? 'none'
-    : refs.map((r) => (typeof r === 'string' ? r : r.id)).join(', ');
+    : refs.map((r) => (typeof r === 'string' ? r : 'kind' in r ? r.kind : r.id)).join(', ');
 }
 
 /** Human-readable lines for `vet doctor --config`; names env vars, never key values or options. */

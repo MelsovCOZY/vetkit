@@ -122,10 +122,11 @@ export const configSchema: JsonSchema = {
       },
     },
     sinks: {
-      description: 'Result sinks: opaque names or sink adapter objects.',
+      description:
+        'Result sinks: opaque names, sink adapter objects, or {kind,*Env} descriptors resolved by the CLI.',
       type: 'array',
       items: {
-        $ref: '#/$defs/pluginRef',
+        $ref: '#/$defs/sinkRef',
       },
     },
     thresholds: {
@@ -304,6 +305,67 @@ export const configSchema: JsonSchema = {
             },
           },
           required: ['specVersion', 'id'],
+        },
+      ],
+    },
+    otelSinkDescriptor: {
+      title: 'OtelSinkDescriptor',
+      type: 'object',
+      properties: {
+        kind: {
+          const: 'otel',
+        },
+        endpoint: {
+          type: 'string',
+          minLength: 1,
+        },
+        headersEnv: {
+          description:
+            'Name of the env var holding the OTLP headers (OTEL_EXPORTER_OTLP_HEADERS syntax: k=v,k2=v2).',
+          type: 'string',
+          minLength: 1,
+        },
+      },
+      required: ['kind', 'endpoint'],
+      additionalProperties: false,
+    },
+    langfuseSinkDescriptor: {
+      title: 'LangfuseSinkDescriptor',
+      type: 'object',
+      properties: {
+        kind: {
+          const: 'langfuse',
+        },
+        baseUrlEnv: {
+          description: 'Name of the env var holding the Langfuse base URL.',
+          type: 'string',
+          minLength: 1,
+        },
+        publicKeyEnv: {
+          description: 'Name of the env var holding the Langfuse public key.',
+          type: 'string',
+          minLength: 1,
+        },
+        secretKeyEnv: {
+          description: 'Name of the env var holding the Langfuse secret key.',
+          type: 'string',
+          minLength: 1,
+        },
+      },
+      required: ['kind', 'baseUrlEnv', 'publicKeyEnv', 'secretKeyEnv'],
+      additionalProperties: false,
+    },
+    sinkRef: {
+      title: 'SinkRef',
+      anyOf: [
+        {
+          $ref: '#/$defs/pluginRef',
+        },
+        {
+          $ref: '#/$defs/otelSinkDescriptor',
+        },
+        {
+          $ref: '#/$defs/langfuseSinkDescriptor',
         },
       ],
     },

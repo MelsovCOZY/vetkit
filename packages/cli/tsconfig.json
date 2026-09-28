@@ -7,7 +7,9 @@
       "@vetkit/spec": ["../spec/src/index.ts"],
       "@vetkit/core": ["../core/src/index.ts"],
       "@vetkit/judge-jev": ["../judge-jev/src/index.ts"],
-      "@vetkit/generator-openai-compatible": ["../generator-openai-compatible/src/index.ts"]
+      "@vetkit/generator-openai-compatible": ["../generator-openai-compatible/src/index.ts"],
+      "@vetkit/sink-langfuse": ["../sink-langfuse/src/index.ts"],
+      "@vetkit/sink-otel": ["../sink-otel/src/index.ts"]
     }
   },
   "files": [],
@@ -16,6 +18,8 @@
     { "path": "../core" },
     { "path": "../generator-openai-compatible" },
     { "path": "../judge-jev" },
+    { "path": "../sink-langfuse" },
+    { "path": "../sink-otel" },
     { "path": "../spec" }
   ]
 }

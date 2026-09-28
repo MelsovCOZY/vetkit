@@ -33,6 +33,8 @@
     "@vetkit/core": "workspace:^",
     "@vetkit/generator-openai-compatible": "workspace:^",
     "@vetkit/judge-jev": "workspace:^",
+    "@vetkit/sink-langfuse": "workspace:^",
+    "@vetkit/sink-otel": "workspace:^",
     "@vetkit/spec": "workspace:^"
   },
   "scripts": {
