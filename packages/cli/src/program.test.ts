@@ -119,3 +119,17 @@ describe('vet bin: validate and check (q4q.6)', () => {
     expect(result.stdout).toMatch(/--ci\b/);
   });
 });
+
+describe('vet bin: check --outbox and lock refresh (p4a.2)', () => {
+  test('--help lists the lock command; check --help lists --outbox; lock --help lists refresh', () => {
+    const top = runBin(['--help']);
+    expect(top.status).toBe(0);
+    expect(top.stdout).toMatch(/^\s+lock\b/m);
+    const check = runBin(['check', '--help']);
+    expect(check.status).toBe(0);
+    expect(check.stdout).toMatch(/--outbox\b/);
+    const lock = runBin(['lock', '--help']);
+    expect(lock.status).toBe(0);
+    expect(lock.stdout).toMatch(/^\s+refresh\b/m);
+  });
+});
