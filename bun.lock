@@ -37,6 +37,7 @@
       "dependencies": {
         "@clack/prompts": "1.8.1",
         "@vetkit/core": "workspace:^",
+        "@vetkit/judge-jev": "workspace:^",
         "@vetkit/spec": "workspace:^",
         "c12": "^3.3.4",
         "commander": "15.0.0",

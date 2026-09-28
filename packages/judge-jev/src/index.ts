@@ -4,8 +4,15 @@
 export { createJevJudge } from './transport.ts';
 export type { CreateJevJudgeOptions } from './transport.ts';
 
-export { JEV_PRESETS } from './presets.ts';
-export type { JevPreset, JevPresetName, JevProviderOptions } from './presets.ts';
+export { JEV_CREDENTIAL_PRIORITY, JEV_PRESETS } from './presets.ts';
+export type {
+  JevCredentialEnv,
+  JevEnv,
+  JevHealthEndpoint,
+  JevPreset,
+  JevPresetName,
+  JevProviderOptions,
+} from './presets.ts';
 
 export { normalise } from './normalise.ts';
 export type { NormaliseRequested } from './normalise.ts';

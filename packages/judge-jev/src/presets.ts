@@ -18,11 +18,29 @@ export interface JevProviderOptions {
   };
 }
 
+// A credential env var a preset needs, and what it is for. A preset is usable only when
+// every one of its credentials is set; the first one is the bearer token.
+export interface JevCredentialEnv {
+  readonly name: string;
+  readonly purpose: string;
+}
+
+export type JevEnv = Readonly<Record<string, string | undefined>>;
+
+// Per-transport health probe (root ledger RISK "OpenRouter/Cloudflare health endpoints
+// differ"): each preset gets its own probe rather than one shared shape.
+export interface JevHealthEndpoint {
+  readonly method: 'GET' | 'HEAD';
+  readonly url: (env: JevEnv) => string;
+}
+
 export interface JevPreset {
   readonly baseURL: string;
   readonly defaultModel: string;
   readonly pinned: boolean;
   readonly providerOptions?: JevProviderOptions;
+  readonly credentials: readonly JevCredentialEnv[];
+  readonly health: JevHealthEndpoint;
 }
 
 // Explicit `Record<..., JevPreset>` annotation (rather than `as const satisfies`,
@@ -33,6 +51,10 @@ export const JEV_PRESETS: Record<'typesafe' | 'vercel' | 'openrouter' | 'cloudfl
     baseURL: 'https://api.typesafe.ai',
     defaultModel: 'jev-1.13.0',
     pinned: true,
+    credentials: [
+      { name: 'TYPESAFE_API_KEY', purpose: 'judge credential for the TypeSafe direct transport' },
+    ],
+    health: { method: 'GET', url: () => 'https://api.typesafe.ai/v1/models' },
   },
   vercel: {
     baseURL: 'https://ai-gateway.vercel.sh/typesafe',
@@ -44,6 +66,13 @@ export const JEV_PRESETS: Record<'typesafe' | 'vercel' | 'openrouter' | 'cloudfl
     providerOptions: {
       gateway: { zeroDataRetention: true, only: ['typesafe-ai'] },
     },
+    credentials: [
+      {
+        name: 'AI_GATEWAY_API_KEY',
+        purpose: 'judge credential for the Vercel AI Gateway transport (typesafe-ai/jev alias)',
+      },
+    ],
+    health: { method: 'GET', url: () => 'https://ai-gateway.vercel.sh/typesafe/v1/models' },
   },
   openrouter: {
     // UNVERIFIED (contract RISK): OpenRouter's TypeSafe-compatible /api/v1/systemone
@@ -52,6 +81,16 @@ export const JEV_PRESETS: Record<'typesafe' | 'vercel' | 'openrouter' | 'cloudfl
     baseURL: 'https://openrouter.ai/api',
     defaultModel: 'typesafe/jev-1.13',
     pinned: true,
+    credentials: [
+      {
+        name: 'OPENROUTER_API_KEY',
+        purpose: 'judge credential for the OpenRouter Decisions transport',
+      },
+    ],
+    health: {
+      method: 'GET',
+      url: () => 'https://openrouter.ai/api/v1/models?output_modalities=all',
+    },
   },
   cloudflare: {
     // UNVERIFIED (bead RISK): the {result, success, errors} REST envelope is taken from
@@ -59,7 +98,33 @@ export const JEV_PRESETS: Record<'typesafe' | 'vercel' | 'openrouter' | 'cloudfl
     baseURL: 'https://api.cloudflare.com/client/v4',
     defaultModel: 'typesafe/jev',
     pinned: false,
+    credentials: [
+      {
+        name: 'CLOUDFLARE_API_TOKEN',
+        purpose:
+          'judge credential (paired with CLOUDFLARE_ACCOUNT_ID) for the Cloudflare Workers AI transport',
+      },
+      {
+        name: 'CLOUDFLARE_ACCOUNT_ID',
+        purpose:
+          'account id (paired with CLOUDFLARE_API_TOKEN) for the Cloudflare Workers AI transport',
+      },
+    ],
+    health: {
+      method: 'HEAD',
+      url: (env) =>
+        `https://api.cloudflare.com/client/v4/accounts/${env.CLOUDFLARE_ACCOUNT_ID ?? ''}/ai/run`,
+    },
   },
 };
 
 export type JevPresetName = keyof typeof JEV_PRESETS;
+
+// Tie-break order when credentials for more than one preset are set (root ledger RISK
+// "amends TYPESAFE_API_KEY is not set...").
+export const JEV_CREDENTIAL_PRIORITY: readonly JevPresetName[] = [
+  'vercel',
+  'openrouter',
+  'cloudflare',
+  'typesafe',
+];
