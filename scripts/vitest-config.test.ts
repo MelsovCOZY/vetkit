@@ -74,7 +74,9 @@ test('adds an e2e project reading e2e/**/*.e2e.test.ts with a long timeout when 
   const projects = (config.test?.projects ?? []) as ProjectConfig[];
   const e2eProject = projects.find((p) => p.test?.name === 'e2e');
 
-  expect(e2eProject?.test?.include).toEqual(['e2e/**/*.e2e.test.ts']);
+  const include = e2eProject?.test?.include;
+  expect(include).toContain('e2e/**/*.e2e.test.ts');
+  expect(include).toContain('packages/*/e2e/**/*.e2e.test.ts');
   expect(e2eProject?.test?.testTimeout).toBe(900_000);
 });
 
