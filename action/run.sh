@@ -51,7 +51,11 @@ run_vet() {
 
   local outputs
   outputs="$(node "$here/comment.mjs" outputs "$out")"
-  if grep -qx 'hasResult=true' <<<"$outputs"; then mv "$out" .vet/runs/latest.json; fi
+  # vet is the single writer of .vet/runs/latest.json when it writes one (mol-p4a.16); only
+  # fall back to the --json stdout for older vetkit versions that never wrote the file themselves.
+  if grep -qx 'hasResult=true' <<<"$outputs" && [ ! -f .vet/runs/latest.json ]; then
+    mv "$out" .vet/runs/latest.json
+  fi
   {
     echo "exitCode=$code"
     grep -v '^hasResult=' <<<"$outputs"
