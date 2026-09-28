@@ -1,9 +1,11 @@
 import { createRequire } from 'node:module';
 import { Command, CommanderError } from 'commander';
+import { registerCheck } from './commands/check.ts';
 import { registerDoctor } from './commands/doctor.ts';
 import { registerEstimate } from './commands/estimate.ts';
 import { registerInit } from './commands/init.ts';
 import { registerLabel } from './commands/label.ts';
+import { registerLock } from './commands/lock.ts';
 import { registerRun } from './commands/run.ts';
 import { registerRunSinks } from './commands/run-sinks.ts';
 import { registerValidate } from './commands/validate.ts';
@@ -63,6 +65,8 @@ export function createProgram(): Command {
   registerValidate(program);
   registerEstimate(program);
   registerInit(program);
+  registerCheck(program);
+  registerLock(program);
   return program;
 }
 

@@ -1,15 +1,13 @@
-// `vet validate` and `vet check --lock` (bead mol-q4q.6; docs/contracts/j3.md). validate judges
-// every labelled case `--repeats` times (min 3) with the cache bypassed, tops the band cases up to
-// 15 repeats, calibrates, runs the eight gauntlets on the held-out cases and writes
-// criteria.lock.json atomically. check recomputes the lock's content hashes and compares the
-// judge's transport and release date; it exits 1 when stale and 2 when the lock is missing.
+// `vet validate` (bead mol-q4q.6; docs/contracts/j3.md). validate judges every labelled case
+// `--repeats` times (min 3) with the cache bypassed, tops the band cases up to 15 repeats,
+// calibrates, runs the eight gauntlets on the held-out cases and writes criteria.lock.json
+// atomically. `vet check` lives in check.ts (mol-p4a.2) and reuses loadProject.
 import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import {
   bandCases,
   buildLock,
   calibrate,
-  checkLock,
   correctedPassRate,
   createEvents,
   gauntletConstantOutput,
@@ -24,7 +22,6 @@ import {
   loadCriteria,
   loadLabels,
   LOCK_FILE,
-  readLock,
   repeatValues,
   runJudge,
   writeLockAtomic,
@@ -73,7 +70,7 @@ export interface ValidateDeps {
   readonly events?: Events;
 }
 
-interface ProjectOptions extends GlobalOptions {
+export interface ProjectOptions extends GlobalOptions {
   readonly config?: string;
   readonly criteria?: string;
   readonly cases?: string;
@@ -86,11 +83,7 @@ interface ValidateOptions extends ProjectOptions {
   readonly gauntlet?: string;
 }
 
-interface CheckOptions extends ProjectOptions {
-  readonly lock?: string | boolean;
-}
-
-interface Project {
+export interface Project {
   readonly loaded: Pick<LoadedVetConfig, 'config' | 'judge' | 'rootDir' | 'warnings'>;
   readonly criteria: Criterion[];
   readonly cases: Case[];
@@ -104,7 +97,7 @@ function loadError(
   return new VetError(code, `cannot load ${source}: ${issues.map((i) => i.message).join('; ')}`);
 }
 
-async function loadProject(
+export async function loadProject(
   options: ProjectOptions,
   deps: ValidateDeps,
   requireCredentials: boolean,
@@ -627,49 +620,6 @@ async function validate(
   }
 }
 
-// ---------- check --lock ----------
-
-async function describeReleaseDate(judge: JudgeV1): Promise<string | null> {
-  const describe: unknown = Reflect.get(judge, 'describeModel');
-  if (typeof describe !== 'function') return null;
-  try {
-    const described: unknown = await Reflect.apply(describe, judge, []);
-    if (typeof described !== 'object' || described === null) return null;
-    const date: unknown = Reflect.get(described, 'releaseDate');
-    return typeof date === 'string' ? date : null;
-  } catch {
-    return null;
-  }
-}
-
-async function checkCommand(options: CheckOptions, deps: ValidateDeps): Promise<void> {
-  if (options.lock === undefined || options.lock === false) {
-    throw new VetError(CEV_ERROR_CODES.CONFIG_INVALID, '`vet check` needs --lock [path]');
-  }
-  const project = await loadProject(options, deps, false);
-  const { judge, rootDir } = project.loaded;
-  const lockPath = resolve(
-    typeof options.lock === 'string' ? options.lock : join(rootDir, LOCK_FILE),
-  );
-  const read = await readLock(lockPath);
-  if ('error' in read) throw read.error;
-  const report = checkLock(read, {
-    criteria: project.criteria,
-    cases: project.cases,
-    model: {
-      transport: judge.capabilities.transport,
-      releaseDate: await describeReleaseDate(judge),
-    },
-  });
-  emit(report, () =>
-    report.stale
-      ? `stale: ${report.reasons.join(', ')}`
-      : `fresh: ${lockPath} matches the criteria and cases`,
-  );
-  // Root exit-code DECISION: stale exits 1 (LOCK_STALE), missing exits 2.
-  if (report.stale) process.exitCode = 1;
-}
-
 export function registerValidate(program: Command, deps: ValidateDeps = {}): Command {
   program
     .command('validate')
@@ -686,16 +636,6 @@ export function registerValidate(program: Command, deps: ValidateDeps = {}): Com
     )
     .action(async (_options: unknown, command: Command) => {
       await validateCommand(command.optsWithGlobals<ValidateOptions>(), deps);
-    });
-  program
-    .command('check')
-    .description('check criteria.lock.json against the current criteria, cases and judge')
-    .option('--lock [path]', 'lock file to check (default: criteria.lock.json next to the config)')
-    .option('--config <path>', 'config file (default: vetkit.config.* in the current directory)')
-    .option('--criteria <file>', 'criteria file (default: evals/criteria.yaml next to the config)')
-    .option('--cases <dir>', 'cases directory (default: evals/cases next to the config)')
-    .action(async (_options: unknown, command: Command) => {
-      await checkCommand(command.optsWithGlobals<CheckOptions>(), deps);
     });
   return program;
 }

@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
-import { copyFile, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -480,80 +480,6 @@ describe('gate module with a validate-written lock', () => {
     );
     expect(r).toMatchObject({ ok: false, code: 'GATE_UNCALIBRATED', criterionId: 'tone' });
     if (!r.ok) expect(exitCodeOf(new VetError(r.code, r.message))).toBe(2);
-  });
-});
-
-// ---------- vet check --lock ----------
-
-describe('vet check --lock', () => {
-  test('check --lock fresh → exit 0 {stale:false}', async () => {
-    const rows = standardRows();
-    const root = await project(rows);
-    const events = createEvents();
-    const { judge } = countingJudge(rows, events);
-    const deps = depsFor(root, judge, events);
-    await vet(['validate'], deps);
-    stdout = [];
-    await vet(['check', '--lock'], deps);
-
-    expect(report()).toMatchObject({ stale: false, reasons: [] });
-    expect(process.exitCode ?? 0).toBe(0);
-  });
-
-  test('check --lock stale → exit 1 {stale:true, reasons}', async () => {
-    const rows = standardRows();
-    const root = await project(rows);
-    const events = createEvents();
-    const { judge } = countingJudge(rows, events);
-    const deps = depsFor(root, judge, events);
-    await vet(['validate'], deps);
-    const casesFile = join(root, 'evals', 'cases', 'cases.jsonl');
-    await writeFile(casesFile, (await readFile(casesFile, 'utf8')).replace('S-p0', 'S-p0 edited'));
-    stdout = [];
-    await vet(['check', '--lock'], deps);
-
-    expect(report()).toMatchObject({ stale: true, reasons: ['datasetHash'] });
-    expect(process.exitCode).toBe(1);
-  });
-
-  test('check --lock compares releaseDate through describeModel and transport', async () => {
-    const rows = standardRows();
-    const root = await project(rows);
-    const events = createEvents();
-    const { judge } = countingJudge(rows, events, { releaseDate: '2026-09-15' });
-    await vet(['validate'], depsFor(root, judge, events));
-    expect((await lockAt(root)).model.releaseDate).toBe('2026-09-15');
-
-    const newer = { ...judge, describeModel: () => Promise.resolve({ releaseDate: '2026-10-01' }) };
-    stdout = [];
-    await vet(['check', '--lock'], depsFor(root, newer, events));
-    expect(report()).toMatchObject({ stale: true, reasons: ['releaseDate'] });
-
-    const broken = { ...judge, describeModel: () => Promise.reject(new Error('no endpoint')) };
-    stdout = [];
-    process.exitCode = undefined;
-    await vet(['check', '--lock'], depsFor(root, broken, events));
-    expect(report()).toMatchObject({ stale: false, releaseDate: 'unknown' });
-
-    const moved = { ...judge, capabilities: { ...judge.capabilities, transport: 'transport-b' } };
-    stdout = [];
-    await vet(['check', '--lock'], depsFor(root, moved, events));
-    expect(report()).toMatchObject({ stale: true, reasons: ['transport'] });
-  });
-
-  test('check --lock missing → exit 2', async () => {
-    const rows = standardRows();
-    const root = await project(rows);
-    const events = createEvents();
-    const { judge } = countingJudge(rows, events);
-    const error = await rejection(vet(['check', '--lock'], depsFor(root, judge, events)));
-
-    expect(exitCodeOf(error)).toBe(2);
-    expect(VetError.isInstance(error) && error.message).toContain('criteria.lock.json');
-  });
-
-  test('LOCK_STALE → exit 1 via handleError', () => {
-    expect(exitCodeOf(new VetError(CEV_ERROR_CODES.LOCK_STALE, 'stale'))).toBe(1);
   });
 });
 
