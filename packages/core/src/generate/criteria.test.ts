@@ -10,10 +10,10 @@ type DoGenerate = GeneratorV1['doGenerate'];
 
 function fakeGenerator(
   value: unknown,
-  resolvedModelId: string | undefined = 'acme/model-1',
+  resolvedModelId: string | null = 'acme/model-1',
 ): { generator: GeneratorV1; doGenerate: ReturnType<typeof vi.fn<DoGenerate>> } {
   const doGenerate = vi.fn<DoGenerate>(() =>
-    Promise.resolve(resolvedModelId === undefined ? { value } : { value, resolvedModelId }),
+    Promise.resolve(resolvedModelId === null ? { value } : { value, resolvedModelId }),
   );
   const generator: GeneratorV1 = {
     specVersion: 'v1',
@@ -87,13 +87,13 @@ describe('proposeCriteria', () => {
       computeWordingHash({
         type: 'boolean',
         instructions: c?.instructions ?? '',
-        escape: c?.escape,
+        escape: c?.escape ?? '',
       }),
     );
   });
 
   test('provenance.generator falls back to the generator id without a resolved model id', async () => {
-    const { generator } = fakeGenerator({ criteria: [draft('rude-tone')] }, undefined);
+    const { generator } = fakeGenerator({ criteria: [draft('rude-tone')] }, null);
 
     const { criteria, promptHash: hash } = await proposeCriteria({
       generator,
