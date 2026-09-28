@@ -252,11 +252,18 @@ export const genAiDialect: DialectV1 = {
 
 // -- genAiLegacyDialect ---------------------------------------------------------------------------
 
-const LEGACY_INDEX_RE = /^gen_ai\.(prompt|completion)\.(\d+)\.(role|content)$/;
+const LEGACY_INDEX_RE = /^gen_ai\.(prompt|completion)\.(\d+)\.(role|content|tool_call_id)$/;
+// pij.14: gen_ai.{prompt,completion}.{n}.tool_calls.{i}.{id,name,arguments} — an assistant turn's
+// own tool call(s), indexed the same way llm.output_messages.*.message.tool_calls is in the
+// OpenInference dialect (no cross-dialect import; the pattern is only coincidentally similar).
+const LEGACY_TOOL_CALL_RE =
+  /^gen_ai\.(prompt|completion)\.(\d+)\.tool_calls\.(\d+)\.(id|name|arguments)$/;
 const LEGACY_EVENT_NAMES = new Set(['gen_ai.content.prompt', 'gen_ai.content.completion']);
 
 function hasLegacyIndexedAttrs(span: OtlpSpan): boolean {
-  return Object.keys(span.attributes).some((key) => LEGACY_INDEX_RE.test(key));
+  return Object.keys(span.attributes).some(
+    (key) => LEGACY_INDEX_RE.test(key) || LEGACY_TOOL_CALL_RE.test(key),
+  );
 }
 
 function hasLegacyContentEvents(span: OtlpSpan): boolean {
@@ -274,9 +281,17 @@ function contentStateLegacy(span: OtlpSpan): 'captured' | 'not_captured' | 'reda
   return hasLegacyIndexedAttrs(span) || hasLegacyContentEvents(span) ? 'captured' : 'not_captured';
 }
 
+interface LegacyToolCall {
+  id?: string;
+  name?: string;
+  arguments?: AnyValue;
+}
+
 interface LegacyIndexedEntry {
   role?: string;
   content?: string;
+  toolCallId?: string;
+  toolCalls: Map<number, LegacyToolCall>;
 }
 
 function legacyIndexedMessages(
@@ -285,21 +300,60 @@ function legacyIndexedMessages(
   fallbackRole: Message['role'],
 ): Message[] {
   const byIndex = new Map<number, LegacyIndexedEntry>();
+  const entryFor = (idx: number): LegacyIndexedEntry => {
+    let entry = byIndex.get(idx);
+    if (entry === undefined) {
+      entry = { toolCalls: new Map() };
+      byIndex.set(idx, entry);
+    }
+    return entry;
+  };
   for (const [key, value] of Object.entries(span.attributes)) {
     const match = LEGACY_INDEX_RE.exec(key);
-    if (match === null || match[1] !== group) continue;
-    const idx = Number(match[2]);
-    const entry = byIndex.get(idx) ?? {};
-    if (match[3] === 'role' && typeof value === 'string') entry.role = value;
-    if (match[3] === 'content' && typeof value === 'string') entry.content = value;
-    byIndex.set(idx, entry);
+    if (match !== null && match[1] === group) {
+      const entry = entryFor(Number(match[2]));
+      if (match[3] === 'role' && typeof value === 'string') entry.role = value;
+      if (match[3] === 'content' && typeof value === 'string') entry.content = value;
+      if (match[3] === 'tool_call_id' && typeof value === 'string') entry.toolCallId = value;
+      continue;
+    }
+    const toolMatch = LEGACY_TOOL_CALL_RE.exec(key);
+    if (toolMatch !== null && toolMatch[1] === group) {
+      const entry = entryFor(Number(toolMatch[2]));
+      const callIdx = Number(toolMatch[3]);
+      const call = entry.toolCalls.get(callIdx) ?? {};
+      if (toolMatch[4] === 'id' && typeof value === 'string') call.id = value;
+      if (toolMatch[4] === 'name' && typeof value === 'string') call.name = value;
+      if (toolMatch[4] === 'arguments') call.arguments = value;
+      entry.toolCalls.set(callIdx, call);
+    }
   }
   return [...byIndex.entries()]
     .toSorted(([a], [b]) => a - b)
-    .map(([, entry]) => ({
-      role: mapRole(entry.role, fallbackRole),
-      parts: [{ type: 'text', content: entry.content ?? '' }],
-    }));
+    .map(([, entry]) => {
+      const parts: MessagePart[] = [];
+      // A tool_call_id marks this entry as a tool turn responding to a call; its content is the
+      // response, never a sibling text part (Scope: not `entry.content ?? ''` duplicated as text).
+      if (entry.toolCallId !== undefined) {
+        parts.push({
+          type: 'tool_call_response',
+          id: entry.toolCallId,
+          response: entry.content ?? '',
+        });
+      } else {
+        parts.push({ type: 'text', content: entry.content ?? '' });
+      }
+      for (const [, call] of [...entry.toolCalls.entries()].toSorted(([a], [b]) => a - b)) {
+        if (call.name === undefined) continue;
+        parts.push({
+          type: 'tool_call',
+          ...(call.id === undefined ? {} : { id: call.id }),
+          name: call.name,
+          ...(call.arguments === undefined ? {} : { arguments: call.arguments }),
+        });
+      }
+      return { role: mapRole(entry.role, fallbackRole), parts };
+    });
 }
 
 interface RawLegacyEntry {

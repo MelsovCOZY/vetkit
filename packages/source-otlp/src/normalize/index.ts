@@ -123,6 +123,39 @@ export function sumTokens(
   };
 }
 
+// Normalises tool_call/tool_call_response ids across the whole trace to tool_call_1,
+// tool_call_2... in first-seen call order (contract pij.14): every dialect's extractMessages
+// keeps emitting its own native ids, and this single pass renumbers them afterwards so all five
+// dialects agree on the same ids for the same conversation. A part with no id is left as-is, and
+// a tool_call_response id that never matches an earlier tool_call id is also left as-is (nothing
+// to rename it to).
+function normalizeToolCallIds(messages: readonly Message[]): Message[] {
+  const idMap = new Map<string, string>();
+  let counter = 0;
+  for (const message of messages) {
+    for (const part of message.parts) {
+      if (part.type === 'tool_call' && part.id !== undefined && !idMap.has(part.id)) {
+        counter += 1;
+        idMap.set(part.id, `tool_call_${counter}`);
+      }
+    }
+  }
+  if (idMap.size === 0) return [...messages];
+  return messages.map((message) => ({
+    ...message,
+    parts: message.parts.map((part) => {
+      if (
+        (part.type === 'tool_call' || part.type === 'tool_call_response') &&
+        part.id !== undefined
+      ) {
+        const mapped = idMap.get(part.id);
+        return mapped === undefined ? part : { ...part, id: mapped };
+      }
+      return part;
+    }),
+  }));
+}
+
 export function normalizeTrace(
   tree: SpanTree,
   resource: OtlpResource,
@@ -164,7 +197,7 @@ export function normalizeTrace(
   return {
     traceId: resolvedTraceId,
     spans,
-    messages,
+    messages: normalizeToolCallIds(messages),
     dialect: dialect?.name ?? 'unknown',
     dialectVersion: dialect?.specCommit ?? 'unknown',
     ...(resource.schemaUrl === undefined ? {} : { schemaUrl: resource.schemaUrl }),

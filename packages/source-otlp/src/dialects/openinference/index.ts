@@ -161,12 +161,23 @@ function toolCallParts(
 
 // llm.input_messages / llm.output_messages: indexed message.role + message.content +
 // message.tool_calls.*. Returns [] when no index is present under this prefix at all.
+// pij.14: message.tool_call_id marks this index as a tool turn responding to a call — its
+// content becomes a tool_call_response part, never a sibling text part.
 function indexedMessages(attrs: Record<string, AnyValue>, prefix: string): Message[] {
   return messageIndices(attrs, prefix).map((index) => {
     const role = mapRole(attrs[`${prefix}.${index}.message.role`]);
     const content = attrs[`${prefix}.${index}.message.content`];
+    const toolCallId = attrs[`${prefix}.${index}.message.tool_call_id`];
     const parts: MessagePart[] = [];
-    if (content !== undefined) parts.push({ type: 'text', content: textContent(content) });
+    if (typeof toolCallId === 'string') {
+      parts.push({
+        type: 'tool_call_response',
+        id: toolCallId,
+        response: content !== undefined ? textContent(content) : '',
+      });
+    } else if (content !== undefined) {
+      parts.push({ type: 'text', content: textContent(content) });
+    }
     parts.push(...toolCallParts(attrs, prefix, index));
     return { role, parts };
   });

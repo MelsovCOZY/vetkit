@@ -150,6 +150,64 @@ describe('vercelDialect.extractMessages', () => {
     expect(messages).toEqual([{ role: 'assistant', parts: [{ type: 'text', content: 'Paris' }] }]);
   });
 
+  // pij.14: ai.prompt.messages content-parts arrays carry the AI SDK's own tool-call/tool-result
+  // shapes ({type:'tool-call', toolCallId, toolName, args} / {type:'tool-result', toolCallId,
+  // toolName, result}) alongside {type:'text', text} — the wire shape a prior assistant tool call
+  // or its tool response is fed back as, on a later turn's prompt.
+  test('ai.prompt.messages: a tool-call content part becomes a tool_call part', () => {
+    const s = span('inner', {
+      'ai.operationId': 'ai.generateText.doGenerate',
+      'ai.prompt.messages': JSON.stringify([
+        {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool-call',
+              toolCallId: 'call_1',
+              toolName: 'get_weather',
+              args: { city: 'Paris' },
+            },
+          ],
+        },
+      ]),
+    });
+    const messages = vercelDialect.extractMessages(s, buildSpanTree([s]));
+    expect(messages).toEqual([
+      {
+        role: 'assistant',
+        parts: [
+          { type: 'tool_call', id: 'call_1', name: 'get_weather', arguments: { city: 'Paris' } },
+        ],
+      },
+    ]);
+  });
+
+  test('ai.prompt.messages: a tool-result content part becomes a tool_call_response part', () => {
+    const s = span('inner', {
+      'ai.operationId': 'ai.generateText.doGenerate',
+      'ai.prompt.messages': JSON.stringify([
+        {
+          role: 'tool',
+          content: [
+            {
+              type: 'tool-result',
+              toolCallId: 'call_1',
+              toolName: 'get_weather',
+              result: { temp_c: 18 },
+            },
+          ],
+        },
+      ]),
+    });
+    const messages = vercelDialect.extractMessages(s, buildSpanTree([s]));
+    expect(messages).toEqual([
+      {
+        role: 'tool',
+        parts: [{ type: 'tool_call_response', id: 'call_1', response: { temp_c: 18 } }],
+      },
+    ]);
+  });
+
   test('ai.response.toolCalls JSON becomes assistant tool_call parts', () => {
     const s = span('inner', {
       'ai.operationId': 'ai.generateText.doGenerate',
