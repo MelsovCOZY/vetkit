@@ -43,4 +43,50 @@ describe('VetError', () => {
     expect(VetError.isInstance(null)).toBe(false);
     expect(VetError.isInstance(undefined)).toBe(false);
   });
+
+  test('accepts the ten J1 error codes (judge port, IR validation, gate, cache)', () => {
+    const j1Codes = [
+      'CONFIG_INVALID',
+      'CRITERIA_INVALID',
+      'CASE_INVALID',
+      'JUDGE_UNAVAILABLE',
+      'JUDGE_TIMEOUT',
+      'JUDGE_BAD_RESPONSE',
+      'GATE_REFUSED',
+      'CACHE_IO',
+      'JUDGE_UNAUTHORIZED',
+      'INPUT_TOO_LARGE',
+    ] as const;
+
+    for (const code of j1Codes) {
+      expect(CEV_ERROR_CODES[code]).toBe(code);
+      const err = new VetError(code, 'message');
+      expect(VetError.isInstance(err)).toBe(true);
+      expect(err.code).toBe(code);
+    }
+  });
+
+  test('details round-trips through the constructor options', () => {
+    const err = new VetError('CACHE_IO', 'cache write failed', {
+      details: {
+        retryable: true,
+        hint: 'retry with backoff',
+        retryAfterMs: 500,
+        requestId: 'req-1',
+      },
+    });
+
+    expect(err.details).toEqual({
+      retryable: true,
+      hint: 'retry with backoff',
+      retryAfterMs: 500,
+      requestId: 'req-1',
+    });
+  });
+
+  test('details is undefined when the constructor options omit it', () => {
+    const err = new VetError('CACHE_IO', 'cache write failed');
+
+    expect(err.details).toBeUndefined();
+  });
 });

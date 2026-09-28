@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vetkit.dev/schemas/verdict.schema.json",
+  "title": "Verdict",
+  "type": "object",
+  "$defs": {
+    "Answer": {
+      "type": "object",
+      "properties": {
+        "type": { "enum": ["boolean", "choice", "score"] },
+        "probability": { "type": "number" },
+        "choice": { "type": "string" },
+        "confidence": { "type": "number" },
+        "probabilities": { "type": "object", "additionalProperties": { "type": "number" } },
+        "score": { "type": "number" },
+        "legend": { "type": "object", "additionalProperties": { "type": "string" } }
+      },
+      "required": ["type"],
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "properties": { "type": { "const": "boolean" }, "probability": { "type": "number" } },
+          "required": ["type", "probability"]
+        },
+        {
+          "properties": {
+            "type": { "const": "choice" },
+            "choice": { "type": "string" },
+            "confidence": { "type": "number" },
+            "probabilities": { "type": "object", "additionalProperties": { "type": "number" } }
+          },
+          "required": ["type", "choice", "confidence", "probabilities"]
+        },
+        {
+          "properties": {
+            "type": { "const": "score" },
+            "score": { "type": "number" },
+            "confidence": { "type": "number" },
+            "legend": { "type": "object", "additionalProperties": { "type": "string" } },
+            "probabilities": { "type": "object", "additionalProperties": { "type": "number" } }
+          },
+          "required": ["type", "score", "confidence", "legend", "probabilities"]
+        }
+      ]
+    },
+    "Model": {
+      "type": "object",
+      "properties": {
+        "requested": { "type": "string" },
+        "resolved": { "type": "string" },
+        "transport": { "type": "string" },
+        "pinned": { "type": "boolean" },
+        "provider": { "type": "string" },
+        "releaseDate": { "type": "string" }
+      },
+      "required": ["requested", "resolved", "transport", "pinned"],
+      "additionalProperties": false
+    }
+  },
+  "properties": {
+    "caseId": { "type": "string" },
+    "criterionId": { "type": "string" },
+    "status": {
+      "enum": [
+        "ok",
+        "unscored",
+        "error",
+        "incomplete_trace",
+        "truncated",
+        "content_not_captured",
+        "not_applicable",
+        "infra_failure",
+        "simulator_error"
+      ]
+    },
+    "answer": { "$ref": "#/$defs/Answer" },
+    "pass": { "type": "boolean" },
+    "threshold": { "type": "number" },
+    "model": { "$ref": "#/$defs/Model" },
+    "cacheHit": { "type": "boolean" },
+    "cause": {},
+    "explanation": { "type": "string" },
+    "gated": { "type": "boolean" },
+    "gateReason": { "enum": ["score_not_gateable", "language_not_calibrated"] }
+  },
+  "required": ["caseId", "criterionId", "status", "model", "cacheHit"],
+  "additionalProperties": false,
+  "if": {
+    "properties": { "status": { "const": "ok" } },
+    "required": ["status"]
+  },
+  "else": {
+    "not": { "properties": { "answer": true }, "required": ["answer"] }
+  }
+}

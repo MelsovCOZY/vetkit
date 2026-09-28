@@ -20,4 +20,13 @@ export type { AdapterBase } from './registry.ts';
 export { ADAPTER_KINDS, SPEC_VERSION } from './version.ts';
 export type { AdapterKind, SpecVersion } from './version.ts';
 
-export type { SpecVersionDoc } from './generated/index.ts';
+export type {
+  Case,
+  Criterion,
+  Answer as IrAnswer,
+  Model,
+  SpecVersionDoc,
+  Verdict,
+} from './generated/index.ts';
+
+export type { Answer, JudgeResponse, JudgeV1, Question } from './ports/judge.ts';
