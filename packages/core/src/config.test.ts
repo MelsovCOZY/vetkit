@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { VetError, type JudgeV1 } from '@vetkit/spec';
 import {
@@ -127,6 +128,66 @@ describe('defineConfig / validateConfig', () => {
     const { model: _model, ...noModel } = judgeEndpoint;
     const issues = issuesOf(() => defineUntyped({ judge: noModel }));
     expect(issues.some((i) => i.pointer.startsWith('/judge'))).toBe(true);
+  });
+});
+
+describe('judge endpoint presets', () => {
+  it('accepts a preset with accountId and no baseURL or model', () => {
+    const judge = {
+      kind: 'typesafe-compatible',
+      preset: 'cloudflare',
+      accountId: 'abc',
+      apiKeyEnv: 'CLOUDFLARE_API_TOKEN',
+    };
+    expect(validateConfig({ judge })).toEqual([]);
+  });
+
+  it('accepts a preset without accountId', () => {
+    const judge = {
+      kind: 'typesafe-compatible',
+      preset: 'vercel',
+      apiKeyEnv: 'AI_GATEWAY_API_KEY',
+    };
+    expect(validateConfig({ judge })).toEqual([]);
+  });
+
+  it('rejects an endpoint with neither preset nor baseURL at /judge', () => {
+    const { baseURL: _baseURL, ...noBase } = judgeEndpoint;
+    const issues = issuesOf(() => defineUntyped({ judge: noBase }));
+    expect(issues.map((i) => i.pointer)).toContain('/judge');
+  });
+
+  it('still accepts baseURL without preset', () => {
+    expect(validateConfig({ judge: judgeEndpoint })).toEqual([]);
+  });
+
+  it('describes a preset judge by preset name without any key value', () => {
+    const { config } = resolveConfig({
+      judge: {
+        kind: 'typesafe-compatible',
+        preset: 'cloudflare',
+        accountId: 'abc',
+        apiKeyEnv: 'CLOUDFLARE_API_TOKEN',
+        providerOptions: { secretish: 'sk-do-not-print' },
+      },
+    });
+    const text = describeConfig(config).join('\n');
+    expect(text).toContain('cloudflare');
+    expect(text).toContain('CLOUDFLARE_API_TOKEN');
+    expect(text).not.toContain('sk-do-not-print');
+  });
+
+  it('core config.ts and config.schema.json name no vendor outside comments', () => {
+    const vendor = /vercel|typesafe|openrouter|cloudflare/i;
+    const ts = readFileSync(new URL('config.ts', import.meta.url), 'utf8')
+      .replaceAll(/\/\*[\s\S]*?\*\//g, '')
+      .replaceAll(/\/\/.*$/gm, '');
+    const schema = readFileSync(
+      new URL('../../spec/schemas/config.schema.json', import.meta.url),
+      'utf8',
+    );
+    expect(ts).not.toMatch(vendor);
+    expect(schema).not.toMatch(vendor);
   });
 });
 
