@@ -56,6 +56,15 @@ import {
 } from './index.ts';
 import { createOutbox } from './index.ts';
 import { gauntletParaphrase, gauntletPolarity } from './index.ts';
+import {
+  CRITERIA_PROMPT,
+  CRITERIA_SCHEMA,
+  FAILURE_MODES_PROMPT,
+  FAILURE_MODES_SCHEMA,
+  promptHash,
+  proposeCriteria,
+  proposeFailureModes,
+} from './index.ts';
 
 describe('@vetkit/core package entry', () => {
   it('re-exports loadCriteria as a function', () => {
@@ -279,5 +288,32 @@ describe('@vetkit/core package entry', () => {
   it('re-exports gauntletParaphrase and gauntletPolarity as functions', () => {
     expect(typeof gauntletParaphrase).toBe('function');
     expect(typeof gauntletPolarity).toBe('function');
+  });
+
+  it('re-exports proposeFailureModes and proposeCriteria as functions', () => {
+    expect(typeof proposeFailureModes).toBe('function');
+    expect(typeof proposeCriteria).toBe('function');
+  });
+
+  it('re-exports promptHash as a deterministic sha256-hex function', () => {
+    expect(promptHash('a')).toMatch(/^[0-9a-f]{64}$/);
+    expect(promptHash('a')).toBe(promptHash('a'));
+    expect(promptHash('a')).not.toBe(promptHash('b'));
+  });
+
+  it('re-exports FAILURE_MODES_PROMPT naming the error-analysis task', () => {
+    expect(FAILURE_MODES_PROMPT).toContain('error analysis on traces');
+  });
+
+  it('re-exports CRITERIA_PROMPT naming the yes/no question-writing task', () => {
+    expect(CRITERIA_PROMPT).toContain('yes/no evaluation questions');
+  });
+
+  it('re-exports FAILURE_MODES_SCHEMA requiring failureModes', () => {
+    expect(JSON.stringify(FAILURE_MODES_SCHEMA)).toContain('failureModes');
+  });
+
+  it('re-exports CRITERIA_SCHEMA requiring criteria', () => {
+    expect(JSON.stringify(CRITERIA_SCHEMA)).toContain('criteria');
   });
 });
