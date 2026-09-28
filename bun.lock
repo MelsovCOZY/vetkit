@@ -101,6 +101,12 @@
         "@vetkit/core": "workspace:^",
         "@vetkit/spec": "workspace:^",
       },
+      "peerDependencies": {
+        "vitest": "^5.0.2",
+      },
+      "optionalPeers": [
+        "vitest",
+      ],
     },
     "packages/sink-langfuse": {
       "name": "@vetkit/sink-langfuse",
