@@ -190,3 +190,12 @@ export { MASTER_KEY_MIN_REPEATS } from './validate/gauntlet-controls.ts';
 
 export { createOutbox } from './outbox/outbox.ts';
 export type { DrainResult, Outbox, OutboxOptions, ReconcileResult } from './outbox/outbox.ts';
+
+export { gauntletParaphrase, gauntletPolarity } from './validate/gauntlet-wording.ts';
+export type {
+  GauntletWordingSkipReason,
+  ParaphraseOptions,
+  ParaphraseResult,
+  PolarityResult,
+  WordingJudgeOptions,
+} from './validate/gauntlet-wording.ts';
