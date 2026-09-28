@@ -47,3 +47,15 @@ export type { Answer, JudgeResponse, JudgeV1, Question } from './ports/judge.ts'
 
 export { defineExporter } from './ports/exporter.ts';
 export type { ExporterV1 } from './ports/exporter.ts';
+
+export { configSchema } from './generated/schemas.ts';
+export type {
+  AdapterRef,
+  ConfigDoc,
+  GateConfig,
+  GeneratorEndpoint,
+  JudgeEndpoint,
+  PluginRef,
+  ThresholdsPolicy,
+  WatchConfig,
+} from './generated/index.ts';

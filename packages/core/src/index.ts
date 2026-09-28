@@ -85,3 +85,21 @@ export type {
   LanguageSlice,
   ReliabilityBin,
 } from './validate/calibrate.ts';
+
+export {
+  defineConfig,
+  describeConfig,
+  readEnvName,
+  resolveConfig,
+  validateConfig,
+} from './config.ts';
+export type {
+  ConfigIssue,
+  GeneratorAdapter,
+  GeneratorEndpoint,
+  JudgeEndpoint,
+  RegistryEntry,
+  ResolveConfigResult,
+  ResolvedConfig,
+  VetkitConfig,
+} from './config.ts';

@@ -13,6 +13,8 @@ import {
   decideExit,
   evaluateGate,
   DEFAULT_FORBIDDEN_WORDS,
+  defineConfig,
+  describeConfig,
   gradeCode,
   judgeCase,
   LINT_RULES,
@@ -22,13 +24,16 @@ import {
   MAX_STATE_TOKENS,
   nearDuplicateClusters,
   pairedClusteredDiff,
+  readEnvName,
   referenceRequirement,
   renderReference,
   repeatTolerance,
   repeatValues,
+  resolveConfig,
   runEvals,
   runJudge,
   splitByHash,
+  validateConfig,
 } from './index.ts';
 
 describe('@vetkit/core package entry', () => {
@@ -146,5 +151,25 @@ describe('@vetkit/core package entry', () => {
 
   it('re-exports splitByHash as a function', () => {
     expect(typeof splitByHash).toBe('function');
+  });
+
+  it('re-exports defineConfig as a function', () => {
+    expect(typeof defineConfig).toBe('function');
+  });
+
+  it('re-exports validateConfig as a function', () => {
+    expect(typeof validateConfig).toBe('function');
+  });
+
+  it('re-exports resolveConfig as a function', () => {
+    expect(typeof resolveConfig).toBe('function');
+  });
+
+  it('re-exports readEnvName as a function', () => {
+    expect(typeof readEnvName).toBe('function');
+  });
+
+  it('re-exports describeConfig as a function', () => {
+    expect(typeof describeConfig).toBe('function');
   });
 });

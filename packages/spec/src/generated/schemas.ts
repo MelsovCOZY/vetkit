@@ -59,6 +59,252 @@ export const caseSchema: JsonSchema = {
   additionalProperties: false,
 } as const;
 
+export const configSchema: JsonSchema = {
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  $id: 'https://vetkit.dev/schemas/config.schema.json',
+  title: 'ConfigDoc',
+  description:
+    'Declarative shape of vetkit.config.ts. Adapter objects are checked as {specVersion, id, capabilities} projections; their methods are checked structurally in core.',
+  type: 'object',
+  properties: {
+    generator: {
+      description:
+        'Generator LLM: a registry name, an endpoint, or a generator adapter object. Optional; no implicit default.',
+      anyOf: [
+        {
+          type: 'string',
+          minLength: 1,
+        },
+        {
+          $ref: '#/$defs/generatorEndpoint',
+        },
+        {
+          $ref: '#/$defs/adapterRef',
+        },
+      ],
+    },
+    judge: {
+      description:
+        'Judge: a registry name, an endpoint, or a JudgeV1 adapter object. Required; never defaulted.',
+      anyOf: [
+        {
+          type: 'string',
+          minLength: 1,
+        },
+        {
+          $ref: '#/$defs/judgeEndpoint',
+        },
+        {
+          $ref: '#/$defs/adapterRef',
+        },
+      ],
+    },
+    registry: {
+      description:
+        'User-declared map from name to endpoint or adapter object; the only way a string judge/generator resolves.',
+      type: 'object',
+      additionalProperties: {
+        anyOf: [
+          {
+            $ref: '#/$defs/judgeEndpoint',
+          },
+          {
+            $ref: '#/$defs/adapterRef',
+          },
+        ],
+      },
+    },
+    sources: {
+      description: 'Trace sources: opaque names or source adapter objects.',
+      type: 'array',
+      items: {
+        $ref: '#/$defs/pluginRef',
+      },
+    },
+    sinks: {
+      description: 'Result sinks: opaque names or sink adapter objects.',
+      type: 'array',
+      items: {
+        $ref: '#/$defs/pluginRef',
+      },
+    },
+    thresholds: {
+      title: 'ThresholdsPolicy',
+      type: 'object',
+      properties: {
+        default: {
+          description:
+            'Pass threshold for every criterion; defaults to 0.5, a placeholder until calibrated.',
+          type: 'number',
+          minimum: 0,
+          maximum: 1,
+        },
+        perCriterion: {
+          description: 'Per-criterion overrides keyed by criterion id.',
+          type: 'object',
+          additionalProperties: {
+            type: 'number',
+            minimum: 0,
+            maximum: 1,
+          },
+        },
+      },
+      additionalProperties: false,
+    },
+    watch: {
+      title: 'WatchConfig',
+      description: 'Sampling for watch mode.',
+      type: 'object',
+      properties: {
+        sampleRate: {
+          type: 'number',
+          minimum: 0,
+          maximum: 1,
+        },
+        upstreamSampleRate: {
+          type: 'number',
+          minimum: 0,
+          maximum: 1,
+        },
+        maxInFlight: {
+          description: 'Concurrent judge calls in watch mode; defaults to 4.',
+          type: 'integer',
+          minimum: 1,
+        },
+      },
+      additionalProperties: false,
+    },
+    gate: {
+      title: 'GateConfig',
+      type: 'object',
+      properties: {
+        minPass: {
+          type: 'number',
+          minimum: 0,
+          maximum: 1,
+        },
+        requireCalibrated: {
+          description: 'Refuse to gate on uncalibrated criteria; defaults to true.',
+          type: 'boolean',
+        },
+        allowUnpinned: {
+          description: 'Allow gating on an unpinned judge model; defaults to false.',
+          type: 'boolean',
+        },
+      },
+      additionalProperties: false,
+    },
+    cacheDir: {
+      description: "Verdict cache directory; defaults to '.vet'.",
+      type: 'string',
+      minLength: 1,
+    },
+  },
+  required: ['judge'],
+  additionalProperties: false,
+  $defs: {
+    judgeEndpoint: {
+      title: 'JudgeEndpoint',
+      description:
+        'Either preset, or baseURL and model, is required; core enforces this (a schema anyOf would degrade the generated type).',
+      type: 'object',
+      properties: {
+        kind: {
+          description: 'Transport kind, validated by the adapter.',
+          type: 'string',
+        },
+        preset: {
+          description:
+            'Opaque preset name; the adapter validates it and supplies baseURL and model defaults.',
+          type: 'string',
+          minLength: 1,
+        },
+        accountId: {
+          description: 'Account id some presets need in their URL.',
+          type: 'string',
+          minLength: 1,
+        },
+        baseURL: {
+          type: 'string',
+        },
+        apiKeyEnv: {
+          description: 'Name of the env var holding the key.',
+          type: 'string',
+        },
+        model: {
+          type: 'string',
+        },
+        providerOptions: {
+          type: 'object',
+          additionalProperties: {},
+        },
+      },
+      required: ['kind', 'apiKeyEnv'],
+      additionalProperties: false,
+    },
+    generatorEndpoint: {
+      title: 'GeneratorEndpoint',
+      type: 'object',
+      properties: {
+        kind: {
+          description: 'Transport kind, validated by the adapter.',
+          type: 'string',
+        },
+        baseURL: {
+          type: 'string',
+        },
+        apiKeyEnv: {
+          description: 'Name of the env var holding the key.',
+          type: 'string',
+        },
+        model: {
+          type: 'string',
+        },
+      },
+      required: ['kind', 'baseURL', 'apiKeyEnv', 'model'],
+      additionalProperties: false,
+    },
+    adapterRef: {
+      title: 'AdapterRef',
+      type: 'object',
+      properties: {
+        specVersion: {
+          const: 'v1',
+        },
+        id: {
+          type: 'string',
+        },
+        capabilities: {
+          type: 'object',
+          additionalProperties: {},
+        },
+      },
+      required: ['specVersion', 'id', 'capabilities'],
+      additionalProperties: false,
+    },
+    pluginRef: {
+      anyOf: [
+        {
+          type: 'string',
+          minLength: 1,
+        },
+        {
+          type: 'object',
+          properties: {
+            specVersion: {
+              const: 'v1',
+            },
+            id: {
+              type: 'string',
+            },
+          },
+          required: ['specVersion', 'id'],
+        },
+      ],
+    },
+  },
+} as const;
+
 export const criterionSchema: JsonSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   $id: 'https://vetkit.dev/schemas/criterion.schema.json',
