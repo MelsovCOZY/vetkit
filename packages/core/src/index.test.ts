@@ -40,6 +40,7 @@ import {
   splitByHash,
   validateConfig,
 } from './index.ts';
+import { createEvents, EVENT_NAMES } from './index.ts';
 
 describe('@vetkit/core package entry', () => {
   it('re-exports loadCriteria as a function', () => {
@@ -196,5 +197,13 @@ describe('@vetkit/core package entry', () => {
 
   it('re-exports LABEL_CSV_HEADER naming the five label columns', () => {
     expect(LABEL_CSV_HEADER).toBe('case_id,criterion_id,label,labeler,labeled_at');
+  });
+
+  it('re-exports createEvents as a function', () => {
+    expect(typeof createEvents).toBe('function');
+  });
+
+  it('re-exports EVENT_NAMES naming the run:start event', () => {
+    expect(EVENT_NAMES.RUN_START).toBe('run:start');
   });
 });
