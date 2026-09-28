@@ -7,6 +7,7 @@
 // cascade order are owned by pij.11: this module only consumes DialectV1, it never imports one.
 
 import type { Message, NormalizedTrace, Span } from '@vetkit/spec';
+import { assessCompleteness } from '../completeness/index.ts';
 import type { OtlpResource, OtlpResourceSpans, OtlpSpan } from '../reader/index.ts';
 import type { SpanNode, SpanTree } from '../reader/tree.ts';
 import type { DialectV1, OtlpDiag } from './dialect.ts';
@@ -143,6 +144,11 @@ export function normalizeTrace(
   }
 
   const tokens = sumTokens(tree, dialect);
+  const completeness = assessCompleteness(
+    tree,
+    [...tree.byId.values()].map((n) => n.span),
+    dialect,
+  );
 
   return {
     traceId: resolvedTraceId,
@@ -152,10 +158,9 @@ export function normalizeTrace(
     dialectVersion: dialect?.specCommit ?? 'unknown',
     ...(resource.schemaUrl === undefined ? {} : { schemaUrl: resource.schemaUrl }),
     completeness: {
-      // completeness rules are refined by bead pij.7
-      contentCaptured: messages.length > 0,
-      truncated: false,
-      missingParents: tree.missingParents.length > 0,
+      contentCaptured: completeness.contentCaptured,
+      truncated: completeness.truncated,
+      missingParents: completeness.missingParents.length > 0,
     },
     ...(tokens === undefined ? {} : { tokens }),
   };
