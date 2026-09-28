@@ -24,13 +24,18 @@ import type { Command } from 'commander';
 import { loadVetConfig } from '../config-load.ts';
 import { generatorFromEndpoint } from '../generators.ts';
 import { CEV_EXIT, emit, getLogger, isInteractive, prompt, type GlobalOptions } from '../output.ts';
-import { resolveSource } from '../sources.ts';
+import { resolveSource, type SourceOptions } from '../sources.ts';
 
 interface InitOptions extends GlobalOptions {
   readonly dir?: string;
   readonly force?: boolean;
   readonly source?: string;
   readonly out?: string;
+  // J5 (bead mol-pij.8): forwarded to resolveSource as SourceOptions, for otlp::<port>'s
+  // receiver mode. Commander hands option values through as strings; the jsonl factory (and
+  // any other prefix that ignores SourceOptions) never sees these at all.
+  readonly until?: string;
+  readonly seconds?: string;
 }
 
 // A criteria.yaml lint drops error-severity criteria (core's lintCriteria); root design
@@ -210,7 +215,11 @@ async function generateCommand(options: InitOptions & { source: string }): Promi
   const force = options.force === true;
   await ensureOutAvailable(out, force);
 
-  const source = resolveSource(options.source);
+  const sourceOptions: SourceOptions = {
+    ...(options.until === undefined ? {} : { until: Number(options.until) }),
+    ...(options.seconds === undefined ? {} : { seconds: Number(options.seconds) }),
+  };
+  const source = resolveSource(options.source, sourceOptions);
   const loaded = await loadVetConfig({ cwd: process.cwd() });
   const log = getLogger();
   for (const warning of loaded.warnings) log.warn(warning);
@@ -250,6 +259,8 @@ export function registerInit(program: Command): Command {
       'directory to write criteria.yaml and cases/ into (required with --source)',
     )
     .option('--force', 'overwrite existing scaffold or --out files')
+    .option('--until <n>', 'stop a streaming --source (e.g. otlp::<port>) after n traces')
+    .option('--seconds <s>', 'stop a streaming --source (e.g. otlp::<port>) after s seconds')
     .action(async (_options: unknown, command: Command) => {
       const options = command.optsWithGlobals<InitOptions>();
       if (options.source === undefined) {

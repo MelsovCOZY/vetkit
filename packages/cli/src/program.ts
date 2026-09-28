@@ -6,6 +6,7 @@ import { registerDoctor } from './commands/doctor.ts';
 import { registerEstimate } from './commands/estimate.ts';
 import { registerExport } from './commands/export.ts';
 import { registerInit } from './commands/init.ts';
+import { registerOtlpSource } from './commands/init-otlp.ts';
 import { registerLabel } from './commands/label.ts';
 import { registerLint } from './commands/lint.ts';
 import { registerLock } from './commands/lock.ts';
@@ -69,6 +70,7 @@ export function createProgram(): Command {
   registerRerun(program);
   registerValidate(program);
   registerEstimate(program);
+  registerOtlpSource();
   registerInit(program);
   registerCheck(program);
   registerLock(program);

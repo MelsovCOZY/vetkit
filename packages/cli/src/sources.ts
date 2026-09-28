@@ -1,26 +1,61 @@
 // Source string resolution for `vet init --source <path>` (bead mol-76a.7). A bare path or
 // `jsonl:<dir>` both resolve to a filesystem-backed source-jsonl SourceV1. Other prefixes
 // register through registerSourcePrefix (J5 `otlp:`, J6 `langfuse:`) without touching this
-// module's callers. Before constructing, the resolved path is stat-checked here so a path
-// the user named surfaces as exit 2 SOURCE_UNREADABLE (withExitCode), independent of
-// source-jsonl's own lenient runtime diagnostics (onDiag), which stay warn-only for the
-// `run`/`run-sinks` SOURCE_* class rule.
+// module's callers. A prefix that wants a pre-flight check on `rest` (jsonl's own stat +
+// isDirectory) passes a `validate` hook to registerSourcePrefix (contract pij.8 revision 1);
+// resolveSource runs only the matched prefix's own hook, so `otlp::4318` (rest ':4318', not a
+// directory at all) reaches otlp's factory unchecked while jsonl keeps its exit 2
+// SOURCE_UNREADABLE behaviour unchanged. `options` (until/seconds, pij.8) is forwarded from
+// `vet init`'s flags straight through to the matched factory; jsonl's factory ignores it.
 import { statSync } from 'node:fs';
 import { createJsonlSource } from '@vetkit/source-jsonl';
 import { CEV_ERROR_CODES, VetError, type SourceV1 } from '@vetkit/spec';
 import { EXIT_USAGE, withExitCode } from './errors.ts';
 
-export type SourceFactory = (spec: string) => SourceV1;
-
-const DEFAULT_PREFIX = 'jsonl';
-const prefixes = new Map<string, SourceFactory>();
-
-/** Registers a new `<prefix>:<rest>` source string; later calls win over earlier ones. */
-export function registerSourcePrefix(prefix: string, factory: SourceFactory): void {
-  prefixes.set(prefix, factory);
+export interface SourceOptions {
+  readonly until?: number;
+  readonly seconds?: number;
 }
 
-registerSourcePrefix(DEFAULT_PREFIX, (dir) => createJsonlSource({ dir }));
+export type SourceFactory = (rest: string, options?: SourceOptions) => SourceV1;
+export type SourceValidate = (rest: string) => void;
+
+interface PrefixEntry {
+  readonly factory: SourceFactory;
+  readonly validate?: SourceValidate;
+}
+
+const DEFAULT_PREFIX = 'jsonl';
+const prefixes = new Map<string, PrefixEntry>();
+
+/** Registers a new `<prefix>:<rest>` source string; later calls win over earlier ones. An
+ * omitted `validate` means resolveSource passes `rest` straight to `factory`, unchecked. */
+export function registerSourcePrefix(
+  prefix: string,
+  factory: SourceFactory,
+  validate?: SourceValidate,
+): void {
+  prefixes.set(prefix, validate === undefined ? { factory } : { factory, validate });
+}
+
+function unreadable(rest: string): VetError {
+  return withExitCode(
+    new VetError(CEV_ERROR_CODES.SOURCE_UNREADABLE, `'${rest}' is not a readable directory`),
+    EXIT_USAGE,
+  );
+}
+
+function jsonlValidate(rest: string): void {
+  let info: ReturnType<typeof statSync>;
+  try {
+    info = statSync(rest);
+  } catch {
+    throw unreadable(rest);
+  }
+  if (!info.isDirectory()) throw unreadable(rest);
+}
+
+registerSourcePrefix(DEFAULT_PREFIX, (dir) => createJsonlSource({ dir }), jsonlValidate);
 
 interface SplitSpec {
   readonly prefix: string;
@@ -33,33 +68,17 @@ function splitSpec(spec: string): SplitSpec {
   return { prefix: spec.slice(0, colon), rest: spec.slice(colon + 1) };
 }
 
-function unreadable(spec: string, rest: string): VetError {
-  return withExitCode(
-    new VetError(
-      CEV_ERROR_CODES.SOURCE_UNREADABLE,
-      `--source '${spec}': ${rest} is not a readable directory`,
-    ),
-    EXIT_USAGE,
-  );
-}
-
-/** Resolves a `--source` string to a SourceV1; throws VetError (SOURCE_UNREADABLE, exit 2) on
- * a path that does not stat as a directory, or CONFIG_INVALID on an unregistered prefix. */
-export function resolveSource(spec: string): SourceV1 {
+/** Resolves a `--source` string to a SourceV1; throws VetError (SOURCE_UNREADABLE, exit 2) from
+ * the matched prefix's own validate hook, or CONFIG_INVALID on an unregistered prefix. */
+export function resolveSource(spec: string, options?: SourceOptions): SourceV1 {
   const { prefix, rest } = splitSpec(spec);
-  const factory = prefixes.get(prefix);
-  if (factory === undefined) {
+  const entry = prefixes.get(prefix);
+  if (entry === undefined) {
     throw new VetError(
       CEV_ERROR_CODES.CONFIG_INVALID,
       `--source '${spec}': unknown source prefix '${prefix}'; registered: ${[...prefixes.keys()].join(', ')}`,
     );
   }
-  let info: ReturnType<typeof statSync>;
-  try {
-    info = statSync(rest);
-  } catch {
-    throw unreadable(spec, rest);
-  }
-  if (!info.isDirectory()) throw unreadable(spec, rest);
-  return factory(rest);
+  entry.validate?.(rest);
+  return entry.factory(rest, options);
 }
