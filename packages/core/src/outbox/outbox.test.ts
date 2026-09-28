@@ -354,6 +354,14 @@ describe('createOutbox', () => {
     expect(await lines('dead.jsonl')).toEqual([]);
   });
 
+  test('a never-resolving, signal-ignoring sink times out and leaves the item pending', async () => {
+    const outbox = createOutbox(opts({ timeoutMs: 5 }));
+    const sink = fakeSink(() => new Promise<SinkAck>(() => {}));
+    await outbox.enqueue(verdicts(1));
+    const [result] = await outbox.drain([sink]);
+    expect(result).toMatchObject({ acknowledged: 0, dead: 0, pending: 1 });
+  });
+
   test('idempotent:false never resends unlisted ids', async () => {
     const outbox = createOutbox(opts());
     const sink = fakeSink((b) => ({ accepted: ids(b).slice(1), rejected: [] }), {
