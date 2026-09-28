@@ -62,13 +62,15 @@ const judge = {
     if (mode === 'slow') {
       if (req.state.includes('second')) await waitForAbort(req.signal);
     }
+    const choice = mode === 'fail' ? 'no' : 'yes';
     const answers = {};
     for (const key of Object.keys(req.questions)) {
       answers[key] = {
         type: 'choice',
-        choice: 'yes',
+        choice,
         confidence: 0.9,
-        probabilities: { yes: 0.9, no: 0.1, escape: 0 },
+        probabilities:
+          choice === 'yes' ? { yes: 0.9, no: 0.1, escape: 0 } : { yes: 0.1, no: 0.9, escape: 0 },
       };
     }
     return {
@@ -257,24 +259,37 @@ describe('vet run --sink (mol-yxn.7)', () => {
     });
   }, 60_000);
 
-  test('judge failure', () => {
+  test('judge failure: --sink exits 0 (unscored-only), without --sink stays 1 (bug F3/F4)', () => {
     const project = freshProject();
     const plain = runVet(
       ['run', '--json'],
       freshProject(),
       envFor(freshProject(), { VETKIT_FIXTURE_MODE: 'throw' }),
     );
+    expect(plain.status).toBe(1);
     const result = runVet(
       ['run', '--sink', 'otel', '--json'],
       project,
       envFor(project, { VETKIT_FIXTURE_MODE: 'throw' }),
     );
-    expect(result.status).toBe(plain.status);
+    expect(result.status).toBe(0);
+    expect(parseJson(result.stdout)).toMatchObject({ exitCode: 0 });
     const received = readLines(project.otelOut);
     expect(received).toHaveLength(N);
     for (const v of received) {
       expect(v).toMatchObject({ status: 'unscored', provenance: { traceId: expect.any(String) } });
     }
+  }, 60_000);
+
+  test('a failing scored verdict with --sink still exits 1', () => {
+    const project = freshProject();
+    const result = runVet(
+      ['run', '--sink', 'otel', '--json'],
+      project,
+      envFor(project, { VETKIT_FIXTURE_MODE: 'fail' }),
+    );
+    expect(result.status).toBe(1);
+    expect(parseJson(result.stdout)).toMatchObject({ exitCode: 1 });
   }, 60_000);
 
   test('missing', () => {
@@ -327,6 +342,67 @@ describe('vet run --sink (mol-yxn.7)', () => {
       sinks: { otel: { accepted: N } },
     });
     expect(readLines(project.otelOut)).toHaveLength(N);
+  }, 60_000);
+});
+
+const ENDPOINT_CONFIG = `import { appendFileSync } from 'node:fs';
+
+function fakeSink(id) {
+  return {
+    specVersion: 'v1',
+    id,
+    capabilities: { batch: 10, idempotent: true },
+    async doWrite(batch) {
+      const out = process.env['FAKE_OTEL_OUT'];
+      if (out !== undefined) {
+        appendFileSync(out, batch.map((v) => JSON.stringify(v) + '\\n').join(''));
+      }
+      return { accepted: batch.map((v) => v.id), rejected: [] };
+    },
+  };
+}
+
+export default {
+  judge: {
+    kind: 'typesafe-compatible',
+    baseURL: 'https://config-default.example.test',
+    model: 'custom/jev',
+    apiKeyEnv: 'FIXTURE_JUDGE_KEY',
+  },
+  sinks: [fakeSink('otel/logs')],
+};
+`;
+
+describe('vet run CEV_JUDGE_BASE_URL forced judge failure (bug F3/F4, gate 7lg AC3)', () => {
+  test('CEV_JUDGE_BASE_URL=http://127.0.0.1:9 forces unscored verdicts; --sink exits 0 and the record carries no score', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'vetkit-run-baseurl-'));
+    cpSync(fixtureEvals, join(dir, 'evals'), { recursive: true });
+    writeFileSync(join(dir, 'vetkit.config.ts'), ENDPOINT_CONFIG);
+    const otelOut = join(dir, 'otel.jsonl');
+    const result = spawnSync(
+      process.execPath,
+      [binPath, 'run', '--sink', 'otel', '--json'],
+      {
+        cwd: dir,
+        env: {
+          ...process.env,
+          NO_COLOR: '1',
+          FAKE_OTEL_OUT: otelOut,
+          FIXTURE_JUDGE_KEY: 'sk-fixture-do-not-print-baseurl',
+          CEV_JUDGE_BASE_URL: 'http://127.0.0.1:9',
+        },
+        encoding: 'utf8',
+      },
+    );
+    expect(result.status).toBe(0);
+    expect(parseJson(result.stdout)).toMatchObject({ exitCode: 0 });
+    const received = readLines(otelOut);
+    expect(received).toHaveLength(N);
+    for (const v of received) {
+      expect(v['status']).toBe('unscored');
+      expect(v['cause']).toBe('JUDGE_TIMEOUT');
+      expect(v['answer']).toBeUndefined();
+    }
   }, 60_000);
 });
 

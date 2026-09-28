@@ -170,6 +170,30 @@ describe('loadVetConfig', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  test('CEV_JUDGE_BASE_URL overrides the configured baseURL for that process (bug F3/F4)', async () => {
+    const fetchSpy = vi.fn(async () => new Response('{}', { status: 500 }));
+    vi.stubGlobal('fetch', fetchSpy);
+    const cwd = await project({
+      'vetkit.config.ts': descriptorConfig({
+        kind: 'typesafe-compatible',
+        baseURL: 'https://configured.example.test',
+        model: 'custom/jev',
+        apiKeyEnv: 'FIXTURE_JUDGE_KEY',
+      }),
+    });
+    const loaded = await loadVetConfig({
+      cwd,
+      env: { FIXTURE_JUDGE_KEY: 'k-123', CEV_JUDGE_BASE_URL: 'http://127.0.0.1:9' },
+    });
+    await rejection(
+      loaded.judge.doJudge({
+        state: 's',
+        questions: { q: { type: 'boolean', instructions: 'is it?' } },
+      }),
+    );
+    expect(fetchSpy.mock.calls[0]?.[0]).toBe('http://127.0.0.1:9/v1/systemone');
+  });
+
   test('an unknown descriptor kind is CONFIG_INVALID naming the kind', async () => {
     const cwd = await project({
       'vetkit.config.ts': descriptorConfig({
