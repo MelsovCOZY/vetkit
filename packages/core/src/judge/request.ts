@@ -11,6 +11,7 @@ import {
   CEV_ERROR_CODES,
   VetError,
   type Case,
+  type CevErrorCode,
   type Criterion,
   type JudgeResponse,
   type JudgeV1,
@@ -136,7 +137,25 @@ function verdictModel(model: JudgeResponse['model']): Verdict['model'] {
   return out;
 }
 
-function unscored(input: JudgeCaseInput, cause: string): Verdict[] {
+/**
+ * A transport rejection's `err.code` alone hides the HTTP status and provider error type
+ * (bead mol-0nw.28) — e.g. a 403 no_providers_available surfaces only 'JUDGE_UNAVAILABLE'. When
+ * the VetError carries a `details.hint` (the provider's error type, set by the judge transport),
+ * this pulls the HTTP status out of the message text and returns both alongside the code. Never
+ * reads `err.cause` (the transport's redacted request/response detail) so no body or key ever
+ * reaches a verdict.
+ */
+function causeOf(err: unknown, fallback: CevErrorCode): unknown {
+  if (!VetError.isInstance(err)) return fallback;
+  const errorType = err.details?.hint;
+  if (errorType === undefined) return err.code;
+  const status = /HTTP (\d+)/.exec(err.message)?.[1];
+  return status === undefined
+    ? { code: err.code, errorType }
+    : { code: err.code, status: Number(status), errorType };
+}
+
+function unscored(input: JudgeCaseInput, cause: unknown): Verdict[] {
   const model: Verdict['model'] = {
     requested: input.judge.capabilities.model,
     resolved: '',
@@ -186,7 +205,7 @@ export async function judgeCase(input: JudgeCaseInput): Promise<Verdict[]> {
       input.signal === undefined ? request : { ...request, signal: input.signal },
     );
   } catch (err) {
-    return unscored(input, VetError.isInstance(err) ? err.code : CEV_ERROR_CODES.JUDGE_UNAVAILABLE);
+    return unscored(input, causeOf(err, CEV_ERROR_CODES.JUDGE_UNAVAILABLE));
   }
 
   const judged: CachedJudgment = {
