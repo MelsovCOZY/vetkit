@@ -5,8 +5,9 @@
 // Pass semantics (DECISION: escape and pass semantics): boolean criteria come back as a 3-way
 // choice {yes, no, escape}; p = P(yes), P(escape) >= escapeThreshold gives not_applicable,
 // pass = p >= threshold (pass_when_true) or 1-p >= threshold (pass_when_false). Choice passes when
-// the chosen label is in passWhen. Score passes when score >= threshold. Only boolean and choice
-// criteria gate (eval-quality brief §5.2 item 14); code-graded criteria never reach the judge.
+// the chosen label is in passWhen. Score passes when the expected level E >= threshold (max − E
+// for pass_when_false). Only boolean and choice criteria gate (eval-quality brief §5.2 item 14);
+// code-graded criteria never reach the judge.
 import {
   CEV_ERROR_CODES,
   VetError,
@@ -192,12 +193,19 @@ function decide(
 
   if (criterion.type === 'score') {
     if (answer.type !== 'score') return badResponse(base);
-    return {
-      ...base,
-      threshold,
-      pass: answer.score >= threshold,
-      borderline: band(answer.score),
-    };
+    // Same pass value calibrate fits on (validate/calibrate.ts repeatValues): the expected level
+    // E = Σ level·p (the argmax score when no probabilities come back), or max − E for
+    // pass_when_false, where max = levels − 1.
+    const entries = Object.entries(answer.probabilities);
+    const expected =
+      entries.length === 0
+        ? answer.score
+        : entries.reduce((sum, [level, p]) => sum + Number(level) * p, 0);
+    const value =
+      criterion.polarity === 'pass_when_false'
+        ? criterion.criteria.length - 1 - expected
+        : expected;
+    return { ...base, threshold, pass: value >= threshold, borderline: band(value) };
   }
 
   if (criterion.type === 'choice') {
