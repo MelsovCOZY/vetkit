@@ -27,11 +27,18 @@ test('DialectV1.extractMessages takes (span, tree) and returns Message[]', () =>
   expectTypeOf<DialectV1['extractMessages']>().parameters.toEqualTypeOf<[OtlpSpan, SpanTree]>();
 });
 
-test('DialectV1.extractUsage returns a partial token pair or null', () => {
+test('DialectV1.extractUsage returns a partial token pair/total or null', () => {
   expectTypeOf<DialectV1['extractUsage']>().returns.toEqualTypeOf<{
     inputTokens?: number;
     outputTokens?: number;
+    totalTokens?: number;
   } | null>();
+});
+
+test('DialectV1.spanKind is an optional hook', () => {
+  expectTypeOf<DialectV1['spanKind']>().toEqualTypeOf<
+    ((span: OtlpSpan) => 'llm' | 'tool' | 'other' | undefined) | undefined
+  >();
 });
 
 test("DialectV1.contentState returns 'captured' | 'not_captured' | 'redacted'", () => {
