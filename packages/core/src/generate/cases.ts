@@ -25,6 +25,12 @@ export interface ExtractCasesInput {
   readonly traces: readonly NormalizedTrace[];
   /** The criteria the cases are generated for (not used by rendering). */
   readonly criteria: readonly Criterion[];
+  /** bead classified-evals-mol-dh8.4: when true, also builds a Case for a non-ok trace that
+   * still has a real conversation, with provenance `{traceIds, trace:{completeness}}` (the
+   * `CaseTraceProvenance` shape judge/completeness.ts's `partitionCases` reads), so a caller
+   * like the watch loop can still judge that trace's content-independent criteria. Default
+   * false: `vet init` (generateEvals) never passes this, so its output is unchanged. */
+  readonly includeIncomplete?: boolean;
 }
 
 export interface ExtractCasesResult {
@@ -74,11 +80,14 @@ export function extractCases(input: ExtractCasesInput): ExtractCasesResult {
   for (const trace of input.traces) {
     const { traceId } = trace;
     const completenessStatus = statusForTrace(trace);
+    const hasConversation = trace.messages.some((m) => m.role !== 'system');
+
     if (completenessStatus !== 'ok') {
       traces.push({ traceId, status: 'not_applicable', reason: completenessStatus });
-      continue;
-    }
-    if (!trace.messages.some((m) => m.role !== 'system')) {
+      // Default: a non-ok trace never gets a Case (vet init's output is unchanged). Opt-in:
+      // still build one below, as long as there is a real conversation to render.
+      if (input.includeIncomplete !== true || !hasConversation) continue;
+    } else if (!hasConversation) {
       traces.push({ traceId, status: 'not_applicable', reason: 'no_conversation' });
       continue;
     }
@@ -95,10 +104,16 @@ export function extractCases(input: ExtractCasesInput): ExtractCasesResult {
       id: caseId(traceId),
       input: answer === undefined ? { state } : { state, answer },
       traceId,
-      provenance: { traceIds: [traceId] },
+      provenance:
+        completenessStatus === 'ok'
+          ? { traceIds: [traceId] }
+          : { traceIds: [traceId], trace: { completeness: trace.completeness } },
       tags: truncated ? ['truncated'] : [],
     });
-    traces.push({ traceId, status: truncated ? 'truncated' : 'ok' });
+    // The non-ok branch already pushed its not_applicable status above; only an ok trace
+    // still needs its (ok|truncated) status recorded here.
+    if (completenessStatus === 'ok')
+      traces.push({ traceId, status: truncated ? 'truncated' : 'ok' });
   }
   return { cases, traces };
 }
