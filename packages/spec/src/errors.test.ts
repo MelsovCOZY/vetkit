@@ -161,6 +161,17 @@ describe('VetError', () => {
     }
   });
 
+  test('accepts RECEIVER_BIND and WATCH_CONFIG (J7 `vet watch`, docs/contracts/j7.md)', () => {
+    const j7Codes = ['RECEIVER_BIND', 'WATCH_CONFIG'] as const;
+
+    for (const code of j7Codes) {
+      expect(CEV_ERROR_CODES[code]).toBe(code);
+      const err = new VetError(code, 'message');
+      expect(VetError.isInstance(err)).toBe(true);
+      expect(err.code).toBe(code);
+    }
+  });
+
   test('accepts EXPORT_TARGET_UNKNOWN and EXPORT_NO_LOCK (mol-aq4.3 `vet export`)', () => {
     const exportCodes = ['EXPORT_TARGET_UNKNOWN', 'EXPORT_NO_LOCK'] as const;
 
