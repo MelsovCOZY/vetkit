@@ -1,0 +1,9 @@
+criteria:
+  - id: cites-and-quotes
+    type: boolean
+    instructions: Does the reply cite a source and does it quote that source?
+    escape: The reply is empty.
+    polarity: pass_when_true
+    channel: quality
+    provenance:
+      traceIds: [trace-1]

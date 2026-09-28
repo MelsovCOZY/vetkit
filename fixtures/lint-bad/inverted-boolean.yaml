@@ -1,0 +1,9 @@
+criteria:
+  - id: lacks-greeting
+    type: boolean
+    instructions: Does the reply lack a greeting?
+    escape: The reply is empty.
+    polarity: pass_when_true
+    channel: quality
+    provenance:
+      traceIds: [trace-1]

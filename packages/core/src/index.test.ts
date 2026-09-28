@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   computeWordingHash,
+  DEFAULT_FORBIDDEN_WORDS,
   gradeCode,
+  LINT_RULES,
+  lintCriteria,
   loadCases,
   loadCriteria,
   MAX_STATE_TOKENS,
@@ -36,5 +39,17 @@ describe('@vetkit/core package entry', () => {
 
   it('re-exports MAX_STATE_TOKENS as 32_000', () => {
     expect(MAX_STATE_TOKENS).toBe(32_000);
+  });
+
+  it('re-exports lintCriteria as a function', () => {
+    expect(typeof lintCriteria).toBe('function');
+  });
+
+  it('re-exports LINT_RULES as an array', () => {
+    expect(Array.isArray(LINT_RULES)).toBe(true);
+  });
+
+  it('re-exports DEFAULT_FORBIDDEN_WORDS containing good', () => {
+    expect(DEFAULT_FORBIDDEN_WORDS).toContain('good');
   });
 });
