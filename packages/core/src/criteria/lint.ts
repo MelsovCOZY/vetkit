@@ -106,7 +106,7 @@ export const LINT_RULES: readonly LintRule[] = [
   ),
   rule(
     'DEEP_INDIRECTION',
-    'error',
+    'warn',
     'Instructions that point at other text instead of naming the field make Jev resolve references it often gets wrong.',
   ),
 ];
