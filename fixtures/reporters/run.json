@@ -1,0 +1,74 @@
+{
+  "results": [
+    {
+      "caseId": "refund-1",
+      "criterionId": "polite",
+      "status": "ok",
+      "answer": { "type": "boolean", "probability": 0.92 },
+      "pass": true,
+      "threshold": 0.5,
+      "model": {
+        "requested": "typesafe-ai/jev",
+        "resolved": "typesafe-ai/jev-2026-09",
+        "transport": "vercel-ai-gateway",
+        "pinned": false
+      },
+      "cacheHit": false
+    },
+    {
+      "caseId": "refund-1",
+      "criterionId": "cites-policy",
+      "status": "ok",
+      "answer": { "type": "boolean", "probability": 0.31 },
+      "pass": false,
+      "threshold": 0.5,
+      "model": {
+        "requested": "typesafe-ai/jev",
+        "resolved": "typesafe-ai/jev-2026-09",
+        "transport": "vercel-ai-gateway",
+        "pinned": false
+      },
+      "cacheHit": true
+    },
+    {
+      "caseId": "refund-<2>&co",
+      "criterionId": "polite",
+      "status": "not_applicable",
+      "model": {
+        "requested": "typesafe-ai/jev",
+        "resolved": "typesafe-ai/jev-2026-09",
+        "transport": "vercel-ai-gateway",
+        "pinned": false
+      },
+      "cacheHit": false
+    },
+    {
+      "caseId": "refund-<2>&co",
+      "criterionId": "cites-policy",
+      "status": "unscored",
+      "model": {
+        "requested": "typesafe-ai/jev",
+        "resolved": "",
+        "transport": "vercel-ai-gateway",
+        "pinned": false
+      },
+      "cacheHit": false
+    }
+  ],
+  "summary": {
+    "total": 2,
+    "passed": 0,
+    "failed": 1,
+    "unscored": 1,
+    "aborted": false,
+    "byCriterion": {}
+  },
+  "model": {
+    "requested": "typesafe-ai/jev",
+    "resolved": "typesafe-ai/jev-2026-09",
+    "transport": "vercel-ai-gateway",
+    "pinned": false
+  },
+  "exitCode": 1,
+  "gateReasons": []
+}

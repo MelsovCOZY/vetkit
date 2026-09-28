@@ -8,6 +8,7 @@ import type { Command } from 'commander';
 import { loadVetConfig } from '../config-load.ts';
 import { CEV_EXIT, emit, getLogger, type GlobalOptions } from '../output.ts';
 import { renderEvents } from '../render-events.ts';
+import { registerReporterFlag, writeReports, type ReporterSpec } from '../reporters/junit.ts';
 
 interface RunOptions extends GlobalOptions {
   readonly config?: string;
@@ -15,6 +16,7 @@ interface RunOptions extends GlobalOptions {
   readonly cases?: string;
   readonly gate?: boolean;
   readonly allowUnpinned?: boolean;
+  readonly reporter?: ReporterSpec;
 }
 
 type Outcome = 'pass' | 'fail' | 'unscored';
@@ -59,11 +61,12 @@ async function runCommand(options: RunOptions): Promise<void> {
   // Progress renders on stderr (render-events.ts); stdout stays the result document.
   const events = createEvents();
   const stopRendering = renderEvents(events, { options });
+  const criteriaPath = resolve(options.criteria ?? resolve(rootDir, 'evals/criteria.yaml'));
   let result: RunEvalsResult;
   try {
     result = await runEvals({
       config: {
-        criteriaPath: resolve(options.criteria ?? resolve(rootDir, 'evals/criteria.yaml')),
+        criteriaPath,
         casesDir: resolve(options.cases ?? resolve(rootDir, 'evals/cases')),
         judge: loaded.judge,
         threshold: config.thresholds.default,
@@ -83,20 +86,25 @@ async function runCommand(options: RunOptions): Promise<void> {
   }
 
   for (const reason of result.gateReasons) log.error(`gate refused: ${reason}`);
+  await writeReports(options.reporter, [{ criteriaPath, result }], { cwd });
   emit(result, () => render(result));
   process.exitCode = result.exitCode;
 }
 
 export function registerRun(program: Command): Command {
-  return program
-    .command('run')
-    .description('judge every case against the criteria and exit with the result')
-    .option('--config <path>', 'config file (default: vetkit.config.* in the current directory)')
-    .option('--criteria <file>', 'criteria file (default: evals/criteria.yaml next to the config)')
-    .option('--cases <dir>', 'cases directory (default: evals/cases next to the config)')
-    .option('--gate', 'gate on calibrated thresholds from the lock; refuses (exit 2) without one')
-    .option('--allow-unpinned', 'let --gate pass on an unpinned judge transport')
-    .action(async (_options: unknown, command: Command) => {
-      await runCommand(command.optsWithGlobals<RunOptions>());
-    });
+  return registerReporterFlag(
+    program
+      .command('run')
+      .description('judge every case against the criteria and exit with the result')
+      .option('--config <path>', 'config file (default: vetkit.config.* in the current directory)')
+      .option(
+        '--criteria <file>',
+        'criteria file (default: evals/criteria.yaml next to the config)',
+      )
+      .option('--cases <dir>', 'cases directory (default: evals/cases next to the config)')
+      .option('--gate', 'gate on calibrated thresholds from the lock; refuses (exit 2) without one')
+      .option('--allow-unpinned', 'let --gate pass on an unpinned judge transport'),
+  ).action(async (_options: unknown, command: Command) => {
+    await runCommand(command.optsWithGlobals<RunOptions>());
+  });
 }
