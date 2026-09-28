@@ -99,6 +99,28 @@ describe('handleError code classes', () => {
     expect(result.code).toBe(EXIT_UNSCORED_ONLY);
   });
 
+  test('a SOURCE_EMPTY code exits 2 by exact entry, not the SOURCE_ warning rule (J5)', () => {
+    const result = run(markerError('SOURCE_EMPTY', 'otlp:traces/ produced 0 traces'));
+    expect(result.code).toBe(EXIT_USAGE);
+    expect(result.stderr).toContain('error SOURCE_EMPTY: otlp:traces/ produced 0 traces\n');
+    expect(result.stderr).not.toContain('warning SOURCE_EMPTY');
+  });
+
+  test('a SOURCE_EMPTY code still exits 2 under --strict (J5)', () => {
+    const result = run(markerError('SOURCE_EMPTY', 'no traces'), { strict: true });
+    expect(result.code).toBe(EXIT_USAGE);
+  });
+
+  test('an OTLP_PARSE code exits 2 naming the file (J5)', () => {
+    const result = run(
+      markerError('OTLP_PARSE', 'traces/a.json: not an ExportTraceServiceRequest'),
+    );
+    expect(result.code).toBe(EXIT_USAGE);
+    expect(result.stderr).toContain(
+      'error OTLP_PARSE: traces/a.json: not an ExportTraceServiceRequest\n',
+    );
+  });
+
   test('a SINK_ prefixed class code exits 0 with a warning line by default', () => {
     const result = run(markerError('E_SINK_WRITE', 'sink dropped a batch'));
     expect(result.code).toBe(EXIT_OK);
