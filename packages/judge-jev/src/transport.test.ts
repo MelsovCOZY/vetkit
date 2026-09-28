@@ -280,6 +280,47 @@ describe('HTTP error mapping', () => {
     expect(err.details?.requestId).toBe('req-403');
   });
 
+  test('403 no_providers_available maps to JUDGE_UNAVAILABLE with the gateway error type as hint', async () => {
+    const fetchStub = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ error: { type: 'no_providers_available' } }), {
+          status: 403,
+        }),
+    );
+    const judge = createJevJudge({ preset: 'vercel', apiKey: 'fake-jev-key', fetch: fetchStub });
+
+    const err = await catchVetError(
+      judge.doJudge({ state: 's', questions: { ok: { type: 'boolean', instructions: 'q' } } }),
+    );
+
+    expect(err.code).toBe('JUDGE_UNAVAILABLE');
+    expect(err.details).toEqual({ retryable: false, hint: 'no_providers_available' });
+    expect(err.message).toContain('403');
+    expect(err.message).toContain('no_providers_available');
+  });
+
+  test('403 with a body whose error type is not a short lowercase token falls back to hint "forbidden", key still redacted', async () => {
+    const apiKey = 'fake-jev-key-should-never-leak';
+    const fetchStub = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({ error: { type: 'Not A Valid Token!' }, message: `key ${apiKey}` }),
+          { status: 403 },
+        ),
+    );
+    const judge = createJevJudge({ preset: 'vercel', apiKey, fetch: fetchStub });
+
+    const err = await catchVetError(
+      judge.doJudge({ state: 's', questions: { ok: { type: 'boolean', instructions: 'q' } } }),
+    );
+
+    expect(err.code).toBe('JUDGE_UNAVAILABLE');
+    expect(err.details).toEqual({ retryable: false, hint: 'forbidden' });
+    expect(err.message).toContain('403');
+    expect(err.message).toContain('forbidden');
+    expect(serializeErrorChain(err)).not.toContain(apiKey);
+  });
+
   test('402 maps to JUDGE_UNAVAILABLE with retryable:false and hint "no credit"', async () => {
     const fetchStub = vi.fn(async () => new Response(JSON.stringify({}), { status: 402 }));
     const judge = createJevJudge({ preset: 'typesafe', apiKey: 'fake-jev-key', fetch: fetchStub });
