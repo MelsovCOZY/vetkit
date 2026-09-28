@@ -9,3 +9,12 @@ export type { CaseIssue, CaseLocation, LoadCasesResult } from './cases/load.ts';
 
 export { gradeCode, referenceRequirement, renderReference } from './judge/reference.ts';
 export type { GradeCodeResult, ReferenceRequirementResult } from './judge/reference.ts';
+
+export { DEFAULT_FORBIDDEN_WORDS, LINT_RULES, lintCriteria } from './criteria/lint.ts';
+export type {
+  LintIssue,
+  LintOptions,
+  LintRule,
+  LintRuleId,
+  LintSeverity,
+} from './criteria/lint.ts';

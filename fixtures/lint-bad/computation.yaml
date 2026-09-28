@@ -1,0 +1,9 @@
+criteria:
+  - id: price-sum
+    type: boolean
+    instructions: Is the sum of the prices in the reply above 100?
+    escape: The reply is empty.
+    polarity: pass_when_true
+    channel: quality
+    provenance:
+      traceIds: [trace-1]

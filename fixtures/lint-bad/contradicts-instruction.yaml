@@ -1,0 +1,9 @@
+criteria:
+  - id: no-price
+    type: boolean
+    instructions: Does the reply not mention the price?
+    escape: The reply is empty.
+    polarity: pass_when_false
+    channel: quality
+    provenance:
+      traceIds: [trace-1]

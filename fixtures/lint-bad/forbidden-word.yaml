@@ -1,0 +1,9 @@
+criteria:
+  - id: good-summary
+    type: boolean
+    instructions: Is the reply a good summary of the ticket?
+    escape: The reply is empty.
+    polarity: pass_when_true
+    channel: quality
+    provenance:
+      traceIds: [trace-1]

@@ -1,0 +1,9 @@
+criteria:
+  - id: indirect-name
+    type: boolean
+    instructions: Does the reply use the product name as described above?
+    escape: The reply is empty.
+    polarity: pass_when_true
+    channel: quality
+    provenance:
+      traceIds: [trace-1]

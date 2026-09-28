@@ -1,0 +1,17 @@
+criteria:
+  - id: mentions-refund
+    type: boolean
+    instructions: Does the reply mention the refund policy?
+    escape: The reply is empty.
+    polarity: pass_when_true
+    channel: outcome
+    provenance:
+      traceIds: [trace-1]
+  - id: omits-refund
+    type: boolean
+    instructions: Does the reply not mention the refund policy?
+    escape: The reply is empty.
+    polarity: pass_when_true
+    channel: outcome
+    provenance:
+      traceIds: [trace-2]
