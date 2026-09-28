@@ -66,3 +66,22 @@ export type {
   RunVerdict,
   Saturation,
 } from './run.ts';
+
+export {
+  bandCases,
+  calibrate,
+  correctedPassRate,
+  repeatTolerance,
+  repeatValues,
+  splitByHash,
+} from './validate/calibrate.ts';
+export type {
+  CalibrateOptions,
+  CalibrationLabel,
+  CalibrationResult,
+  Confusion,
+  CorrectedPassRateInput,
+  CorrectedPassRateResult,
+  LanguageSlice,
+  ReliabilityBin,
+} from './validate/calibrate.ts';
