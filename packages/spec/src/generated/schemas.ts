@@ -260,6 +260,11 @@ export const configSchema: JsonSchema = {
         model: {
           type: 'string',
         },
+        structured: {
+          description: 'Structured-output strategy; missing means json_schema.',
+          type: 'string',
+          enum: ['json_schema', 'json_object', 'prompt'],
+        },
       },
       required: ['kind', 'baseURL', 'apiKeyEnv', 'model'],
       additionalProperties: false,

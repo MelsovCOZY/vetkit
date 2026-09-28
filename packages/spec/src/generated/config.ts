@@ -52,6 +52,10 @@ export interface GeneratorEndpoint {
    */
   apiKeyEnv: string;
   model: string;
+  /**
+   * Structured-output strategy; missing means json_schema.
+   */
+  structured?: 'json_schema' | 'json_object' | 'prompt';
 }
 export interface AdapterRef {
   specVersion: 'v1';
