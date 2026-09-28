@@ -33,7 +33,7 @@ function mkCase(id: string, state: string, overrides: Partial<Case> = {}): Case 
   return { id, input: { state }, provenance: null, tags: [], ...overrides };
 }
 
-function caseLine(c: Case): string {
+function caseLine(c: Case | (Case & { readonly quarantine: unknown })): string {
   return JSON.stringify(c);
 }
 
