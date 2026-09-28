@@ -200,4 +200,34 @@ describe('vet estimate', () => {
     const result = runVet(['estimate', '--for', 'watch'], freshProject());
     expect(result.status).toBe(2);
   });
+
+  test('a criterion with enabled: false is excluded from the criteria and cost counts (mol-e3g.1)', () => {
+    const dir = freshProject();
+    writeFileSync(
+      join(dir, 'evals', 'criteria.yaml'),
+      `criteria:
+  - id: tone
+    type: boolean
+    instructions: Is the reply polite?
+    escape: The reply has no discernible tone.
+    polarity: pass_when_true
+    channel: quality
+    provenance:
+      traceIds: []
+  - id: extra
+    type: boolean
+    instructions: Is the reply extra?
+    escape: The reply has no discernible tone.
+    polarity: pass_when_true
+    channel: quality
+    enabled: false
+    provenance:
+      traceIds: []
+`,
+    );
+    const result = runVet(['estimate', '--json'], dir);
+    expect(result.status).toBe(0);
+    const doc = parseJson(result.stdout);
+    expect(doc['criteria']).toBe(1);
+  });
 });

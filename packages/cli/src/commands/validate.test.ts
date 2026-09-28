@@ -20,6 +20,7 @@ import {
   type JudgeResponse,
   type JudgeV1,
   type Lock,
+  type LockCriterion,
 } from '@vetkit/spec';
 import { Command } from 'commander';
 import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest';
@@ -458,6 +459,98 @@ describe('vet validate', () => {
 
     const r = await readLock(target);
     expect('error' in r).toBe(false);
+  });
+
+  test('a criterion with enabled: false is never judged and gets no lock entry (mol-e3g.1)', async () => {
+    const rows = standardRows();
+    const root = await project(rows);
+    await writeFile(
+      join(root, 'evals', 'criteria.yaml'),
+      `${CRITERIA_YAML}  - id: extra
+    type: boolean
+    instructions: Is the reply extra?
+    escape: The reply has no discernible tone.
+    polarity: pass_when_true
+    channel: quality
+    enabled: false
+    provenance:
+      traceIds: []
+`,
+    );
+    const events = createEvents();
+    const { judge } = countingJudge(rows, events);
+    const seenCriteria = new Set<string>();
+    const spying: JudgeV1 = {
+      ...judge,
+      doJudge: (req) => {
+        for (const k of Object.keys(req.questions)) seenCriteria.add(k);
+        return judge.doJudge(req);
+      },
+    };
+    await vet(['validate'], depsFor(root, spying, events));
+
+    expect(seenCriteria).toEqual(new Set(['tone']));
+    const lock = await lockAt(root);
+    expect(lock.criteria['extra']).toBeUndefined();
+    expect(lock.criteria['tone']?.labelCount).toBe(200);
+  });
+
+  test('a pre-existing lock entry for a disabled criterion survives validate unchanged (mol-e3g.1)', async () => {
+    const rows = standardRows();
+    const root = await project(rows);
+    await writeFile(
+      join(root, 'evals', 'criteria.yaml'),
+      `${CRITERIA_YAML}  - id: extra
+    type: boolean
+    instructions: Is the reply extra?
+    escape: The reply has no discernible tone.
+    polarity: pass_when_true
+    channel: quality
+    enabled: false
+    provenance:
+      traceIds: []
+`,
+    );
+    const priorEntry: LockCriterion = {
+      wordingHash: 'c'.repeat(64),
+      status: 'calibrated',
+      threshold: 0.42,
+      tpr: 0.9,
+      tnr: 0.8,
+      ece: 0.05,
+      tolerance: 0.02,
+      gauntlet: {
+        paraphrase: 'pass',
+        polarity: 'pass',
+        injection: 'pass',
+        master_key: 'pass',
+        label_permutation: 'pass',
+        constant_output: 'pass',
+        position_swap: 'pass',
+        length: 'pass',
+      },
+      reasons: [],
+      languages: ['en'],
+      labelCount: 250,
+    };
+    const priorLock: Lock = {
+      lockVersion: 1,
+      model: {
+        requested: 'legacy/jev',
+        resolved: 'legacy/jev-1',
+        transport: 'legacy-transport',
+        pinned: true,
+      },
+      criteria: { extra: priorEntry },
+      datasetHash: 'd'.repeat(64),
+    };
+    await writeFile(join(root, 'criteria.lock.json'), JSON.stringify(priorLock));
+    const events = createEvents();
+    const { judge } = countingJudge(rows, events);
+    await vet(['validate'], depsFor(root, judge, events));
+
+    const lock = await lockAt(root);
+    expect(lock.criteria['extra']).toEqual(priorEntry);
   });
 });
 
