@@ -94,6 +94,7 @@ describe('criterion.schema.json', () => {
     type: 'choice',
     instructions: gatewayRequest.questions.tone.instructions,
     criteria: gatewayRequest.questions.tone.criteria,
+    passWhen: ['helpful'],
     escape: 'unclear',
     polarity: 'pass_when_true',
     channel: 'quality',

@@ -42,7 +42,10 @@ export type Criterion = {
       criteria: {
         [k: string]: string;
       };
-      passWhen?: unknown;
+      /**
+       * @minItems 1
+       */
+      passWhen: [string, ...string[]];
     }
   | {
       type: 'score';
