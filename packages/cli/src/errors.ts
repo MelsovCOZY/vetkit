@@ -8,6 +8,7 @@ export const EXIT_OK = 0;
 export const EXIT_USAGE = 2;
 export const EXIT_UNSCORED_ONLY = 3;
 export const EXIT_SINK_SOURCE_STRICT = 1;
+export const EXIT_FAILED = 1;
 export const EXIT_SIGINT = 130;
 export const EXIT_INTERNAL = 70;
 
@@ -77,7 +78,7 @@ function resolveExit(code: string, strict: boolean): Resolved {
   }
   // Root exit-code DECISION: a stale lock exits 1 (a missing one exits 2).
   if (unprefixed === 'LOCK_STALE') {
-    return { category: 'failed', exitCode: EXIT_SINK_SOURCE_STRICT, warn: false };
+    return { category: 'failed', exitCode: EXIT_FAILED, warn: false };
   }
   if (
     unprefixed === 'NOT_INTERACTIVE' ||
