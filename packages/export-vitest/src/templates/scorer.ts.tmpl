@@ -1,0 +1,132 @@
+// Emitted by @vetkit/export-vitest {{version}} — do not edit by hand.
+// criterion: {{criterionId}} · wordingHash {{wordingHash}} · lock status: {{status}}
+// Calls the real judge through {{vetkitPackage}} at test time; no fixture and no secret is
+// ever baked into this file.
+import { judgeOne, type JudgeOneCriterion } from '{{vetkitPackage}}';
+
+const CRITERION = ({{criterionJson}}) as unknown as JudgeOneCriterion;
+const THRESHOLD = {{threshold}};
+const WORDING_HASH = '{{wordingHash}}';
+const LOCK_STATUS = '{{status}}';
+const ESCAPE_KEY = 'escape';
+const DEFAULT_ESCAPE_THRESHOLD = 0.5;
+
+interface ScorerInput {
+  readonly input: string;
+  readonly output: string;
+  readonly expected?: unknown;
+}
+
+interface ScorerMetadata {
+  readonly criterionId: string;
+  readonly wordingHash: string;
+  readonly model: { requested: string; resolved: string; transport: string; pinned: boolean };
+  readonly status: string;
+  readonly probability?: number;
+  readonly threshold?: number;
+}
+
+interface ScorerResult {
+  readonly score: number;
+  readonly metadata: ScorerMetadata;
+}
+
+// Carries the judge's own status/cause; a scorer never returns score 0 for a judge that
+// could not be decided (unscored/error/content_not_captured are for the caller to skip).
+class ScorerJudgeError extends Error {
+  readonly status: string;
+
+  constructor(status: string, cause: unknown) {
+    super(`judgeOne did not return a scoreable verdict for '${CRITERION.id}' (status: ${status})`);
+    this.name = 'ScorerJudgeError';
+    this.status = status;
+    this.cause = cause;
+  }
+}
+
+export interface ScorerOverrides {
+  readonly __judge?: typeof judgeOne;
+}
+
+// Pass derivation mirrors packages/core/src/run.ts decide(), including its escape
+// short-circuit; duplicated here because core exports no reusable helper this turn
+// (root ledger DECISION — a follow-up bead adds a pure core decideVerdict()).
+export function createScorer(overrides: ScorerOverrides = {}): {
+  readonly name: string;
+  readonly scorer: (input: ScorerInput) => Promise<ScorerResult>;
+} {
+  const judge = overrides.__judge ?? judgeOne;
+  return {
+    name: CRITERION.id,
+    scorer: async ({ output }: ScorerInput): Promise<ScorerResult> => {
+      const verdict = await judge({ criterion: CRITERION, state: output });
+      if (verdict.status !== 'ok' || verdict.answer === undefined) {
+        throw new ScorerJudgeError(verdict.status, verdict.cause);
+      }
+      const answer = verdict.answer;
+      const escapeThreshold = CRITERION.escapeThreshold ?? DEFAULT_ESCAPE_THRESHOLD;
+      let pass = false;
+      let escaped = false;
+
+      if (CRITERION.type === 'score') {
+        if (answer.type !== 'score') throw new ScorerJudgeError('error', answer);
+        const entries = Object.entries(answer.probabilities);
+        const expected =
+          entries.length === 0
+            ? answer.score
+            : entries.reduce((sum, [level, p]) => sum + Number(level) * p, 0);
+        const value =
+          CRITERION.polarity === 'pass_when_false'
+            ? CRITERION.criteria.length - 1 - expected
+            : expected;
+        pass = value >= THRESHOLD;
+      } else if (CRITERION.type === 'choice') {
+        if (answer.type !== 'choice') throw new ScorerJudgeError('error', answer);
+        const escapeName = String(CRITERION.escape);
+        const key = Object.hasOwn(CRITERION.criteria, escapeName) ? escapeName : ESCAPE_KEY;
+        if (answer.choice === key || (answer.probabilities[key] ?? 0) >= escapeThreshold) {
+          escaped = true;
+        } else {
+          const passWhen = new Set<string>(CRITERION.passWhen);
+          const entries = Object.entries(answer.probabilities);
+          const pPass =
+            entries.length === 0
+              ? Number(passWhen.has(answer.choice))
+              : entries.filter(([label]) => passWhen.has(label)).reduce((sum, [, p]) => sum + p, 0);
+          const value = CRITERION.polarity === 'pass_when_false' ? 1 - pPass : pPass;
+          pass = value >= THRESHOLD;
+        }
+      } else {
+        let p: number | undefined;
+        if (answer.type === 'boolean') {
+          p = answer.probability;
+        } else if (answer.type === 'choice') {
+          if ((answer.probabilities[ESCAPE_KEY] ?? 0) >= escapeThreshold) {
+            escaped = true;
+          } else {
+            p = answer.probabilities['yes'] ?? 0;
+          }
+        } else {
+          throw new ScorerJudgeError('error', answer);
+        }
+        if (!escaped && p !== undefined) {
+          const value = CRITERION.polarity === 'pass_when_true' ? p : 1 - p;
+          pass = value >= THRESHOLD;
+        }
+      }
+
+      const status = escaped ? 'not_applicable' : LOCK_STATUS;
+      return {
+        score: !escaped && pass ? 1 : 0,
+        metadata: {
+          criterionId: verdict.criterionId,
+          wordingHash: WORDING_HASH,
+          model: verdict.model,
+          status,
+          ...(answer.probability === undefined ? {} : { probability: answer.probability }),
+          threshold: THRESHOLD,
+        },
+      };
+    },
+  };
+}
