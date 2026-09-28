@@ -73,6 +73,20 @@ describe('createLogger', () => {
     expect(lines[0]).not.toMatch(/\u001b\[/);
   });
 
+  test('an injected color: true colours labels even on a non-TTY stream', () => {
+    const { stream, lines } = makeStream(false);
+    createLogger({ stream, color: true }).error('boom');
+    // eslint-disable-next-line no-control-regex
+    expect(lines[0]).toMatch(/\u001b\[/);
+  });
+
+  test('an injected color: false leaves labels uncoloured on a TTY stream', () => {
+    const { stream, lines } = makeStream(true);
+    createLogger({ stream, color: false }).error('boom');
+    // eslint-disable-next-line no-control-regex
+    expect(lines[0]).not.toMatch(/\u001b\[/);
+  });
+
   test('falls back to info with a warning when CEV_LOG_LEVEL is invalid, never NaN', () => {
     vi.stubEnv('CEV_LOG_LEVEL', 'nonsense');
     const { stream, lines } = makeStream();

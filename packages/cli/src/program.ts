@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import { Command, CommanderError } from 'commander';
 import { registerDoctor } from './commands/doctor.ts';
+import { registerLabel } from './commands/label.ts';
 import { handleError } from './errors.ts';
 import { CEV_EXIT, configureOutput, type GlobalOptions } from './output.ts';
 
@@ -51,6 +52,7 @@ export function createProgram(): Command {
     log.debug(`vet ${version}: running ${actionCommand.name()}`);
   });
   registerDoctor(program);
+  registerLabel(program);
   return program;
 }
 

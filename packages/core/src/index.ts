@@ -103,3 +103,23 @@ export type {
   ResolvedConfig,
   VetkitConfig,
 } from './config.ts';
+
+export {
+  formatLabelRow,
+  LABEL_CSV_HEADER,
+  loadLabels,
+  parseCsv,
+  parseLabels,
+} from './validate/labels.ts';
+export type {
+  CsvRecord,
+  LabelEntry,
+  LabelIdSets,
+  LabelIssue,
+  LabelRow,
+  LabelSet,
+  LabelValue,
+  LabelWarning,
+  LoadLabelsResult,
+  ParseLabelsResult,
+} from './validate/labels.ts';

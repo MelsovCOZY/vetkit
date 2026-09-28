@@ -15,15 +15,20 @@ import {
   DEFAULT_FORBIDDEN_WORDS,
   defineConfig,
   describeConfig,
+  formatLabelRow,
   gradeCode,
   judgeCase,
+  LABEL_CSV_HEADER,
   LINT_RULES,
   lintCriteria,
   loadCases,
   loadCriteria,
+  loadLabels,
   MAX_STATE_TOKENS,
   nearDuplicateClusters,
   pairedClusteredDiff,
+  parseCsv,
+  parseLabels,
   readEnvName,
   referenceRequirement,
   renderReference,
@@ -171,5 +176,25 @@ describe('@vetkit/core package entry', () => {
 
   it('re-exports describeConfig as a function', () => {
     expect(typeof describeConfig).toBe('function');
+  });
+
+  it('re-exports parseCsv as a function', () => {
+    expect(typeof parseCsv).toBe('function');
+  });
+
+  it('re-exports parseLabels as a function', () => {
+    expect(typeof parseLabels).toBe('function');
+  });
+
+  it('re-exports loadLabels as a function', () => {
+    expect(typeof loadLabels).toBe('function');
+  });
+
+  it('re-exports formatLabelRow as a function', () => {
+    expect(typeof formatLabelRow).toBe('function');
+  });
+
+  it('re-exports LABEL_CSV_HEADER naming the five label columns', () => {
+    expect(LABEL_CSV_HEADER).toBe('case_id,criterion_id,label,labeler,labeled_at');
   });
 });
