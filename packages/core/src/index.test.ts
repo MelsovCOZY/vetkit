@@ -65,6 +65,7 @@ import {
   proposeCriteria,
   proposeFailureModes,
 } from './index.ts';
+import { dedupeCriteria, extractCases, generateEvals } from './index.ts';
 
 describe('@vetkit/core package entry', () => {
   it('re-exports loadCriteria as a function', () => {
@@ -315,5 +316,17 @@ describe('@vetkit/core package entry', () => {
 
   it('re-exports CRITERIA_SCHEMA requiring criteria', () => {
     expect(JSON.stringify(CRITERIA_SCHEMA)).toContain('criteria');
+  });
+
+  it('re-exports generateEvals as a function', () => {
+    expect(typeof generateEvals).toBe('function');
+  });
+
+  it('re-exports extractCases as a function', () => {
+    expect(typeof extractCases).toBe('function');
+  });
+
+  it('re-exports dedupeCriteria as a function', () => {
+    expect(typeof dedupeCriteria).toBe('function');
   });
 });
