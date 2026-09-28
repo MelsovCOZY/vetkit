@@ -1,0 +1,16 @@
+{"id":"exact-1","check":"exact","answer":"Paris","expected":"Paris","pass":true}
+{"id":"exact-2","check":"exact","answer":" Paris ","expected":"Paris","pass":true}
+{"id":"exact-3","check":"exact","answer":"paris","expected":"Paris","pass":false}
+{"id":"exact-4","check":"exact","answer":"Paris","expected":"London","pass":false}
+{"id":"normalized-1","check":"normalized","answer":"Paris[1]","expected":"paris","pass":true}
+{"id":"normalized-2","check":"normalized","answer":"Paris.","expected":"PARIS","pass":true}
+{"id":"normalized-3","check":"normalized","answer":"New   York","expected":"new york","pass":true}
+{"id":"normalized-4","check":"normalized","answer":"Paris","expected":"London","pass":false}
+{"id":"normalized-5","check":"normalized","answer":"Ｐａｒｉｓ","expected":"paris","pass":true}
+{"id":"numeric-1","check":"numeric","answer":"1,000","expected":1000,"pass":true}
+{"id":"numeric-2","check":"numeric","answer":"1_000","expected":"1000","pass":true}
+{"id":"numeric-3","check":"numeric","answer":"about 1 000 dollars","expected":1000,"pass":true}
+{"id":"numeric-4","check":"numeric","answer":"the result is 1e3","expected":1000,"pass":true}
+{"id":"numeric-5","check":"numeric","answer":"96.12","expected":"96.124991","pass":false}
+{"id":"numeric-6","check":"numeric","answer":"from 10 to 42","expected":42,"pass":true}
+{"id":"numeric-7","check":"numeric","answer":"no numbers here","expected":5,"pass":false}
