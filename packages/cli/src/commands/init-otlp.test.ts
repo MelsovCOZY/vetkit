@@ -3,14 +3,14 @@
 // ever binds 4318. otlpSourceFromArg is exercised directly here — no full `generateEvals` run —
 // except the SIGINT test, which spawns the built bin (test-support/build-cli.ts), following
 // run.test.ts's precedent.
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { GenerateEvalsResult } from '@vetkit/core';
-import type { Case, NormalizedTrace } from '@vetkit/spec';
+import { safeParseJson, type Case, type NormalizedTrace } from '@vetkit/spec';
 import { beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import { ensureCliBuilt } from '../test-support/build-cli.js';
 import { buildOtlpSummary, otlpSourceFromArg } from './init-otlp.ts';
@@ -294,6 +294,42 @@ function freshProject(): string {
   writeFileSync(join(dir, 'vetkit.config.ts'), readFileSync(join(fixtureDir, 'vetkit.config.ts')));
   return dir;
 }
+
+// oxlint-disable-next-line typescript/no-unnecessary-type-parameters
+function parseJson<T>(text: string): T {
+  const result = safeParseJson<T>(text, {});
+  if (!result.ok) throw result.error;
+  return result.value;
+}
+
+interface GenerateDoc {
+  readonly summary?: {
+    readonly cases: number;
+    readonly excluded: Record<string, number>;
+    readonly dialects: Record<string, number>;
+    readonly tokens: number;
+  };
+}
+
+describe('vet init --source otlp:<file> --json summary (orchestrator-widened grant, mol-pij.8)', () => {
+  test('the printed document carries a summary of {cases, excluded, dialects, tokens}', () => {
+    const project = freshProject();
+    const out = join(project, 'evals-out');
+    const result = spawnSync(
+      process.execPath,
+      [binPath, 'init', '--source', `otlp:${otlpFixture}`, '--out', out, '--json'],
+      { cwd: project, encoding: 'utf8' },
+    );
+    expect(result.status).toBe(0);
+    const doc = parseJson<GenerateDoc>(result.stdout);
+    expect(doc.summary).toMatchObject({
+      cases: expect.any(Number),
+      excluded: expect.any(Object),
+      dialects: expect.any(Object),
+      tokens: expect.any(Number),
+    });
+  });
+});
 
 describe('vet init --source otlp:: SIGINT (bead mol-pij.8)', () => {
   test('Ctrl-C during otlp::0 receiver mode closes the server and flushes cases written so far', async () => {
