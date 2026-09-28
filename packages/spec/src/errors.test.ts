@@ -150,6 +150,17 @@ describe('VetError', () => {
     expect(err.code).toBe('RUN_NOT_FOUND');
   });
 
+  test('accepts SOURCE_AUTH and SOURCE_UNREACHABLE (mol-yxn.5 Langfuse source)', () => {
+    const langfuseCodes = ['SOURCE_AUTH', 'SOURCE_UNREACHABLE'] as const;
+
+    for (const code of langfuseCodes) {
+      expect(CEV_ERROR_CODES[code]).toBe(code);
+      const err = new VetError(code, 'message');
+      expect(VetError.isInstance(err)).toBe(true);
+      expect(err.code).toBe(code);
+    }
+  });
+
   test('details round-trips through the constructor options', () => {
     const err = new VetError('CACHE_IO', 'cache write failed', {
       details: {
