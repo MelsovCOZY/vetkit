@@ -93,7 +93,33 @@ function textPartText(item: unknown): string | undefined {
   return type === 'text' && typeof text === 'string' ? text : undefined;
 }
 
-// Only `{type:'text', text}` parts are read from a content-parts array.
+// pij.14: a `{type:'tool-call', toolCallId, toolName, args}` or `{type:'tool-result',
+// toolCallId, toolName, result}` content-parts entry — the AI SDK's own wire shape for a prior
+// assistant tool call or its tool response fed back on a later turn's ai.prompt.messages.
+function toolCallContentPart(item: unknown): MessagePart | undefined {
+  if (item === null || typeof item !== 'object' || !('type' in item)) return undefined;
+  const toolCallId = 'toolCallId' in item ? item.toolCallId : undefined;
+  const id = typeof toolCallId === 'string' ? { id: toolCallId } : {};
+  if (item.type === 'tool-call') {
+    const toolName = 'toolName' in item ? item.toolName : undefined;
+    if (typeof toolName !== 'string') return undefined;
+    const args = 'args' in item ? item.args : undefined;
+    return {
+      type: 'tool_call',
+      ...id,
+      name: toolName,
+      ...(args === undefined ? {} : { arguments: args }),
+    };
+  }
+  if (item.type === 'tool-result') {
+    const result = 'result' in item ? item.result : undefined;
+    return { type: 'tool_call_response', ...id, response: result };
+  }
+  return undefined;
+}
+
+// `{type:'text', text}` parts and `{type:'tool-call'|'tool-result', ...}` parts are read from a
+// content-parts array; any other part type is skipped.
 function contentToParts(content: unknown): MessagePart[] {
   if (typeof content === 'string') return [{ type: 'text', content }];
   if (!Array.isArray(content)) return [];
@@ -101,7 +127,12 @@ function contentToParts(content: unknown): MessagePart[] {
   const parts: MessagePart[] = [];
   for (const item of items) {
     const text = textPartText(item);
-    if (text !== undefined) parts.push({ type: 'text', content: text });
+    if (text !== undefined) {
+      parts.push({ type: 'text', content: text });
+      continue;
+    }
+    const toolPart = toolCallContentPart(item);
+    if (toolPart !== undefined) parts.push(toolPart);
   }
   return parts;
 }
