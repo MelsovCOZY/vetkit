@@ -248,3 +248,35 @@ describe('handleError --json mode', () => {
     expect(result.stdout).not.toContain(secret);
   });
 });
+
+describe('handleError input, credential and lock codes', () => {
+  const CONFIG_HINT = 'check your configuration and CLI flags, then retry.';
+  const configCodes = [
+    'CRITERIA_INVALID',
+    'CASE_INVALID',
+    'INPUT_TOO_LARGE',
+    'LABELS_INVALID',
+    'LABELS_TOO_FEW',
+    'JUDGE_UNAUTHORIZED',
+  ];
+
+  for (const base of configCodes) {
+    for (const code of [base, `E_${base}`]) {
+      test(`${code} exits 2 with the config hint`, () => {
+        const result = run(markerError(code, 'bad input'));
+        expect(result.code).toBe(EXIT_USAGE);
+        expect(result.stderr).toBe(`error ${code}: bad input\n${CONFIG_HINT}\n`);
+      });
+    }
+  }
+
+  for (const code of ['LOCK_STALE', 'E_LOCK_STALE']) {
+    test(`${code} exits 1 with the stale-lock hint`, () => {
+      const result = run(markerError(code, 'lock is stale'));
+      expect(result.code).toBe(1);
+      expect(result.stderr).toBe(
+        `error ${code}: lock is stale\nthe lock is stale; rerun vet validate to refresh it.\n`,
+      );
+    });
+  }
+});

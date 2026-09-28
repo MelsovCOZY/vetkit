@@ -8,6 +8,7 @@ export const EXIT_OK = 0;
 export const EXIT_USAGE = 2;
 export const EXIT_UNSCORED_ONLY = 3;
 export const EXIT_SINK_SOURCE_STRICT = 1;
+export const EXIT_FAILED = 1;
 export const EXIT_SIGINT = 130;
 export const EXIT_INTERNAL = 70;
 
@@ -26,7 +27,7 @@ export interface HandleErrorContext {
   readonly exit: (code: number) => never;
 }
 
-type Category = 'config' | 'unscored' | 'sinkSource' | 'internal';
+type Category = 'config' | 'unscored' | 'sinkSource' | 'failed' | 'internal';
 
 interface Resolved {
   readonly category: Category;
@@ -47,11 +48,22 @@ const CONFIG_EXIT_CODES = new Set([
   'E_UNCALIBRATED',
 ]);
 const INTERNAL_EXIT_CODES = new Set(['E_IO', 'E_NETWORK', 'E_TIMEOUT', 'E_RATE_LIMIT']);
+// User-input and credential codes (docs/contracts/j1.md "Exit codes": 2 = config
+// error), matched after E_ stripping.
+const INPUT_EXIT_CODES = new Set([
+  'CRITERIA_INVALID',
+  'CASE_INVALID',
+  'INPUT_TOO_LARGE',
+  'LABELS_INVALID',
+  'LABELS_TOO_FEW',
+  'JUDGE_UNAUTHORIZED',
+]);
 
 const HINTS: Readonly<Record<Category, string>> = {
   config: 'check your configuration and CLI flags, then retry.',
   unscored: 'no scored cases matched; add scored evals or relax the filter.',
   sinkSource: 'a sink or source adapter failed; rerun with --strict to treat this as fatal.',
+  failed: 'the lock is stale; rerun vet validate to refresh it.',
   internal: 'this looks like an internal error; rerun with --verbose and file an issue.',
 };
 
@@ -61,6 +73,13 @@ function resolveExit(code: string, strict: boolean): Resolved {
     return { category: 'internal', exitCode: EXIT_INTERNAL, warn: false };
   }
   const unprefixed = code.startsWith('E_') ? code.slice(2) : code;
+  if (INPUT_EXIT_CODES.has(unprefixed)) {
+    return { category: 'config', exitCode: EXIT_USAGE, warn: false };
+  }
+  // Root exit-code DECISION: a stale lock exits 1 (a missing one exits 2).
+  if (unprefixed === 'LOCK_STALE') {
+    return { category: 'failed', exitCode: EXIT_FAILED, warn: false };
+  }
   if (
     unprefixed === 'NOT_INTERACTIVE' ||
     unprefixed.startsWith('CONFIG') ||

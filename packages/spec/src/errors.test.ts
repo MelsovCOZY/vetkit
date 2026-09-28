@@ -84,6 +84,13 @@ describe('VetError', () => {
     }
   });
 
+  test('accepts LABELS_INVALID (malformed labels row, J3)', () => {
+    expect(CEV_ERROR_CODES.LABELS_INVALID).toBe('LABELS_INVALID');
+    const err = new VetError('LABELS_INVALID', 'labels.csv:3: bad row');
+    expect(VetError.isInstance(err)).toBe(true);
+    expect(err.code).toBe('LABELS_INVALID');
+  });
+
   test('details round-trips through the constructor options', () => {
     const err = new VetError('CACHE_IO', 'cache write failed', {
       details: {
