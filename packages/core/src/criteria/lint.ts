@@ -81,7 +81,7 @@ export const LINT_RULES: readonly LintRule[] = [
   ),
   rule(
     'FORBIDDEN_WORD',
-    'warn',
+    'error',
     'Degree words like good or appropriate have no checkable meaning, so name the observable property instead.',
   ),
   rule(

@@ -48,19 +48,21 @@ function parseJson<T = unknown>(text: string): T {
 }
 
 // Ground truth from core/src/criteria/lint.ts's LINT_RULES: every rule these fixtures name
-// is 'error' severity except FORBIDDEN_WORD and DEEP_INDIRECTION, which are 'warn'.
+// is 'error' severity except DEEP_INDIRECTION, which is 'warn' (eval-quality brief item 18,
+// docs/contracts/j2.md:165-170).
 const ERROR_SEVERITY_FIXTURES = [
   'compound-level.yaml',
   'computation.yaml',
   'contradicts-instruction.yaml',
   'double-negative.yaml',
   'escape-missing.yaml',
+  'forbidden-word.yaml',
   'inverted-boolean.yaml',
   'negation-pair.yaml',
   'non-atomic.yaml',
 ];
 
-const WARN_ONLY_FIXTURES = ['deep-indirection.yaml', 'forbidden-word.yaml'];
+const WARN_ONLY_FIXTURES = ['deep-indirection.yaml'];
 
 describe('vet lint', () => {
   test.each(ERROR_SEVERITY_FIXTURES)('%s: an error-severity issue exits 1', (name) => {
@@ -83,6 +85,13 @@ describe('vet lint', () => {
     const doc = parseJson<LintDoc>(result.stdout);
     expect(doc.issues.length).toBeGreaterThan(0);
     expect(doc.issues.every((issue) => issue.severity === 'warn')).toBe(true);
+  });
+
+  test('deep-indirection.yaml: human output prints a warning naming DEEP_INDIRECTION', () => {
+    const result = runLint([`${badDir}deep-indirection.yaml`]);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toMatch(/warn/);
+    expect(result.stdout).toMatch(/DEEP_INDIRECTION/);
   });
 
   test('a clean criteria.yaml exits 0 with no issues', () => {
