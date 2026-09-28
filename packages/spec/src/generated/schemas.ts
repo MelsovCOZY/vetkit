@@ -274,6 +274,180 @@ export const criterionSchema: JsonSchema = {
   },
 } as const;
 
+export const lockSchema: JsonSchema = {
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  $id: 'https://vetkit.dev/schemas/lock.schema.json',
+  title: 'Lock',
+  type: 'object',
+  $defs: {
+    LockModel: {
+      title: 'LockModel',
+      type: 'object',
+      properties: {
+        requested: {
+          type: 'string',
+        },
+        resolved: {
+          type: 'string',
+        },
+        transport: {
+          type: 'string',
+        },
+        pinned: {
+          type: 'boolean',
+        },
+        releaseDate: {
+          type: 'string',
+        },
+      },
+      required: ['requested', 'resolved', 'transport', 'pinned'],
+      additionalProperties: false,
+    },
+    GauntletOutcome: {
+      title: 'GauntletOutcome',
+      enum: ['pass', 'fail', 'skipped'],
+    },
+    GauntletResult: {
+      title: 'GauntletResult',
+      type: 'object',
+      properties: {
+        paraphrase: {
+          $ref: '#/$defs/GauntletOutcome',
+        },
+        polarity: {
+          $ref: '#/$defs/GauntletOutcome',
+        },
+        injection: {
+          $ref: '#/$defs/GauntletOutcome',
+        },
+        master_key: {
+          $ref: '#/$defs/GauntletOutcome',
+        },
+        label_permutation: {
+          $ref: '#/$defs/GauntletOutcome',
+        },
+        constant_output: {
+          $ref: '#/$defs/GauntletOutcome',
+        },
+        position_swap: {
+          $ref: '#/$defs/GauntletOutcome',
+        },
+        length: {
+          $ref: '#/$defs/GauntletOutcome',
+        },
+      },
+      required: [
+        'paraphrase',
+        'polarity',
+        'injection',
+        'master_key',
+        'label_permutation',
+        'constant_output',
+        'position_swap',
+        'length',
+      ],
+      additionalProperties: false,
+    },
+    LockReason: {
+      title: 'LockReason',
+      enum: [
+        'too_few_labels',
+        'single_class',
+        'single_class_heldout',
+        'class_too_small',
+        'unstable',
+        'language_limited',
+        'score_not_gateable',
+        'reference_missing',
+        'paraphrase',
+        'polarity',
+        'injection',
+        'master_key',
+        'label_permutation',
+        'constant_output',
+        'position_swap',
+        'length',
+      ],
+    },
+    LockCriterion: {
+      title: 'LockCriterion',
+      type: 'object',
+      properties: {
+        wordingHash: {
+          type: 'string',
+          pattern: '^[0-9a-f]{64}$',
+        },
+        status: {
+          enum: ['calibrated', 'uncalibrated', 'floating'],
+        },
+        threshold: {
+          type: 'number',
+        },
+        tpr: {
+          type: 'number',
+          minimum: 0,
+          maximum: 1,
+        },
+        tnr: {
+          type: 'number',
+          minimum: 0,
+          maximum: 1,
+        },
+        ece: {
+          type: 'number',
+          minimum: 0,
+          maximum: 1,
+        },
+        tolerance: {
+          type: 'number',
+          minimum: 0,
+        },
+        gauntlet: {
+          $ref: '#/$defs/GauntletResult',
+        },
+        reasons: {
+          type: 'array',
+          items: {
+            $ref: '#/$defs/LockReason',
+          },
+        },
+        languages: {
+          type: 'array',
+          items: {
+            type: 'string',
+          },
+        },
+        labelCount: {
+          type: 'integer',
+          minimum: 0,
+        },
+      },
+      required: ['wordingHash', 'status', 'gauntlet', 'reasons', 'labelCount'],
+      additionalProperties: false,
+    },
+  },
+  properties: {
+    lockVersion: {
+      const: 1,
+    },
+    model: {
+      $ref: '#/$defs/LockModel',
+    },
+    criteria: {
+      type: 'object',
+      additionalProperties: {
+        $ref: '#/$defs/LockCriterion',
+      },
+    },
+    datasetHash: {
+      type: 'string',
+      pattern: '^[0-9a-f]{64}$',
+    },
+  },
+  required: ['lockVersion', 'model', 'criteria', 'datasetHash'],
+  additionalProperties: false,
+} as const;
+
 export const verdictSchema: JsonSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   $id: 'https://vetkit.dev/schemas/verdict.schema.json',
