@@ -330,3 +330,34 @@ describe('@vetkit/core package entry', () => {
     expect(typeof dedupeCriteria).toBe('function');
   });
 });
+
+import {
+  assertLockGates,
+  buildLock,
+  checkLock,
+  datasetHash,
+  lockEntryGateable,
+  readLock,
+  readLockOrNull,
+  writeLockAtomic,
+} from './index.ts';
+
+describe('@vetkit/core lock exports (q4q.6)', () => {
+  it('re-exports the lock functions', () => {
+    for (const fn of [
+      assertLockGates,
+      buildLock,
+      checkLock,
+      lockEntryGateable,
+      readLock,
+      readLockOrNull,
+      writeLockAtomic,
+    ]) {
+      expect(typeof fn).toBe('function');
+    }
+  });
+
+  it('re-exports datasetHash as a sha256-hex function', () => {
+    expect(datasetHash([])).toMatch(/^[0-9a-f]{64}$/);
+  });
+});

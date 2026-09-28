@@ -104,3 +104,18 @@ describe('vet bin', () => {
     expect(source).not.toMatch(/^\s*await\s/m);
   });
 });
+
+describe('vet bin: validate and check (q4q.6)', () => {
+  test('--help lists the validate and check commands', () => {
+    const result = runBin(['--help']);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toMatch(/^\s+validate\b/m);
+    expect(result.stdout).toMatch(/^\s+check\b/m);
+  });
+
+  test('run --help lists the --ci option', () => {
+    const result = runBin(['run', '--help']);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toMatch(/--ci\b/);
+  });
+});

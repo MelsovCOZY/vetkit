@@ -25,6 +25,7 @@ import { createFileCache, type VerdictCache } from './judge/cache.ts';
 import { createLimiter, type Limiter, type PacingEvent } from './judge/pacing.ts';
 import { gradeCode } from './judge/reference.ts';
 import { judgeCase } from './judge/request.ts';
+import { assertLockGates } from './validate/lock.ts';
 
 /** Uncalibrated placeholder threshold, never trusted for gating (jev brief §5). */
 const DEFAULT_THRESHOLD = 0.5;
@@ -71,6 +72,8 @@ export interface RunConfig {
   readonly judge: JudgeV1;
   readonly threshold?: number;
   readonly gate?: boolean;
+  /** CI gating: an unpinned (floating) lock refuses with GATE_UNPINNED unless allowUnpinned. */
+  readonly ci?: boolean;
   readonly gatePolicy?: Partial<GatePolicy>;
   readonly cacheDir?: string;
 }
@@ -427,6 +430,33 @@ function runModel(verdicts: readonly Verdict[], judge: JudgeV1): Verdict['model'
   return { requested: model, resolved: '', transport, pinned };
 }
 
+function preJudgeRefusal(
+  config: RunConfig,
+  lock: Lock | null,
+  criteria: readonly Criterion[],
+): string | undefined {
+  if (config.gate !== true && config.ci !== true) return undefined;
+  if (lock === null) {
+    if (config.gate !== true) return undefined;
+    return evaluateGate({
+      verdicts: [],
+      lock,
+      policy: { requireCalibrated: true, allowUnpinned: true },
+    }).reasons.join('; ');
+  }
+  const checked = assertLockGates(
+    lock,
+    { requireCalibrated: config.gatePolicy?.requireCalibrated ?? true },
+    {
+      gate: config.gate === true,
+      ci: config.ci === true,
+      allowUnpinned: config.gatePolicy?.allowUnpinned ?? false,
+      criterionIds: criteria.filter((c) => c.type !== 'score').map((c) => c.id),
+    },
+  );
+  return checked.ok ? undefined : `${checked.code}: ${checked.message}`;
+}
+
 export async function runEvals(input: RunEvalsInput): Promise<RunEvalsResult> {
   const { config, signal } = input;
   const events = input.events ?? createEvents();
@@ -450,6 +480,25 @@ export async function runEvals(input: RunEvalsInput): Promise<RunEvalsResult> {
   if (cases.length === 0) events.diag('warn', 'NO_CASES', 'no cases to judge');
   if (!criteria.some((c) => c.type === 'boolean' || c.type === 'choice')) {
     events.diag('warn', 'NO_GATEABLE_CRITERIA', 'no boolean or choice criterion can gate');
+  }
+
+  // The gate refuses before any judge call (q4q.11): no lock, an unpinned lock under --ci, or a
+  // referenced boolean/choice criterion that is not gateable in the lock.
+  const refusal = preJudgeRefusal(config, lock, criteria);
+  if (refusal !== undefined) {
+    events.emit('run:end', {
+      cases: cases.length,
+      verdicts: 0,
+      exitCode: 2,
+      durationMs: Math.round(performance.now() - started),
+    });
+    return {
+      results: [],
+      summary: summarise(cases, criteria, [], false),
+      model: runModel([], config.judge),
+      exitCode: 2,
+      gateReasons: [refusal],
+    };
   }
 
   const results = await runJudge({
