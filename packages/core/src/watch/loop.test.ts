@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   safeParseJson,
+  type Criterion,
   type NormalizedTrace,
   type SinkAck,
   type SinkV1,
@@ -119,10 +120,10 @@ function watchOptions(overrides: Partial<RunWatchOptions> = {}): RunWatchOptions
   };
 }
 
-function okVerdict(caseId: string): Verdict {
+function okVerdict(caseId: string, criterionId = 'k1'): Verdict {
   return {
     caseId,
-    criterionId: 'k1',
+    criterionId,
     status: 'ok',
     pass: true,
     model: { requested: 'm', resolved: 'm', transport: 't', pinned: false },
@@ -130,7 +131,25 @@ function okVerdict(caseId: string): Verdict {
   };
 }
 
-const alwaysOkJudge: JudgeCaseFn = async ({ case: c }) => [okVerdict(c.id)];
+function criterion(id: string, overrides: { contentDependent?: boolean } = {}): Criterion {
+  return {
+    id,
+    type: 'boolean',
+    instructions: 'x',
+    escape: 'n/a',
+    polarity: 'pass_when_true',
+    channel: 'quality',
+    contentDependent: true,
+    provenance: { traceIds: [] },
+    wordingHash: 'h',
+    ...overrides,
+  };
+}
+
+const defaultCriteria: Criterion[] = [criterion('k1')];
+
+const alwaysOkJudge: JudgeCaseFn = async ({ case: c, criteria }) =>
+  criteria.map((crit) => okVerdict(c.id, crit.id));
 
 const throwingJudge: JudgeCaseFn = () => {
   throw new Error('judge exploded');
@@ -168,6 +187,7 @@ describe('runWatch', () => {
       source: finiteSource(traces),
       sampler: createSampler({ sampleRate: 0.5, inclusionPath: join(dir, 'inclusion.jsonl') }),
       judge: alwaysOkJudge,
+      criteria: defaultCriteria,
       outbox: wrappedOutbox,
       sinks: [sink],
       options: watchOptions(),
@@ -180,6 +200,11 @@ describe('runWatch', () => {
     expect(summary.promoted).toBe(0);
     expect(summary.produced).toBe(10);
     expect(summary.acknowledged).toBe(10);
+    expect(summary.excluded).toEqual({
+      content_not_captured: 0,
+      truncated: 0,
+      incomplete_trace: 0,
+    });
 
     const lastEnqueue = log.lastIndexOf('enqueue');
     const firstSinkWrite = log.indexOf('sink-write');
@@ -211,6 +236,7 @@ describe('runWatch', () => {
       source: finiteSource(traces),
       sampler: createSampler({ sampleRate: 1, inclusionPath: join(dir, 'inclusion.jsonl') }),
       judge,
+      criteria: defaultCriteria,
       outbox,
       sinks: [fakeSink()],
       options: watchOptions({ sampleRate: 1, maxInFlight }),
@@ -254,6 +280,7 @@ describe('runWatch', () => {
       source: blockingSource(traces),
       sampler: createSampler({ sampleRate: 0.5, inclusionPath: join(dir, 'inclusion.jsonl') }),
       judge: alwaysOkJudge,
+      criteria: defaultCriteria,
       outbox: wrappedOutbox,
       sinks: [fakeSink()],
       options: watchOptions(),
@@ -272,6 +299,7 @@ describe('runWatch', () => {
       promoted: 0,
       produced: 10,
       acknowledged: 10,
+      excluded: { content_not_captured: 0, truncated: 0, incomplete_trace: 0 },
     });
     expect(drainCalls).toBe(1);
   });
@@ -285,6 +313,7 @@ describe('runWatch', () => {
       source: finiteSource(traces),
       sampler: createSampler({ sampleRate: 1, inclusionPath: join(dir, 'inclusion.jsonl') }),
       judge: throwingJudge,
+      criteria: defaultCriteria,
       outbox,
       sinks: [fakeSink()],
       options: watchOptions({ sampleRate: 1 }),
@@ -316,6 +345,7 @@ describe('runWatch', () => {
       source: finiteSource(traces),
       sampler: createSampler({ sampleRate: 1, inclusionPath }),
       judge: alwaysOkJudge,
+      criteria: defaultCriteria,
       outbox,
       sinks: [fakeSink()],
       options: watchOptions({ sampleRate: 1, maxInFlight: 1 }),
@@ -347,6 +377,7 @@ describe('runWatch', () => {
         source: throwingSource(traces, boom),
         sampler: createSampler({ sampleRate: 1, inclusionPath: join(dir, 'inclusion.jsonl') }),
         judge: alwaysOkJudge,
+        criteria: defaultCriteria,
         outbox: wrappedOutbox,
         sinks: [fakeSink()],
         options: watchOptions({ sampleRate: 1 }),
@@ -372,6 +403,7 @@ describe('runWatch', () => {
       source: finiteSource([t]),
       sampler: createSampler({ sampleRate: 1, inclusionPath: join(dir, 'inclusion.jsonl') }),
       judge,
+      criteria: defaultCriteria,
       outbox,
       sinks: [fakeSink()],
       options: watchOptions({ sampleRate: 1 }),
@@ -387,5 +419,38 @@ describe('runWatch', () => {
       () => '',
     );
     expect(pendingText.split('\n').filter((l) => l !== '')).toHaveLength(0);
+  });
+
+  test('truncated: a case with one content-independent and one content-dependent criterion is judged on exactly the content-independent one', async () => {
+    const t = trace('trace-truncated', { truncated: true });
+    const criteria = [
+      criterion('k-independent', { contentDependent: false }),
+      criterion('k-dependent', { contentDependent: true }),
+    ];
+    const outbox = createOutbox({ dir: join(dir, 'outbox') });
+    let receivedCriteria: readonly Criterion[] = [];
+    const judge: JudgeCaseFn = async ({ case: c, criteria: given }) => {
+      receivedCriteria = given;
+      return given.map((crit) => okVerdict(c.id, crit.id));
+    };
+
+    const summary = await runWatch({
+      source: finiteSource([t]),
+      sampler: createSampler({ sampleRate: 1, inclusionPath: join(dir, 'inclusion.jsonl') }),
+      judge,
+      criteria,
+      outbox,
+      sinks: [fakeSink()],
+      options: watchOptions({ sampleRate: 1 }),
+      signal: new AbortController().signal,
+    });
+
+    expect(receivedCriteria.map((c) => c.id)).toEqual(['k-independent']);
+    expect(summary.judged).toBe(1);
+    expect(summary.excluded).toEqual({
+      content_not_captured: 0,
+      truncated: 1,
+      incomplete_trace: 0,
+    });
   });
 });

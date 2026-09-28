@@ -222,3 +222,72 @@ describe('extractCases: completeness-status exclusion (mol-pij.15)', () => {
     });
   });
 });
+
+// bead classified-evals-mol-dh8.4: includeIncomplete lets a watch-loop caller still build a
+// Case for a non-ok trace that has a real conversation, so judge/completeness.ts's
+// partitionCases can select the still-judgeable (contentDependent: false) criteria for it,
+// instead of the whole trace being silently dropped.
+describe('extractCases: includeIncomplete (mol-dh8.4)', () => {
+  test('default (includeIncomplete omitted): a truncated trace with a real conversation still builds no case', () => {
+    const t = trace('t-trunc', {
+      completeness: { contentCaptured: true, truncated: true, missingParents: false },
+    });
+
+    const { cases, traces } = extractCases({ traces: [t], criteria: [] });
+
+    expect(cases).toHaveLength(0);
+    expect(traces).toContainEqual({
+      traceId: 't-trunc',
+      status: 'not_applicable',
+      reason: 'truncated',
+    });
+  });
+
+  test('includeIncomplete: true builds a Case for a truncated trace with a real conversation, provenance carrying completeness', () => {
+    const completeness = { contentCaptured: true, truncated: true, missingParents: false };
+    const t = trace('t-trunc', { completeness });
+
+    const { cases, traces } = extractCases({
+      traces: [t],
+      criteria: [],
+      includeIncomplete: true,
+    });
+
+    expect(cases).toHaveLength(1);
+    expect(cases[0]?.provenance).toEqual({ traceIds: ['t-trunc'], trace: { completeness } });
+    // The trace-status bookkeeping (used by vet init's `excluded` summary) is unchanged: this
+    // trace is still reported not_applicable/truncated even though a Case now also exists for it.
+    expect(traces).toContainEqual({
+      traceId: 't-trunc',
+      status: 'not_applicable',
+      reason: 'truncated',
+    });
+  });
+
+  test('includeIncomplete: true still builds no case for a non-ok trace with no real conversation', () => {
+    const t = uncaptured('t-none-incomplete');
+
+    const { cases, traces } = extractCases({
+      traces: [t],
+      criteria: [],
+      includeIncomplete: true,
+    });
+
+    expect(cases).toHaveLength(0);
+    expect(traces).toContainEqual({
+      traceId: 't-none-incomplete',
+      status: 'not_applicable',
+      reason: 'content_not_captured',
+    });
+  });
+
+  test('includeIncomplete: true does not change provenance or output for an ok trace', () => {
+    const { cases } = extractCases({
+      traces: [trace('t-ok')],
+      criteria: [],
+      includeIncomplete: true,
+    });
+
+    expect(cases[0]?.provenance).toEqual({ traceIds: ['t-ok'] });
+  });
+});
