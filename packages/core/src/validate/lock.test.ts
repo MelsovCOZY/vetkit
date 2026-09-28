@@ -12,7 +12,7 @@ import {
   type Lock,
   type LockCriterion,
 } from '@vetkit/spec';
-import { computeWordingHash } from '../criteria/load.ts';
+import { computeWordingHash, type WordingFields } from '../criteria/load.ts';
 import { createEvents } from '../events.ts';
 import type { CalibrationResult } from './calibrate.ts';
 import {
@@ -42,7 +42,8 @@ function criterion(over: Partial<Criterion> = {}): Criterion {
   } as const;
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   const c = base as unknown as Criterion;
-  return { ...c, wordingHash: computeWordingHash(c) };
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  return { ...c, wordingHash: computeWordingHash(c as unknown as WordingFields) };
 }
 
 function scoreCriterion(): Criterion {
@@ -319,7 +320,7 @@ describe('hashes', () => {
     const a = criterion();
     const reordered = Object.fromEntries(Object.entries(a).toReversed());
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    expect(computeWordingHash(reordered as unknown as Criterion)).toBe(a.wordingHash);
+    expect(computeWordingHash(reordered as unknown as WordingFields)).toBe(a.wordingHash);
 
     const shuffled = cases().map(
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion
