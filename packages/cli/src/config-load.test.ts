@@ -171,7 +171,9 @@ describe('loadVetConfig', () => {
   });
 
   test('CEV_JUDGE_BASE_URL overrides the configured baseURL for that process (bug F3/F4)', async () => {
-    const fetchSpy = vi.fn(async () => new Response('{}', { status: 500 }));
+    const fetchSpy = vi.fn(
+      async (_url: string, _init?: RequestInit) => new Response('{}', { status: 500 }),
+    );
     vi.stubGlobal('fetch', fetchSpy);
     const cwd = await project({
       'vetkit.config.ts': descriptorConfig({
