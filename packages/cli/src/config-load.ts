@@ -43,6 +43,10 @@ export interface LoadedVetConfig {
 const CONFIG_NAME = 'vetkit';
 const JUDGE_KIND = 'typesafe-compatible';
 const EXTENSIONS = '{ts,mts,cts,js,mjs,cjs,json}';
+// Bug F3/F4 (gate 7lg AC2): a generic override of the judge transport's base URL for this
+// process, so a test (or an operator) can force a judge failure without touching config.
+// Named CEV_ (no vendor) since it applies to any typesafe-compatible endpoint, not one preset.
+const JUDGE_BASE_URL_ENV = 'CEV_JUDGE_BASE_URL';
 
 function isProviderOptions(value: unknown): value is JevProviderOptions {
   if (typeof value !== 'object' || value === null || !('gateway' in value)) return false;
@@ -123,13 +127,18 @@ export async function loadVetConfig(options: LoadVetConfigOptions): Promise<Load
   if ('specVersion' in config.judge) {
     judge = config.judge;
   } else {
-    const keyEnv = config.judge.apiKeyEnv;
+    const baseURLOverride = env[JUDGE_BASE_URL_ENV];
+    const endpoint =
+      baseURLOverride === undefined || baseURLOverride === ''
+        ? config.judge
+        : { ...config.judge, baseURL: baseURLOverride };
+    const keyEnv = endpoint.apiKeyEnv;
     const value = env[keyEnv];
     if (options.requireCredentials === false && (value === undefined || value === '')) {
       missingCredentials.push(keyEnv);
-      judge = offlineJudge(judgeFromEndpoint(config.judge, UNSET_KEY_PLACEHOLDER), keyEnv);
+      judge = offlineJudge(judgeFromEndpoint(endpoint, UNSET_KEY_PLACEHOLDER), keyEnv);
     } else {
-      judge = judgeFromEndpoint(config.judge, readEnvName(keyEnv, env));
+      judge = judgeFromEndpoint(endpoint, readEnvName(keyEnv, env));
     }
   }
   // CEV_DIAG=1: count real judge requests (cache hits never reach doJudge) for diag.ts.

@@ -57,6 +57,15 @@ function caseOutcome(verdicts: readonly RunVerdict[]): Outcome {
   return 'pass';
 }
 
+// Bug F3/F4 (gate 7lg AC1): core's exit mapping treats a judge failure (unscored) the same as
+// a scored fail, so `--sink` — whose whole point is durably recording an unscored verdict for
+// later drain, not blocking CI on a transient judge outage — still exited 1. With --sink set,
+// an exit of 1 caused only by unscored verdicts (no real scored failure) is downgraded to 0;
+// a genuine scored failure still exits 1, and without --sink nothing here changes.
+function hasScoredFailure(verdicts: readonly RunVerdict[]): boolean {
+  return verdicts.some((v) => v.gated !== false && v.status === 'ok' && v.pass !== true);
+}
+
 function render(result: RunEvalsResult): string {
   const byCase = new Map<string, RunVerdict[]>();
   for (const v of result.results) byCase.set(v.caseId, [...(byCase.get(v.caseId) ?? []), v]);
@@ -137,6 +146,11 @@ async function runCommand(options: RunOptions & Readonly<Record<string, unknown>
   } finally {
     stopRendering();
     process.off('SIGINT', onSigint);
+  }
+
+  // --sink AC1: an exit of 1 from unscored verdicts alone never blocks a --sink run.
+  if (options['sink'] !== undefined && result.exitCode === 1 && !hasScoredFailure(result.results)) {
+    result.exitCode = 0;
   }
 
   for (const reason of result.gateReasons) log.error(`gate refused: ${reason}`);
