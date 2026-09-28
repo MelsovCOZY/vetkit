@@ -109,6 +109,47 @@ describe('openinferenceDialect.extractMessages — tool_calls', () => {
   });
 });
 
+// pij.14: an indexed message carrying message.tool_call_id (a tool turn responding to a call)
+// maps to a tool_call_response part, not the text part its message.content would otherwise get.
+describe('openinferenceDialect.extractMessages — message.tool_call_id', () => {
+  test('a tool_call_id turns message.content into a tool_call_response, not text', () => {
+    const s = span('a', {
+      'openinference.span.kind': 'LLM',
+      'llm.input_messages.0.message.role': 'tool',
+      'llm.input_messages.0.message.tool_call_id': 'call_1',
+      'llm.input_messages.0.message.content': '{"temp_c":18}',
+    });
+    expect(openinferenceDialect.extractMessages(s, tree(s))).toEqual([
+      {
+        role: 'tool',
+        parts: [{ type: 'tool_call_response', id: 'call_1', response: '{"temp_c":18}' }],
+      },
+    ]);
+  });
+
+  test('a tool_call_id message still gets its sibling tool_calls parts (round-trip on one span)', () => {
+    const s = span('a', {
+      'openinference.span.kind': 'LLM',
+      'llm.output_messages.0.message.role': 'assistant',
+      'llm.output_messages.0.message.tool_calls.0.tool_call.id': 'call_1',
+      'llm.output_messages.0.message.tool_calls.0.tool_call.function.name': 'get_weather',
+      'llm.input_messages.0.message.role': 'tool',
+      'llm.input_messages.0.message.tool_call_id': 'call_1',
+      'llm.input_messages.0.message.content': '{"temp_c":18}',
+    });
+    expect(openinferenceDialect.extractMessages(s, tree(s))).toEqual([
+      {
+        role: 'tool',
+        parts: [{ type: 'tool_call_response', id: 'call_1', response: '{"temp_c":18}' }],
+      },
+      {
+        role: 'assistant',
+        parts: [{ type: 'tool_call', id: 'call_1', name: 'get_weather' }],
+      },
+    ]);
+  });
+});
+
 describe('openinferenceDialect.extractMessages — input.value fallback', () => {
   test('text/plain input.value with no indexed messages becomes one user message', () => {
     const s = span('a', {
