@@ -16,6 +16,7 @@ import {
   verdictSchema,
 } from '@vetkit/spec';
 import type { Limiter } from './judge/pacing.ts';
+import { createEvents, type EventMap } from './events.ts';
 import { evaluateGate } from './gate.ts';
 import { runEvals, runJudge, type RunConfig, type RunEvent, type RunVerdict } from './run.ts';
 
@@ -474,6 +475,76 @@ describe('events', () => {
     expect(types.at(-1)).toBe('run.end');
     expect(types.filter((t) => t === 'case.judged')).toHaveLength(2);
     expect(stdout).not.toHaveBeenCalled();
+  });
+});
+
+describe('event bus', () => {
+  type Seen = { name: keyof EventMap; payload: EventMap[keyof EventMap] };
+  const NAMES = [
+    'run:start',
+    'case:start',
+    'judge:request',
+    'judge:response',
+    'verdict',
+    'run:end',
+  ] as const;
+  const CONTENT_KEYS = ['state', 'prompt', 'answer', 'answers', 'instructions', 'content', 'text'];
+
+  interface Recorded {
+    events: ReturnType<typeof createEvents>;
+    seen: Seen[];
+    responses: EventMap['judge:response'][];
+  }
+  function record(): Recorded {
+    const events = createEvents();
+    const seen: Seen[] = [];
+    const responses: EventMap['judge:response'][] = [];
+    for (const name of NAMES) events.on(name, (payload) => seen.push({ name, payload }));
+    events.on('judge:response', (payload) => responses.push(payload));
+    return { events, seen, responses };
+  }
+  const count = (seen: Seen[], name: keyof EventMap): number =>
+    seen.filter((e) => e.name === name).length;
+
+  test('runEvals emits the EventMap events on an injected Events, with no content keys', async () => {
+    const paths = await suite(
+      [BOOL_YAML],
+      [
+        { id: 'c1', input: { state: 'PRIVATE-STATE-ONE' } },
+        { id: 'c2', input: { state: 'PRIVATE-STATE-TWO' } },
+      ],
+    );
+    const { judge } = scriptedJudge({
+      'PRIVATE-STATE-ONE': { 'answers-question': yes(0.9) },
+      'PRIVATE-STATE-TWO': { 'answers-question': yes(0.9) },
+    });
+    const cacheDir = await mkdtemp(join(tmpdir(), 'vetkit-run-cache-'));
+    const first = record();
+    await runEvals({ config: { ...paths, judge, cacheDir }, events: first.events });
+
+    expect(count(first.seen, 'run:start')).toBe(1);
+    expect(count(first.seen, 'case:start')).toBe(2);
+    expect(count(first.seen, 'judge:request')).toBe(2);
+    expect(count(first.seen, 'judge:response')).toBe(2);
+    expect(count(first.seen, 'verdict')).toBe(2);
+    expect(count(first.seen, 'run:end')).toBe(1);
+    expect(first.seen[0]?.name).toBe('run:start');
+    expect(first.seen.at(-1)?.name).toBe('run:end');
+    for (const r of first.responses) {
+      expect(r.status).toEqual(expect.any(Number));
+      expect(r.durationMs).toEqual(expect.any(Number));
+      expect(r.cacheHit).toBe(false);
+    }
+    for (const { payload } of first.seen) {
+      for (const key of CONTENT_KEYS) expect(payload).not.toHaveProperty(key);
+      expect(JSON.stringify(payload)).not.toContain('PRIVATE-STATE');
+    }
+
+    const rerun = record();
+    await runEvals({ config: { ...paths, judge, cacheDir }, events: rerun.events });
+    const cached = rerun.responses;
+    expect(cached).toHaveLength(2);
+    for (const r of cached) expect(r.cacheHit).toBe(true);
   });
 });
 

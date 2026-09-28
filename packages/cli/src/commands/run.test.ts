@@ -108,6 +108,23 @@ describe('vet run', () => {
     expect(result.stdout).toMatch(/pinned: false/);
   });
 
+  test('human mode prints run progress events on stderr, not stdout', () => {
+    const result = runVet(['run'], freshProject(), fixtureEnv('pass'));
+    expect(result.status).toBe(0);
+    expect(result.stderr).toMatch(/run: 1 case × 1 criteria/);
+    expect(result.stderr).toMatch(/case case-1 \(1\/1\)/);
+    expect(result.stderr).toMatch(/run done: 1 verdict, exit 0/);
+    expect(result.stdout).not.toMatch(/run done/);
+  });
+
+  test('--json keeps stdout exactly one JSON document while progress renders', () => {
+    const result = runVet(['run', '--json'], freshProject(), fixtureEnv('pass'));
+    expect(result.status).toBe(0);
+    expect(nonEmptyLines(result.stdout)).toHaveLength(1);
+    expect(parseJson(result.stdout)).toMatchObject({ summary: { total: 1 } });
+    expect(result.stdout).not.toMatch(/run done/);
+  });
+
   test('the fixture secret never appears in stdout or stderr', () => {
     for (const args of [['run'], ['run', '--json'], ['run', '--verbose']]) {
       const result = runVet(args, freshProject(), fixtureEnv('pass'));
