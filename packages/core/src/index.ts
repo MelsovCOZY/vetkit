@@ -21,6 +21,17 @@ export type {
 export { loadCases, MAX_STATE_TOKENS } from './cases/load.ts';
 export type { CaseIssue, CaseLocation, LoadCasesResult } from './cases/load.ts';
 
+export {
+  dedupeKey,
+  findDuplicates,
+  listPendingCases,
+  promoteVerdict,
+  quarantineCase,
+  removeCases,
+  reviewCase,
+} from './cases/edit.ts';
+export type { DuplicatePair, PendingCase, QuarantineResult, ReviewOptions } from './cases/edit.ts';
+
 export { gradeCode, referenceRequirement, renderReference } from './judge/reference.ts';
 export type { GradeCodeResult, ReferenceRequirementResult } from './judge/reference.ts';
 

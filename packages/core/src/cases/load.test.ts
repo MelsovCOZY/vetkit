@@ -117,4 +117,17 @@ describe('loadCases', () => {
     if (result.ok) return;
     expect(result.issues[0]).toMatchObject({ code: 'E_IO' });
   });
+
+  test('quarantine.jsonl is excluded from the default load (vet cases quarantine, vet run)', async () => {
+    const dir = await tempDir({
+      'a.jsonl': `${caseLine('kept', 's')}\n`,
+      'quarantine.jsonl': `${caseLine('quarantined', 't')}\n`,
+    });
+
+    const result = await loadCases(dir);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.cases.map((c) => c.id)).toEqual(['kept']);
+  });
 });
