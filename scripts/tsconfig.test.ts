@@ -116,17 +116,26 @@ const packageFolders = readdirSync(packagesDir, { withFileTypes: true })
 const packageInfo = packageFolders.map((folder) => {
   const pkgJson = JSON.parse(
     readFileSync(path.join(packagesDir, folder, "package.json"), "utf8"),
-  ) as { name: string; dependencies?: Record<string, string> };
-  return { folder, name: pkgJson.name, dependencies: pkgJson.dependencies ?? {} };
+  ) as { name: string; dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
+  return {
+    folder,
+    name: pkgJson.name,
+    dependencies: pkgJson.dependencies ?? {},
+    devDependencies: pkgJson.devDependencies ?? {},
+  };
 });
 
 function expectedReferencePaths(folder: string): string[] {
   const info = packageInfo.find((p) => p.folder === folder);
   if (!info) throw new Error(`no package.json found for packages/${folder}`);
-  const vetkitDeps = Object.keys(info.dependencies).filter((key) =>
-    key.startsWith("@vetkit/"),
+  const depNames = [
+    ...Object.keys(info.dependencies),
+    ...Object.keys(info.devDependencies),
+  ];
+  const workspaceDeps = depNames.filter((key) =>
+    packageInfo.some((p) => p.name === key),
   );
-  return vetkitDeps
+  return workspaceDeps
     .map((depName) => {
       const target = packageInfo.find((p) => p.name === depName);
       if (!target) {
@@ -170,7 +179,7 @@ describe.each(packageFolders)("packages/%s/tsconfig.json", (folder) => {
     expect(tsconfig.include).toEqual(["src"]);
   });
 
-  test("references match this package's @vetkit/* dependencies", () => {
+  test("references match this package's workspace dependencies", () => {
     const actual = ((tsconfig.references ?? []) as Array<{ path: string }>)
       .map((r) => r.path)
       .sort();
