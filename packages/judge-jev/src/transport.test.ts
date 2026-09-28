@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, test, vi } from 'vitest';
-import { VetError } from '@vetkit/spec';
+import { safeParseJson, VetError, type Question } from '@vetkit/spec';
 import { createJevJudge } from './transport.ts';
 
 interface CapturedCall {
@@ -447,5 +449,74 @@ describe('preflight validation', () => {
       }),
     ).rejects.toMatchObject({ code: 'INPUT_TOO_LARGE' });
     expect(fetchStub).not.toHaveBeenCalled();
+  });
+});
+
+// Same loader as normalise.test.ts: this package's own fixtures/ copy, parsed via the
+// safeParseJson chokepoint (an empty schema `{}` matches any JSON value).
+function loadFixture(name: string): unknown {
+  const path = fileURLToPath(new URL(`../fixtures/${name}`, import.meta.url));
+  const result = safeParseJson<unknown>(readFileSync(path, 'utf8'), {});
+  if (!result.ok) throw result.error;
+  return result.value;
+}
+
+function asMutableRecord(value: unknown): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null) throw new Error('expected an object');
+  // Guarded by the typeof/null check above (trusted-boundary cast, same pattern as
+  // normalise.test.ts).
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  return value as Record<string, unknown>;
+}
+
+const RUN1_QUESTIONS: Record<string, Question> = {
+  promised_refund: {
+    type: 'boolean',
+    instructions: 'Did the assistant promise or issue a refund?',
+  },
+  tone: {
+    type: 'choice',
+    instructions: "What is the assistant's tone?",
+    criteria: {
+      helpful: 'Polite and solves the problem',
+      rude: 'Dismissive or insulting',
+      neutral: 'Neither warm nor rude',
+    },
+  },
+  quality: {
+    type: 'score',
+    instructions: 'Rate the overall answer quality.',
+    criteria: ['Wrong or harmful', 'Poor', 'Acceptable', 'Good', 'Excellent'],
+  },
+};
+
+describe('response normalisation (routes through normalise())', () => {
+  test('run1 fixture through the vercel preset carries provider and credentialType', async () => {
+    const run1 = loadFixture('2026-09-25-gateway-systemone-response-run1.json');
+    const fetchStub = vi.fn(async () => jsonResponse(run1));
+    const judge = createJevJudge({ preset: 'vercel', apiKey: 'fake-jev-key', fetch: fetchStub });
+
+    const result = await judge.doJudge({ state: 'refund conversation', questions: RUN1_QUESTIONS });
+
+    expect(result.model).toMatchObject({
+      transport: 'vercel',
+      pinned: false,
+      provider: 'typesafe-ai',
+      credentialType: 'system',
+    });
+  });
+
+  test('a choice answer missing inline confidence gets it lifted from provider_metadata', async () => {
+    const run1 = structuredClone(loadFixture('2026-09-25-gateway-systemone-response-run1.json'));
+    const tone = asMutableRecord(asMutableRecord(asMutableRecord(run1)['answers'])['tone']);
+    delete tone['confidence'];
+    const fetchStub = vi.fn(async () => jsonResponse(run1));
+    const judge = createJevJudge({ preset: 'vercel', apiKey: 'fake-jev-key', fetch: fetchStub });
+
+    const result = await judge.doJudge({ state: 'refund conversation', questions: RUN1_QUESTIONS });
+
+    const answer = result.answers.tone;
+    if (answer?.type !== 'choice') throw new Error('expected a choice answer for "tone"');
+    expect(answer.confidence).toBe(0.96);
   });
 });

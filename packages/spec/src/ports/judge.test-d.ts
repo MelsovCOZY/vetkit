@@ -30,6 +30,12 @@ test('JudgeResponse.model carries requested/resolved/transport/pinned', () => {
   }>();
 });
 
+test('JudgeResponse.model carries an optional credentialType: string', () => {
+  expectTypeOf<JudgeResponse['model']>()
+    .toHaveProperty('credentialType')
+    .toEqualTypeOf<string | undefined>();
+});
+
 test('Answer is a discriminated union of the three IR answer shapes', () => {
   expectTypeOf<Answer['type']>().toEqualTypeOf<'boolean' | 'choice' | 'score'>();
 });
