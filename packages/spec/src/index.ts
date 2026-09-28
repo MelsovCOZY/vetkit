@@ -59,3 +59,6 @@ export type {
   ThresholdsPolicy,
   WatchConfig,
 } from './generated/index.ts';
+
+export { defineSink } from './ports/sink.ts';
+export type { SinkAck, SinkV1 } from './ports/sink.ts';

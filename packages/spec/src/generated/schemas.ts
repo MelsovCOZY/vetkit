@@ -826,6 +826,9 @@ export const verdictSchema: JsonSchema = {
     },
   },
   properties: {
+    id: {
+      type: 'string',
+    },
     caseId: {
       type: 'string',
     },
@@ -875,6 +878,31 @@ export const verdictSchema: JsonSchema = {
     },
     calibrated: {
       type: 'boolean',
+    },
+    provenance: {
+      type: 'object',
+      properties: {
+        traceId: {
+          type: 'string',
+        },
+        spanId: {
+          type: 'string',
+        },
+        responseId: {
+          type: 'string',
+        },
+        observationId: {
+          type: 'string',
+        },
+        dialect: {
+          type: 'string',
+        },
+        schemaUrl: {
+          type: 'string',
+        },
+      },
+      required: [],
+      additionalProperties: false,
     },
   },
   required: ['caseId', 'criterionId', 'status', 'model', 'cacheHit'],

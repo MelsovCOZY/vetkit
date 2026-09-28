@@ -91,6 +91,23 @@ describe('VetError', () => {
     expect(err.code).toBe('LABELS_INVALID');
   });
 
+  test('accepts the five sink codes (J6 sink/outbox)', () => {
+    const sinkCodes = [
+      'SINK_REJECTED',
+      'SINK_UNREACHABLE',
+      'SINK_AUTH',
+      'SINK_PAYLOAD_TOO_LARGE',
+      'OUTBOX_CORRUPT',
+    ] as const;
+
+    for (const code of sinkCodes) {
+      expect(Object.values(CEV_ERROR_CODES)).toContain(code);
+      const err = new VetError(code, 'message');
+      expect(VetError.isInstance(err)).toBe(true);
+      expect(err.code).toBe(code);
+    }
+  });
+
   test('details round-trips through the constructor options', () => {
     const err = new VetError('CACHE_IO', 'cache write failed', {
       details: {
