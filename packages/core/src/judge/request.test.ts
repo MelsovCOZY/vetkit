@@ -111,6 +111,7 @@ interface FakeJudge {
 function fakeJudge(
   opts: {
     id?: string;
+    model?: string;
     resolved?: string;
     impl?: JudgeV1['doJudge'];
     drop?: string;
@@ -146,6 +147,7 @@ function fakeJudge(
         maxStateTokens: 32_000,
         pinned: false,
         transport: 'fake',
+        model: opts.model ?? 'jev-fake-model',
       },
       doJudge,
     },
@@ -286,11 +288,51 @@ describe('judgeCase', () => {
 
   test('an entry cached under a different judge model identity is a miss', async () => {
     const cache = createFileCache(dir);
-    await judgeCase({ judge: fakeJudge({ id: 'judge-a' }).judge, case: evalCase, criteria, cache });
-    const other = fakeJudge({ id: 'judge-b' });
+    await judgeCase({
+      judge: fakeJudge({ model: 'model-a' }).judge,
+      case: evalCase,
+      criteria,
+      cache,
+    });
+    const other = fakeJudge({ model: 'model-b' });
     const v = await judgeCase({ judge: other.judge, case: evalCase, criteria, cache });
     expect(other.doJudge).toHaveBeenCalledTimes(1);
     expect(v.every((x) => !x.cacheHit)).toBe(true);
+  });
+
+  test('two judges with the same id but different capabilities.model get different keys (miss)', async () => {
+    const get = vi.fn<VerdictCache['get']>(() => Promise.resolve(undefined));
+    const set = vi.fn<VerdictCache['set']>(() => Promise.resolve());
+    const cache: VerdictCache = { get, set };
+    await judgeCase({
+      judge: fakeJudge({ model: 'jev-1.13.0' }).judge,
+      case: evalCase,
+      criteria,
+      cache,
+    });
+    await judgeCase({
+      judge: fakeJudge({ model: 'jev-1.14.0' }).judge,
+      case: evalCase,
+      criteria,
+      cache,
+    });
+    const keys = get.mock.calls.map((c) => c[0]);
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).toBe(cacheKey(evalCase, criteria, 'jev-1.13.0'));
+    expect(keys[1]).toBe(cacheKey(evalCase, criteria, 'jev-1.14.0'));
+    expect(keys[0]).not.toBe(keys[1]);
+  });
+
+  test('an unscored verdict reports model.requested = capabilities.model, not the judge id', async () => {
+    const failing = fakeJudge({
+      id: 'jev-vercel',
+      model: 'typesafe-ai/jev',
+      impl: () => Promise.reject(new VetError(CEV_ERROR_CODES.JUDGE_UNAVAILABLE, 'down')),
+    });
+    const verdicts = await judgeCase({ judge: failing.judge, case: evalCase, criteria });
+    expect(
+      verdicts.every((v) => v.status === 'unscored' && v.model.requested === 'typesafe-ai/jev'),
+    ).toBe(true);
   });
 
   test('a doJudge rejection yields unscored verdicts with cause = code, no throw, nothing cached', async () => {
@@ -354,7 +396,7 @@ describe('createFileCache', () => {
   test('a corrupt cache file is a miss, emits a diag event, and is overwritten', async () => {
     const onDiag = vi.fn();
     const cache = createFileCache(dir, { onDiag });
-    const key = cacheKey(evalCase, criteria, 'judge-fake');
+    const key = cacheKey(evalCase, criteria, 'jev-fake-model');
     writeFileSync(join(dir, `${key}.json`), '{not json');
 
     const { judge, doJudge } = fakeJudge();

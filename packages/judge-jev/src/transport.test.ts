@@ -148,7 +148,40 @@ describe('capabilities', () => {
       maxStateTokens: 32000,
       pinned: false,
       transport: 'vercel',
+      model: 'typesafe-ai/jev',
     });
+  });
+
+  test.each([
+    ['typesafe', 'jev-1.13.0'],
+    ['vercel', 'typesafe-ai/jev'],
+    ['openrouter', 'typesafe/jev-1.13'],
+  ] as const)('%s preset judge declares the preset defaultModel %s', (preset, model) => {
+    const judge = createJevJudge({ preset, apiKey: 'fake-jev-key' });
+
+    expect(judge.capabilities.model).toBe(model);
+  });
+
+  test('opts.model overrides the declared model on a preset', () => {
+    const judge = createJevJudge({ preset: 'openrouter', model: 'typesafe/jev-2', apiKey: 'k' });
+
+    expect(judge.capabilities.model).toBe('typesafe/jev-2');
+  });
+
+  test('a custom transport declares its opts.model', () => {
+    const judge = createJevJudge({
+      baseURL: 'https://custom.example.com',
+      model: 'acme/jev-custom',
+      apiKey: 'fake-jev-key',
+    });
+
+    expect(judge.capabilities.model).toBe('acme/jev-custom');
+  });
+
+  test('the cloudflare transport declares the cloudflare preset defaultModel', () => {
+    const judge = createJevJudge({ preset: 'cloudflare', accountId: 'acct', apiKey: 'k' });
+
+    expect(judge.capabilities.model).toBe('typesafe/jev');
   });
 
   test('typesafe preset judge reports pinned:true, transport "typesafe"', () => {

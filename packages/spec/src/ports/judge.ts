@@ -16,6 +16,7 @@ export interface JudgeV1 {
     maxStateTokens: number;
     pinned: boolean;
     transport: string;
+    model: string; // declared/requested model id (cache key, unscored model.requested)
   };
   doJudge(req: {
     state: string;

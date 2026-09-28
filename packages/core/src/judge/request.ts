@@ -95,7 +95,7 @@ export function buildRequest(
 
 /**
  * sha256 over (state, each criterion's wordingHash in id order, model, rendered reference text,
- * option order). `model` is the judge's declared identity (JudgeV1.id) used for lookup —
+ * option order). `model` is the judge's declared model id (JudgeV1.capabilities.model) used for lookup —
  * `model.resolved` is only known after a call, so it is stored inside the entry instead
  * (bead RISK note); a different declared model is a different key, hence a miss.
  */
@@ -138,7 +138,7 @@ function verdictModel(model: JudgeResponse['model']): Verdict['model'] {
 
 function unscored(input: JudgeCaseInput, cause: string): Verdict[] {
   const model: Verdict['model'] = {
-    requested: input.judge.id,
+    requested: input.judge.capabilities.model,
     resolved: '',
     transport: input.judge.capabilities.transport,
     pinned: input.judge.capabilities.pinned,
@@ -175,7 +175,7 @@ function toVerdicts(input: JudgeCaseInput, judged: CachedJudgment, cacheHit: boo
 export async function judgeCase(input: JudgeCaseInput): Promise<Verdict[]> {
   if (input.signal?.aborted === true) return unscored(input, CEV_ERROR_CODES.JUDGE_TIMEOUT);
 
-  const key = cacheKey(input.case, input.criteria, input.judge.id, input);
+  const key = cacheKey(input.case, input.criteria, input.judge.capabilities.model, input);
   const cached = await input.cache?.get(key);
   if (cached !== undefined) return toVerdicts(input, cached, true);
 

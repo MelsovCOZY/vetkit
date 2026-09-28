@@ -289,6 +289,7 @@ export function createJevJudge(opts: CreateJevJudgeOptions): JudgeV1 {
       maxStateTokens: MAX_STATE_TOKENS,
       pinned,
       transport,
+      model,
     },
     async doJudge(req) {
       validateRequest(req.state, req.questions);
