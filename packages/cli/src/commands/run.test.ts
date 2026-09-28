@@ -54,7 +54,7 @@ function nonEmptyLines(text: string): string[] {
 }
 
 describe('vet run', () => {
-  test('--json prints exactly one JSON document {results, summary, model}; stderr only warnings', () => {
+  test('--json prints exactly one JSON document {results, summary, model}; stderr only log lines', () => {
     const result = runVet(['run', '--json'], freshProject(), fixtureEnv('pass'));
     expect(result.status).toBe(0);
     const doc = parseJson(result.stdout);
@@ -64,7 +64,8 @@ describe('vet run', () => {
       model: { resolved: 'fake-jev-pass-resolved', pinned: false },
     });
     expect(nonEmptyLines(result.stdout)).toHaveLength(1);
-    for (const line of nonEmptyLines(result.stderr)) expect(line).toMatch(/^warn /);
+    // Progress events render on stderr as info lines (render-events.ts); nothing else lands there.
+    for (const line of nonEmptyLines(result.stderr)) expect(line).toMatch(/^(warn|info) /);
   });
 
   test('--json with a config warning puts the warning on stderr only', () => {

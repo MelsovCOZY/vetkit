@@ -16,9 +16,9 @@ import {
   verdictSchema,
 } from '@vetkit/spec';
 import type { Limiter } from './judge/pacing.ts';
-import { createEvents, type EventMap } from './events.ts';
+import { createEvents, EVENT_NAMES, type EventMap, type Events } from './events.ts';
 import { evaluateGate } from './gate.ts';
-import { runEvals, runJudge, type RunConfig, type RunEvent, type RunVerdict } from './run.ts';
+import { runEvals, runJudge, type RunConfig, type RunVerdict } from './run.ts';
 
 // ---------- fixtures ----------
 
@@ -119,6 +119,15 @@ function score(s: number): Answer {
 }
 
 type Script = Record<string, Record<string, Answer> | 'throw'>;
+
+/** Subscribes to every bus event; names lists them in order, diags as `diag:<code>`. */
+function collect(): { events: Events; names: string[] } {
+  const events = createEvents();
+  const names: string[] = [];
+  for (const name of Object.values(EVENT_NAMES)) events.on(name, () => names.push(name));
+  events.on('diag', ({ code }) => names.push(`diag:${code}`));
+  return { events, names };
+}
 
 function scriptedJudge(
   script: Script,
@@ -293,15 +302,15 @@ describe('runEvals results and summary', () => {
     expect(out.exitCode).toBe(0);
   });
 
-  test('zero cases: total 0, exit 0 and a run.no_cases event', async () => {
+  test('zero cases: total 0, exit 0 and a NO_CASES diag', async () => {
     const paths = await suite([BOOL_YAML], []);
     const { judge } = scriptedJudge({});
-    const events: RunEvent[] = [];
-    const out = await runEvals({ config: { ...paths, judge }, emit: (e) => events.push(e) });
+    const { events, names } = collect();
+    const out = await runEvals({ config: { ...paths, judge }, events });
 
     expect(out.summary.total).toBe(0);
     expect(out.exitCode).toBe(0);
-    expect(events.map((e) => e.type)).toContain('run.no_cases');
+    expect(names).toContain('diag:NO_CASES');
   });
 
   test('all unscored exits 1', async () => {
@@ -454,7 +463,7 @@ describe('gate policy (exit 2)', () => {
 // ---------- events ----------
 
 describe('events', () => {
-  test('emits run.start, case.judged per case and run.end, never writing stdout', async () => {
+  test('emits run:start, case:start per case and run:end, never writing stdout', async () => {
     const stdout = vi.spyOn(process.stdout, 'write');
     const paths = await suite(
       [BOOL_YAML],
@@ -467,13 +476,12 @@ describe('events', () => {
       S1: { 'answers-question': yes(0.9) },
       S2: { 'answers-question': yes(0.9) },
     });
-    const events: RunEvent[] = [];
-    await runEvals({ config: { ...paths, judge }, emit: (e) => events.push(e) });
+    const { events, names } = collect();
+    await runEvals({ config: { ...paths, judge }, events });
 
-    const types = events.map((e) => e.type);
-    expect(types[0]).toBe('run.start');
-    expect(types.at(-1)).toBe('run.end');
-    expect(types.filter((t) => t === 'case.judged')).toHaveLength(2);
+    expect(names[0]).toBe('run:start');
+    expect(names.at(-1)).toBe('run:end');
+    expect(names.filter((t) => t === 'case:start')).toHaveLength(2);
     expect(stdout).not.toHaveBeenCalled();
   });
 });
@@ -643,13 +651,13 @@ describe('gate eligibility', () => {
     expect(gated.exitCode).toBe(0);
   });
 
-  test('a score-only suite emits gate.no_gateable_criteria', async () => {
+  test('a score-only suite emits a NO_GATEABLE_CRITERIA diag', async () => {
     const paths = await suite([SCORE_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
     const { judge } = scriptedJudge({ S1: { helpfulness: score(2) } });
-    const events: RunEvent[] = [];
-    await runEvals({ config: { ...paths, judge }, emit: (e) => events.push(e) });
+    const { events, names } = collect();
+    await runEvals({ config: { ...paths, judge }, events });
 
-    expect(events.map((e) => e.type)).toContain('gate.no_gateable_criteria');
+    expect(names).toContain('diag:NO_GATEABLE_CRITERIA');
   });
 
   test('a failing case in a language outside lock languages is not gated', async () => {
@@ -756,7 +764,7 @@ describe('code-graded criteria', () => {
 // ---------- saturation ----------
 
 describe('byCriterion saturation', () => {
-  test('flags all_pass and all_fail, emits criterion.saturated, and leaves mixed as null', async () => {
+  test('flags all_pass and all_fail, emits CRITERION_SATURATED diags, and leaves mixed as null', async () => {
     const paths = await suite(
       [BOOL_YAML, NEG_YAML, CHOICE_YAML],
       [
@@ -768,8 +776,8 @@ describe('byCriterion saturation', () => {
       S1: { 'answers-question': yes(0.9), 'is-rude': yes(0.9), tone: tone('polite') },
       S2: { 'answers-question': yes(0.9), 'is-rude': yes(0.9), tone: tone('rude') },
     });
-    const events: RunEvent[] = [];
-    const out = await runEvals({ config: { ...paths, judge }, emit: (e) => events.push(e) });
+    const { events, names } = collect();
+    const out = await runEvals({ config: { ...paths, judge }, events });
 
     expect(out.summary.byCriterion['answers-question']).toEqual({
       total: 2,
@@ -780,7 +788,7 @@ describe('byCriterion saturation', () => {
     });
     expect(out.summary.byCriterion['is-rude']?.saturated).toBe('all_fail');
     expect(out.summary.byCriterion['tone']?.saturated).toBeNull();
-    const saturated = events.filter((e) => e.type === 'criterion.saturated');
+    const saturated = names.filter((n) => n === 'diag:CRITERION_SATURATED');
     expect(saturated).toHaveLength(2);
     expect(out.exitCode).toBe(1);
   });
