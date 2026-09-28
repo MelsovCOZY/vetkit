@@ -122,7 +122,11 @@ function gateFields(
 ): Pick<Verdict, 'gated' | 'gateReason'> {
   if (criterion.type === 'score') return { gated: false, gateReason: 'score_not_gateable' };
   const languages = entry?.languages;
-  if (languages !== undefined && !languages.includes(evalCase.language ?? 'und')) {
+  if (
+    languages !== undefined &&
+    languages.length > 0 &&
+    !languages.includes(evalCase.language ?? 'und')
+  ) {
     return { gated: false, gateReason: 'language_not_calibrated' };
   }
   return { gated: true };

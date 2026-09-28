@@ -695,6 +695,16 @@ describe('gate eligibility', () => {
     expect(find(out.results, 'c1', 'answers-question')?.gated).toBe(true);
     expect(out.exitCode).toBe(1);
   });
+
+  test('a lock entry with languages: [] gates like no calibrated entry, not like an out-of-language case', async () => {
+    const paths = await suite([BOOL_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
+    const { judge } = scriptedJudge({ S1: 'throw' });
+    const lock = lockOf({ 'answers-question': lockCriterion({ languages: [] }) });
+    const out = await runEvals({ config: { ...paths, judge }, lock });
+
+    expect(find(out.results, 'c1', 'answers-question')).toMatchObject({ gated: true });
+    expect(out.exitCode).toBe(1);
+  });
 });
 
 // ---------- code graders ----------
