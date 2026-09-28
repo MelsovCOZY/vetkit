@@ -452,7 +452,7 @@ describe('vet validate', () => {
     expect((await lockAt(root)).criteria['tone']?.gauntlet.paraphrase).not.toBe('skipped');
   });
 
-  test('fewer than 100 labels: the lock is written with too_few_labels, then exit 2 LABELS_TOO_FEW with the count', async () => {
+  test('fewer than 100 labels: exits 2 LABELS_TOO_FEW with the count and writes no lock', async () => {
     const rows = standardRows().slice(0, 10);
     const root = await project(rows);
     const events = createEvents();
@@ -462,10 +462,54 @@ describe('vet validate', () => {
     expect(VetError.isInstance(error) && error.code).toBe(CEV_ERROR_CODES.LABELS_TOO_FEW);
     expect(VetError.isInstance(error) && error.message).toContain('tone: 10 labels (need 100)');
     expect(exitCodeOf(error)).toBe(2);
-    const entry = (await lockAt(root)).criteria['tone'];
-    expect(entry?.status).toBe('uncalibrated');
-    expect(entry?.reasons).toContain('too_few_labels');
+    await expect(lockAt(root)).rejects.toThrow();
     expect(report()['criteria']).toEqual(expect.any(Array));
+  });
+
+  test('fewer than 100 labels with a pre-existing lock: the refusal leaves it untouched', async () => {
+    const rows = standardRows().slice(0, 10);
+    const root = await project(rows);
+    const priorLock: Lock = {
+      lockVersion: 1,
+      model: {
+        requested: 'legacy/jev',
+        resolved: 'legacy/jev-1',
+        transport: 'legacy-transport',
+        pinned: true,
+      },
+      criteria: {
+        tone: {
+          wordingHash: 'c'.repeat(64),
+          status: 'calibrated',
+          threshold: 0.42,
+          tpr: 0.9,
+          tnr: 0.8,
+          ece: 0.05,
+          tolerance: 0.02,
+          gauntlet: {
+            paraphrase: 'pass',
+            polarity: 'pass',
+            injection: 'pass',
+            master_key: 'pass',
+            label_permutation: 'pass',
+            constant_output: 'pass',
+            position_swap: 'pass',
+            length: 'pass',
+          },
+          reasons: [],
+          languages: ['en'],
+          labelCount: 250,
+        },
+      },
+      datasetHash: 'd'.repeat(64),
+    };
+    await writeFile(join(root, 'criteria.lock.json'), JSON.stringify(priorLock));
+    const events = createEvents();
+    const { judge } = countingJudge(rows, events);
+    const error = await rejection(vet(['validate'], depsFor(root, judge, events)));
+
+    expect(VetError.isInstance(error) && error.code).toBe(CEV_ERROR_CODES.LABELS_TOO_FEW);
+    expect(await lockAt(root)).toEqual(priorLock);
   });
 
   test('--lock <path> writes the lock there', async () => {
