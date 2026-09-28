@@ -267,3 +267,6 @@ export type {
 
 export { readRunRecord, writeRunRecord } from './run-record.ts';
 export type { RunRecord } from './run-record.ts';
+
+export { DEFAULT_GAUNTLET_CORPORA } from './validate/corpora.ts';
+export type { DefaultCorpora } from './validate/corpora.ts';
