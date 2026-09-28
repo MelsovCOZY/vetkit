@@ -9,7 +9,8 @@
     "node": ">=22.12"
   },
   "files": [
-    "dist"
+    "dist",
+    "templates"
   ],
   "bin": {
     "vet": "./dist/bin.js"
