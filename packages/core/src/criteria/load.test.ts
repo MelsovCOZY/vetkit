@@ -155,6 +155,70 @@ describe('loadCriteria', () => {
     expect(issue?.message).toContain('friendly');
   });
 
+  test('a choice criterion without passWhen is CRITERIA_INVALID at /criteria/<i>/passWhen', async () => {
+    const file = await tempFile(
+      'criteria.yaml',
+      [
+        'criteria:',
+        '  - id: answers-question',
+        '    type: boolean',
+        '    instructions: Does the reply answer the question?',
+        '    escape: The reply is empty.',
+        '    polarity: pass_when_true',
+        '    channel: outcome',
+        '    provenance: { traceIds: [] }',
+        '  - id: tone',
+        '    type: choice',
+        '    instructions: Which tone does the reply take?',
+        '    criteria:',
+        '      polite: The reply is courteous.',
+        '      rude: The reply is insulting.',
+        '    escape: The reply has no tone.',
+        '    polarity: pass_when_true',
+        '    channel: quality',
+        '    provenance: { traceIds: [] }',
+        '',
+      ].join('\n'),
+    );
+
+    const result = await loadCriteria(file);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.issues).toContainEqual(
+      expect.objectContaining({ code: 'CRITERIA_INVALID', path: '/criteria/1/passWhen' }),
+    );
+  });
+
+  test('a choice criterion with an empty passWhen is CRITERIA_INVALID at /criteria/0/passWhen', async () => {
+    const file = await tempFile(
+      'criteria.yaml',
+      [
+        'criteria:',
+        '  - id: tone',
+        '    type: choice',
+        '    instructions: Which tone does the reply take?',
+        '    criteria:',
+        '      polite: The reply is courteous.',
+        '      rude: The reply is insulting.',
+        '    passWhen: []',
+        '    escape: The reply has no tone.',
+        '    polarity: pass_when_true',
+        '    channel: quality',
+        '    provenance: { traceIds: [] }',
+        '',
+      ].join('\n'),
+    );
+
+    const result = await loadCriteria(file);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.issues).toContainEqual(
+      expect.objectContaining({ code: 'CRITERIA_INVALID', path: '/criteria/0/passWhen' }),
+    );
+  });
+
   test('a YAML anchor alias cannot smuggle a duplicate id past the uniqueness check', async () => {
     const file = await tempFile(
       'criteria.yaml',
