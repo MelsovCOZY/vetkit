@@ -68,6 +68,7 @@ async function doctor(
   args: readonly string[],
   cwd: string,
   env: Record<string, string | undefined>,
+  fetchImpl: typeof fetch = vi.fn(async () => new Response('{}', { status: 200 })),
 ): Promise<Run> {
   const program = new Command().option('--json');
   program.exitOverride();
@@ -79,7 +80,7 @@ async function doctor(
     lefthookInstalled: () => true,
     cwd,
     env,
-    fetchImpl: vi.fn(async () => new Response('{}', { status: 200 })),
+    fetchImpl,
     stdout: { write: (chunk: string) => chunks.push(chunk) },
     setExitCode: (code) => {
       exitCode = code;
@@ -176,6 +177,30 @@ describe('vet doctor --config --json', () => {
     });
     expect(typeof doc === 'object' && doc !== null && 'config' in doc).toBe(false);
     expect(run.exitCode).toBe(1);
+  });
+});
+
+describe('vet doctor --config judge health probe', () => {
+  test('a cloudflare descriptor probes the accountId from the config, not the env', async () => {
+    const cwd = await project({
+      'vetkit.config.ts': `export default {
+  judge: {
+    kind: 'typesafe-compatible',
+    preset: 'cloudflare',
+    accountId: 'acct-from-config',
+    apiKeyEnv: 'DOCTOR_CF_KEY',
+  },
+};
+`,
+    });
+    const urls: string[] = [];
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      urls.push(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+      return new Response(null, { status: 200 });
+    });
+    await doctor(['--config', '--json'], cwd, { DOCTOR_CF_KEY: SECRET }, fetchImpl);
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).toContain('/accounts/acct-from-config/');
   });
 });
 
