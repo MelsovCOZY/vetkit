@@ -459,6 +459,40 @@ describe('vet validate', () => {
     const r = await readLock(target);
     expect('error' in r).toBe(false);
   });
+
+  test('a criterion with enabled: false is never judged and gets no lock entry (mol-e3g.1)', async () => {
+    const rows = standardRows();
+    const root = await project(rows);
+    await writeFile(
+      join(root, 'evals', 'criteria.yaml'),
+      `${CRITERIA_YAML}  - id: extra
+    type: boolean
+    instructions: Is the reply extra?
+    escape: The reply has no discernible tone.
+    polarity: pass_when_true
+    channel: quality
+    enabled: false
+    provenance:
+      traceIds: []
+`,
+    );
+    const events = createEvents();
+    const { judge } = countingJudge(rows, events);
+    const seenCriteria = new Set<string>();
+    const spying: JudgeV1 = {
+      ...judge,
+      doJudge: (req) => {
+        for (const k of Object.keys(req.questions)) seenCriteria.add(k);
+        return judge.doJudge(req);
+      },
+    };
+    await vet(['validate'], depsFor(root, spying, events));
+
+    expect(seenCriteria).toEqual(new Set(['tone']));
+    const lock = await lockAt(root);
+    expect(lock.criteria['extra']).toBeUndefined();
+    expect(lock.criteria['tone']?.labelCount).toBe(200);
+  });
 });
 
 // ---------- gate module ----------
