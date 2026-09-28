@@ -129,6 +129,27 @@ function isTimeout(err: unknown): boolean {
   return err instanceof Error && err.name === 'TimeoutError';
 }
 
+// Races `promise` against `signal`, so a sink that ignores its AbortSignal and never
+// resolves still returns (as a rejection) once the signal fires. Same pattern as
+// fetchWithAbort in packages/judge-jev/src/transport.ts.
+function raceAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise((resolve, reject) => {
+    const onAbort = (): void => reject(signal.reason);
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (cause: unknown) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(cause);
+      },
+    );
+  });
+}
+
 // A thrown error is a whole-batch outcome: SINK_* VetErrors and timeouts are rejections,
 // anything else is a programmer error and is rethrown with nothing recorded for the batch.
 function thrownOutcome(err: unknown, batch: PendingLine[]): BatchOutcome {
@@ -169,9 +190,13 @@ export function createOutbox(opts: OutboxOptions): Outbox {
   async function sendBatch(sink: SinkV1, batch: PendingLine[]): Promise<BatchOutcome> {
     let ack;
     try {
-      ack = await sink.doWrite(
-        batch.map((p) => p.verdict),
-        { signal: AbortSignal.timeout(timeoutMs) },
+      const signal = AbortSignal.timeout(timeoutMs);
+      ack = await raceAbort(
+        sink.doWrite(
+          batch.map((p) => p.verdict),
+          { signal },
+        ),
+        signal,
       );
     } catch (err) {
       if (VetError.isInstance(err) && err.code === CEV_ERROR_CODES.SINK_PAYLOAD_TOO_LARGE) {
