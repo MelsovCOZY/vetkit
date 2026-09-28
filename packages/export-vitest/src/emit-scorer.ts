@@ -74,6 +74,7 @@ export function emitScorer(
     .replaceAll('{{wordingHash}}', criterion.wordingHash)
     .replaceAll('{{status}}', status)
     .replaceAll('{{threshold}}', String(threshold))
+    .replaceAll('{{tolerance}}', String(lock?.tolerance ?? 0))
     .replaceAll('{{vetkitPackage}}', vetkitPackage)
     .replaceAll('{{criterionJson}}', JSON.stringify(judgeOneCriterion, null, 2));
 
