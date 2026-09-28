@@ -17,7 +17,8 @@ import { fitThreshold, type CalibrationLabel } from './calibrate.ts';
 
 /** Below this many sample cases (or joined labels) a check is skipped. */
 const MIN_SAMPLES = 10;
-const MIN_MASTER_KEY_REPEATS = 3;
+/** Judge repeats per master-key input, at least; the input count depends on the pack. */
+export const MASTER_KEY_MIN_REPEATS = 3;
 const DEFAULT_MAX_DELTA = 0.15;
 const DEFAULT_TRIALS = 200;
 const PERMUTATION_PERCENTILE = 0.95;
@@ -354,7 +355,7 @@ export async function gauntletMasterKey(
     return { id, case: withState(c, id, `${before}${firstSentence(turn)}${after}`) };
   });
   const inputs = [...fixed, ...truncations];
-  const repeats = Math.max(MIN_MASTER_KEY_REPEATS, options.repeats ?? MIN_MASTER_KEY_REPEATS);
+  const repeats = Math.max(MASTER_KEY_MIN_REPEATS, options.repeats ?? MASTER_KEY_MIN_REPEATS);
   const byCase = await judgeAll(
     criterion,
     inputs.map((i) => i.case),

@@ -9,7 +9,8 @@ import { clusteredSE, clusterKeys } from './clusters.ts';
 /** Held-out floor per class (eval-quality brief §5.2 item 3, vetkit choice §5.3). */
 const CLASS_FLOOR = 30;
 const MIN_LABELS = 100;
-const MIN_REPEATS = 3;
+/** Judge repeats per labelled case that J3 calibration needs (fewer marks the criterion). */
+export const CALIBRATION_MIN_REPEATS = 3;
 /** Per-language Cohen κ floor (vetkit choice, brief §5.3). */
 const KAPPA_FLOOR = 0.6;
 /** The API rounds probabilities to 2 decimals, so no tolerance can be finer than this. */
@@ -406,7 +407,7 @@ export function calibrate(
   for (const { caseId, label } of labels) {
     if (label === 'unknown') continue;
     const vs = values.get(caseId) ?? [];
-    if (vs.length < MIN_REPEATS) tooFewRepeats = true;
+    if (vs.length < CALIBRATION_MIN_REPEATS) tooFewRepeats = true;
     if (vs.length === 0) continue;
     known.push({
       caseId,

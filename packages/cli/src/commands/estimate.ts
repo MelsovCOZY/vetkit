@@ -3,9 +3,9 @@
 // The price row comes from the judge adapter's preset table for the resolved transport; a
 // transport with no row (custom baseURL, in-process adapter) prints cost 'unknown'.
 //
-// --for validate: calibrate's repeat count and the gauntlet pack sizes are not exported
-// constants (gauntlets take their packs as inputs), so those parts print 'unknown' rather
-// than a guess (bead AC).
+// --for validate: calibration uses core's exported CALIBRATION_MIN_REPEATS (the estimateValidate
+// default). The gauntlet pack sizes depend on their input packs (paddings, injections,
+// constants), so those parts print 'unknown' rather than a guess (bead AC).
 import { resolve } from 'node:path';
 import {
   estimateRun,
