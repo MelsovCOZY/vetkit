@@ -1,0 +1,143 @@
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { VetError } from '@vetkit/spec';
+import { describe, expect, test } from 'vitest';
+import { loadVetConfig } from './config-load.ts';
+
+const ADAPTER_CONFIG = `export default {
+  judge: {
+    specVersion: 'v1',
+    id: 'inline-judge',
+    capabilities: {
+      questionTypes: ['boolean', 'choice', 'score'],
+      maxStateTokens: 1000,
+      pinned: true,
+      transport: 'inline',
+      model: 'inline-model',
+    },
+    async doJudge() {
+      throw new Error('not called');
+    },
+  },
+  thresholds: { default: 0.7 },
+};
+`;
+
+function descriptorConfig(judge: Record<string, unknown>): string {
+  return `export default { judge: ${JSON.stringify(judge)} };\n`;
+}
+
+async function project(files: Record<string, string>): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), 'vetkit-config-load-'));
+  for (const [name, body] of Object.entries(files)) {
+    const target = join(root, name);
+    await mkdir(join(target, '..'), { recursive: true });
+    await writeFile(target, body);
+  }
+  return root;
+}
+
+async function rejection(promise: Promise<unknown>): Promise<unknown> {
+  try {
+    await promise;
+  } catch (error) {
+    return error;
+  }
+  throw new Error('expected loadVetConfig to reject');
+}
+
+describe('loadVetConfig', () => {
+  test('finds vetkit.config.ts in cwd and passes an adapter judge through unchanged', async () => {
+    const cwd = await project({ 'vetkit.config.ts': ADAPTER_CONFIG });
+    const loaded = await loadVetConfig({ cwd });
+    expect(loaded.judge.id).toBe('inline-judge');
+    expect(typeof loaded.judge.doJudge).toBe('function');
+    expect(loaded.config.thresholds.default).toBe(0.7);
+    expect(loaded.configFile).toBe(join(cwd, 'vetkit.config.ts'));
+    expect(loaded.rootDir).toBe(cwd);
+  });
+
+  test('loads an explicit configPath relative to cwd, rooted at its directory', async () => {
+    const cwd = await project({ 'sub/custom.config.ts': ADAPTER_CONFIG });
+    const loaded = await loadVetConfig({ cwd, configPath: 'sub/custom.config.ts' });
+    expect(loaded.judge.id).toBe('inline-judge');
+    expect(loaded.rootDir).toBe(join(cwd, 'sub'));
+  });
+
+  test('returns resolveConfig warnings (placeholder threshold)', async () => {
+    const cwd = await project({
+      'vetkit.config.ts': ADAPTER_CONFIG.replace('thresholds: { default: 0.7 },', ''),
+    });
+    const loaded = await loadVetConfig({ cwd });
+    expect(loaded.warnings.some((w) => w.includes('thresholds.default'))).toBe(true);
+  });
+
+  test('builds a Jev judge from a typesafe-compatible preset descriptor, key read from env', async () => {
+    const cwd = await project({
+      'vetkit.config.ts': descriptorConfig({
+        kind: 'typesafe-compatible',
+        preset: 'vercel',
+        apiKeyEnv: 'FIXTURE_JUDGE_KEY',
+      }),
+    });
+    const loaded = await loadVetConfig({ cwd, env: { FIXTURE_JUDGE_KEY: 'k-123' } });
+    expect(loaded.judge.specVersion).toBe('v1');
+    expect(loaded.judge.capabilities.transport).toBe('vercel');
+    expect(typeof loaded.judge.doJudge).toBe('function');
+  });
+
+  test('builds a custom-baseURL Jev judge with the configured model', async () => {
+    const cwd = await project({
+      'vetkit.config.ts': descriptorConfig({
+        kind: 'typesafe-compatible',
+        baseURL: 'https://judge.example.test',
+        model: 'custom/jev',
+        apiKeyEnv: 'FIXTURE_JUDGE_KEY',
+      }),
+    });
+    const loaded = await loadVetConfig({ cwd, env: { FIXTURE_JUDGE_KEY: 'k-123' } });
+    expect(loaded.judge.capabilities.model).toBe('custom/jev');
+  });
+
+  test('an unset apiKeyEnv is CONFIG_INVALID naming the variable, never a value', async () => {
+    const cwd = await project({
+      'vetkit.config.ts': descriptorConfig({
+        kind: 'typesafe-compatible',
+        preset: 'vercel',
+        apiKeyEnv: 'FIXTURE_UNSET_KEY',
+      }),
+    });
+    const error = await rejection(loadVetConfig({ cwd, env: {} }));
+    expect(VetError.isInstance(error) && error.code).toBe('CONFIG_INVALID');
+    expect(error instanceof Error && error.message).toContain('FIXTURE_UNSET_KEY');
+  });
+
+  test('an unknown descriptor kind is CONFIG_INVALID naming the kind', async () => {
+    const cwd = await project({
+      'vetkit.config.ts': descriptorConfig({
+        kind: 'mystery',
+        baseURL: 'https://judge.example.test',
+        model: 'm',
+        apiKeyEnv: 'FIXTURE_JUDGE_KEY',
+      }),
+    });
+    const error = await rejection(loadVetConfig({ cwd, env: { FIXTURE_JUDGE_KEY: 'k' } }));
+    expect(VetError.isInstance(error) && error.code).toBe('CONFIG_INVALID');
+    expect(error instanceof Error && error.message).toContain('mystery');
+  });
+
+  test('a missing config is CONFIG_INVALID naming the searched paths', async () => {
+    const cwd = await project({});
+    const error = await rejection(loadVetConfig({ cwd }));
+    expect(VetError.isInstance(error) && error.code).toBe('CONFIG_INVALID');
+    expect(error instanceof Error && error.message).toContain(join(cwd, 'vetkit.config'));
+  });
+
+  test('a missing explicit configPath is CONFIG_INVALID naming that path', async () => {
+    const cwd = await project({});
+    const error = await rejection(loadVetConfig({ cwd, configPath: 'nope.config.ts' }));
+    expect(VetError.isInstance(error) && error.code).toBe('CONFIG_INVALID');
+    expect(error instanceof Error && error.message).toContain(join(cwd, 'nope.config.ts'));
+  });
+});

@@ -50,6 +50,12 @@ describe('vet bin', () => {
     expect(result.stdout).toMatch(/^\s+label\b/m);
   });
 
+  test('--help lists the run command', () => {
+    const result = runBin(['--help']);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toMatch(/^\s+run\b/m);
+  });
+
   test('label --tty with a closed stdin exits 2 with NOT_INTERACTIVE on stderr', () => {
     const result = runBin(['label', '--tty'], ['ignore', 'pipe', 'pipe']);
     expect(result.status).toBe(2);

@@ -1,0 +1,9 @@
+criteria:
+  - id: tone
+    type: boolean
+    instructions: Is the reply polite?
+    escape: The reply has no discernible tone.
+    polarity: pass_when_true
+    channel: quality
+    provenance:
+      traceIds: []
