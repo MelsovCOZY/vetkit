@@ -198,20 +198,49 @@ describe('genAiDialect.extractMessages: tool_call parts round-trip', () => {
   });
 });
 
-describe('genAiDialect.extractMessages: unmapped part kind downgrades to text', () => {
-  // The repo's Message schema (packages/spec/schemas/trace.schema.json $defs.MessagePart) has
-  // only text | tool_call | tool_call_response | parse_error — no 'reasoning' variant, unlike
-  // the upstream semconv draft. A reasoning part is carried as text rather than dropped or
-  // thrown on. See BUILD report Deviations.
-  test('a reasoning part is mapped to a text part, content preserved', () => {
+describe('genAiDialect.extractMessages: reasoning parts are dropped (root DECISION)', () => {
+  // Root DECISION: the trace IR MessagePart set is text{content} / tool_call /
+  // tool_call_response{id?,response} / parse_error{detail}; reasoning parts are DROPPED, not
+  // downgraded to text.
+  test('a reasoning part is dropped, sibling parts in the same message survive', () => {
+    const s = span({
+      'gen_ai.output.messages': JSON.stringify([
+        {
+          role: 'assistant',
+          parts: [
+            { type: 'reasoning', content: 'thinking it through' },
+            { type: 'text', content: 'final answer' },
+          ],
+        },
+      ]),
+    });
+
+    expect(genAiDialect.extractMessages(s, tree)).toEqual([
+      { role: 'assistant', parts: [{ type: 'text', content: 'final answer' }] },
+    ]);
+  });
+
+  test('a message containing only a reasoning part yields no message at all', () => {
     const s = span({
       'gen_ai.output.messages': JSON.stringify([
         { role: 'assistant', parts: [{ type: 'reasoning', content: 'thinking it through' }] },
       ]),
     });
 
+    expect(genAiDialect.extractMessages(s, tree)).toEqual([]);
+  });
+});
+
+describe('genAiDialect.extractMessages: other unmapped part kinds still downgrade to text', () => {
+  test('a non-reasoning unknown part kind is still mapped to a text part', () => {
+    const s = span({
+      'gen_ai.output.messages': JSON.stringify([
+        { role: 'assistant', parts: [{ type: 'audio', content: 'transcribed audio' }] },
+      ]),
+    });
+
     expect(genAiDialect.extractMessages(s, tree)).toEqual([
-      { role: 'assistant', parts: [{ type: 'text', content: 'thinking it through' }] },
+      { role: 'assistant', parts: [{ type: 'text', content: 'transcribed audio' }] },
     ]);
   });
 });
