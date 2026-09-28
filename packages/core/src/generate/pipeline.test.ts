@@ -1,5 +1,6 @@
-// Tests for the J2 generation pipeline and its two steps (case extraction, Jev dedupe).
-// All three live here because this bead's owned paths name only pipeline.test.ts.
+// Tests for generateEvals (the J2 pipeline: failure modes → criteria → Jev dedupe → lint →
+// cases). extractCases and dedupeCriteria have their own test files (cases.test.ts,
+// dedupe.test.ts).
 import { mkdtemp, readdir, rm, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,14 +11,11 @@ import {
   type GeneratorV1,
   type JudgeV1,
   type NormalizedTrace,
-  type Question,
   type SourceV1,
 } from '@vetkit/spec';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { loadCases, MAX_STATE_TOKENS } from '../cases/load.ts';
-import { computeWordingHash, loadCriteria } from '../criteria/load.ts';
-import { extractCases } from './cases.ts';
-import { dedupeCriteria } from './dedupe.ts';
+import { loadCases } from '../cases/load.ts';
+import { loadCriteria } from '../criteria/load.ts';
 import { generateEvals } from './pipeline.ts';
 
 type DoGenerate = GeneratorV1['doGenerate'];
@@ -46,26 +44,6 @@ const uncaptured = (id: string): NormalizedTrace =>
     messages: [],
     completeness: { contentCaptured: false, truncated: false, missingParents: false },
   });
-
-interface CandidateExtra {
-  readonly channel?: Criterion['channel'];
-  readonly provenance?: Criterion['provenance'];
-}
-
-function candidate(id: string, instructions: string, extra: CandidateExtra = {}): Criterion {
-  const escape = 'The response is missing or empty.';
-  return {
-    id,
-    type: 'boolean',
-    instructions,
-    escape,
-    polarity: 'pass_when_false',
-    channel: 'quality',
-    provenance: { traceIds: [`${id}-trace`], generator: 'acme/model-1#hash' },
-    wordingHash: computeWordingHash({ type: 'boolean', instructions, escape }),
-    ...extra,
-  };
-}
 
 const DISSIMILAR = [
   'Does the response use sarcasm toward the user?',
@@ -117,227 +95,6 @@ function fakeJudge(probability = 0.9, pick: 'first' | 'none' = 'first'): FakeJud
   };
   return { judge, doJudge };
 }
-
-function choiceQuestions(
-  req: JudgeRequest | undefined,
-): Array<Extract<Question, { type: 'choice' }>> {
-  return Object.values(req?.questions ?? {}).filter(
-    (q): q is Extract<Question, { type: 'choice' }> => q.type === 'choice',
-  );
-}
-
-// ---------------------------------------------------------------- extractCases
-
-describe('extractCases', () => {
-  test('renders a trace as role: content lines and sets the final assistant answer', () => {
-    const { cases } = extractCases({ traces: [trace('t1')], criteria: [] });
-
-    expect(cases).toHaveLength(1);
-    const c = cases[0];
-    expect(c?.input.state).toBe(
-      [
-        'system: You are a support agent.',
-        'user: Where is order t1?',
-        'assistant: Order t1 ships today.',
-      ].join('\n'),
-    );
-    expect(c?.input.answer).toBe('Order t1 ships today.');
-    expect(c?.traceId).toBe('t1');
-    expect(c?.provenance).toEqual({ traceIds: ['t1'] });
-    expect(c?.tags).not.toContain('truncated');
-  });
-
-  test('inlines tool calls and tool responses as JSON', () => {
-    const t = trace('t2', {
-      messages: [
-        { role: 'user', parts: [{ type: 'text', content: 'Status of A1?' }] },
-        {
-          role: 'assistant',
-          parts: [
-            { type: 'tool_call', id: 'c1', name: 'lookup_order', arguments: { orderId: 'A1' } },
-          ],
-        },
-        {
-          role: 'tool',
-          parts: [{ type: 'tool_call_response', id: 'c1', response: { status: 'shipped' } }],
-        },
-        { role: 'assistant', parts: [{ type: 'text', content: 'A1 has shipped.' }] },
-      ],
-    });
-
-    const state = extractCases({ traces: [t], criteria: [] }).cases[0]?.input.state ?? '';
-
-    expect(state).toContain('assistant: {');
-    expect(state).toContain('"lookup_order"');
-    expect(state).toContain('"orderId":"A1"');
-    expect(state).toContain('tool: {');
-    expect(state).toContain('"status":"shipped"');
-    expect(state.endsWith('assistant: A1 has shipped.')).toBe(true);
-  });
-
-  test('is deterministic: same trace gives the same id and state; ids are sha256 hex per trace', () => {
-    const a = extractCases({ traces: [trace('t1'), trace('t2')], criteria: [] }).cases;
-    const b = extractCases({ traces: [trace('t1'), trace('t2')], criteria: [] }).cases;
-
-    expect(a).toEqual(b);
-    expect(a[0]?.id).toMatch(/^[0-9a-f]{64}$/);
-    expect(a[0]?.id).not.toBe(a[1]?.id);
-  });
-
-  test('skips a trace whose content was not captured, reporting not_applicable', () => {
-    const { cases, traces } = extractCases({
-      traces: [uncaptured('t-none'), trace('t1')],
-      criteria: [],
-    });
-
-    expect(cases.map((c) => c.traceId)).toEqual(['t1']);
-    expect(traces).toContainEqual(
-      expect.objectContaining({ traceId: 't-none', status: 'not_applicable' }),
-    );
-    expect(traces).toContainEqual(expect.objectContaining({ traceId: 't1', status: 'ok' }));
-  });
-
-  test('a trace with only system messages is not_applicable', () => {
-    const t = trace('t-sys', {
-      messages: [{ role: 'system', parts: [{ type: 'text', content: 'You are helpful.' }] }],
-    });
-
-    const { cases, traces } = extractCases({ traces: [t], criteria: [] });
-
-    expect(cases).toHaveLength(0);
-    expect(traces).toContainEqual(
-      expect.objectContaining({ traceId: 't-sys', status: 'not_applicable' }),
-    );
-  });
-
-  test('caps state at MAX_STATE_TOKENS (chars/4), keeps the end, and flags truncated', () => {
-    const t = trace('t-big', {
-      messages: [
-        {
-          role: 'user',
-          parts: [{ type: 'text', content: 'x'.repeat(MAX_STATE_TOKENS * 4 + 5000) }],
-        },
-        { role: 'assistant', parts: [{ type: 'text', content: 'Final answer.' }] },
-      ],
-    });
-
-    const { cases, traces } = extractCases({ traces: [t], criteria: [] });
-
-    const c = cases[0];
-    expect(Math.ceil((c?.input.state.length ?? Infinity) / 4)).toBeLessThanOrEqual(
-      MAX_STATE_TOKENS,
-    );
-    expect(c?.input.state.endsWith('assistant: Final answer.')).toBe(true);
-    expect(c?.tags).toContain('truncated');
-    expect(c?.input.answer).toBe('Final answer.');
-    expect(traces).toContainEqual(
-      expect.objectContaining({ traceId: 't-big', status: 'truncated' }),
-    );
-  });
-
-  test('never writes expected on any generated case', () => {
-    const noAnswer = trace('t-q', {
-      messages: [{ role: 'user', parts: [{ type: 'text', content: 'Hello?' }] }],
-    });
-    const { cases } = extractCases({ traces: [trace('t1'), noAnswer], criteria: [] });
-
-    expect(cases).toHaveLength(2);
-    for (const c of cases) expect(c).not.toHaveProperty('expected');
-    expect(cases[1]).not.toHaveProperty('input.answer');
-  });
-});
-
-// ---------------------------------------------------------------- dedupeCriteria
-
-describe('dedupeCriteria', () => {
-  test('5 dissimilar candidates: zero Jev calls, all kept', async () => {
-    const { judge, doJudge } = fakeJudge();
-    const candidates = DISSIMILAR.map((text, i) => candidate(`c${i}`, text));
-
-    const result = await dedupeCriteria({ judge, candidates });
-
-    expect(doJudge).not.toHaveBeenCalled();
-    expect(result.kept.map((c) => c.id)).toEqual(candidates.map((c) => c.id));
-    expect(result.duplicates).toEqual([]);
-  });
-
-  test('one near-duplicate pair among 5: one call with only that pair and a none escape; duplicate merged', async () => {
-    const { judge, doJudge } = fakeJudge(0.9);
-    const candidates = [
-      candidate('refund', REFUND, { provenance: { traceIds: ['t1', 't2'] } }),
-      ...DISSIMILAR.slice(0, 3).map((text, i) => candidate(`c${i}`, text)),
-      candidate('refund-2', REFUND_DUP, { provenance: { traceIds: ['t2', 't3'] } }),
-    ];
-
-    const result = await dedupeCriteria({ judge, candidates });
-
-    expect(doJudge).toHaveBeenCalledTimes(1);
-    const req = doJudge.mock.calls[0]?.[0];
-    expect(req?.state).toContain(REFUND);
-    expect(req?.state).toContain(REFUND_DUP);
-    for (const text of DISSIMILAR.slice(0, 3)) expect(req?.state).not.toContain(text);
-    const questions = choiceQuestions(req);
-    expect(questions).toHaveLength(1);
-    expect(Object.keys(questions[0]?.criteria ?? {})).toContain('none');
-    expect(Object.keys(questions[0]?.criteria ?? {})).toContain('refund');
-
-    expect(result.kept.map((c) => c.id)).toEqual(['refund', 'c0', 'c1', 'c2']);
-    expect(result.duplicates).toEqual([
-      expect.objectContaining({ id: 'refund-2', duplicateOf: 'refund' }),
-    ]);
-    const refund = result.kept.find((c) => c.id === 'refund');
-    expect(refund?.provenance.traceIds).toEqual(['t1', 't2', 't3']);
-  });
-
-  test('a duplicate judged below probability 0.8 is kept', async () => {
-    const { judge } = fakeJudge(0.7);
-    const candidates = [candidate('refund', REFUND), candidate('refund-2', REFUND_DUP)];
-
-    const result = await dedupeCriteria({ judge, candidates });
-
-    expect(result.kept.map((c) => c.id)).toEqual(['refund', 'refund-2']);
-    expect(result.duplicates).toEqual([]);
-  });
-
-  test('Jev choosing the none escape keeps both', async () => {
-    const { judge, doJudge } = fakeJudge(0.95, 'none');
-    const candidates = [candidate('refund', REFUND), candidate('refund-2', REFUND_DUP)];
-
-    const result = await dedupeCriteria({ judge, candidates });
-
-    expect(doJudge).toHaveBeenCalledTimes(1);
-    expect(result.kept).toHaveLength(2);
-  });
-
-  test('identical wording in different channels is never sent to Jev', async () => {
-    const { judge, doJudge } = fakeJudge();
-    const candidates = [
-      candidate('a', REFUND, { channel: 'outcome' }),
-      candidate('b', REFUND, { channel: 'quality' }),
-    ];
-
-    const result = await dedupeCriteria({ judge, candidates });
-
-    expect(doJudge).not.toHaveBeenCalled();
-    expect(result.kept).toHaveLength(2);
-  });
-
-  test('a large similar group is batched: at most one call per 50 candidates, ≤50 options each', async () => {
-    const { judge, doJudge } = fakeJudge(0.9, 'none');
-    const candidates = Array.from({ length: 60 }, (_, i) => candidate(`r${i}`, `${REFUND} (${i})`));
-
-    await dedupeCriteria({ judge, candidates });
-
-    expect(doJudge.mock.calls.length).toBeGreaterThan(0);
-    expect(doJudge.mock.calls.length).toBeLessThanOrEqual(Math.ceil(60 / 50));
-    for (const [req] of doJudge.mock.calls) {
-      for (const q of choiceQuestions(req)) {
-        expect(Object.keys(q.criteria).length).toBeLessThanOrEqual(50);
-        expect(Object.keys(q.criteria)).toContain('none');
-      }
-    }
-  });
-});
 
 // ---------------------------------------------------------------- generateEvals
 
