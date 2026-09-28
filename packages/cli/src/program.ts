@@ -6,6 +6,7 @@ import { registerInit } from './commands/init.ts';
 import { registerLabel } from './commands/label.ts';
 import { registerRun } from './commands/run.ts';
 import { registerRunSinks } from './commands/run-sinks.ts';
+import { registerValidate } from './commands/validate.ts';
 import { handleError } from './errors.ts';
 import { CEV_EXIT, configureOutput, type GlobalOptions } from './output.ts';
 
@@ -59,6 +60,7 @@ export function createProgram(): Command {
   registerLabel(program);
   registerRun(program);
   registerRunSinks(program);
+  registerValidate(program);
   registerEstimate(program);
   registerInit(program);
   return program;

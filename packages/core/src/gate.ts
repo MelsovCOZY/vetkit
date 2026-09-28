@@ -3,6 +3,7 @@
 // unscored, 2 the gate refuses (no lock, uncalibrated gated criterion, unpinned transport),
 // 130 aborted. Verdicts with gated:false (score criteria, uncalibrated languages) never count.
 import type { Lock, Verdict } from '@vetkit/spec';
+import { LOCK_FILE, lockEntryGateable } from './validate/lock.ts';
 
 export interface GatePolicy {
   /** Minimum pass rate (0..1) over counted verdicts; absent means every one must pass. */
@@ -49,7 +50,9 @@ export function evaluateGate(input: EvaluateGateInput): GateResult {
   if (lock === null) {
     return {
       exitCode: 2,
-      reasons: ['no lock file: the gate refuses to run on uncalibrated thresholds'],
+      reasons: [
+        `no lock file: ${LOCK_FILE} not found; the gate refuses to run on uncalibrated thresholds (run \`vet validate\`)`,
+      ],
     };
   }
 
@@ -67,8 +70,8 @@ export function evaluateGate(input: EvaluateGateInput): GateResult {
       input.verdicts.filter((v) => v.gated !== false).map((v) => v.criterionId),
     );
     for (const id of gated) {
-      if (lock.criteria[id]?.status !== 'calibrated') {
-        reasons.push(`criterion '${id}' is not calibrated in the lock`);
+      if (!lockEntryGateable(lock.criteria[id], policy.allowUnpinned)) {
+        reasons.push(`criterion '${id}' is not calibrated in ${LOCK_FILE}`);
       }
     }
   }

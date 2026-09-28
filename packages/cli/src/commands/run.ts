@@ -5,6 +5,8 @@
 import { resolve } from 'node:path';
 import {
   createEvents,
+  LOCK_FILE,
+  readLockOrNull,
   runEvals,
   type ResolvedConfig,
   type RunEvalsResult,
@@ -21,6 +23,7 @@ interface RunOptions extends GlobalOptions {
   readonly criteria?: string;
   readonly cases?: string;
   readonly gate?: boolean;
+  readonly ci?: boolean;
   readonly allowUnpinned?: boolean;
   readonly reporter?: ReporterSpec;
 }
@@ -73,6 +76,8 @@ async function runCommand(options: RunOptions & Readonly<Record<string, unknown>
   });
   for (const warning of loaded.warnings) log.warn(warning);
   const { config, rootDir } = loaded;
+  // Missing lock → null (the gate then refuses); an invalid one throws (exit 2). q4q.11.
+  const lock = await readLockOrNull(resolve(rootDir, LOCK_FILE));
   const finishes: RunHookFinish[] = [];
   for (const hook of runHooks) {
     const finish = await hook({ options, config, rootDir });
@@ -99,12 +104,14 @@ async function runCommand(options: RunOptions & Readonly<Record<string, unknown>
         judge: loaded.judge,
         threshold: config.thresholds.default,
         gate: options.gate === true,
+        ci: options.ci === true,
         gatePolicy: {
           ...config.gate,
           allowUnpinned: options.allowUnpinned === true || config.gate.allowUnpinned,
         },
         cacheDir: resolve(rootDir, config.cacheDir),
       },
+      lock,
       signal: controller.signal,
       events,
     });
@@ -138,7 +145,8 @@ export function registerRun(program: Command): Command {
       )
       .option('--cases <dir>', 'cases directory (default: evals/cases next to the config)')
       .option('--gate', 'gate on calibrated thresholds from the lock; refuses (exit 2) without one')
-      .option('--allow-unpinned', 'let --gate pass on an unpinned judge transport'),
+      .option('--ci', 'CI gating: refuse (exit 2) a lock written against an unpinned transport')
+      .option('--allow-unpinned', 'let --gate and --ci pass on an unpinned judge transport'),
   ).action(async (_options: unknown, command: Command) => {
     await runCommand(command.optsWithGlobals<RunOptions & Readonly<Record<string, unknown>>>());
   });

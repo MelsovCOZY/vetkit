@@ -211,3 +211,25 @@ export {
   FAILURE_MODES_SCHEMA,
   promptHash,
 } from './generate/prompts.ts';
+
+export {
+  assertLockGates,
+  buildLock,
+  checkLock,
+  datasetHash,
+  LOCK_FILE,
+  lockEntryGateable,
+  readLock,
+  readLockOrNull,
+  writeLockAtomic,
+} from './validate/lock.ts';
+export type {
+  CheckLockCurrent,
+  LockCriterionInput,
+  LockGateFlags,
+  LockGateResult,
+  LockInputs,
+  StaleReason,
+  StaleReport,
+  WriteLockOptions,
+} from './validate/lock.ts';
