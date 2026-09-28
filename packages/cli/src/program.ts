@@ -2,6 +2,7 @@ import { createRequire } from 'node:module';
 import { Command, CommanderError } from 'commander';
 import { registerDoctor } from './commands/doctor.ts';
 import { registerLabel } from './commands/label.ts';
+import { registerRun } from './commands/run.ts';
 import { handleError } from './errors.ts';
 import { CEV_EXIT, configureOutput, type GlobalOptions } from './output.ts';
 
@@ -53,6 +54,7 @@ export function createProgram(): Command {
   });
   registerDoctor(program);
   registerLabel(program);
+  registerRun(program);
   return program;
 }
 
@@ -81,7 +83,11 @@ async function execute(program: Command, argv: readonly string[]): Promise<void>
 }
 
 export function run(argv: readonly string[], program: Command = createProgram()): void {
-  process.once('SIGINT', () => exitNow(CEV_EXIT.SIGINT));
+  // A command that handles SIGINT itself (`vet run` aborts and prints partial results)
+  // registers its own listener; this default exit applies only when none is present.
+  process.once('SIGINT', () => {
+    if (process.listenerCount('SIGINT') === 0) exitNow(CEV_EXIT.SIGINT);
+  });
   // `vet … | head` closes stdout early; that is not an error.
   process.stdout.on('error', (err: NodeJS.ErrnoException) => {
     if (err.code === 'EPIPE') exitNow(CEV_EXIT.OK);
