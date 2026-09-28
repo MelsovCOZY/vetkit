@@ -108,7 +108,11 @@ describe('root package.json', () => {
   });
 });
 
-const EXPECTED_PACKAGE_NAMES = [
+// The original J0 contract packages: a floor, not a ceiling (docs/contracts/j0.md — this test
+// globs packages/*/package.json, it does not hard-code the package list). Later beads add more
+// packages under packages/*; each new one is picked up by the dynamic describe.each below
+// without another edit here.
+const MIN_PACKAGE_NAMES = [
   'spec',
   'core',
   'cli',
@@ -122,11 +126,12 @@ const EXPECTED_PACKAGE_NAMES = [
   'export-vitest',
 ];
 
-it('creates all eleven contract packages', () => {
-  expect([...packageNames].sort()).toEqual([...EXPECTED_PACKAGE_NAMES].sort());
+it('creates at least the eleven original contract packages (open-world: later beads add more)', () => {
+  expect(packageNames).toEqual(expect.arrayContaining(MIN_PACKAGE_NAMES));
+  expect(packageNames.length).toBeGreaterThanOrEqual(MIN_PACKAGE_NAMES.length);
 });
 
-describe.each(packageNames.length ? packageNames : EXPECTED_PACKAGE_NAMES)('packages/%s/package.json', (dir) => {
+describe.each(packageNames.length ? packageNames : MIN_PACKAGE_NAMES)('packages/%s/package.json', (dir) => {
   const pkg = loadPkg(dir);
 
   it('has name @vetkit/<dir> (cli is named "vetkit")', () => {
@@ -249,6 +254,13 @@ describe('dependency budget', () => {
     for (const dir of packageNames.filter((d) => /^(source|sink|judge|generator|export)-/.test(d))) {
       expect(externalPeers(loadPkg(dir)).length).toBeLessThanOrEqual(1);
     }
+  });
+
+  it('packages/scorers takes no external runtime dependencies and vitest as an optional peer', () => {
+    const pkg = loadPkg('scorers');
+    expect(externalDeps(pkg)).toEqual([]);
+    expect(externalPeers(pkg)).toEqual(['vitest']);
+    expect(pkg?.peerDependenciesMeta?.vitest?.optional).toBe(true);
   });
 });
 

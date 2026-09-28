@@ -1,0 +1,37 @@
+{
+  "name": "@vetkit/scorers",
+  "version": "0.0.0",
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22.12"
+  },
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@vetkit/core": "workspace:^",
+    "@vetkit/spec": "workspace:^"
+  },
+  "peerDependencies": {
+    "vitest": "^5.0.2"
+  },
+  "peerDependenciesMeta": {
+    "vitest": {
+      "optional": true
+    }
+  },
+  "scripts": {
+    "build": "tsdown"
+  }
+}
