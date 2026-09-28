@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { VetError } from '@vetkit/spec';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { loadVetConfig } from './config-load.ts';
+import { judgeRequestCount } from './diag.ts';
 
 const ADAPTER_CONFIG = `export default {
   judge: {
@@ -195,6 +196,36 @@ describe('loadVetConfig', () => {
     const error = await rejection(loadVetConfig({ cwd, configPath: 'nope.config.ts' }));
     expect(VetError.isInstance(error) && error.code).toBe('CONFIG_INVALID');
     expect(error instanceof Error && error.message).toContain(join(cwd, 'nope.config.ts'));
+  });
+});
+
+const ANSWERING_CONFIG = ADAPTER_CONFIG.replace(
+  "throw new Error('not called');",
+  "return { answers: {}, model: { requested: 'm', resolved: 'm', transport: 'inline', pinned: true } };",
+);
+
+const REQUEST = {
+  state: 's',
+  questions: { q: { type: 'boolean', instructions: 'is it?' } },
+} as const;
+
+describe('loadVetConfig CEV_DIAG judge counter (mol-0nw.24)', () => {
+  test('with CEV_DIAG=1 every doJudge call on the loaded judge is counted', async () => {
+    const cwd = await project({ 'vetkit.config.ts': ANSWERING_CONFIG });
+    const loaded = await loadVetConfig({ cwd, env: { CEV_DIAG: '1' } });
+    const before = judgeRequestCount();
+    await loaded.judge.doJudge(REQUEST);
+    await loaded.judge.doJudge(REQUEST);
+    expect(judgeRequestCount() - before).toBe(2);
+    expect(loaded.judge.id).toBe('inline-judge');
+  });
+
+  test('without CEV_DIAG the judge is not wrapped and nothing is counted', async () => {
+    const cwd = await project({ 'vetkit.config.ts': ANSWERING_CONFIG });
+    const loaded = await loadVetConfig({ cwd, env: {} });
+    const before = judgeRequestCount();
+    await loaded.judge.doJudge(REQUEST);
+    expect(judgeRequestCount()).toBe(before);
   });
 });
 
