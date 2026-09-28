@@ -477,6 +477,29 @@ function preJudgeRefusal(
   return checked.ok ? undefined : `${checked.code}: ${checked.message}`;
 }
 
+function disabledVerdicts(
+  cases: readonly Case[],
+  disabled: readonly Criterion[],
+  judge: JudgeV1,
+): RunVerdict[] {
+  const { model, transport, pinned } = judge.capabilities;
+  return cases.flatMap((evalCase) =>
+    disabled.map((criterion) => {
+      const provenance = verdictProvenance(evalCase);
+      return {
+        caseId: evalCase.id,
+        criterionId: criterion.id,
+        status: 'not_applicable' as const,
+        cause: 'disabled',
+        model: { requested: model, resolved: '', transport, pinned },
+        cacheHit: false,
+        gated: false,
+        ...(provenance === undefined ? {} : { provenance }),
+      };
+    }),
+  );
+}
+
 export async function runEvals(input: RunEvalsInput): Promise<RunEvalsResult> {
   const { config, signal } = input;
   const events = input.events ?? createEvents();
@@ -495,16 +518,19 @@ export async function runEvals(input: RunEvalsInput): Promise<RunEvalsResult> {
   }
   const { criteria } = loadedCriteria;
   const { cases } = loadedCases;
+  // `enabled: false` (vet criteria disable): never judged, never gated, reported not_applicable.
+  const active = criteria.filter((c) => c.enabled !== false);
+  const disabled = criteria.filter((c) => c.enabled === false);
 
   events.emit('run:start', { cases: cases.length, criteria: criteria.length });
   if (cases.length === 0) events.diag('warn', 'NO_CASES', 'no cases to judge');
-  if (!criteria.some((c) => c.type === 'boolean' || c.type === 'choice')) {
+  if (!active.some((c) => c.type === 'boolean' || c.type === 'choice')) {
     events.diag('warn', 'NO_GATEABLE_CRITERIA', 'no boolean or choice criterion can gate');
   }
 
   // The gate refuses before any judge call (q4q.11): no lock, an unpinned lock under --ci, or a
   // referenced boolean/choice criterion that is not gateable in the lock.
-  const refusal = preJudgeRefusal(config, lock, criteria);
+  const refusal = preJudgeRefusal(config, lock, active);
   if (refusal !== undefined) {
     events.emit('run:end', {
       cases: cases.length,
@@ -521,9 +547,9 @@ export async function runEvals(input: RunEvalsInput): Promise<RunEvalsResult> {
     };
   }
 
-  const results = await runJudge({
+  const judged = await runJudge({
     cases,
-    criteria,
+    criteria: active,
     judge: config.judge,
     lock,
     events,
@@ -533,6 +559,7 @@ export async function runEvals(input: RunEvalsInput): Promise<RunEvalsResult> {
     ...(signal === undefined ? {} : { signal }),
   });
 
+  const results = [...judged, ...disabledVerdicts(cases, disabled, config.judge)];
   const aborted = signal?.aborted === true;
   const summary = summarise(cases, criteria, results, aborted);
   for (const [criterionId, s] of Object.entries(summary.byCriterion)) {

@@ -18,6 +18,7 @@
     "escapeThreshold": { "type": "number", "minimum": 0, "maximum": 1 },
     "polarity": { "enum": ["pass_when_true", "pass_when_false"] },
     "channel": { "enum": ["outcome", "safety", "quality"] },
+    "enabled": { "type": "boolean" },
     "provenance": {
       "type": "object",
       "properties": {
