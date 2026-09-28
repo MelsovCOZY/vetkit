@@ -11,12 +11,20 @@ export function promptHash(template: string): string {
   return createHash('sha256').update(template).digest('hex');
 }
 
+/** The failure-mode step asks for, and tops up towards, at least this many modes. */
+export const MIN_FAILURE_MODES = 6;
+
 export const FAILURE_MODES_PROMPT: string = `You are doing error analysis on traces from an LLM application.
 You get a sample of traces. Each starts with "### trace <id>" and shows the end of the conversation.
+The sample may start with a list of failure modes already found; do not repeat those.
 
 Name the distinct ways the application fails in these traces.
+Read every trace in turn. Aim for at least ${MIN_FAILURE_MODES} distinct failure modes: look at task outcome
+(wrong, incomplete or unhelpful answers), safety (harm, policy, privacy) and quality (tone, format,
+clarity, length), and include minor problems as well as severe ones.
 Rules:
 - One failure mode per distinct problem. Do not merge unrelated problems into one.
+- A failure mode seen in only one trace still counts.
 - name: short kebab-case, unique across your answer.
 - description: one or two plain sentences saying what goes wrong, observable from the trace.
 - exampleTraceIds: ids of traces in the sample that show this failure. Use only ids shown.
@@ -55,11 +63,26 @@ Rules:
 - escape: the escape option, a sentence the judge picks when the evidence is missing or the question does not apply.
 - No counting, arithmetic, math, date comparison or colour codes. Those go to a code grader.
 - No double negatives, and no negated wording where a plain positive question works.
+- Ask whether something is present in the response, never whether it is missing, absent or lacking:
+  write "Does the response cite the policy?", not "Is a citation missing from the response?".
 - No vague words such as "good", "appropriate", "high quality" or "properly".
 - polarity: "pass_when_false" when a yes means the failure happened, "pass_when_true" when a yes means the response is fine.
 - channel: "outcome" (the task got done), "safety" (harm, policy, privacy) or "quality" (tone, style, clarity).
 - checkable: "factual", "math" or "code" when the failure is about factual, arithmetic or code correctness, else "none".
 A linter rejects questions that break these rules:
+${LINT_SUMMARY}`;
+
+export const CRITERIA_REPAIR_PROMPT: string = `You repair yes/no evaluation questions that a linter rejected.
+You get a list of rejected questions. Each names its failure mode, the rejected question and the
+lint rules it broke. For each one write one new question that detects the same failure mode and
+breaks none of the rules below. Keep the escape option. Ask whether something is present, never
+whether it is missing, absent or lacking; flip polarity when you flip the wording.
+Rules for every field are the same as when the question was first written:
+- failureMode: the exact failure-mode name given.
+- instructions: one atomic, literal question about one observable claim.
+- polarity: "pass_when_false" when a yes means the failure happened, "pass_when_true" when a yes means the response is fine.
+- channel: "outcome", "safety" or "quality". checkable: "factual", "math", "code" or "none".
+Lint rules:
 ${LINT_SUMMARY}`;
 
 export const CRITERIA_SCHEMA: JsonSchema = {

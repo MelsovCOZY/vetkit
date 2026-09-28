@@ -1,7 +1,7 @@
 import type { GeneratorV1, NormalizedTrace } from '@vetkit/spec';
 import { describe, expect, test, vi } from 'vitest';
 import { createEvents, type DiagEvent } from '../events.ts';
-import { proposeFailureModes } from './failure-modes.ts';
+import { MIN_FAILURE_MODES, proposeFailureModes } from './failure-modes.ts';
 import { FAILURE_MODES_PROMPT, FAILURE_MODES_SCHEMA } from './prompts.ts';
 
 type DoGenerate = GeneratorV1['doGenerate'];
@@ -45,6 +45,10 @@ function collectDiags(): { events: ReturnType<typeof createEvents>; diags: DiagE
   const diags: DiagEvent[] = [];
   events.on('diag', (d) => diags.push(d));
   return { events, diags };
+}
+
+function mode(name: string, id: string) {
+  return { name, description: `${name} happens.`, exampleTraceIds: [id] };
 }
 
 describe('proposeFailureModes', () => {
@@ -180,5 +184,70 @@ describe('proposeFailureModes', () => {
     const modes = await proposeFailureModes({ generator, traces: traces(6) });
 
     expect(modes).toEqual([{ name: 'a', description: 'd', exampleTraceIds: ['t2'] }]);
+  });
+
+  test('the prompt asks for at least MIN_FAILURE_MODES (>= 5) distinct failure modes', () => {
+    expect(MIN_FAILURE_MODES).toBeGreaterThanOrEqual(5);
+    expect(FAILURE_MODES_PROMPT).toContain(`at least ${MIN_FAILURE_MODES}`);
+  });
+
+  test('too few modes on a 50-trace corpus: one top-up call over unsampled traces', async () => {
+    const replies = [
+      { failureModes: [mode('missing-citation', 't1')] },
+      {
+        failureModes: [
+          mode('missing-citation', 't2'),
+          mode('rude-tone', 't3'),
+          mode('wrong-refund', 't4'),
+          mode('leaks-pii', 't5'),
+          mode('off-topic', 't6'),
+        ],
+      },
+    ];
+    let call = 0;
+    const doGenerate = vi.fn<DoGenerate>(() => {
+      const value = replies[Math.min(call, replies.length - 1)];
+      call += 1;
+      return Promise.resolve({ value, resolvedModelId: 'acme/model-1' });
+    });
+    const generator: GeneratorV1 = {
+      specVersion: 'v1',
+      id: 'fake',
+      capabilities: { structured: 'json_schema', streaming: false },
+      doGenerate,
+    };
+
+    const modes = await proposeFailureModes({ generator, traces: traces(50) });
+
+    expect(doGenerate).toHaveBeenCalledTimes(2);
+    const idsOf = (i: number) =>
+      (doGenerate.mock.calls[i]?.[0].prompt ?? '').match(/^### trace t\d+$/gm) ?? [];
+    expect(idsOf(1).length).toBeGreaterThan(0);
+    const first = new Set(idsOf(0));
+    expect(idsOf(1).some((id) => first.has(id))).toBe(false);
+    expect(doGenerate.mock.calls[1]?.[0].prompt).toContain('missing-citation');
+    expect(doGenerate.mock.calls[1]?.[0].schema?.jsonSchema).toBe(FAILURE_MODES_SCHEMA);
+    expect(modes.map((m) => m.name)).toEqual([
+      'missing-citation',
+      'rude-tone',
+      'wrong-refund',
+      'leaks-pii',
+      'off-topic',
+    ]);
+  });
+
+  test('no top-up call when the first call already yields enough modes', async () => {
+    const { generator, doGenerate } = fakeGenerator({
+      failureModes: Array.from({ length: MIN_FAILURE_MODES }, (_, i) => ({
+        name: `mode-${i}`,
+        description: 'd',
+        exampleTraceIds: [`t${i}`],
+      })),
+    });
+
+    const modes = await proposeFailureModes({ generator, traces: traces(50) });
+
+    expect(doGenerate).toHaveBeenCalledTimes(1);
+    expect(modes).toHaveLength(MIN_FAILURE_MODES);
   });
 });

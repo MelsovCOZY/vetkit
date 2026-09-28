@@ -1,10 +1,17 @@
 import { criterionSchema, type GeneratorV1, validateJson } from '@vetkit/spec';
 import { describe, expect, test, vi } from 'vitest';
 import { computeWordingHash } from '../criteria/load.ts';
-import { LINT_RULES } from '../criteria/lint.ts';
+import { LINT_RULES, lintCriteria } from '../criteria/lint.ts';
+import { createEvents, type DiagEvent } from '../events.ts';
 import { proposeCriteria } from './criteria.ts';
 import type { FailureMode } from './failure-modes.ts';
-import { CRITERIA_PROMPT, CRITERIA_SCHEMA, FAILURE_MODES_PROMPT, promptHash } from './prompts.ts';
+import {
+  CRITERIA_PROMPT,
+  CRITERIA_REPAIR_PROMPT,
+  CRITERIA_SCHEMA,
+  FAILURE_MODES_PROMPT,
+  promptHash,
+} from './prompts.ts';
 
 type DoGenerate = GeneratorV1['doGenerate'];
 
@@ -166,6 +173,98 @@ describe('proposeCriteria', () => {
   });
 });
 
+const citation: FailureMode = {
+  name: 'missing-citation',
+  description: 'The assistant gives a policy answer without citing the policy document.',
+  exampleTraceIds: ['t7'],
+};
+
+const INVERTED = 'Is a citation of the policy document missing from the response?';
+const POSITIVE = 'Does the response cite the policy document?';
+
+/** Answers the first call with `first`, every later call with `later`. */
+function sequenceGenerator(
+  first: unknown,
+  later: unknown,
+): { generator: GeneratorV1; doGenerate: ReturnType<typeof vi.fn<DoGenerate>> } {
+  let calls = 0;
+  const doGenerate = vi.fn<DoGenerate>(() => {
+    const value = calls === 0 ? first : later;
+    calls += 1;
+    return Promise.resolve({ value, resolvedModelId: 'acme/model-1' });
+  });
+  const generator: GeneratorV1 = {
+    specVersion: 'v1',
+    id: 'fake-gen',
+    capabilities: { structured: 'json_schema', streaming: false },
+    doGenerate,
+  };
+  return { generator, doGenerate };
+}
+
+describe('proposeCriteria repair', () => {
+  test('a draft rejected by INVERTED_BOOLEAN is re-drafted once and the repair replaces it', async () => {
+    const { generator, doGenerate } = sequenceGenerator(
+      { criteria: [draft('missing-citation', { instructions: INVERTED })] },
+      {
+        criteria: [
+          draft('missing-citation', { instructions: POSITIVE, polarity: 'pass_when_true' }),
+        ],
+      },
+    );
+
+    const result = await proposeCriteria({ generator, failureModes: [citation] });
+
+    expect(doGenerate).toHaveBeenCalledTimes(2);
+    const req = doGenerate.mock.calls[1]?.[0];
+    expect(req?.system).toBe(CRITERIA_REPAIR_PROMPT);
+    expect(req?.schema?.jsonSchema).toBe(CRITERIA_SCHEMA);
+    expect(req?.prompt).toContain(INVERTED);
+    expect(req?.prompt).toContain('INVERTED_BOOLEAN');
+    expect(result.criteria).toHaveLength(1);
+    expect(result.criteria[0]).toMatchObject({
+      id: 'missing-citation',
+      instructions: POSITIVE,
+      polarity: 'pass_when_true',
+      provenance: { traceIds: ['t7'] },
+    });
+    expect(validateJson(result.criteria[0], criterionSchema).ok).toBe(true);
+    expect(lintCriteria(result.criteria).filter((i) => i.severity === 'error')).toEqual([]);
+    expect(result.repaired).toEqual(['missing-citation']);
+    expect(result.unrepaired).toEqual([]);
+  });
+
+  test('a repair that still fails lint is not retried again and is reported, not hidden', async () => {
+    const inverted = { criteria: [draft('missing-citation', { instructions: INVERTED })] };
+    const { generator, doGenerate } = sequenceGenerator(inverted, inverted);
+    const events = createEvents();
+    const diags: DiagEvent[] = [];
+    events.on('diag', (d) => diags.push(d));
+
+    const result = await proposeCriteria({ generator, failureModes: [citation], events });
+
+    expect(doGenerate).toHaveBeenCalledTimes(2);
+    expect(result.repaired).toEqual([]);
+    expect(result.unrepaired).toEqual(['missing-citation']);
+    expect(result.criteria.map((c) => c.id)).toEqual(['missing-citation']);
+    expect(diags).toContainEqual(
+      expect.objectContaining({ level: 'warn', code: 'CRITERION_REPAIR_FAILED' }),
+    );
+  });
+
+  test('lint-clean drafts make no repair call', async () => {
+    const { generator, doGenerate } = sequenceGenerator(
+      { criteria: [draft('missing-citation', { instructions: POSITIVE })] },
+      { criteria: [] },
+    );
+
+    const result = await proposeCriteria({ generator, failureModes: [citation] });
+
+    expect(doGenerate).toHaveBeenCalledTimes(1);
+    expect(result.repaired).toEqual([]);
+  });
+});
+
 describe('prompt templates', () => {
   test('promptHash is stable across two calls', () => {
     expect(promptHash(CRITERIA_PROMPT)).toBe(promptHash(CRITERIA_PROMPT));
@@ -193,5 +292,11 @@ describe('prompt templates', () => {
     expect(CRITERIA_PROMPT).toContain('outcome');
     expect(CRITERIA_PROMPT).toContain('safety');
     expect(CRITERIA_PROMPT).toContain('quality');
+  });
+
+  test('the repair prompt names every lint rule id', () => {
+    for (const rule of LINT_RULES) {
+      expect(CRITERIA_REPAIR_PROMPT).toContain(rule.id);
+    }
   });
 });
