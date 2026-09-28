@@ -1,8 +1,9 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, test } from 'vitest';
+import { ensureCliBuilt } from './test-support/build-cli.js';
 
 const require = createRequire(import.meta.url);
 
@@ -12,40 +13,15 @@ function readVersion(): string {
 }
 
 const binPath = fileURLToPath(new URL('../dist/bin.js', import.meta.url));
-const packageRoot = fileURLToPath(new URL('..', import.meta.url));
-const srcDir = fileURLToPath(new URL('.', import.meta.url));
 
 // `bun run test` runs before `bun run build` in CI (and on a fresh checkout dist/
 // doesn't exist at all), so the bin this suite spawns may be missing or stale.
-// Build packages/cli here, before spawning it - only when dist/bin.js is absent
-// or older than the newest file under src/.
-function newestMtimeMs(dir: string): number {
-  let newest = 0;
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const entryPath = `${dir}/${entry.name}`;
-    newest = Math.max(
-      newest,
-      entry.isDirectory() ? newestMtimeMs(entryPath) : statSync(entryPath).mtimeMs,
-    );
-  }
-  return newest;
-}
-
-function isBinStale(): boolean {
-  if (!existsSync(binPath)) return true;
-  return newestMtimeMs(srcDir) > statSync(binPath).mtimeMs;
-}
-
-function ensureBinBuilt(): void {
-  if (!isBinStale()) return;
-  const result = spawnSync('bun', ['x', 'tsdown'], { cwd: packageRoot, encoding: 'utf8' });
-  if (result.status !== 0) {
-    throw new Error(`tsdown build failed for packages/cli:\n${result.stdout}\n${result.stderr}`);
-  }
-}
-
-beforeAll(() => {
-  ensureBinBuilt();
+// ensureCliBuilt() builds packages/cli here, before spawning it, sharing a single
+// build with types-public.test.ts's beforeAll via a lock so the two test files
+// (which vitest runs in parallel workers) never race two tsdown builds against
+// the same dist/ directory.
+beforeAll(async () => {
+  await ensureCliBuilt();
 }, 60_000);
 
 function runBin(args: string[]): { stdout: string; stderr: string; status: number | null } {
