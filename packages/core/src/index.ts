@@ -271,3 +271,13 @@ export type { RunRecord } from './run-record.ts';
 
 export { DEFAULT_GAUNTLET_CORPORA } from './validate/corpora.ts';
 export type { DefaultCorpora } from './validate/corpora.ts';
+
+// J7 (docs/contracts/j7.md): additive per root DECISION resolving the dh8.3 premise stop —
+// packages/cli/src/commands/watch.ts needs these and had no exported path to reach them.
+export { runWatch } from './watch/loop.ts';
+export type { CoverageSummary, JudgeCaseFn, RunWatchInput, RunWatchOptions } from './watch/loop.ts';
+export { createSampler, hashToUnit } from './watch/sampler.ts';
+export type { Sampler, SamplerOptions } from './watch/sampler.ts';
+export { promoteFailure } from './watch/promote.ts';
+export type { PromoteFailureOptions } from './watch/promote.ts';
+export type { InclusionRecord, PromotedCase, WatchOptions } from './watch/types.ts';

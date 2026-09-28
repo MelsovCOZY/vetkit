@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   safeParseJson,
+  type Case,
   type Criterion,
   type NormalizedTrace,
   type SinkAck,
@@ -452,5 +453,39 @@ describe('runWatch', () => {
       truncated: 1,
       incomplete_trace: 0,
     });
+  });
+
+  test('onVerdict gets id and case: verdict.id is exactly what outbox.enqueue returned, evalCase is the judged Case (bug dh8.5)', async () => {
+    const t = trace('trace-onverdict');
+    const baseOutbox = createOutbox({ dir: join(dir, 'outbox') });
+    const wrappedOutbox: Outbox = {
+      ...baseOutbox,
+      enqueue: async (verdicts) => {
+        await baseOutbox.enqueue(verdicts);
+        // Known ids, deliberately different from anything the verdicts arrived with.
+        return verdicts.map((_, i) => `known-id-${String(i)}`);
+      },
+    };
+    const received: Array<{ id: string | undefined; evalCase: Case }> = [];
+    const onVerdict = (verdict: Verdict, evalCase: Case): boolean => {
+      received.push({ id: verdict.id, evalCase });
+      return false;
+    };
+
+    await runWatch({
+      source: finiteSource([t]),
+      sampler: createSampler({ sampleRate: 1, inclusionPath: join(dir, 'inclusion.jsonl') }),
+      judge: alwaysOkJudge,
+      criteria: defaultCriteria,
+      outbox: wrappedOutbox,
+      sinks: [fakeSink()],
+      options: watchOptions({ sampleRate: 1 }),
+      signal: new AbortController().signal,
+      onVerdict,
+    });
+
+    expect(received).toHaveLength(1);
+    expect(received[0]?.id).toBe('known-id-0');
+    expect(received[0]?.evalCase.traceId).toBe('trace-onverdict');
   });
 });

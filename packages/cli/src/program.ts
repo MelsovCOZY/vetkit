@@ -14,6 +14,7 @@ import { registerRerun } from './commands/rerun.ts';
 import { registerRun } from './commands/run.ts';
 import { registerRunSinks } from './commands/run-sinks.ts';
 import { registerValidate } from './commands/validate.ts';
+import { registerWatch } from './commands/watch.ts';
 import { handleError } from './errors.ts';
 import { CEV_EXIT, configureOutput, type GlobalOptions } from './output.ts';
 
@@ -77,6 +78,7 @@ export function createProgram(): Command {
   registerCriteria(program);
   registerLint(program);
   registerExport(program);
+  registerWatch(program);
   return program;
 }
 

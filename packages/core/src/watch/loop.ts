@@ -45,9 +45,12 @@ export interface RunWatchInput {
   readonly sinks: readonly SinkV1[];
   readonly options: RunWatchOptions;
   readonly signal: AbortSignal;
-  /** dh8.3's promotion hook, called once per enqueued verdict. Returning `true` counts it
-   * toward `promoted`. */
-  readonly onVerdict?: (verdict: Verdict) => boolean | void;
+  /** dh8.3's promotion hook, called once per enqueued verdict with the Case it was judged
+   * against. `verdict.id` is exactly the id `outbox.enqueue` assigned it (bug dh8.5: enqueue
+   * assigns each verdict's id to a copy it builds internally, so the bare Verdict this loop
+   * judges never carries it — this hook is handed the corrected copy instead). Returning
+   * `true` counts it toward `promoted`. */
+  readonly onVerdict?: (verdict: Verdict, evalCase: Case) => boolean | void;
 }
 
 export interface CoverageSummary {
@@ -74,6 +77,14 @@ function causeOf(err: unknown): string {
 /** Edge case: "Judge throws → catch, produce a Verdict with status 'infra_failure' and cause,
  * enqueue, continue." One sentinel verdict per failed case: the loop has no criterion ids to
  * attribute the failure to (those live behind the opaque `judge` callable). */
+// enqueue() assigns each verdict's id to a copy it builds internally ({...v, id}), never
+// mutating the array this loop already has in hand — so a caller-supplied id is kept, and
+// only a missing one is backfilled from what enqueue reports back for that same position.
+function withAssignedId(v: Verdict, id: string | undefined): Verdict {
+  if (v.id !== undefined || id === undefined) return v;
+  return { ...v, id };
+}
+
 function infraFailureVerdict(caseId: string, cause: string): Verdict {
   return {
     caseId,
@@ -165,10 +176,11 @@ export async function runWatch(input: RunWatchInput): Promise<CoverageSummary> {
       verdicts = [infraFailureVerdict(evalCase.id, causeOf(err))];
     }
     judged += 1;
-    await serializeOutbox(() => outbox.enqueue(verdicts));
-    pendingSinceDrain += verdicts.length;
-    for (const v of verdicts) {
-      if (onVerdict?.(v) === true) promoted += 1;
+    const ids = await serializeOutbox(() => outbox.enqueue(verdicts));
+    const withIds = verdicts.map((v, i) => withAssignedId(v, ids[i]));
+    pendingSinceDrain += withIds.length;
+    for (const v of withIds) {
+      if (onVerdict?.(v, evalCase) === true) promoted += 1;
     }
     if (pendingSinceDrain >= DRAIN_PENDING_THRESHOLD) void drainOnce();
   }
