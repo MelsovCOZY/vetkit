@@ -55,6 +55,7 @@ import {
 } from '@vetkit/spec';
 import type { Command } from 'commander';
 import { loadVetConfig, type LoadedVetConfig, type LoadVetConfigOptions } from '../config-load.ts';
+import { generatorFromEndpoint } from '../generators.ts';
 import { emit, getLogger, type GlobalOptions } from '../output.ts';
 import { renderEvents } from '../render-events.ts';
 
@@ -192,8 +193,6 @@ async function resolveGenerator(
 ): Promise<GeneratorV1 | undefined> {
   if (generator === undefined) return undefined;
   if (isGenerator(generator)) return generator;
-  // Loaded lazily: only a config with a generator endpoint needs the adapter package.
-  const { generatorFromEndpoint } = await import('../generators.ts');
   if ('kind' in generator) return generatorFromEndpoint(generator);
   return undefined;
 }

@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// The CLI tests spawn packages/cli/dist/bin.js, which imports @vetkit/spec, core and
-// judge-jev through their package.json exports (./dist). On a fresh checkout none of
+// The CLI tests spawn packages/cli/dist/bin.js, which imports @vetkit/spec, core,
+// judge-jev and generator-openai-compatible through their package.json exports (./dist). On a fresh checkout none of
 // those dist/ directories exist, so this helper builds the whole chain in dependency
 // order. vitest runs test files in parallel workers, and two tsdown runs racing on one
 // dist/ directory flake (one worker's `tsdown --publint` reads dist/ mid-write), so the
@@ -23,7 +23,13 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = fileURLToPath(new URL('../../../..', import.meta.url));
 // Dependency order: each package's dist must exist before the next one builds.
-const BUILD_ORDER = ['spec', 'core', 'judge-jev', 'cli'] as const;
+export const BUILD_ORDER = [
+  'spec',
+  'core',
+  'judge-jev',
+  'generator-openai-compatible',
+  'cli',
+] as const;
 const packageRoots = BUILD_ORDER.map((name) => join(repoRoot, 'packages', name));
 // Keyed by the repo root so separate checkouts (git worktrees) never share a lock,
 // while every worker of one checkout contends on the same file.
@@ -100,7 +106,7 @@ function sleep(ms: number): Promise<void> {
 export const DIST_READY_ENV = 'VETKIT_TEST_DIST_READY';
 
 /**
- * Builds spec → core → judge-jev → cli at most once across parallel callers, sharing
+ * Builds spec → core → judge-jev → generator-openai-compatible → cli at most once across parallel callers, sharing
  * the build via a lock-guarded file under the OS temp dir. Rebuilds when any of those
  * packages' dist/ is missing or older than the newest file under its src/, and
  * resolves only once the build (by this call or a concurrent one) has finished.
@@ -135,7 +141,7 @@ export async function buildWorkspace(): Promise<void> {
 }
 
 /**
- * Resolves once spec, core, judge-jev and cli have a dist/ for this vitest run. Under
+ * Resolves once every BUILD_ORDER package has a dist/ for this vitest run. Under
  * the cli project's globalSetup the build has already happened, so this never builds
  * (or cleans) dist/ while tests are running.
  */
