@@ -120,9 +120,13 @@ interface EmittedModule {
 }
 
 const STUB_VETKIT_SPECIFIER = './stub-judge.ts';
+// decideVerdict is re-exported from the real core source (not stubbed): the emitted
+// scorer's pass/escape math must run for real in these tests, only judgeOne is faked.
+const CORE_RUN_PATH = join(REPO_ROOT, 'packages/core/src/run.ts');
 const STUB_VETKIT_SOURCE = `export async function judgeOne() {
   throw new Error('stub judgeOne must not be called; every test supplies __judge');
 }
+export { decideVerdict } from '${CORE_RUN_PATH}';
 `;
 
 const cleanupDirs: string[] = [];
