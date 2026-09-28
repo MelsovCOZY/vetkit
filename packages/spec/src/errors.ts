@@ -29,6 +29,14 @@ export const CEV_ERROR_CODES = {
   CACHE_IO: 'CACHE_IO',
   JUDGE_UNAUTHORIZED: 'JUDGE_UNAUTHORIZED',
   INPUT_TOO_LARGE: 'INPUT_TOO_LARGE',
+  // J3 (mol-q4q.1): calibration labels, lock staleness, the gate's refusal reasons, and
+  // the two CLI conditions resolveExit maps to exit codes 2 and 3.
+  LABELS_TOO_FEW: 'LABELS_TOO_FEW',
+  LOCK_STALE: 'LOCK_STALE',
+  GATE_UNCALIBRATED: 'GATE_UNCALIBRATED',
+  GATE_UNPINNED: 'GATE_UNPINNED',
+  NOT_INTERACTIVE: 'NOT_INTERACTIVE',
+  UNSCORED_ONLY: 'UNSCORED_ONLY',
 } as const;
 
 export type CevErrorCode = (typeof CEV_ERROR_CODES)[keyof typeof CEV_ERROR_CODES];

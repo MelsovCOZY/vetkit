@@ -66,6 +66,24 @@ describe('VetError', () => {
     }
   });
 
+  test('accepts the six J3 codes (labels, lock staleness, gate, CLI exit mapping)', () => {
+    const j3Codes = [
+      'LABELS_TOO_FEW',
+      'LOCK_STALE',
+      'GATE_UNCALIBRATED',
+      'GATE_UNPINNED',
+      'NOT_INTERACTIVE',
+      'UNSCORED_ONLY',
+    ] as const;
+
+    for (const code of j3Codes) {
+      expect(Object.values(CEV_ERROR_CODES)).toContain(code);
+      const err = new VetError(code, 'message');
+      expect(VetError.isInstance(err)).toBe(true);
+      expect(err.code).toBe(code);
+    }
+  });
+
   test('details round-trips through the constructor options', () => {
     const err = new VetError('CACHE_IO', 'cache write failed', {
       details: {

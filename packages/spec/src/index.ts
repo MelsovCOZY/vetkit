@@ -23,7 +23,13 @@ export type { AdapterKind, SpecVersion } from './version.ts';
 export type {
   Case,
   Criterion,
+  GauntletOutcome,
+  GauntletResult,
   Answer as IrAnswer,
+  Lock,
+  LockCriterion,
+  LockModel,
+  LockReason,
   Model,
   SpecVersionDoc,
   Verdict,
@@ -32,6 +38,7 @@ export type {
 export {
   caseSchema,
   criterionSchema,
+  lockSchema,
   specVersionSchema,
   verdictSchema,
 } from './generated/schemas.ts';
