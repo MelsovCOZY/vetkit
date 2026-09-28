@@ -36,6 +36,19 @@ const SCORE: Criterion = {
   wordingHash: 'h2',
 };
 
+const CHOICE: Criterion = {
+  id: 'sentiment',
+  type: 'choice',
+  instructions: 'What is the sentiment?',
+  criteria: { positive: 'Positive', neutral: 'Neutral', negative: 'Negative' },
+  passWhen: ['positive'],
+  escape: undefined,
+  polarity: 'pass_when_true',
+  channel: 'quality',
+  provenance: { traceIds: [] },
+  wordingHash: 'h3',
+};
+
 interface Row {
   readonly id: string;
   readonly label: 'pass' | 'fail' | 'unknown';
@@ -363,6 +376,37 @@ describe('repeat tolerance and band cases', () => {
     const response = judged({ type: 'boolean', probability: 0.35 });
     const values = repeatValues(BOOL, new Map([['a', [response]]]));
     expect(values.get('a')?.[0]).toBeCloseTo(0.35, 10);
+  });
+
+  // mol-q4q.17: a choice answer with empty probabilities falls back to the argmax label, the same
+  // rule run.ts decide uses (Number(passWhen.has(choice)), or 1 − v for pass_when_false).
+  test('repeatValues falls back to Number(passWhen.has(choice)) for a choice answer with empty probabilities', () => {
+    const passResponse: JudgeResponse = {
+      answers: {
+        sentiment: { type: 'choice', choice: 'positive', confidence: 0.9, probabilities: {} },
+      },
+      usage: { inputTokens: 1, outputTokens: 1 },
+      model: { requested: 'm', resolved: 'm', transport: 't', pinned: false },
+    };
+    const failResponse: JudgeResponse = {
+      answers: {
+        sentiment: { type: 'choice', choice: 'negative', confidence: 0.9, probabilities: {} },
+      },
+      usage: { inputTokens: 1, outputTokens: 1 },
+      model: { requested: 'm', resolved: 'm', transport: 't', pinned: false },
+    };
+    const repeats = new Map([
+      ['a', [passResponse]],
+      ['b', [failResponse]],
+    ]);
+    const values = repeatValues(CHOICE, repeats);
+    expect(values.get('a')?.[0]).toBe(1);
+    expect(values.get('b')?.[0]).toBe(0);
+
+    const inverted: Criterion = { ...CHOICE, polarity: 'pass_when_false' };
+    const invertedValues = repeatValues(inverted, repeats);
+    expect(invertedValues.get('a')?.[0]).toBe(0);
+    expect(invertedValues.get('b')?.[0]).toBe(1);
   });
 
   test('a boolean criterion calibrated from yes/no/escape choice answers fits a threshold', () => {
