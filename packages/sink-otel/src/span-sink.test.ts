@@ -97,7 +97,7 @@ describe('createOpenInferenceSink', () => {
     const ack = await sink.doWrite([verdict()], {});
 
     expect(sink.id).toBe('otel/openinference');
-    expect(sink.capabilities).toEqual({ batch: 200, idempotent: true });
+    expect(sink.capabilities).toEqual({ batch: 200, idempotent: false });
     expect(ack).toEqual({ accepted: ['v-1'], rejected: [] });
     expect(calls).toHaveLength(1);
     expect(calls[0]?.url).toBe('http://phoenix:6006/v1/traces');
@@ -215,6 +215,20 @@ describe('createOpenInferenceSink', () => {
     expect((await denied.doWrite([verdict()], {})).rejected).toEqual([
       { id: 'v-1', reason: 'SINK_AUTH', retryable: false },
     ]);
+  });
+
+  test('capabilities.idempotent is false: a resend mints a new carrier span (mol-yxn.11)', async () => {
+    const { fetch, calls } = fakeFetch();
+    const sink = createOpenInferenceSink({ endpoint: ENDPOINT, fetch });
+    expect(sink.capabilities.idempotent).toBe(false);
+
+    await sink.doWrite([verdict()], {});
+    await sink.doWrite([verdict()], {});
+    const [first, second] = calls;
+    const firstSpan = spans(first)[0];
+    const secondSpan = spans(second)[0];
+    expect(firstSpan?.spanId).not.toBe(secondSpan?.spanId);
+    expect(firstSpan?.traceId).not.toBe(secondSpan?.traceId);
   });
 
   test('a body over 4 MiB is split before sending', async () => {
