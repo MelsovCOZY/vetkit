@@ -52,7 +52,8 @@ function stubFetch(...responses: Array<Response | (() => Promise<Response>)>): {
   const calls: CapturedCall[] = [];
   let i = 0;
   const impl = vi.fn((input: string | URL | Request, init?: RequestInit): Promise<Response> => {
-    calls.push({ url: String(input), init: init ?? {} });
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    calls.push({ url, init: init ?? {} });
     const next = responses[Math.min(i, responses.length - 1)];
     i += 1;
     if (next === undefined) return Promise.reject(new Error('no stub response'));

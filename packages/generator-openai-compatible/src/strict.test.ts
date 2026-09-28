@@ -122,12 +122,16 @@ describe('normaliseOpenAIStrict', () => {
     const err = capabilityError(() =>
       normaliseOpenAIStrict({
         type: 'object',
-        properties: { a: { type: 'string', if: { minLength: 2 }, then: { maxLength: 9 } } },
+        properties: {
+          // `then` here is the JSON Schema keyword, never awaited.
+          // oxlint-disable-next-line unicorn/no-thenable
+          a: { type: 'string', if: { minLength: 2 }, then: { maxLength: 9 } },
+        },
         required: ['a'],
       }),
     );
     expect(err.code).toBe('GENERATOR_CAPABILITY');
-    expect(err.message).toContain('if');
+    expect(err.message).toContain('"if"');
   });
 
   test('oneOf is GENERATOR_CAPABILITY naming oneOf', () => {
