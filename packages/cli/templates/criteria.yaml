@@ -1,0 +1,23 @@
+# evals/criteria.yaml, written by `vet init`. Each criterion is one typed question the
+# judge answers about every case in evals/cases/.
+criteria:
+  - id: refund-issued
+    # boolean: the judge answers yes or no. polarity says which answer passes.
+    type: boolean
+    instructions: Does the answer state that the refund was issued?
+    # escape: the judge picks this instead of yes/no when the question does not apply,
+    # so an inapplicable case is reported as not applicable rather than as a guess.
+    # Every boolean and choice criterion needs one.
+    escape: The conversation has no assistant answer about a refund.
+    polarity: pass_when_true
+    channel: outcome
+    provenance:
+      traceIds: []
+# A choice criterion lists its options under `criteria` and names the passing ones in
+# passWhen (required), for example:
+#   type: choice
+#   criteria: { resolved: The issue is fixed., open: The issue remains. }
+#   passWhen: [resolved]
+#
+# Thresholds live in vetkit.config.ts (thresholds.default, thresholds.perCriterion):
+# a verdict passes when the judge's probability for the passing answer reaches it.

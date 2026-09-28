@@ -2,6 +2,7 @@ import { createRequire } from 'node:module';
 import { Command, CommanderError } from 'commander';
 import { registerDoctor } from './commands/doctor.ts';
 import { registerEstimate } from './commands/estimate.ts';
+import { registerInit } from './commands/init.ts';
 import { registerLabel } from './commands/label.ts';
 import { registerRun } from './commands/run.ts';
 import { handleError } from './errors.ts';
@@ -57,6 +58,7 @@ export function createProgram(): Command {
   registerLabel(program);
   registerRun(program);
   registerEstimate(program);
+  registerInit(program);
   return program;
 }
 

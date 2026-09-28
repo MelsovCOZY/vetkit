@@ -1,0 +1,14 @@
+// vetkit.config.ts, written by `vet init`. `vet run` reads it from this directory.
+//
+// The judge is Jev, reached through the transport below. The key is never stored here:
+// `vet run` reads it from the environment variable named by apiKeyEnv.
+export default {
+  judge: {
+    kind: 'typesafe-compatible',
+    preset: '{{transport}}',
+    apiKeyEnv: '{{apiKeyEnv}}',{{accountId}}
+  },
+  // A criterion passes when P(pass) >= its threshold. 0.5 is a placeholder until you
+  // calibrate against labelled cases; perCriterion overrides it by criterion id.
+  thresholds: { default: 0.5, perCriterion: {} },
+};
