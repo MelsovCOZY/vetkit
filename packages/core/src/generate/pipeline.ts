@@ -54,6 +54,10 @@ export interface GenerateReport {
   readonly failureModes: FailureMode[];
   /** Error-severity lint issues; their criteria were dropped. */
   readonly rejected: LintIssue[];
+  /** Ids of criteria whose lint-rejected draft one repair re-draft fixed. generateEvals always sets it. */
+  readonly repaired?: string[];
+  /** How many criteria lint dropped (after the repair re-draft). generateEvals always sets it. */
+  readonly dropped?: number;
   /** Warn-severity lint issues on criteria that were kept. */
   readonly warnings: LintIssue[];
   readonly duplicates: DuplicateRecord[];
@@ -66,7 +70,10 @@ export interface GenerateEvalsResult {
   readonly report: GenerateReport;
 }
 
-function refused(issue: GenerateIssue, traces: TraceStatus[] = []): GenerateEvalsResult {
+/** What generateEvals returns: every report field, including the repair counts, is set. */
+type GeneratedEvals = GenerateEvalsResult & { readonly report: Required<GenerateReport> };
+
+function refused(issue: GenerateIssue, traces: TraceStatus[] = []): GeneratedEvals {
   return {
     criteria: [],
     cases: [],
@@ -75,6 +82,8 @@ function refused(issue: GenerateIssue, traces: TraceStatus[] = []): GenerateEval
       issues: [issue],
       failureModes: [],
       rejected: [],
+      repaired: [],
+      dropped: 0,
       warnings: [],
       duplicates: [],
       traces,
@@ -108,7 +117,7 @@ async function readAll(source: SourceV1, signal?: AbortSignal): Promise<Normaliz
   return traces;
 }
 
-export async function generateEvals(input: GenerateEvalsInput): Promise<GenerateEvalsResult> {
+export async function generateEvals(input: GenerateEvalsInput): Promise<GeneratedEvals> {
   const { source, generator, judge, out, signal, events } = input;
 
   if (!input.overwrite && (await hasOutputs(out))) {
@@ -144,7 +153,11 @@ export async function generateEvals(input: GenerateEvalsInput): Promise<Generate
     ...(events === undefined ? {} : { events }),
   };
   const failureModes = await proposeFailureModes({ generator, traces: usable, ...opt });
-  const { criteria: candidates } = await proposeCriteria({ generator, failureModes, ...opt });
+  const { criteria: candidates, repaired } = await proposeCriteria({
+    generator,
+    failureModes,
+    ...opt,
+  });
   const { kept, duplicates } = await dedupeCriteria({ judge, candidates, ...opt });
 
   const issues = lintCriteria(kept);
@@ -174,6 +187,8 @@ export async function generateEvals(input: GenerateEvalsInput): Promise<Generate
       issues: [],
       failureModes,
       rejected,
+      repaired,
+      dropped: dropped.size,
       warnings,
       duplicates,
       traces: extracted.traces,

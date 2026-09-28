@@ -1,8 +1,17 @@
 // Error-analysis-first step: one generator call over a seeded sample of at most 20 traces
-// proposes named failure modes, each tied to trace ids that exist in the input.
+// proposes named failure modes, each tied to trace ids that exist in the input. When that
+// yields fewer than MIN_FAILURE_MODES and the corpus has unsampled traces, one top-up call
+// over the next 20 traces asks for further modes, naming the ones already found.
 import type { GeneratorV1, NormalizedTrace } from '@vetkit/spec';
 import type { Events } from '../events.ts';
-import { FAILURE_MODES_PROMPT, FAILURE_MODES_SCHEMA, generateStructured } from './prompts.ts';
+import {
+  FAILURE_MODES_PROMPT,
+  FAILURE_MODES_SCHEMA,
+  generateStructured,
+  MIN_FAILURE_MODES,
+} from './prompts.ts';
+
+export { MIN_FAILURE_MODES };
 
 export interface FailureMode {
   readonly name: string;
@@ -35,7 +44,7 @@ function rng(seed: number): () => number {
   };
 }
 
-function sample(traces: readonly NormalizedTrace[], seed: number): NormalizedTrace[] {
+function shuffle(traces: readonly NormalizedTrace[], seed: number): NormalizedTrace[] {
   const out = [...traces];
   const next = rng(seed);
   for (let i = out.length - 1; i > 0; i -= 1) {
@@ -46,7 +55,7 @@ function sample(traces: readonly NormalizedTrace[], seed: number): NormalizedTra
     out[i] = other;
     out[j] = tmp;
   }
-  return out.slice(0, MAX_DIGEST_TRACES);
+  return out;
 }
 
 function renderTrace(trace: NormalizedTrace): string {
@@ -74,35 +83,58 @@ export async function proposeFailureModes(input: ProposeFailureModesInput): Prom
       traces: traces.length,
     });
   }
-  const digest = sample(traces, input.seed ?? 0);
-  const digestIds = digest.map((t) => t.traceId);
+  const shuffled = shuffle(traces, input.seed ?? 0);
   const known = new Set(traces.map((t) => t.traceId));
-
-  const { value } = await generateStructured<RawOutput>(generator, {
-    system: FAILURE_MODES_PROMPT,
-    prompt: digest.map(renderTrace).join('\n\n'),
-    name: 'failure_modes',
-    schema: FAILURE_MODES_SCHEMA,
-    ...(signal === undefined ? {} : { signal }),
-  });
 
   const seen = new Set<string>();
   const modes: FailureMode[] = [];
   let duplicates = 0;
   let droppedIds = 0;
-  for (const mode of value.failureModes) {
-    if (seen.has(mode.name)) {
-      duplicates += 1;
-      continue;
-    }
-    seen.add(mode.name);
-    const ids = [...new Set(mode.exampleTraceIds)].filter((id) => known.has(id));
-    droppedIds += mode.exampleTraceIds.length - ids.length;
-    modes.push({
-      name: mode.name,
-      description: mode.description,
-      exampleTraceIds: ids.length > 0 ? ids : digestIds,
+  const ask = async (digest: readonly NormalizedTrace[]): Promise<void> => {
+    const found =
+      modes.length === 0
+        ? ''
+        : `Failure modes already found (do not repeat them):\n${modes
+            .map((m) => `- ${m.name}: ${m.description.replaceAll('\n', ' ')}`)
+            .join('\n')}\n\n`;
+    const { value } = await generateStructured<RawOutput>(generator, {
+      system: FAILURE_MODES_PROMPT,
+      prompt: found + digest.map(renderTrace).join('\n\n'),
+      name: 'failure_modes',
+      schema: FAILURE_MODES_SCHEMA,
+      ...(signal === undefined ? {} : { signal }),
     });
+    const digestIds = digest.map((t) => t.traceId);
+    for (const mode of value.failureModes) {
+      if (seen.has(mode.name)) {
+        duplicates += 1;
+        continue;
+      }
+      seen.add(mode.name);
+      const ids = [...new Set(mode.exampleTraceIds)].filter((id) => known.has(id));
+      droppedIds += mode.exampleTraceIds.length - ids.length;
+      modes.push({
+        name: mode.name,
+        description: mode.description,
+        exampleTraceIds: ids.length > 0 ? ids : digestIds,
+      });
+    }
+  };
+
+  await ask(shuffled.slice(0, MAX_DIGEST_TRACES));
+  const rest = shuffled.slice(MAX_DIGEST_TRACES, 2 * MAX_DIGEST_TRACES);
+  if (modes.length < MIN_FAILURE_MODES && rest.length > 0) {
+    const before = modes.length;
+    await ask(rest);
+    events?.diag(
+      'info',
+      'FAILURE_MODE_TOP_UP',
+      'asked for more failure modes on unsampled traces',
+      {
+        before,
+        after: modes.length,
+      },
+    );
   }
   if (duplicates > 0) {
     events?.diag('info', 'DUPLICATE_FAILURE_MODE', 'kept the first of duplicate failure modes', {
