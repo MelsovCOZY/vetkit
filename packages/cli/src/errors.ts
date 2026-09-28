@@ -105,6 +105,25 @@ function resolveExit(code: string, strict: boolean): Resolved {
   return { category: 'internal', exitCode: EXIT_INTERNAL, warn: false };
 }
 
+// Additive escape hatch (root ledger contract 76a.7 #2): forces the exit code (and
+// error-severity rendering) for one VetError instance, bypassing resolveExit's class-based
+// rules. SOURCE_UNREADABLE is lenient by class (the SOURCE_* prefix rule above) for the
+// runtime degradation `run`/`run-sinks` rely on, but `vet init --source`'s one pre-flight
+// stat check on a path the user named needs exit 2 without changing that class rule.
+const EXIT_OVERRIDE = Symbol('vetkit.errors.exitOverride');
+
+export function withExitCode(err: VetError, exitCode: number): VetError {
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  (err as unknown as Record<symbol, unknown>)[EXIT_OVERRIDE] = exitCode;
+  return err;
+}
+
+function exitOverride(err: VetError): number | undefined {
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  const value = (err as unknown as Record<symbol, unknown>)[EXIT_OVERRIDE];
+  return typeof value === 'number' ? value : undefined;
+}
+
 function causeMessage(cause: unknown): string | undefined {
   return cause instanceof Error ? cause.message : undefined;
 }
@@ -186,7 +205,11 @@ export function handleError(err: unknown, ctx: HandleErrorContext): never {
     } else if (err instanceof Error && err.name === 'AbortError') {
       exitCode = EXIT_SIGINT;
     } else if (VetError.isInstance(err)) {
-      const resolved = resolveExit(err.code, ctx.strict);
+      const override = exitOverride(err);
+      const resolved =
+        override === undefined
+          ? resolveExit(err.code, ctx.strict)
+          : { category: 'config' as const, exitCode: override, warn: false };
       renderResolved(err, resolved, ctx);
       exitCode = resolved.exitCode;
     } else {

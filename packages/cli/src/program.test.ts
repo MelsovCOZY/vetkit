@@ -152,3 +152,18 @@ describe('vet bin: criteria (mol-e3g)', () => {
     expect(result.stdout).toMatch(/^\s+criteria\s/m);
   });
 });
+
+describe('vet bin: init --source and lint (mol-76a.7)', () => {
+  test('--help lists the lint command', () => {
+    const result = runBin(['--help']);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toMatch(/^\s+lint\b/m);
+  });
+
+  test('init --help lists --source and --out', () => {
+    const result = runBin(['init', '--help']);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toMatch(/--source <spec>/);
+    expect(result.stdout).toMatch(/--out <dir>/);
+  });
+});

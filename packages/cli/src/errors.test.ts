@@ -1,5 +1,6 @@
 import { Writable } from 'node:stream';
 import { CommanderError } from 'commander';
+import { VetError } from '@vetkit/spec';
 import { describe, expect, test, vi } from 'vitest';
 import {
   EXIT_INTERNAL,
@@ -9,6 +10,7 @@ import {
   EXIT_UNSCORED_ONLY,
   EXIT_USAGE,
   handleError,
+  withExitCode,
   type HandleErrorContext,
 } from './errors.ts';
 
@@ -311,4 +313,35 @@ describe('handleError input, credential and lock codes', () => {
       );
     });
   }
+});
+
+// mol-76a.7: SOURCE_UNREADABLE is lenient by class (SOURCE_* prefix rule above), but `vet
+// init --source` needs exit 2 for the one pre-flight stat check on a path the user named,
+// without changing that class rule for `run`/`run-sinks`. withExitCode is the escape hatch.
+describe('handleError exit override (withExitCode)', () => {
+  test('forces the exit code and renders as an error, bypassing the SOURCE_ class default', () => {
+    const err = withExitCode(
+      new VetError('SOURCE_UNREADABLE', "--source 'x': x is not a readable directory"),
+      EXIT_USAGE,
+    );
+    const result = run(err);
+    expect(result.code).toBe(EXIT_USAGE);
+    expect(result.stderr).toBe(
+      "error SOURCE_UNREADABLE: --source 'x': x is not a readable directory\ncheck your configuration and CLI flags, then retry.\n",
+    );
+  });
+
+  test('a SOURCE_UNREADABLE code without the override is unaffected: still lenient (exit 0, warn)', () => {
+    const result = run(markerError('SOURCE_UNREADABLE', 'source truncated'));
+    expect(result.code).toBe(EXIT_OK);
+    expect(result.stderr).toContain('warning SOURCE_UNREADABLE: source truncated\n');
+  });
+
+  test('--json mode still reports the overridden exit code and message', () => {
+    const err = withExitCode(new VetError('SOURCE_UNREADABLE', 'no such directory'), EXIT_USAGE);
+    const result = run(err, { json: true });
+    expect(result.code).toBe(EXIT_USAGE);
+    expect(result.stdout).toContain('"code":"SOURCE_UNREADABLE"');
+    expect(result.stdout).toContain('"message":"no such directory"');
+  });
 });
