@@ -2,7 +2,8 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, test } from 'vitest';
 import { ENV_VARS } from './commands/doctor.ts';
-import { colorEnabled } from './output.ts';
+import { EXIT_FAILED } from './errors.ts';
+import { CEV_EXIT, colorEnabled } from './output.ts';
 import { ensureCliBuilt } from './test-support/build-cli.js';
 
 const binPath = fileURLToPath(new URL('../dist/bin.js', import.meta.url));
@@ -13,13 +14,13 @@ beforeAll(async () => {
   await ensureCliBuilt();
 }, 180_000);
 
-function runDoctor(colorEnv: Record<string, string>) {
+function runDoctor(colorEnv: Record<string, string>, flags: string[] = []) {
   const env: NodeJS.ProcessEnv = { ...process.env };
   for (const v of ENV_VARS) delete env[v.name];
   delete env.NO_COLOR;
   delete env.FORCE_COLOR;
   delete env.CI;
-  return spawnSync(process.execPath, [binPath, 'doctor'], {
+  return spawnSync(process.execPath, [binPath, ...flags, 'doctor'], {
     encoding: 'utf8',
     env: { ...env, ...colorEnv },
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -44,6 +45,32 @@ describe('NO_COLOR / FORCE_COLOR', () => {
     const plain = runDoctor({ NO_COLOR: '1' }).stdout;
     const forced = runDoctor({ FORCE_COLOR: '1' }).stdout;
     expect(forced.replaceAll(new RegExp(ANSI.source, 'g'), '')).toBe(plain);
+  });
+});
+
+describe('stderr log lines follow the same colour rule', () => {
+  test('FORCE_COLOR=1 NO_COLOR=1 vet --verbose doctor colours stderr log lines', () => {
+    const result = runDoctor({ NO_COLOR: '1', FORCE_COLOR: '1' }, ['--verbose']);
+    expect(result.stderr).toContain('running doctor');
+    expect(result.stderr).toMatch(ANSI);
+  });
+
+  test('NO_COLOR=1 vet --verbose doctor leaves stderr log lines uncoloured', () => {
+    const result = runDoctor({ NO_COLOR: '1' }, ['--verbose']);
+    expect(result.stderr).toContain('running doctor');
+    expect(result.stderr).not.toMatch(ANSI);
+  });
+
+  test('vet --no-color --verbose doctor leaves stderr log lines uncoloured', () => {
+    const result = runDoctor({}, ['--no-color', '--verbose']);
+    expect(result.stderr).toContain('running doctor');
+    expect(result.stderr).not.toMatch(ANSI);
+  });
+});
+
+describe('CEV_EXIT.FAILED', () => {
+  test('is EXIT_FAILED from errors.ts', () => {
+    expect(CEV_EXIT.FAILED).toBe(EXIT_FAILED);
   });
 });
 
