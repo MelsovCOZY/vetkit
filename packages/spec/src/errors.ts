@@ -65,6 +65,12 @@ export const CEV_ERROR_CODES = {
   // mol-p4a.3: `vet rerun` finds no persisted run record (<cacheDir>/runs/latest.json,
   // mol-p4a.16) to re-judge from; exits 2 (cli errors.ts).
   RUN_NOT_FOUND: 'RUN_NOT_FOUND',
+  // mol-yxn.5: the Langfuse source (packages/source-langfuse). A 401/403 from the Langfuse
+  // API, or a missing credential, thrown at first read (SOURCE_ prefix -> cli errors.ts
+  // resolveExit's existing sinkSource rule, no CLI change needed). SOURCE_UNREACHABLE is a
+  // 429 exhausted after 3 retries, or any other non-OK response.
+  SOURCE_AUTH: 'SOURCE_AUTH',
+  SOURCE_UNREACHABLE: 'SOURCE_UNREACHABLE',
 } as const;
 
 export type CevErrorCode = (typeof CEV_ERROR_CODES)[keyof typeof CEV_ERROR_CODES];
