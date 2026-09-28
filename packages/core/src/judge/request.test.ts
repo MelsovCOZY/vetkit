@@ -352,6 +352,38 @@ describe('judgeCase', () => {
     expect(readdirSync(dir).filter((f) => f.endsWith('.json'))).toHaveLength(0);
   });
 
+  test('a 403 transport rejection preserves HTTP status and error type in cause, without body or key', async () => {
+    const apiKey = 'sk-test-do-not-log-9f2c';
+    const rejectionCause = {
+      status: 403,
+      body: { error: { type: 'no_providers_available' }, secretEcho: apiKey },
+    };
+    const failing = fakeJudge({
+      impl: () =>
+        Promise.reject(
+          new VetError(
+            CEV_ERROR_CODES.JUDGE_UNAVAILABLE,
+            'judge unavailable (HTTP 403: no_providers_available)',
+            {
+              cause: rejectionCause,
+              details: { retryable: false, hint: 'no_providers_available' },
+            },
+          ),
+        ),
+    });
+    const verdicts = await judgeCase({ judge: failing.judge, case: evalCase, criteria });
+    expect(verdicts).toHaveLength(3);
+    for (const v of verdicts) {
+      expect(v.status).toBe('unscored');
+      const detail = JSON.stringify(v.cause);
+      expect(detail).toContain('403');
+      expect(detail).toContain('no_providers_available');
+      expect(detail).not.toContain('secretEcho');
+      expect(detail).not.toContain(apiKey);
+      expect(detail).not.toContain('body');
+    }
+  });
+
   test('a missing answer key yields status error for that criterion only', async () => {
     const { judge } = fakeJudge({ drop: 'tone' });
     const verdicts = await judgeCase({ judge, case: evalCase, criteria });

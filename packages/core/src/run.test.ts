@@ -557,6 +557,62 @@ describe('event bus', () => {
     expect(cached).toHaveLength(2);
     for (const r of cached) expect(r.cacheHit).toBe(true);
   });
+
+  test('a transport HTTP error rides the real status on judge:response and status/errorType (never body or key) on verdict', async () => {
+    const apiKey = 'sk-test-do-not-log-3d81';
+    const failing: JudgeV1 = {
+      specVersion: 'v1',
+      id: 'fake',
+      capabilities: {
+        questionTypes: ['boolean', 'choice', 'score'],
+        maxStateTokens: 32_000,
+        pinned: true,
+        transport: 'fake-transport',
+        model: 'fake/jev',
+      },
+      doJudge: () =>
+        Promise.reject(
+          new VetError(
+            CEV_ERROR_CODES.JUDGE_UNAVAILABLE,
+            'judge unavailable (HTTP 403: no_providers_available)',
+            {
+              cause: {
+                status: 403,
+                body: { error: { type: 'no_providers_available' }, secretEcho: apiKey },
+              },
+              details: { retryable: false, hint: 'no_providers_available' },
+            },
+          ),
+        ),
+    };
+    const events = createEvents();
+    const responses: EventMap['judge:response'][] = [];
+    const verdicts: EventMap['verdict'][] = [];
+    events.on('judge:response', (p) => responses.push(p));
+    events.on('verdict', (p) => verdicts.push(p));
+    const criterion: Criterion = {
+      id: 'answers-question',
+      type: 'boolean',
+      instructions: 'Q?',
+      escape: 'empty',
+      polarity: 'pass_when_true',
+      channel: 'outcome',
+      provenance: { traceIds: [] },
+      wordingHash: 'h',
+    };
+
+    await runJudge({ cases: [mk('c1')], criteria: [criterion], judge: failing, events });
+
+    expect(responses).toHaveLength(1);
+    expect(responses[0]?.status).toBe(403);
+    expect(verdicts).toHaveLength(1);
+    expect(verdicts[0]?.status).toBe('unscored');
+    expect(verdicts[0]?.cause).toEqual({ status: 403, errorType: 'no_providers_available' });
+    const text = JSON.stringify(verdicts[0]);
+    expect(text).not.toContain('secretEcho');
+    expect(text).not.toContain(apiKey);
+    expect(text).not.toContain('body');
+  });
 });
 
 // ---------- limiter and abort ----------

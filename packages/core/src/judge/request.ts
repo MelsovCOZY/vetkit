@@ -11,6 +11,7 @@ import {
   CEV_ERROR_CODES,
   VetError,
   type Case,
+  type CevErrorCode,
   type Criterion,
   type JudgeResponse,
   type JudgeV1,
@@ -136,7 +137,46 @@ function verdictModel(model: JudgeResponse['model']): Verdict['model'] {
   return out;
 }
 
-function unscored(input: JudgeCaseInput, cause: string): Verdict[] {
+/**
+ * Reads only the numeric HTTP status off a caught transport error (bead mol-0nw.28): every
+ * transport error branch sets `err.cause` to `{status, body}` (redacted), so `err.cause.status`
+ * is the reliable source; the "HTTP \d+" text in `err.message` is a fallback for an error shaped
+ * differently. Never reads `err.cause.body` — only the numeric `status` field — so no request or
+ * response body, and no key, is ever pulled out of it.
+ */
+export function httpStatusOf(err: unknown): number | undefined {
+  if (typeof err !== 'object' || err === null) return undefined;
+  const cause = (err as { cause?: unknown }).cause;
+  if (typeof cause === 'object' && cause !== null) {
+    const status = (cause as { status?: unknown }).status;
+    if (typeof status === 'number') return status;
+  }
+  const message = (err as { message?: unknown }).message;
+  if (typeof message === 'string') {
+    const match = /HTTP (\d+)/.exec(message)?.[1];
+    if (match !== undefined) return Number(match);
+  }
+  return undefined;
+}
+
+/**
+ * A transport rejection's `err.code` alone hides the HTTP status and provider error type
+ * (bead mol-0nw.28) — e.g. a 403 no_providers_available surfaces only 'JUDGE_UNAVAILABLE'. When
+ * the VetError carries a `details.hint` (the provider's error type, set by the judge transport),
+ * this folds the HTTP status (via httpStatusOf) in alongside the code and hint. Never reads
+ * `err.cause.body` so no request/response body or key ever reaches a verdict.
+ */
+function causeOf(err: unknown, fallback: CevErrorCode): unknown {
+  if (!VetError.isInstance(err)) return fallback;
+  const errorType = err.details?.hint;
+  if (errorType === undefined) return err.code;
+  const status = httpStatusOf(err);
+  return status === undefined
+    ? { code: err.code, errorType }
+    : { code: err.code, status, errorType };
+}
+
+function unscored(input: JudgeCaseInput, cause: unknown): Verdict[] {
   const model: Verdict['model'] = {
     requested: input.judge.capabilities.model,
     resolved: '',
@@ -186,7 +226,7 @@ export async function judgeCase(input: JudgeCaseInput): Promise<Verdict[]> {
       input.signal === undefined ? request : { ...request, signal: input.signal },
     );
   } catch (err) {
-    return unscored(input, VetError.isInstance(err) ? err.code : CEV_ERROR_CODES.JUDGE_UNAVAILABLE);
+    return unscored(input, causeOf(err, CEV_ERROR_CODES.JUDGE_UNAVAILABLE));
   }
 
   const judged: CachedJudgment = {
