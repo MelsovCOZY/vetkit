@@ -1,0 +1,122 @@
+name: vetkit
+description: Run vetkit evals (vet run), upload the JUnit report and post one sticky PR comment with deltas against the base branch.
+author: vetkit
+
+# Composite, dependency-free (DECISION C10): setup-node, install the CLI, run, upload, comment
+# through `gh api`. The job fails with the CLI's own exit code (0/1/2/3/130), untouched.
+inputs:
+  config:
+    description: "Path to vetkit.config.* (default: the CLI's lookup in the working directory)."
+    required: false
+    default: ''
+  gate:
+    description: 'Pass --gate (gate on calibrated thresholds; refuses with exit 2 without a lock).'
+    required: false
+    default: 'false'
+  allow-unpinned:
+    description: Pass --allow-unpinned (let --gate pass on an unpinned judge transport).
+    required: false
+    default: 'false'
+  comment:
+    description: On pull_request events, upsert one PR comment with counts and deltas.
+    required: false
+    default: 'true'
+  node-version:
+    description: Node.js version for actions/setup-node.
+    required: false
+    default: '22'
+  version:
+    description: The published vetkit version to install.
+    required: false
+    default: '0.0.0'
+  tarballs:
+    description: Directory of packed .tgz files to install instead of the published version.
+    required: false
+    default: ''
+  criteria-files:
+    description: Glob of criteria files hashed into the baseline cache key, so a changed suite never diffs against a stale baseline.
+    required: false
+    default: '**/criteria*.yaml'
+  artifact-name:
+    description: Name of the uploaded JUnit artifact.
+    required: false
+    default: vet-junit
+  github-token:
+    description: 'Token for the PR comment; needs pull-requests: write.'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  passed:
+    description: Passed verdicts.
+    value: ${{ steps.run.outputs.passed }}
+  failed:
+    description: Failed verdicts.
+    value: ${{ steps.run.outputs.failed }}
+  unscored:
+    description: Unscored verdicts.
+    value: ${{ steps.run.outputs.unscored }}
+  exitCode:
+    description: The `vet run` exit code.
+    value: ${{ steps.run.outputs.exitCode }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    - name: Install vetkit
+      shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_TARBALLS: ${{ inputs.tarballs }}
+      run: bash "$GITHUB_ACTION_PATH/action/run.sh" install
+
+    - name: Restore the base branch baseline
+      if: inputs.comment == 'true' && startsWith(github.event_name, 'pull_request')
+      uses: actions/cache/restore@v4
+      with:
+        path: .vet/runs/latest.json
+        key: vetkit-baseline-${{ github.base_ref }}-${{ hashFiles(inputs.criteria-files) }}-
+        restore-keys: vetkit-baseline-${{ github.base_ref }}-${{ hashFiles(inputs.criteria-files) }}-
+
+    - name: vet run
+      id: run
+      shell: bash
+      env:
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_GATE: ${{ inputs.gate }}
+        INPUT_ALLOW_UNPINNED: ${{ inputs.allow-unpinned }}
+      run: bash "$GITHUB_ACTION_PATH/action/run.sh" run
+
+    - name: Upload the JUnit report
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: vet-junit.xml
+        if-no-files-found: warn
+
+    - name: PR comment
+      if: inputs.comment == 'true' && startsWith(github.event_name, 'pull_request')
+      continue-on-error: true
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: node "$GITHUB_ACTION_PATH/action/comment.mjs" comment .vet/runs/latest.json .vet/baseline/latest.json
+
+    # Pushes to a branch save its result as the baseline PRs against that branch diff against.
+    - name: Save the baseline
+      if: "!startsWith(github.event_name, 'pull_request') && hashFiles('.vet/runs/latest.json') != ''"
+      uses: actions/cache/save@v4
+      with:
+        path: .vet/runs/latest.json
+        key: vetkit-baseline-${{ github.ref_name }}-${{ hashFiles(inputs.criteria-files) }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+    - name: Fail with the vet run exit code
+      shell: bash
+      env:
+        EXIT_CODE: ${{ steps.run.outputs.exitCode }}
+      run: exit "${EXIT_CODE:-1}"
