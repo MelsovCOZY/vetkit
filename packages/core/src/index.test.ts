@@ -49,6 +49,7 @@ import { createEvents, EVENT_NAMES } from './index.ts';
 
 import { gauntletLength, gauntletPositionSwap } from './index.ts';
 import { DEFAULT_CALLS_PER_MINUTE, estimateRun, estimateValidate } from './index.ts';
+import { createOutbox } from './index.ts';
 
 describe('@vetkit/core package entry', () => {
   it('re-exports loadCriteria as a function', () => {
@@ -251,5 +252,9 @@ describe('@vetkit/core package entry', () => {
 
   it('re-exports DEFAULT_CALLS_PER_MINUTE as 25', () => {
     expect(DEFAULT_CALLS_PER_MINUTE).toBe(25);
+  });
+
+  it('re-exports createOutbox as a function', () => {
+    expect(typeof createOutbox).toBe('function');
   });
 });
