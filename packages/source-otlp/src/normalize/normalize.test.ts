@@ -2,6 +2,7 @@
 // in for the real gen_ai/openinference/etc modules (owned by pij.11), which do not exist yet.
 
 import { describe, expect, test, vi } from 'vitest';
+import type { Message } from '@vetkit/spec';
 import type { AnyValue, OtlpResource, OtlpResourceSpans, OtlpSpan } from '../reader/index.ts';
 import { buildSpanTree } from '../reader/tree.ts';
 import type { DialectV1 } from './dialect.ts';
@@ -204,6 +205,90 @@ describe('normalizeTrace: dialect.spanKind honoured for non-LLM spans', () => {
     const trace = normalizeTrace(tree, resource(), [dialectA]);
 
     expect(trace.spans).toEqual([{ spanId: 'a', name: 'a', kind: 'tool' }]);
+  });
+});
+
+// pij.14: dialects keep emitting their own native tool_call/tool_call_response ids;
+// normalizeTrace renumbers them afterwards to tool_call_1, tool_call_2... in first-seen call
+// order, the same normaliser regardless of which dialect produced the parts.
+describe('normalizeTrace: tool_call id normalisation', () => {
+  const dialectTools: DialectV1 = {
+    name: 'gen_ai',
+    detect: (s) => s.attributes['fake.dialect'] === 'tools',
+    isLlmSpan: () => true,
+    extractMessages: (s) => {
+      const messages: Message[] = [];
+      const callId = s.attributes['fake.call.id'];
+      const responseId = s.attributes['fake.response.id'];
+      if (typeof callId === 'string') {
+        messages.push({
+          role: 'assistant',
+          parts: [{ type: 'tool_call', id: callId, name: 'get_weather' }],
+        });
+      }
+      if (typeof responseId === 'string') {
+        messages.push({
+          role: 'tool',
+          parts: [{ type: 'tool_call_response', id: responseId, response: 'ok' }],
+        });
+      }
+      return messages;
+    },
+    extractUsage: () => null,
+    contentState: () => 'captured',
+  };
+
+  test('ids become tool_call_1, tool_call_2... in first-seen order; a response follows its call', () => {
+    const tree = buildSpanTree([
+      span('a', undefined, 0, { 'fake.dialect': 'tools', 'fake.call.id': 'native_a' }),
+      span('b', 'a', 10, {
+        'fake.dialect': 'tools',
+        'fake.call.id': 'native_b',
+        'fake.response.id': 'native_a',
+      }),
+    ]);
+    const trace = normalizeTrace(tree, resource(), [dialectTools]);
+
+    expect(trace.messages).toEqual([
+      {
+        role: 'assistant',
+        parts: [{ type: 'tool_call', id: 'tool_call_1', name: 'get_weather' }],
+      },
+      {
+        role: 'assistant',
+        parts: [{ type: 'tool_call', id: 'tool_call_2', name: 'get_weather' }],
+      },
+      {
+        role: 'tool',
+        parts: [{ type: 'tool_call_response', id: 'tool_call_1', response: 'ok' }],
+      },
+    ]);
+  });
+
+  test('a tool_call part with no id is left without one; other ids are still normalised', () => {
+    const dialectNoId: DialectV1 = {
+      ...dialectTools,
+      extractMessages: () => [
+        { role: 'assistant', parts: [{ type: 'tool_call', name: 'no_id_tool' }] },
+        { role: 'assistant', parts: [{ type: 'tool_call', id: 'native_x', name: 'get_weather' }] },
+      ],
+    };
+    const tree = buildSpanTree([span('a', undefined, 0, { 'fake.dialect': 'tools' })]);
+    const trace = normalizeTrace(tree, resource(), [dialectNoId]);
+
+    expect(trace.messages).toEqual([
+      { role: 'assistant', parts: [{ type: 'tool_call', name: 'no_id_tool' }] },
+      {
+        role: 'assistant',
+        parts: [{ type: 'tool_call', id: 'tool_call_1', name: 'get_weather' }],
+      },
+    ]);
+  });
+
+  test('no tool_call parts at all: messages pass through unchanged', () => {
+    const tree = buildSpanTree([span('a', undefined, 0, { 'fake.dialect': 'tools' })]);
+    const trace = normalizeTrace(tree, resource(), [dialectTools]);
+    expect(trace.messages).toEqual([]);
   });
 });
 
