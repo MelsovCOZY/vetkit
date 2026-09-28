@@ -25,7 +25,7 @@ import { decideExit, evaluateGate, type ExitCode, type GatePolicy } from './gate
 import { createFileCache, type VerdictCache } from './judge/cache.ts';
 import { createLimiter, type Limiter, type PacingEvent } from './judge/pacing.ts';
 import { gradeCode } from './judge/reference.ts';
-import { judgeCase } from './judge/request.ts';
+import { httpStatusOf, judgeCase } from './judge/request.ts';
 import { assertLockGates } from './validate/lock.ts';
 
 /** Uncalibrated placeholder threshold, never trusted for gating (jev brief §5). */
@@ -298,17 +298,23 @@ function pacingDiag(events: Events): (event: PacingEvent) => void {
   };
 }
 
-/** HTTP-like status for judge:response: 200 when answered (live or cached), else the error's status or 0. */
+/** HTTP-like status for judge:response: 200 when answered (live or cached), else the error's real
+ * HTTP status (bead mol-0nw.28: httpStatusOf reads it off err.cause.status / the message text,
+ * never the body), or 0 when neither is present. */
 function statusOf(err: unknown): number {
-  if (
-    typeof err === 'object' &&
-    err !== null &&
-    'status' in err &&
-    typeof err.status === 'number'
-  ) {
-    return err.status;
-  }
-  return 0;
+  return httpStatusOf(err) ?? 0;
+}
+
+/** The safe subset of a verdict's cause that may ride the 'verdict' event: status and errorType
+ * only, never the VetError code, a body or a key (bead mol-0nw.28). */
+function verdictCause(cause: unknown): EventMap['verdict']['cause'] {
+  if (typeof cause !== 'object' || cause === null) return undefined;
+  const status = (cause as { status?: unknown }).status;
+  const errorType = (cause as { errorType?: unknown }).errorType;
+  const out: { status?: number; errorType?: string } = {};
+  if (typeof status === 'number') out.status = status;
+  if (typeof errorType === 'string') out.errorType = errorType;
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 function markAborted(verdicts: Verdict[]): Verdict[] {
@@ -394,11 +400,13 @@ export async function runJudge(input: RunJudgeInput): Promise<RunVerdict[]> {
         : [decide(v, criterion, evalCase, lock, fallbackThreshold)];
     });
     for (const v of out) {
+      const cause = v.status === 'unscored' ? verdictCause(v.cause) : undefined;
       events.emit('verdict', {
         caseId: v.caseId,
         criterionId: v.criterionId,
         status: v.status,
         ...(v.pass === undefined ? {} : { pass: v.pass }),
+        ...(cause === undefined ? {} : { cause }),
       });
     }
     return out;

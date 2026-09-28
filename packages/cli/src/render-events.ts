@@ -62,11 +62,12 @@ function pretty(logger: Logger, now: () => number): Subscribe {
     events.on('judge:response', ({ caseId, criterionId, ...counters }) => {
       logger.debug(`judge response ${caseId}/${criterionId}`, counters);
     }),
-    events.on('verdict', ({ caseId, criterionId, status, pass }) => {
-      logger.debug(
-        `verdict ${caseId}/${criterionId}`,
-        pass === undefined ? { status } : { status, pass },
-      );
+    events.on('verdict', ({ caseId, criterionId, status, pass, cause }) => {
+      logger.debug(`verdict ${caseId}/${criterionId}`, {
+        status,
+        ...(pass === undefined ? {} : { pass }),
+        ...(cause === undefined ? {} : { cause }),
+      });
     }),
     events.on('sink:write', ({ sink, records }) => {
       logger.debug(`sink ${sink} wrote ${plural(records, 'record')}`);

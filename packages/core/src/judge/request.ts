@@ -138,21 +138,42 @@ function verdictModel(model: JudgeResponse['model']): Verdict['model'] {
 }
 
 /**
+ * Reads only the numeric HTTP status off a caught transport error (bead mol-0nw.28): every
+ * transport error branch sets `err.cause` to `{status, body}` (redacted), so `err.cause.status`
+ * is the reliable source; the "HTTP \d+" text in `err.message` is a fallback for an error shaped
+ * differently. Never reads `err.cause.body` — only the numeric `status` field — so no request or
+ * response body, and no key, is ever pulled out of it.
+ */
+export function httpStatusOf(err: unknown): number | undefined {
+  if (typeof err !== 'object' || err === null) return undefined;
+  const cause = (err as { cause?: unknown }).cause;
+  if (typeof cause === 'object' && cause !== null) {
+    const status = (cause as { status?: unknown }).status;
+    if (typeof status === 'number') return status;
+  }
+  const message = (err as { message?: unknown }).message;
+  if (typeof message === 'string') {
+    const match = /HTTP (\d+)/.exec(message)?.[1];
+    if (match !== undefined) return Number(match);
+  }
+  return undefined;
+}
+
+/**
  * A transport rejection's `err.code` alone hides the HTTP status and provider error type
  * (bead mol-0nw.28) — e.g. a 403 no_providers_available surfaces only 'JUDGE_UNAVAILABLE'. When
  * the VetError carries a `details.hint` (the provider's error type, set by the judge transport),
- * this pulls the HTTP status out of the message text and returns both alongside the code. Never
- * reads `err.cause` (the transport's redacted request/response detail) so no body or key ever
- * reaches a verdict.
+ * this folds the HTTP status (via httpStatusOf) in alongside the code and hint. Never reads
+ * `err.cause.body` so no request/response body or key ever reaches a verdict.
  */
 function causeOf(err: unknown, fallback: CevErrorCode): unknown {
   if (!VetError.isInstance(err)) return fallback;
   const errorType = err.details?.hint;
   if (errorType === undefined) return err.code;
-  const status = /HTTP (\d+)/.exec(err.message)?.[1];
+  const status = httpStatusOf(err);
   return status === undefined
     ? { code: err.code, errorType }
-    : { code: err.code, status: Number(status), errorType };
+    : { code: err.code, status, errorType };
 }
 
 function unscored(input: JudgeCaseInput, cause: unknown): Verdict[] {
