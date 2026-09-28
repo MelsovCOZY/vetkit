@@ -10,10 +10,7 @@ import type { AnyValue, OtlpEvent, OtlpSpan } from '../../reader/index.ts';
 import { buildSpanTree } from '../../reader/tree.ts';
 import { genAiDialect, genAiLegacyDialect } from './index.ts';
 
-function span(
-  attributes: Record<string, AnyValue> = {},
-  events: OtlpEvent[] = [],
-): OtlpSpan {
+function span(attributes: Record<string, AnyValue> = {}, events: OtlpEvent[] = []): OtlpSpan {
   return {
     traceId: '5b8efff798038103d269b633813fc60c',
     spanId: 's1',
@@ -87,9 +84,7 @@ describe('genAiLegacyDialect.detect', () => {
 describe('isLlmSpan (shared rule)', () => {
   test('operation.name in {chat, text_completion, generate_content}', () => {
     expect(genAiDialect.isLlmSpan(span({ 'gen_ai.operation.name': 'chat' }))).toBe(true);
-    expect(genAiDialect.isLlmSpan(span({ 'gen_ai.operation.name': 'text_completion' }))).toBe(
-      true,
-    );
+    expect(genAiDialect.isLlmSpan(span({ 'gen_ai.operation.name': 'text_completion' }))).toBe(true);
     expect(genAiDialect.isLlmSpan(span({ 'gen_ai.operation.name': 'generate_content' }))).toBe(
       true,
     );
