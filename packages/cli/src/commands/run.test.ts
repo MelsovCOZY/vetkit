@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -165,5 +165,61 @@ describe('vet run', () => {
     const code = await exited;
     expect(code).toBe(130);
     expect(parseJson(stdout)).toMatchObject({ summary: { aborted: true }, exitCode: 130 });
+  }, 60_000);
+});
+
+describe('vet run --reporter junit (mol-aq4.7)', () => {
+  test('--reporter junit=vet-junit.xml --json writes the file and stdout is exactly one JSON document', () => {
+    const project = freshProject();
+    const result = runVet(
+      ['run', '--reporter', 'junit=vet-junit.xml', '--json'],
+      project,
+      fixtureEnv('pass'),
+    );
+    expect(result.status).toBe(0);
+    expect(nonEmptyLines(result.stdout)).toHaveLength(1);
+    expect(parseJson(result.stdout)).toMatchObject({ summary: { total: 1, passed: 1 } });
+    expect(result.stdout).not.toContain('<testsuites');
+    const xml = readFileSync(join(project, 'vet-junit.xml'), 'utf8');
+    expect(xml).toMatch(/^<\?xml /);
+    expect(xml).toContain('<testcase name="case-1::');
+  });
+
+  test('--reporter junit=missing/dir/x.xml creates the directory', () => {
+    const project = freshProject();
+    const result = runVet(
+      ['run', '--json', '--reporter', 'junit=missing/dir/x.xml'],
+      project,
+      fixtureEnv('fail'),
+    );
+    expect(result.status).toBe(1);
+    const xml = readFileSync(join(project, 'missing', 'dir', 'x.xml'), 'utf8');
+    expect(xml).toContain('<failure');
+  });
+
+  test('plain --reporter junit writes .vet/junit.xml', () => {
+    const project = freshProject();
+    const result = runVet(['run', '--reporter', 'junit'], project, fixtureEnv('pass'));
+    expect(result.status).toBe(0);
+    expect(readFileSync(join(project, '.vet', 'junit.xml'), 'utf8')).toContain('<testsuites');
+  });
+
+  test('SIGINT with --reporter junit still writes the partial report', async () => {
+    const project = freshProject();
+    const started = join(project, 'started');
+    const child = spawn(process.execPath, [binPath, 'run', '--json', '--reporter', 'junit'], {
+      cwd: project,
+      env: fixtureEnv('slow', { VETKIT_FIXTURE_STARTED: started }),
+    });
+    const exited = new Promise<number | null>((resolve) => {
+      child.on('exit', (code) => resolve(code));
+    });
+    const deadline = Date.now() + 30_000;
+    while (!existsSync(started) && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    child.kill('SIGINT');
+    expect(await exited).toBe(130);
+    expect(readFileSync(join(project, '.vet', 'junit.xml'), 'utf8')).toContain('<testsuites');
   }, 60_000);
 });
