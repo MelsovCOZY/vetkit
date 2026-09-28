@@ -20,6 +20,19 @@ const fixtureDir = fileURLToPath(new URL('../../../../fixtures/cli/init/', impor
 const otlpFixture = fileURLToPath(
   new URL('../../../../fixtures/otlp/gen_ai-latest.json', import.meta.url),
 );
+const incompleteFixture = fileURLToPath(
+  new URL('../../../../fixtures/otlp/incomplete.json', import.meta.url),
+);
+const goldenInitCases = fileURLToPath(
+  new URL('../../../../fixtures/otlp/golden/init-cases.jsonl', import.meta.url),
+);
+const dialectFixtures = [
+  'gen_ai-latest',
+  'gen_ai-legacy',
+  'openinference',
+  'openllmetry',
+  'vercel',
+] as const;
 
 // vitest.setup.ts replaces global fetch with a network-blocking guard by default; these tests
 // POST real loopback HTTP to an in-process receiver on an ephemeral port, so every test here
@@ -328,6 +341,78 @@ describe('vet init --source otlp:<file> --json summary (orchestrator-widened gra
       dialects: expect.any(Object),
       tokens: expect.any(Number),
     });
+  });
+});
+
+// J5 gate (bead mol-pij.15): <out>/summary.json must exist on disk, hold the same
+// {cases, excluded, dialects, tokens} the --json stdout document carries under `summary`,
+// and excluded must classify by completeness status (content_not_captured, truncated,
+// incomplete_trace), not the old {content_not_captured, no_conversation} pair.
+describe('vet init --source otlp: writes <out>/summary.json (mol-pij.15)', () => {
+  test('summary.json on disk matches stdout summary, excluded classifies by completeness', () => {
+    const project = freshProject();
+    const out = join(project, 'evals-out');
+    const result = spawnSync(
+      process.execPath,
+      [binPath, 'init', '--source', `otlp:${incompleteFixture}`, '--out', out, '--json'],
+      { cwd: project, encoding: 'utf8' },
+    );
+    expect(result.status).toBe(0);
+    const doc = parseJson<GenerateDoc>(result.stdout);
+
+    const summaryPath = join(out, 'summary.json');
+    expect(existsSync(summaryPath)).toBe(true);
+    const onDisk = parseJson<GenerateDoc['summary']>(readFileSync(summaryPath, 'utf8'));
+
+    expect(onDisk).toEqual(doc.summary);
+    // incomplete.json's 4 traces, verified against source-otlp's completeness assessment:
+    // one content_not_captured, two completeness-truncated, one with a missing parent span.
+    expect(onDisk).toMatchObject({
+      excluded: { content_not_captured: 1, truncated: 2, incomplete_trace: 1 },
+    });
+  });
+});
+
+function normalizeCase(c: Case): unknown {
+  const { id: _id, traceId: _traceId, provenance, ...rest } = c;
+  const strippedProvenance =
+    provenance !== null && typeof provenance === 'object' && !Array.isArray(provenance)
+      ? Object.fromEntries(Object.entries(provenance).filter(([k]) => k !== 'traceIds'))
+      : provenance;
+  return { ...rest, provenance: strippedProvenance };
+}
+
+function readCases(path: string): Case[] {
+  return readFileSync(path, 'utf8')
+    .split('\n')
+    .filter((line) => line.trim() !== '')
+    .map((line) => parseJson<Case>(line));
+}
+
+// J5 gate (bead mol-pij.15): the five dialect fixtures encode the same conversation in
+// different OTel semconv styles; vet init's cases must be identical across all five once
+// per-dialect ids (traceId, provenance.traceIds) are deleted, matching a committed golden.
+describe('vet init --source otlp: dialect cases match the golden (mol-pij.15)', () => {
+  test('the five dialect fixtures produce identical cases after deleting per-dialect ids', () => {
+    const golden = readCases(goldenInitCases).map(normalizeCase);
+    expect(golden).toHaveLength(1);
+
+    for (const dialect of dialectFixtures) {
+      const project = freshProject();
+      const out = join(project, 'evals-out');
+      const fixture = fileURLToPath(
+        new URL(`../../../../fixtures/otlp/${dialect}.json`, import.meta.url),
+      );
+      const result = spawnSync(
+        process.execPath,
+        [binPath, 'init', '--source', `otlp:${fixture}`, '--out', out, '--json'],
+        { cwd: project, encoding: 'utf8' },
+      );
+      expect(result.status).toBe(0);
+
+      const cases = readCases(join(out, 'cases', 'generated.jsonl')).map(normalizeCase);
+      expect(cases).toEqual(golden);
+    }
   });
 });
 

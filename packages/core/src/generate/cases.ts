@@ -5,6 +5,7 @@
 import { createHash } from 'node:crypto';
 import type { Case, Criterion, Message, MessagePart, NormalizedTrace } from '@vetkit/spec';
 import { MAX_STATE_TOKENS } from '../cases/load.ts';
+import { statusForTrace, type ExclusionStatus } from '../judge/completeness.ts';
 
 /** Bump when rendering changes: it is part of every case id. */
 export const CASE_RENDERER_VERSION = '1';
@@ -17,7 +18,7 @@ export type TraceStatus =
   | {
       readonly traceId: string;
       readonly status: 'not_applicable';
-      readonly reason: 'content_not_captured' | 'no_conversation';
+      readonly reason: ExclusionStatus | 'no_conversation';
     };
 
 export interface ExtractCasesInput {
@@ -72,8 +73,9 @@ export function extractCases(input: ExtractCasesInput): ExtractCasesResult {
   const traces: TraceStatus[] = [];
   for (const trace of input.traces) {
     const { traceId } = trace;
-    if (!trace.completeness.contentCaptured) {
-      traces.push({ traceId, status: 'not_applicable', reason: 'content_not_captured' });
+    const completenessStatus = statusForTrace(trace);
+    if (completenessStatus !== 'ok') {
+      traces.push({ traceId, status: 'not_applicable', reason: completenessStatus });
       continue;
     }
     if (!trace.messages.some((m) => m.role !== 'system')) {
