@@ -1,0 +1,409 @@
+// runEvals: the pipeline `vet run` calls — load criteria and cases, judge every case (runJudge,
+// DECISION: core seams named), apply thresholds with polarity and tolerance bands, summarise and
+// decide the exit code (gate.ts). Library code emits typed events and never logs.
+//
+// Pass semantics (DECISION: escape and pass semantics): boolean criteria come back as a 3-way
+// choice {yes, no, escape}; p = P(yes), P(escape) >= escapeThreshold gives not_applicable,
+// pass = p >= threshold (pass_when_true) or p < threshold (pass_when_false). Choice passes when
+// the chosen label is in passWhen. Score passes when score >= threshold. Only boolean and choice
+// criteria gate (eval-quality brief §5.2 item 14); code-graded criteria never reach the judge.
+import {
+  CEV_ERROR_CODES,
+  VetError,
+  type Case,
+  type Criterion,
+  type JudgeV1,
+  type Lock,
+  type LockCriterion,
+  type Verdict,
+} from '@vetkit/spec';
+import { loadCases } from './cases/load.ts';
+import { loadCriteria } from './criteria/load.ts';
+import { decideExit, evaluateGate, type ExitCode, type GatePolicy } from './gate.ts';
+import { createFileCache, type VerdictCache } from './judge/cache.ts';
+import { createLimiter, type Limiter, type PacingEvent } from './judge/pacing.ts';
+import { gradeCode } from './judge/reference.ts';
+import { judgeCase } from './judge/request.ts';
+
+/** Uncalibrated placeholder threshold, never trusted for gating (jev brief §5). */
+const DEFAULT_THRESHOLD = 0.5;
+const DEFAULT_ESCAPE_THRESHOLD = 0.5;
+const ESCAPE_KEY = 'escape';
+/** Float slack so |p - threshold| == tolerance counts as inside the band. */
+const EPSILON = 1e-9;
+
+export interface RunVerdict extends Verdict {
+  /** |p - threshold| <= lock tolerance; the verdict is still decided by sign. */
+  borderline?: boolean;
+  /** The threshold came from a calibrated lock entry. */
+  calibrated?: boolean;
+}
+
+export type Saturation = 'all_pass' | 'all_fail' | null;
+
+export interface CriterionSummary {
+  total: number;
+  passed: number;
+  failed: number;
+  unscored: number;
+  saturated: Saturation;
+}
+
+export interface RunSummary {
+  total: number;
+  passed: number;
+  failed: number;
+  unscored: number;
+  aborted: boolean;
+  byCriterion: Record<string, CriterionSummary>;
+}
+
+export type RunEvent =
+  | { readonly type: 'run.start'; readonly cases: number; readonly criteria: number }
+  | { readonly type: 'run.no_cases' }
+  | { readonly type: 'case.judged'; readonly caseId: string; readonly verdicts: number }
+  | { readonly type: 'gate.no_gateable_criteria' }
+  | {
+      readonly type: 'criterion.saturated';
+      readonly criterionId: string;
+      readonly saturated: 'all_pass' | 'all_fail';
+    }
+  | { readonly type: 'run.end'; readonly summary: RunSummary; readonly exitCode: ExitCode }
+  | PacingEvent;
+
+/** The fields runEvals reads; a resolved config object passes through structurally. */
+export interface RunConfig {
+  readonly criteriaPath: string;
+  readonly casesDir: string;
+  readonly judge: JudgeV1;
+  readonly threshold?: number;
+  readonly gate?: boolean;
+  readonly gatePolicy?: Partial<GatePolicy>;
+  readonly cacheDir?: string;
+}
+
+export interface RunJudgeInput {
+  readonly cases: readonly Case[];
+  readonly criteria: readonly Criterion[];
+  readonly judge: JudgeV1;
+  readonly cache?: VerdictCache;
+  readonly repeats?: number;
+  readonly bypassCache?: boolean;
+  readonly signal?: AbortSignal;
+  readonly limiter?: Limiter;
+  readonly lock?: Lock | null;
+  /** Fallback threshold for criteria without a lock threshold (default 0.5, uncalibrated). */
+  readonly threshold?: number;
+  readonly emit?: (event: RunEvent) => void;
+}
+
+function codeVerdict(criterion: Criterion, evalCase: Case): Verdict {
+  const check = criterion.grader?.kind === 'code' ? criterion.grader.check : 'exact';
+  const id = `code:${check}`;
+  const base = {
+    caseId: evalCase.id,
+    criterionId: criterion.id,
+    model: { requested: id, resolved: id, transport: 'code', pinned: true },
+    cacheHit: false,
+  };
+  const graded = gradeCode(criterion, evalCase);
+  if (graded.status === 'not_applicable') {
+    return { ...base, status: 'not_applicable', cause: graded.cause };
+  }
+  return {
+    ...base,
+    status: 'ok',
+    answer: { type: 'boolean', probability: graded.probability },
+    pass: graded.pass,
+  };
+}
+
+function gateFields(
+  criterion: Criterion,
+  evalCase: Case,
+  entry: LockCriterion | undefined,
+): Pick<Verdict, 'gated' | 'gateReason'> {
+  if (criterion.type === 'score') return { gated: false, gateReason: 'score_not_gateable' };
+  const languages = entry?.languages;
+  if (languages !== undefined && !languages.includes(evalCase.language ?? 'und')) {
+    return { gated: false, gateReason: 'language_not_calibrated' };
+  }
+  return { gated: true };
+}
+
+function escapeKey(criterion: Criterion): string {
+  if (criterion.type !== 'choice') return ESCAPE_KEY;
+  const escape = String(criterion.escape);
+  return Object.hasOwn(criterion.criteria, escape) ? escape : ESCAPE_KEY;
+}
+
+function badResponse(verdict: RunVerdict): RunVerdict {
+  return { ...verdict, status: 'error', cause: CEV_ERROR_CODES.JUDGE_BAD_RESPONSE };
+}
+
+function decide(
+  verdict: Verdict,
+  criterion: Criterion,
+  evalCase: Case,
+  lock: Lock | null,
+  fallbackThreshold: number,
+): RunVerdict {
+  const entry = lock?.criteria[criterion.id];
+  const base: RunVerdict = {
+    ...verdict,
+    calibrated: entry?.status === 'calibrated',
+    ...gateFields(criterion, evalCase, entry),
+  };
+  const answer = verdict.answer;
+  if (criterion.grader?.kind === 'code' || verdict.status !== 'ok' || answer === undefined) {
+    return base;
+  }
+
+  const threshold = entry?.threshold ?? fallbackThreshold;
+  const tolerance = entry?.tolerance ?? 0;
+  const escapeThreshold = criterion.escapeThreshold ?? DEFAULT_ESCAPE_THRESHOLD;
+  const band = (x: number): boolean => Math.abs(x - threshold) <= tolerance + EPSILON;
+
+  if (criterion.type === 'score') {
+    if (answer.type !== 'score') return badResponse(base);
+    return {
+      ...base,
+      threshold,
+      pass: answer.score >= threshold,
+      borderline: band(answer.score),
+    };
+  }
+
+  if (criterion.type === 'choice') {
+    if (answer.type !== 'choice') return badResponse(base);
+    const key = escapeKey(criterion);
+    if (answer.choice === key || (answer.probabilities[key] ?? 0) >= escapeThreshold) {
+      return { ...base, status: 'not_applicable', cause: 'escape' };
+    }
+    return { ...base, pass: (criterion.passWhen ?? []).includes(answer.choice) };
+  }
+
+  let p: number;
+  if (answer.type === 'boolean') {
+    p = answer.probability;
+  } else if (answer.type === 'choice') {
+    if ((answer.probabilities[ESCAPE_KEY] ?? 0) >= escapeThreshold) {
+      return { ...base, status: 'not_applicable', cause: 'escape' };
+    }
+    p = answer.probabilities['yes'] ?? 0;
+  } else {
+    return badResponse(base);
+  }
+  const pass = criterion.polarity === 'pass_when_true' ? p >= threshold : p < threshold;
+  return { ...base, threshold, pass, borderline: band(p) };
+}
+
+function markAborted(verdicts: Verdict[]): Verdict[] {
+  return verdicts.map((v) => (v.status === 'unscored' ? { ...v, cause: 'aborted' } : v));
+}
+
+/** Judges every case (one request per case per repeat) and applies thresholds; never throws on judge failure. */
+export async function runJudge(input: RunJudgeInput): Promise<RunVerdict[]> {
+  const { judge, signal } = input;
+  const emit = input.emit ?? ((): void => {});
+  const limiter = input.limiter ?? createLimiter({ emit });
+  const lock = input.lock ?? null;
+  const fallbackThreshold = input.threshold ?? DEFAULT_THRESHOLD;
+  const repeats = Math.max(1, input.repeats ?? 1);
+  const cache = input.bypassCache === true ? undefined : input.cache;
+  const byId = new Map(input.criteria.map((c) => [c.id, c]));
+  const coded = input.criteria.filter((c) => c.grader?.kind === 'code');
+  const judged = input.criteria.filter((c) => c.grader?.kind !== 'code');
+
+  // Every doJudge call goes through the shared limiter (pacing leaf); none bypasses it.
+  const paced: JudgeV1 = {
+    specVersion: judge.specVersion,
+    id: judge.id,
+    capabilities: judge.capabilities,
+    doJudge: (req) =>
+      limiter.run(() => judge.doJudge(req), signal === undefined ? undefined : { signal }),
+  };
+
+  async function judgeOnce(evalCase: Case): Promise<Verdict[]> {
+    const verdicts = await judgeCase({
+      judge: paced,
+      case: evalCase,
+      criteria: judged,
+      ...(cache === undefined ? {} : { cache }),
+      ...(signal === undefined ? {} : { signal }),
+    });
+    return signal?.aborted === true ? markAborted(verdicts) : verdicts;
+  }
+
+  async function perCase(evalCase: Case): Promise<RunVerdict[]> {
+    const raw = coded.map((c) => codeVerdict(c, evalCase));
+    if (judged.length > 0) {
+      const runs = await Promise.all(Array.from({ length: repeats }, () => judgeOnce(evalCase)));
+      raw.push(...runs.flat());
+    }
+    const out = raw.flatMap((v) => {
+      const criterion = byId.get(v.criterionId);
+      return criterion === undefined
+        ? []
+        : [decide(v, criterion, evalCase, lock, fallbackThreshold)];
+    });
+    emit({ type: 'case.judged', caseId: evalCase.id, verdicts: out.length });
+    return out;
+  }
+
+  const results = await Promise.all(input.cases.map(perCase));
+  return results.flat();
+}
+
+type Outcome = 'passed' | 'failed' | 'unscored' | 'neutral';
+
+function outcome(v: Verdict): Outcome {
+  if (v.status === 'not_applicable') return 'neutral';
+  if (v.status !== 'ok') return 'unscored';
+  return v.pass === true ? 'passed' : 'failed';
+}
+
+function summarise(
+  cases: readonly Case[],
+  criteria: readonly Criterion[],
+  verdicts: readonly RunVerdict[],
+  aborted: boolean,
+): RunSummary {
+  const summary: RunSummary = {
+    total: cases.length,
+    passed: 0,
+    failed: 0,
+    unscored: 0,
+    aborted,
+    byCriterion: {},
+  };
+  for (const evalCase of cases) {
+    const outcomes = verdicts.filter((v) => v.caseId === evalCase.id).map(outcome);
+    if (outcomes.includes('failed')) summary.failed += 1;
+    else if (outcomes.includes('unscored')) summary.unscored += 1;
+    else summary.passed += 1;
+  }
+  for (const criterion of criteria) {
+    const outcomes = verdicts.filter((v) => v.criterionId === criterion.id).map(outcome);
+    const passed = outcomes.filter((o) => o === 'passed').length;
+    const failed = outcomes.filter((o) => o === 'failed').length;
+    let saturated: Saturation = null;
+    if (passed + failed > 0) {
+      if (failed === 0) saturated = 'all_pass';
+      else if (passed === 0) saturated = 'all_fail';
+    }
+    summary.byCriterion[criterion.id] = {
+      total: outcomes.length,
+      passed,
+      failed,
+      unscored: outcomes.filter((o) => o === 'unscored').length,
+      saturated,
+    };
+  }
+  return summary;
+}
+
+export interface RunEvalsInput {
+  readonly config: RunConfig;
+  readonly signal?: AbortSignal;
+  /** Parsed lock, or null when none exists (lock reading lands in J3). */
+  readonly lock?: Lock | null;
+  readonly limiter?: Limiter;
+  readonly emit?: (event: RunEvent) => void;
+}
+
+export interface RunEvalsResult {
+  results: RunVerdict[];
+  summary: RunSummary;
+  model: Verdict['model'];
+  exitCode: ExitCode;
+  /** Why the gate refused (exit 2); names the criterion or transport. */
+  gateReasons: string[];
+}
+
+function loadError(
+  code: VetError['code'],
+  source: string,
+  issues: readonly { message: string }[],
+): VetError {
+  const detail = issues.map((i) => i.message).join('; ');
+  return new VetError(code, `cannot load ${source}: ${detail}`);
+}
+
+function runModel(verdicts: readonly Verdict[], judge: JudgeV1): Verdict['model'] {
+  const judged = verdicts.find((v) => v.model.transport !== 'code' && v.model.resolved !== '');
+  if (judged !== undefined) return judged.model;
+  const { model, transport, pinned } = judge.capabilities;
+  return { requested: model, resolved: '', transport, pinned };
+}
+
+export async function runEvals(input: RunEvalsInput): Promise<RunEvalsResult> {
+  const { config, signal } = input;
+  const emit = input.emit ?? ((): void => {});
+  const lock = input.lock ?? null;
+
+  const loadedCriteria = await loadCriteria(config.criteriaPath);
+  if (!loadedCriteria.ok) {
+    const code = loadedCriteria.issues[0]?.code ?? CEV_ERROR_CODES.CRITERIA_INVALID;
+    throw loadError(code, config.criteriaPath, loadedCriteria.issues);
+  }
+  const loadedCases = await loadCases(config.casesDir);
+  if (!loadedCases.ok) {
+    const code = loadedCases.issues[0]?.code ?? CEV_ERROR_CODES.CASE_INVALID;
+    throw loadError(code, config.casesDir, loadedCases.issues);
+  }
+  const { criteria } = loadedCriteria;
+  const { cases } = loadedCases;
+
+  emit({ type: 'run.start', cases: cases.length, criteria: criteria.length });
+  if (cases.length === 0) emit({ type: 'run.no_cases' });
+  if (!criteria.some((c) => c.type === 'boolean' || c.type === 'choice')) {
+    emit({ type: 'gate.no_gateable_criteria' });
+  }
+
+  const results = await runJudge({
+    cases,
+    criteria,
+    judge: config.judge,
+    lock,
+    emit,
+    ...(config.cacheDir === undefined ? {} : { cache: createFileCache(config.cacheDir) }),
+    ...(config.threshold === undefined ? {} : { threshold: config.threshold }),
+    ...(input.limiter === undefined ? {} : { limiter: input.limiter }),
+    ...(signal === undefined ? {} : { signal }),
+  });
+
+  const aborted = signal?.aborted === true;
+  const summary = summarise(cases, criteria, results, aborted);
+  for (const [criterionId, s] of Object.entries(summary.byCriterion)) {
+    if (s.saturated !== null) {
+      emit({ type: 'criterion.saturated', criterionId, saturated: s.saturated });
+    }
+  }
+
+  let exitCode: ExitCode;
+  let gateReasons: string[] = [];
+  const minPass = config.gatePolicy?.minPass;
+  if (aborted) {
+    exitCode = 130;
+  } else if (config.gate === true) {
+    const gate = evaluateGate({
+      verdicts: results,
+      lock,
+      policy: {
+        requireCalibrated: config.gatePolicy?.requireCalibrated ?? true,
+        allowUnpinned: config.gatePolicy?.allowUnpinned ?? false,
+        ...(minPass === undefined ? {} : { minPass }),
+      },
+    });
+    exitCode = gate.exitCode;
+    gateReasons = gate.reasons;
+  } else {
+    exitCode = decideExit(
+      minPass === undefined ? { verdicts: results } : { verdicts: results, minPass },
+    );
+  }
+
+  emit({ type: 'run.end', summary, exitCode });
+  return { results, summary, model: runModel(results, config.judge), exitCode, gateReasons };
+}

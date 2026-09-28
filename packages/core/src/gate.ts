@@ -1,0 +1,78 @@
+// Exit-code decision and gate policy (DECISION: core seams named — `vet run --gate` calls
+// evaluateGate). Exit codes: 0 all gated verdicts pass, 1 any gated verdict fails or is
+// unscored, 2 the gate refuses (no lock, uncalibrated gated criterion, unpinned transport),
+// 130 aborted. Verdicts with gated:false (score criteria, uncalibrated languages) never count.
+import type { Lock, Verdict } from '@vetkit/spec';
+
+export interface GatePolicy {
+  /** Minimum pass rate (0..1) over counted verdicts; absent means every one must pass. */
+  readonly minPass?: number;
+  readonly requireCalibrated: boolean;
+  readonly allowUnpinned: boolean;
+}
+
+export type ExitCode = 0 | 1 | 2 | 130;
+
+export interface DecideExitInput {
+  readonly verdicts: readonly Verdict[];
+  readonly aborted?: boolean;
+  readonly minPass?: number;
+}
+
+function resultExit(verdicts: readonly Verdict[], minPass: number | undefined): 0 | 1 {
+  // not_applicable (escape, missing reference) is neither pass nor fail; unscored is never a pass.
+  const counted = verdicts.filter((v) => v.gated !== false && v.status !== 'not_applicable');
+  if (counted.length === 0) return 0;
+  const passed = counted.filter((v) => v.status === 'ok' && v.pass === true).length;
+  if (minPass === undefined) return passed === counted.length ? 0 : 1;
+  return passed / counted.length >= minPass ? 0 : 1;
+}
+
+export function decideExit(input: DecideExitInput): 0 | 1 | 130 {
+  if (input.aborted === true) return 130;
+  return resultExit(input.verdicts, input.minPass);
+}
+
+export interface EvaluateGateInput {
+  readonly verdicts: readonly Verdict[];
+  readonly lock: Lock | null;
+  readonly policy: GatePolicy;
+}
+
+export interface GateResult {
+  readonly exitCode: 0 | 1 | 2;
+  readonly reasons: string[];
+}
+
+export function evaluateGate(input: EvaluateGateInput): GateResult {
+  const { lock, policy } = input;
+  if (lock === null) {
+    return {
+      exitCode: 2,
+      reasons: ['no lock file: the gate refuses to run on uncalibrated thresholds'],
+    };
+  }
+
+  const reasons: string[] = [];
+  if (!policy.allowUnpinned) {
+    const unpinned = new Set<string>();
+    if (!lock.model.pinned) unpinned.add(lock.model.transport);
+    for (const v of input.verdicts) if (!v.model.pinned) unpinned.add(v.model.transport);
+    for (const transport of unpinned) {
+      reasons.push(`transport '${transport}' is unpinned (pass allowUnpinned to gate anyway)`);
+    }
+  }
+  if (policy.requireCalibrated) {
+    const gated = new Set(
+      input.verdicts.filter((v) => v.gated !== false).map((v) => v.criterionId),
+    );
+    for (const id of gated) {
+      if (lock.criteria[id]?.status !== 'calibrated') {
+        reasons.push(`criterion '${id}' is not calibrated in the lock`);
+      }
+    }
+  }
+  if (reasons.length > 0) return { exitCode: 2, reasons };
+
+  return { exitCode: resultExit(input.verdicts, policy.minPass), reasons };
+}

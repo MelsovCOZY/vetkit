@@ -45,3 +45,24 @@ export type {
 
 export { createLimiter } from './judge/pacing.ts';
 export type { Limiter, LimiterOptions, LimiterStats, PacingEvent } from './judge/pacing.ts';
+
+export { decideExit, evaluateGate } from './gate.ts';
+export type {
+  DecideExitInput,
+  EvaluateGateInput,
+  ExitCode,
+  GatePolicy,
+  GateResult,
+} from './gate.ts';
+export { runEvals, runJudge } from './run.ts';
+export type {
+  CriterionSummary,
+  RunConfig,
+  RunEvalsInput,
+  RunEvalsResult,
+  RunEvent,
+  RunJudgeInput,
+  RunSummary,
+  RunVerdict,
+  Saturation,
+} from './run.ts';
