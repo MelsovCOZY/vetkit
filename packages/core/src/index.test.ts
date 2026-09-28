@@ -6,6 +6,7 @@ import {
   clusterKeys,
   computeWordingHash,
   createFileCache,
+  createLimiter,
   DEFAULT_FORBIDDEN_WORDS,
   gradeCode,
   judgeCase,
@@ -43,6 +44,10 @@ describe('@vetkit/core package entry', () => {
 
   it('re-exports referenceRequirement as a function', () => {
     expect(typeof referenceRequirement).toBe('function');
+  });
+
+  it('re-exports createLimiter as a function', () => {
+    expect(typeof createLimiter).toBe('function');
   });
 
   it('re-exports MAX_STATE_TOKENS as 32_000', () => {
