@@ -7,6 +7,8 @@ import {
   computeWordingHash,
   createFileCache,
   createLimiter,
+  decideExit,
+  evaluateGate,
   DEFAULT_FORBIDDEN_WORDS,
   gradeCode,
   judgeCase,
@@ -19,6 +21,8 @@ import {
   pairedClusteredDiff,
   referenceRequirement,
   renderReference,
+  runEvals,
+  runJudge,
 } from './index.ts';
 
 describe('@vetkit/core package entry', () => {
@@ -96,5 +100,21 @@ describe('@vetkit/core package entry', () => {
 
   it('re-exports createFileCache as a function', () => {
     expect(typeof createFileCache).toBe('function');
+  });
+
+  it('re-exports runEvals as a function', () => {
+    expect(typeof runEvals).toBe('function');
+  });
+
+  it('re-exports runJudge as a function', () => {
+    expect(typeof runJudge).toBe('function');
+  });
+
+  it('re-exports evaluateGate as a function', () => {
+    expect(typeof evaluateGate).toBe('function');
+  });
+
+  it('re-exports decideExit as a function', () => {
+    expect(typeof decideExit).toBe('function');
   });
 });
