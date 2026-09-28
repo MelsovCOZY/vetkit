@@ -793,3 +793,69 @@ describe('byCriterion saturation', () => {
     expect(out.exitCode).toBe(1);
   });
 });
+
+// ---------- verdict provenance (mol-yxn.7) ----------
+
+describe('verdict provenance', () => {
+  const TRACE = '0af7651916cd43dd8448eb211c80319c';
+
+  test('provenance picks the six keys from case.provenance and case.traceId', async () => {
+    const paths = await suite(
+      [BOOL_YAML],
+      [
+        {
+          id: 'c1',
+          input: { state: 'S1' },
+          traceId: TRACE,
+          provenance: {
+            traceId: 'overridden',
+            spanId: 'b7ad6b7169203331',
+            responseId: 'resp-1',
+            observationId: 'obs-1',
+            dialect: 'openinference',
+            schemaUrl: 'https://example.test/schema',
+            extra: 'dropped',
+            source: { nested: true },
+            count: 3,
+          },
+        },
+      ],
+    );
+    const { judge } = scriptedJudge({ S1: { 'answers-question': yes(0.9) } });
+    const out = await runEvals({ config: { ...paths, judge } });
+    const v = find(out.results, 'c1', 'answers-question');
+    expect(v?.provenance).toEqual({
+      traceId: TRACE,
+      spanId: 'b7ad6b7169203331',
+      responseId: 'resp-1',
+      observationId: 'obs-1',
+      dialect: 'openinference',
+      schemaUrl: 'https://example.test/schema',
+    });
+    expect(validateJson(v, verdictSchema).ok).toBe(true);
+  });
+
+  test('unscored verdict carries provenance', async () => {
+    const paths = await suite(
+      [BOOL_YAML],
+      [{ id: 'c1', input: { state: 'S1' }, traceId: TRACE, provenance: { spanId: 's1' } }],
+    );
+    const { judge } = scriptedJudge({ S1: 'throw' });
+    const out = await runEvals({ config: { ...paths, judge } });
+    const v = find(out.results, 'c1', 'answers-question');
+    expect(v?.status).toBe('unscored');
+    expect(v?.provenance).toEqual({ traceId: TRACE, spanId: 's1' });
+  });
+
+  test('null case.provenance yields no provenance', async () => {
+    const paths = await suite(
+      [BOOL_YAML],
+      [{ id: 'c1', input: { state: 'S1' }, provenance: null }],
+    );
+    const { judge } = scriptedJudge({ S1: { 'answers-question': yes(0.9) } });
+    const out = await runEvals({ config: { ...paths, judge } });
+    const v = find(out.results, 'c1', 'answers-question');
+    expect(v).toBeDefined();
+    expect(v?.provenance).toBeUndefined();
+  });
+});

@@ -3,7 +3,13 @@
 // and errors go to stderr. SIGINT aborts the run: partial results are still printed, with
 // summary.aborted true, and the exit code is 130 (root DECISION C5).
 import { resolve } from 'node:path';
-import { createEvents, runEvals, type RunEvalsResult, type RunVerdict } from '@vetkit/core';
+import {
+  createEvents,
+  runEvals,
+  type ResolvedConfig,
+  type RunEvalsResult,
+  type RunVerdict,
+} from '@vetkit/core';
 import type { Command } from 'commander';
 import { loadVetConfig } from '../config-load.ts';
 import { CEV_EXIT, emit, getLogger, type GlobalOptions } from '../output.ts';
@@ -18,6 +24,23 @@ interface RunOptions extends GlobalOptions {
   readonly allowUnpinned?: boolean;
   readonly reporter?: ReporterSpec;
 }
+
+// Hooks other commands' modules add to `vet run` (mol-yxn.7: `--sink`). A hook runs after the
+// config loads and before any judge call, so it can fail fast; the finish it returns runs on
+// the result (partial on SIGINT). Only `json` is merged into the --json document; `lines` are
+// appended to the pretty rendering. The exit code stays the run's.
+export interface RunHookContext {
+  readonly options: GlobalOptions & Readonly<Record<string, unknown>>;
+  readonly config: ResolvedConfig;
+  readonly rootDir: string;
+}
+export interface RunHookOutput {
+  readonly json: Record<string, unknown>;
+  readonly lines?: readonly string[];
+}
+export type RunHookFinish = (result: RunEvalsResult) => Promise<RunHookOutput>;
+export type RunHook = (ctx: RunHookContext) => Promise<RunHookFinish | undefined>;
+export const runHooks: RunHook[] = [];
 
 type Outcome = 'pass' | 'fail' | 'unscored';
 
@@ -41,7 +64,7 @@ function render(result: RunEvalsResult): string {
   return lines.join('\n');
 }
 
-async function runCommand(options: RunOptions): Promise<void> {
+async function runCommand(options: RunOptions & Readonly<Record<string, unknown>>): Promise<void> {
   const log = getLogger();
   const cwd = process.cwd();
   const loaded = await loadVetConfig({
@@ -50,6 +73,11 @@ async function runCommand(options: RunOptions): Promise<void> {
   });
   for (const warning of loaded.warnings) log.warn(warning);
   const { config, rootDir } = loaded;
+  const finishes: RunHookFinish[] = [];
+  for (const hook of runHooks) {
+    const finish = await hook({ options, config, rootDir });
+    if (finish !== undefined) finishes.push(finish);
+  }
 
   const controller = new AbortController();
   const onSigint = (): void => {
@@ -87,7 +115,14 @@ async function runCommand(options: RunOptions): Promise<void> {
 
   for (const reason of result.gateReasons) log.error(`gate refused: ${reason}`);
   await writeReports(options.reporter, [{ criteriaPath, result }], { cwd });
-  emit(result, () => render(result));
+  const extras: Record<string, unknown> = {};
+  const lines: string[] = [];
+  for (const finish of finishes) {
+    const out = await finish(result);
+    Object.assign(extras, out.json);
+    lines.push(...(out.lines ?? []));
+  }
+  emit({ ...result, ...extras }, () => [render(result), ...lines].join('\n'));
   process.exitCode = result.exitCode;
 }
 
@@ -105,6 +140,6 @@ export function registerRun(program: Command): Command {
       .option('--gate', 'gate on calibrated thresholds from the lock; refuses (exit 2) without one')
       .option('--allow-unpinned', 'let --gate pass on an unpinned judge transport'),
   ).action(async (_options: unknown, command: Command) => {
-    await runCommand(command.optsWithGlobals<RunOptions>());
+    await runCommand(command.optsWithGlobals<RunOptions & Readonly<Record<string, unknown>>>());
   });
 }

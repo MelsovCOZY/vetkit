@@ -108,6 +108,13 @@ describe('VetError', () => {
     }
   });
 
+  test('accepts CONFIG_UNKNOWN_SINK (vet run --sink names a sink not in config, J6)', () => {
+    expect(CEV_ERROR_CODES.CONFIG_UNKNOWN_SINK).toBe('CONFIG_UNKNOWN_SINK');
+    const err = new VetError('CONFIG_UNKNOWN_SINK', "unknown sink 'nope'");
+    expect(VetError.isInstance(err)).toBe(true);
+    expect(err.code).toBe('CONFIG_UNKNOWN_SINK');
+  });
+
   test('accepts the five J2 codes (source/generator)', () => {
     const j2Codes = [
       'SOURCE_UNREADABLE',

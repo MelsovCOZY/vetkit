@@ -68,6 +68,12 @@ describe('vet bin', () => {
     expect(result.stdout).toMatch(/^\s+run\b/m);
   });
 
+  test('run --help lists the --sink option', () => {
+    const result = runBin(['run', '--help']);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toMatch(/--sink \[names\]/);
+  });
+
   test('label --tty with a closed stdin exits 2 with NOT_INTERACTIVE on stderr', () => {
     const result = runBin(['label', '--tty'], ['ignore', 'pipe', 'pipe']);
     expect(result.status).toBe(2);
