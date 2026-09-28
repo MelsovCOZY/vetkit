@@ -158,7 +158,9 @@ export const openllmetryDialect: DialectV1 = {
     return [...messagesFromIndexed(attrs), ...messagesFromEntity(attrs)];
   },
 
-  extractUsage(span: OtlpSpan): { inputTokens?: number; outputTokens?: number } | null {
+  extractUsage(
+    span: OtlpSpan,
+  ): { inputTokens?: number; outputTokens?: number; totalTokens?: number } | null {
     const attrs = span.attributes;
     const inputTokens = numberAttr(attrs['gen_ai.usage.prompt_tokens']);
     const outputTokens = numberAttr(attrs['gen_ai.usage.completion_tokens']);
@@ -168,14 +170,24 @@ export const openllmetryDialect: DialectV1 = {
         ...(outputTokens === undefined ? {} : { outputTokens }),
       };
     }
-    // llm.usage.total_tokens without a split: usage was reported, but DialectV1.extractUsage has
-    // no field for a bare total (see this bead's BUILD report, Discoveries) — the caller sees
-    // "usage present, no split" rather than losing the signal entirely by returning null.
-    if (numberAttr(attrs['llm.usage.total_tokens']) !== undefined) return {};
+    // llm.usage.total_tokens without a split (pij.13): carried as totalTokens so sumTokens can
+    // record tokens.total with input/output left unknown, rather than losing the signal.
+    const totalTokens = numberAttr(attrs['llm.usage.total_tokens']);
+    if (totalTokens !== undefined) return { totalTokens };
     return null;
   },
 
   contentState(span: OtlpSpan): 'captured' | 'not_captured' | 'redacted' {
     return hasCapturedContent(span.attributes) ? 'captured' : 'not_captured';
+  },
+
+  // pij.13: traceloop.span.kind tool/workflow/task/agent -> Span.kind; 'llm' spans are already
+  // routed to 'llm' by isLlmSpan before normalizeTrace ever calls this hook, and any other value
+  // (or no attribute) is left undefined so normalizeTrace's 'other' fallback applies.
+  spanKind(span: OtlpSpan): 'llm' | 'tool' | 'other' | undefined {
+    const kind = span.attributes['traceloop.span.kind'];
+    if (kind === 'tool') return 'tool';
+    if (kind === 'workflow' || kind === 'task' || kind === 'agent') return 'other';
+    return undefined;
   },
 };
