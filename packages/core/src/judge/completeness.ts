@@ -5,10 +5,6 @@
 
 import type { Case, Criterion, NormalizedTrace } from '@vetkit/spec';
 
-// Criterion.contentDependent is not yet in criterion.schema.json (contract pij.7 revision 4); an
-// absent flag means true (content-dependent). The schema flag is follow-up work on j1-1.
-export type CriterionWithFlag = Criterion & { readonly contentDependent?: boolean };
-
 export type CompletenessStatus = 'ok' | 'content_not_captured' | 'truncated' | 'incomplete_trace';
 export type ExclusionStatus = Exclude<CompletenessStatus, 'ok'>;
 
@@ -41,12 +37,12 @@ function readCompleteness(provenance: unknown): NormalizedTrace['completeness'] 
 
 export function partitionCases(
   cases: readonly Case[],
-  criteria: readonly CriterionWithFlag[],
+  criteria: readonly Criterion[],
 ): {
-  judgeable: Array<{ case: Case; criteria: readonly CriterionWithFlag[] }>;
+  judgeable: Array<{ case: Case; criteria: readonly Criterion[] }>;
   excluded: Array<{ case: Case; status: ExclusionStatus }>;
 } {
-  const judgeable: Array<{ case: Case; criteria: readonly CriterionWithFlag[] }> = [];
+  const judgeable: Array<{ case: Case; criteria: readonly Criterion[] }> = [];
   const excluded: Array<{ case: Case; status: ExclusionStatus }> = [];
 
   for (const c of cases) {
