@@ -21,6 +21,10 @@ test('JudgeV1.capabilities.questionTypes is an array of Question[type]', () => {
   >();
 });
 
+test('JudgeV1.capabilities.model is the declared/requested model id (string)', () => {
+  expectTypeOf<JudgeV1['capabilities']>().toHaveProperty('model').toEqualTypeOf<string>();
+});
+
 test('JudgeResponse.model carries requested/resolved/transport/pinned', () => {
   expectTypeOf<JudgeResponse['model']>().toMatchTypeOf<{
     requested: string;
