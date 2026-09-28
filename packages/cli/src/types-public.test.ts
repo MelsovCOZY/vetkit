@@ -34,4 +34,9 @@ describe('built cli declarations', () => {
     );
     expect(offenders).toEqual([]);
   });
+
+  test('export judgeOne from the package entry', () => {
+    const entry = readFileSync(`${distDir}/index.d.ts`, 'utf8');
+    expect(entry).toMatch(/\bjudgeOne\b/);
+  });
 });
