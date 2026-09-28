@@ -123,6 +123,16 @@ describe('handleError code classes', () => {
     );
   });
 
+  test('a RECEIVER_BIND code exits 2, not the default INTERNAL fallback (J7 `vet watch`)', () => {
+    const result = run(markerError('RECEIVER_BIND', 'port 4318 already in use'));
+    expect(result.code).toBe(EXIT_USAGE);
+  });
+
+  test('a WATCH_CONFIG code exits 2 (J7 `vet watch --sample` outside 0..1)', () => {
+    const result = run(markerError('WATCH_CONFIG', 'sampleRate 1.5 outside 0..1'));
+    expect(result.code).toBe(EXIT_USAGE);
+  });
+
   test('a SINK_ prefixed class code exits 0 with a warning line by default', () => {
     const result = run(markerError('E_SINK_WRITE', 'sink dropped a batch'));
     expect(result.code).toBe(EXIT_OK);

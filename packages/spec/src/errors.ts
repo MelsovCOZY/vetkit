@@ -75,6 +75,10 @@ export const CEV_ERROR_CODES = {
   // --require-lock` (no criteria.lock.json); both exit 2 (cli errors.ts EXPORT_* rule).
   EXPORT_TARGET_UNKNOWN: 'EXPORT_TARGET_UNKNOWN',
   EXPORT_NO_LOCK: 'EXPORT_NO_LOCK',
+  // J7 contract (docs/contracts/j7.md "Error codes", mol-zde): `vet watch`'s receiver bind
+  // failure and an out-of-range --sample. Both exit 2 (cli errors.ts).
+  RECEIVER_BIND: 'RECEIVER_BIND',
+  WATCH_CONFIG: 'WATCH_CONFIG',
 } as const;
 
 export type CevErrorCode = (typeof CEV_ERROR_CODES)[keyof typeof CEV_ERROR_CODES];
