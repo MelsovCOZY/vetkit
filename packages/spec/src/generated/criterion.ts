@@ -10,6 +10,8 @@ export type Criterion = {
       }
     | string[];
   escape?: string;
+  passWhen?: string[];
+  escapeThreshold?: number;
   polarity: 'pass_when_true' | 'pass_when_false';
   channel: 'outcome' | 'safety' | 'quality';
   provenance: {
@@ -40,6 +42,7 @@ export type Criterion = {
       criteria: {
         [k: string]: string;
       };
+      passWhen?: unknown;
     }
   | {
       type: 'score';

@@ -14,6 +14,8 @@
       ]
     },
     "escape": { "type": "string" },
+    "passWhen": { "type": "array", "items": { "type": "string" } },
+    "escapeThreshold": { "type": "number", "minimum": 0, "maximum": 1 },
     "polarity": { "enum": ["pass_when_true", "pass_when_false"] },
     "channel": { "enum": ["outcome", "safety", "quality"] },
     "provenance": {
@@ -59,7 +61,12 @@
     {
       "properties": { "type": { "const": "boolean" }, "escape": true },
       "required": ["type", "escape"],
-      "not": { "properties": { "criteria": true }, "required": ["criteria"] }
+      "not": {
+        "anyOf": [
+          { "properties": { "criteria": true }, "required": ["criteria"] },
+          { "properties": { "passWhen": true }, "required": ["passWhen"] }
+        ]
+      }
     },
     {
       "properties": {
@@ -70,7 +77,8 @@
           "minProperties": 2,
           "maxProperties": 255,
           "additionalProperties": { "type": "string" }
-        }
+        },
+        "passWhen": true
       },
       "required": ["type", "escape", "criteria"]
     },
@@ -85,7 +93,12 @@
         }
       },
       "required": ["type", "criteria"],
-      "not": { "properties": { "escape": true }, "required": ["escape"] }
+      "not": {
+        "anyOf": [
+          { "properties": { "escape": true }, "required": ["escape"] },
+          { "properties": { "passWhen": true }, "required": ["passWhen"] }
+        ]
+      }
     }
   ],
   "if": {
