@@ -170,6 +170,35 @@ describe('criterion.schema.json', () => {
 
     expect(result.ok).toBe(false);
   });
+
+  // DECISION (turn 9, contract amendment): Criterion.passWhen (choice only) and
+  // Criterion.escapeThreshold (0..1, default 0.5), docs/contracts/j1.md IR section.
+  test('accepts a choice criterion with passWhen and escapeThreshold', () => {
+    const result = parseIr(
+      JSON.stringify({ ...choiceCriterion, passWhen: ['helpful'], escapeThreshold: 0.7 }),
+      criterionSchema,
+    );
+
+    expect(result.ok).toBe(true);
+  });
+
+  test('rejects passWhen on a score criterion (passWhen is choice-only)', () => {
+    const result = parseIr(
+      JSON.stringify({ ...scoreCriterion, passWhen: ['Good'] }),
+      criterionSchema,
+    );
+
+    expect(result.ok).toBe(false);
+  });
+
+  test('rejects an escapeThreshold outside [0,1]', () => {
+    const result = parseIr(
+      JSON.stringify({ ...choiceCriterion, escapeThreshold: 1.5 }),
+      criterionSchema,
+    );
+
+    expect(result.ok).toBe(false);
+  });
 });
 
 describe('case.schema.json', () => {

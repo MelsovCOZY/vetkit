@@ -14,6 +14,13 @@ test('Criterion is a narrow object type, not Record<string, unknown>', () => {
   expectTypeOf<Criterion>().not.toEqualTypeOf<Record<string, unknown>>();
 });
 
+// DECISION (turn 9, contract amendment): Criterion.passWhen (choice only, string[])
+// and Criterion.escapeThreshold (number, 0..1 default 0.5), docs/contracts/j1.md.
+test('Criterion.passWhen and Criterion.escapeThreshold are optional', () => {
+  expectTypeOf<Criterion['passWhen']>().toEqualTypeOf<string[] | undefined>();
+  expectTypeOf<Criterion['escapeThreshold']>().toEqualTypeOf<number | undefined>();
+});
+
 test('Case is a narrow object type, not Record<string, unknown>', () => {
   expectTypeOf<Case['id']>().toEqualTypeOf<string>();
   expectTypeOf<Case['tags']>().toEqualTypeOf<string[]>();
