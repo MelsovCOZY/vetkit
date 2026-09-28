@@ -17,13 +17,6 @@ import {
 } from '@vetkit/spec';
 import { JEV_PRESETS, type JevPresetName } from './presets.ts';
 
-// JudgeResponse.model (packages/spec/src/ports/judge.ts) does not carry
-// credentialType yet — see this bead's report, "Discoveries". This local type
-// widens it rather than editing the port (out of this bead's owned paths).
-export interface NormalisedJudgeResponse extends JudgeResponse {
-  readonly model: JudgeResponse['model'] & { readonly credentialType?: string };
-}
-
 export interface NormaliseRequested {
   readonly model: string;
   readonly questions: Record<string, Question>;
@@ -216,8 +209,8 @@ function processAnswer(
 export function normalise(
   rawResponse: unknown,
   requested: NormaliseRequested,
-  preset: JevPresetName,
-): NormalisedJudgeResponse {
+  preset: JevPresetName | 'custom',
+): JudgeResponse {
   const validated = validateJson<Record<string, unknown>>(rawResponse, WIRE_RESPONSE_SCHEMA);
   if (!validated.ok) {
     throw new VetError('JUDGE_BAD_RESPONSE', 'judge response failed wire schema validation', {
@@ -261,7 +254,7 @@ export function normalise(
       requested: requested.model,
       resolved,
       transport: preset,
-      pinned: JEV_PRESETS[preset].pinned,
+      pinned: preset === 'custom' ? false : JEV_PRESETS[preset].pinned,
       ...(provider !== undefined ? { provider } : {}),
       ...(credentialType !== undefined ? { credentialType } : {}),
     },

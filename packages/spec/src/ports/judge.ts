@@ -33,6 +33,7 @@ export interface JudgeResponse {
     transport: string;
     pinned: boolean;
     provider?: string;
+    credentialType?: string;
     releaseDate?: string;
   };
   raw?: unknown;
