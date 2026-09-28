@@ -3,13 +3,8 @@
 // model), all speaking the `/v1/systemone` dialect. Plain fetch only — the
 // @typesafe-ai/sdk peer stays optional and unused here (docs/contracts/j1.md
 // "Ports"; root ledger DECISION: access layer).
-import {
-  VetError,
-  type Answer,
-  type JudgeResponse,
-  type JudgeV1,
-  type Question,
-} from '@vetkit/spec';
+import { VetError, type JudgeV1, type Question } from '@vetkit/spec';
+import { normalise } from './normalise.ts';
 import { JEV_PRESETS, type JevPresetName, type JevProviderOptions } from './presets.ts';
 
 const SYSTEMONE_PATH = '/v1/systemone';
@@ -31,7 +26,7 @@ interface ResolvedTransport {
   readonly baseURL: string;
   readonly model: string;
   readonly pinned: boolean;
-  readonly transport: string;
+  readonly transport: JevPresetName | 'custom';
   readonly providerOptions?: JevProviderOptions;
 }
 
@@ -69,31 +64,9 @@ interface WireRequestBody {
   readonly providerOptions?: JevProviderOptions;
 }
 
-type WireAnswer =
-  | { type: 'noul'; noul: number }
-  | { type: 'choice'; choice: string; confidence: number; probabilities: Record<string, number> }
-  | {
-      type: 'score';
-      score: number;
-      confidence: number;
-      legend: Record<string, string>;
-      probabilities: Record<string, number>;
-    };
-
-interface WireResponseBody {
-  readonly model: string;
-  readonly answers: Record<string, WireAnswer>;
-  readonly usage: { readonly input_tokens: number; readonly output_tokens: number };
-}
-
 function toWireQuestion(question: Question): WireQuestion {
   if (question.type === 'boolean') return { type: 'noul', instructions: question.instructions };
   return question;
-}
-
-function fromWireAnswer(wire: WireAnswer): Answer {
-  if (wire.type === 'noul') return { type: 'boolean', probability: wire.noul };
-  return wire;
 }
 
 function estimateTokens(charLength: number): number {
@@ -329,7 +302,7 @@ export function createJevJudge(opts: CreateJevJudgeOptions): JudgeV1 {
         throw await toJudgeError(response, apiKey, model);
       }
 
-      let wireResponse: WireResponseBody;
+      let wireResponse: unknown;
       try {
         wireResponse = await response.json();
       } catch (cause) {
@@ -342,26 +315,7 @@ export function createJevJudge(opts: CreateJevJudgeOptions): JudgeV1 {
         );
       }
 
-      const answers: Record<string, Answer> = {};
-      for (const [key, wireAnswer] of Object.entries(wireResponse.answers)) {
-        answers[key] = fromWireAnswer(wireAnswer);
-      }
-
-      const result: JudgeResponse = {
-        answers,
-        usage: {
-          inputTokens: wireResponse.usage.input_tokens,
-          outputTokens: wireResponse.usage.output_tokens,
-        },
-        model: {
-          requested: model,
-          resolved: wireResponse.model,
-          transport,
-          pinned,
-        },
-        raw: wireResponse,
-      };
-      return result;
+      return normalise(wireResponse, { model, questions: req.questions }, transport);
     },
   };
 }
