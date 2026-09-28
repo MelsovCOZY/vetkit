@@ -12,6 +12,9 @@ export interface LoggerOptions {
   readonly level?: LogLevel;
   readonly format?: 'pretty' | 'json';
   readonly stream?: LogStream;
+  // The caller's colour decision (the CLI passes output.ts's colorEnabled for stderr).
+  // Omitted: colour only on a TTY stream with NO_COLOR unset.
+  readonly color?: boolean;
 }
 export interface Logger {
   readonly debug: (message: string, data?: Record<string, unknown>) => void;
@@ -35,7 +38,7 @@ export function createLogger(options: LoggerOptions = {}): Logger {
   const stream = options.stream ?? process.stderr;
   const format = options.format ?? 'pretty';
   const isTty = 'isTTY' in stream && (stream as { isTTY?: boolean }).isTTY === true;
-  const color = !process.env.NO_COLOR && isTty;
+  const color = options.color ?? (!process.env.NO_COLOR && isTty);
   const rawLevel = process.env.CEV_LOG_LEVEL;
   const level: LogLevel =
     options.level ?? (rawLevel !== undefined && isLogLevel(rawLevel) ? rawLevel : 'info');
@@ -49,7 +52,7 @@ export function createLogger(options: LoggerOptions = {}): Logger {
       stream.write(`${JSON.stringify({ level: lvl, message: safeMessage, ...safeData })}\n`);
       return;
     }
-    const label = color ? styleText(LEVEL_COLOR[lvl], lvl) : lvl;
+    const label = color ? styleText(LEVEL_COLOR[lvl], lvl, { validateStream: false }) : lvl;
     const suffix = safeData ? ` ${JSON.stringify(safeData)}` : '';
     stream.write(`${label} ${safeMessage}${suffix}\n`);
   };
