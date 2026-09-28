@@ -223,3 +223,61 @@ describe('vet run --reporter junit (mol-aq4.7)', () => {
     expect(readFileSync(join(project, '.vet', 'junit.xml'), 'utf8')).toContain('<testsuites');
   }, 60_000);
 });
+
+function recordPath(project: string): string {
+  return join(project, '.vet', 'runs', 'latest.json');
+}
+
+function parseObject(text: string): Record<string, unknown> {
+  const result = safeParseJson<Record<string, unknown>>(text, { type: 'object' });
+  if (!result.ok) throw result.error;
+  return result.value;
+}
+
+describe('vet run persists .vet/runs/latest.json (mol-p4a.16)', () => {
+  test('the record is the --json document plus criteriaPath, casesPath and startedAt', () => {
+    const project = freshProject();
+    const result = runVet(['run', '--json'], project, fixtureEnv('fail'));
+    expect(result.status).toBe(1);
+    const doc = parseObject(result.stdout);
+    const rec = parseObject(readFileSync(recordPath(project), 'utf8'));
+    expect(rec).toEqual({
+      ...doc,
+      criteriaPath: join(project, 'evals', 'criteria.yaml'),
+      casesPath: join(project, 'evals', 'cases'),
+      startedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+    });
+  });
+
+  test('human mode writes the record too', () => {
+    const project = freshProject();
+    const result = runVet(['run'], project, fixtureEnv('pass'));
+    expect(result.status).toBe(0);
+    expect(parseJson(readFileSync(recordPath(project), 'utf8'))).toMatchObject({
+      summary: { total: 1, passed: 1 },
+      exitCode: 0,
+    });
+  });
+
+  test('SIGINT partial runs are written with summary.aborted', async () => {
+    const project = freshProject();
+    const started = join(project, 'started');
+    const child = spawn(process.execPath, [binPath, 'run', '--json'], {
+      cwd: project,
+      env: fixtureEnv('slow', { VETKIT_FIXTURE_STARTED: started }),
+    });
+    const exited = new Promise<number | null>((resolve) => {
+      child.on('exit', (code) => resolve(code));
+    });
+    const deadline = Date.now() + 30_000;
+    while (!existsSync(started) && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    child.kill('SIGINT');
+    expect(await exited).toBe(130);
+    expect(parseJson(readFileSync(recordPath(project), 'utf8'))).toMatchObject({
+      summary: { aborted: true },
+      exitCode: 130,
+    });
+  }, 60_000);
+});

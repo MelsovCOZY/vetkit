@@ -361,3 +361,20 @@ describe('@vetkit/core lock exports (q4q.6)', () => {
     expect(datasetHash([])).toMatch(/^[0-9a-f]{64}$/);
   });
 });
+
+import { readRunRecord, writeRunRecord, type RunRecord } from './index.ts';
+
+describe('@vetkit/core run-record exports (mol-p4a.16)', () => {
+  it('re-exports readRunRecord and writeRunRecord as functions', () => {
+    expect(typeof readRunRecord).toBe('function');
+    expect(typeof writeRunRecord).toBe('function');
+  });
+
+  it('re-exports the RunRecord type carrying criteriaPath and casesPath', () => {
+    const paths: Pick<RunRecord, 'criteriaPath' | 'casesPath'> = {
+      criteriaPath: 'a',
+      casesPath: 'b',
+    };
+    expect(paths.criteriaPath).toBe('a');
+  });
+});
