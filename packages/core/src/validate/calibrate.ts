@@ -142,9 +142,13 @@ export function repeatValues(
         // run.ts decide.
         v = answer.probabilities['yes'] ?? 0;
       } else if (answer?.type === 'choice') {
-        v = Object.entries(answer.probabilities)
-          .filter(([key]) => passWhen.has(key))
-          .reduce((sum, [, p]) => sum + p, 0);
+        // Same fallback as run.ts decide: the argmax label in passWhen as 1 / 0 when no
+        // probabilities come back.
+        const entries = Object.entries(answer.probabilities);
+        v =
+          entries.length === 0
+            ? Number(passWhen.has(answer.choice))
+            : entries.filter(([key]) => passWhen.has(key)).reduce((sum, [, p]) => sum + p, 0);
       } else if (answer?.type === 'score') {
         const entries = Object.entries(answer.probabilities);
         v =
