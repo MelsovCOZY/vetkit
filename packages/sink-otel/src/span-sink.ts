@@ -106,8 +106,9 @@ export function createOpenInferenceSink(opts: CreateOpenInferenceSinkOptions): S
     if (status === 413) return rejectAll(entries, 'SINK_PAYLOAD_TOO_LARGE', true);
     if (status < 200 || status >= 300) return rejectAll(entries, `SINK_REJECTED:${status}`, false);
 
-    // OTLP does not say which spans were rejected; the last N are reported retryable (the
-    // sink is idempotent at the verdict level: a resend adds a second carrier, same identifier).
+    // OTLP does not say which spans were rejected; the last N are reported retryable. The
+    // sink is NOT idempotent (mol-yxn.11): verdictToSpan mints a fresh carrier traceId/spanId
+    // per call, so a resend adds a second carrier span for the same verdict, not an update.
     const rejected = Math.min(rejectedCount(text), entries.length);
     const keep = entries.length - rejected;
     return mergeAcks(
@@ -119,7 +120,7 @@ export function createOpenInferenceSink(opts: CreateOpenInferenceSinkOptions): S
   return defineSink({
     specVersion: 'v1',
     id: 'otel/openinference',
-    capabilities: { batch: 200, idempotent: true },
+    capabilities: { batch: 200, idempotent: false },
     async doWrite(batch, { signal }) {
       const ack: SinkAck = { accepted: [], rejected: [] };
       const sendable: Entry[] = [];
