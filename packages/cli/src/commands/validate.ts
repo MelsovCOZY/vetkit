@@ -22,6 +22,7 @@ import {
   loadCriteria,
   loadLabels,
   LOCK_FILE,
+  readLockOrNull,
   repeatValues,
   runJudge,
   writeLockAtomic,
@@ -474,6 +475,7 @@ async function validate(
   // `enabled: false` (vet criteria disable, mol-e3g): never judged or calibrated; the
   // lock carries no entry for it (mirrors runEvals' active/disabled split in run.ts).
   const active = criteria.filter((c) => c.enabled !== false);
+  const disabled = criteria.filter((c) => c.enabled === false);
   const labelSet = await loadLabelSet(
     resolve(options.labels ?? join(rootDir, 'evals/labels')),
     project,
@@ -566,6 +568,15 @@ async function validate(
   }
 
   const lock = buildLock({ model: runModel(verdicts, judge), criteria: active, cases, results });
+  // buildLock only sees `active`, so a criterion turned off after being calibrated would
+  // otherwise lose its lock entry; carry over its existing entry unchanged instead.
+  if (disabled.length > 0) {
+    const previous = await readLockOrNull(lockPath);
+    for (const c of disabled) {
+      const prior = previous?.criteria[c.id];
+      if (prior !== undefined) lock.criteria[c.id] = prior;
+    }
+  }
   await writeLockAtomic(lockPath, lock, { events, since });
 
   const report = {
