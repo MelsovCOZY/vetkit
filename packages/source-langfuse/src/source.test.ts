@@ -261,7 +261,13 @@ describe('createLangfuseSource', () => {
       return jsonResponse(200, {
         id: 'trace-empty',
         observations: [
-          { id: 'span-1', type: 'SPAN', input: 'x', output: 'y', startTime: '2026-01-01T00:00:00.000Z' },
+          {
+            id: 'span-1',
+            type: 'SPAN',
+            input: 'x',
+            output: 'y',
+            startTime: '2026-01-01T00:00:00.000Z',
+          },
         ],
       });
     });
