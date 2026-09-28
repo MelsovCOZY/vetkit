@@ -39,4 +39,9 @@ describe('built cli declarations', () => {
     const entry = readFileSync(`${distDir}/index.d.ts`, 'utf8');
     expect(entry).toMatch(/\bjudgeOne\b/);
   });
+
+  test('export decideVerdict from the package entry', () => {
+    const entry = readFileSync(`${distDir}/index.d.ts`, 'utf8');
+    expect(entry).toMatch(/\bdecideVerdict\b/);
+  });
 });
