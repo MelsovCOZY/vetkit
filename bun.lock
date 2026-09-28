@@ -64,6 +64,7 @@
       },
       "devDependencies": {
         "evalite": "1.0.0-beta.16",
+        "vetkit": "workspace:^",
       },
       "peerDependencies": {
         "vitest": "^5.0.2",

@@ -1,2 +1,2 @@
-// Placeholder src entry; real exports land in the package's first src bead.
-void 0;
+export { emitScorer } from './emit-scorer.ts';
+export type { EmitScorerOptions, EmitScorerResult } from './emit-scorer.ts';
