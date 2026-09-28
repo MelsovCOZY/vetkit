@@ -3,9 +3,9 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "dist",
-    "paths": { "@vetkit/spec": ["../spec/src/index.ts"], "vetkit": ["../cli/src/index.ts"] }
+    "paths": { "@vetkit/spec": ["../spec/src/index.ts"] }
   },
   "files": [],
   "include": ["src"],
-  "references": [{ "path": "../spec" }, { "path": "../cli" }]
+  "references": [{ "path": "../spec" }]
 }
