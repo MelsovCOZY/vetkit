@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vetkit.dev/schemas/case.schema.json",
+  "title": "Case",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string" },
+    "input": {
+      "type": "object",
+      "properties": {
+        "state": { "type": "string" },
+        "answer": { "type": "string" }
+      },
+      "required": ["state"],
+      "additionalProperties": false
+    },
+    "traceId": { "type": "string" },
+    "provenance": {},
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "expected": {
+      "type": "object",
+      "properties": {
+        "value": {},
+        "source": { "enum": ["user", "code_verified"] }
+      },
+      "required": ["value", "source"],
+      "additionalProperties": false
+    },
+    "language": { "type": "string", "pattern": "^[a-zA-Z]{2,8}(-[a-zA-Z0-9]{1,8})*$" },
+    "cluster": { "type": "string" }
+  },
+  "required": ["id", "input", "provenance", "tags"],
+  "additionalProperties": false
+}

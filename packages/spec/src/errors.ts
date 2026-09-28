@@ -16,19 +16,50 @@ export const CEV_ERROR_CODES = {
   E_RATE_LIMIT: 'E_RATE_LIMIT',
   E_UNPINNED_LOCK: 'E_UNPINNED_LOCK',
   E_UNCALIBRATED: 'E_UNCALIBRATED',
+  // J1 contract (docs/contracts/j1.md "Error codes"), plus JUDGE_UNAUTHORIZED and
+  // INPUT_TOO_LARGE (root ledger DECISION, turn 9): unprefixed codes for the judge
+  // port, config/IR validation and the gate. None of the twelve E_* codes above move.
+  CONFIG_INVALID: 'CONFIG_INVALID',
+  CRITERIA_INVALID: 'CRITERIA_INVALID',
+  CASE_INVALID: 'CASE_INVALID',
+  JUDGE_UNAVAILABLE: 'JUDGE_UNAVAILABLE',
+  JUDGE_TIMEOUT: 'JUDGE_TIMEOUT',
+  JUDGE_BAD_RESPONSE: 'JUDGE_BAD_RESPONSE',
+  GATE_REFUSED: 'GATE_REFUSED',
+  CACHE_IO: 'CACHE_IO',
+  JUDGE_UNAUTHORIZED: 'JUDGE_UNAUTHORIZED',
+  INPUT_TOO_LARGE: 'INPUT_TOO_LARGE',
 } as const;
 
 export type CevErrorCode = (typeof CEV_ERROR_CODES)[keyof typeof CEV_ERROR_CODES];
+
+// Additive detail bag for the judge/gate/cache paths (root ledger DECISION, turn 9):
+// carried through the constructor's `options.details`, never required, never replacing
+// `cause`.
+export interface VetErrorDetails {
+  readonly retryable?: boolean;
+  readonly hint?: string;
+  readonly retryAfterMs?: number;
+  readonly requestId?: string;
+}
+
+export interface VetErrorOptions extends ErrorOptions {
+  readonly details?: VetErrorDetails;
+}
 
 const VETKIT_ERROR_MARKER = Symbol.for('vetkit.error');
 
 export class VetError extends Error {
   readonly code: CevErrorCode;
+  readonly details?: VetErrorDetails;
 
-  constructor(code: CevErrorCode, message: string, options?: ErrorOptions) {
+  constructor(code: CevErrorCode, message: string, options?: VetErrorOptions) {
     super(message, options);
     this.name = 'VetError';
     this.code = code;
+    if (options?.details !== undefined) {
+      this.details = options.details;
+    }
     // Computed class fields can't be typed under isolatedDeclarations (TS1166:
     // a computed property name in a class field needs a literal or `unique
     // symbol` type, and `Symbol.for` returns plain `symbol`), so the marker is
