@@ -142,3 +142,83 @@ describe('extractCases', () => {
     expect(cases[1]).not.toHaveProperty('input.answer');
   });
 });
+
+// mol-pij.15 (J5 gate): extractCases must classify excluded traces by statusForTrace's
+// completeness status, at the same priority (content_not_captured > truncated >
+// incomplete_trace), instead of only ever reporting content_not_captured/no_conversation.
+describe('extractCases: completeness-status exclusion (mol-pij.15)', () => {
+  test('a completeness.truncated trace with real conversation is excluded, reason truncated', () => {
+    const t = trace('t-truncated', {
+      completeness: { contentCaptured: true, truncated: true, missingParents: false },
+    });
+
+    const { cases, traces } = extractCases({ traces: [t], criteria: [] });
+
+    expect(cases).toHaveLength(0);
+    expect(traces).toContainEqual({
+      traceId: 't-truncated',
+      status: 'not_applicable',
+      reason: 'truncated',
+    });
+  });
+
+  test('a missingParents trace with real conversation is excluded, reason incomplete_trace', () => {
+    const t = trace('t-missing-parents', {
+      completeness: { contentCaptured: true, truncated: false, missingParents: true },
+    });
+
+    const { cases, traces } = extractCases({ traces: [t], criteria: [] });
+
+    expect(cases).toHaveLength(0);
+    expect(traces).toContainEqual({
+      traceId: 't-missing-parents',
+      status: 'not_applicable',
+      reason: 'incomplete_trace',
+    });
+  });
+
+  test('content_not_captured takes priority over truncated', () => {
+    const t = uncaptured('t-both-a');
+    const bothFlags = trace('t-both-a', {
+      messages: t.messages,
+      completeness: { contentCaptured: false, truncated: true, missingParents: false },
+    });
+
+    const { traces } = extractCases({ traces: [bothFlags], criteria: [] });
+
+    expect(traces).toContainEqual({
+      traceId: 't-both-a',
+      status: 'not_applicable',
+      reason: 'content_not_captured',
+    });
+  });
+
+  test('truncated takes priority over incomplete_trace', () => {
+    const t = trace('t-both-b', {
+      completeness: { contentCaptured: true, truncated: true, missingParents: true },
+    });
+
+    const { traces } = extractCases({ traces: [t], criteria: [] });
+
+    expect(traces).toContainEqual({
+      traceId: 't-both-b',
+      status: 'not_applicable',
+      reason: 'truncated',
+    });
+  });
+
+  test('an ok-completeness trace with no conversation is still reported no_conversation', () => {
+    const t = trace('t-sys2', {
+      messages: [{ role: 'system', parts: [{ type: 'text', content: 'You are helpful.' }] }],
+    });
+
+    const { cases, traces } = extractCases({ traces: [t], criteria: [] });
+
+    expect(cases).toHaveLength(0);
+    expect(traces).toContainEqual({
+      traceId: 't-sys2',
+      status: 'not_applicable',
+      reason: 'no_conversation',
+    });
+  });
+});
