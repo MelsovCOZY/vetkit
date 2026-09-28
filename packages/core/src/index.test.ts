@@ -48,6 +48,7 @@ import {
 import { createEvents, EVENT_NAMES } from './index.ts';
 
 import { gauntletLength, gauntletPositionSwap } from './index.ts';
+import { DEFAULT_CALLS_PER_MINUTE, estimateRun, estimateValidate } from './index.ts';
 
 describe('@vetkit/core package entry', () => {
   it('re-exports loadCriteria as a function', () => {
@@ -241,5 +242,14 @@ describe('@vetkit/core package entry', () => {
   it('re-exports INJECTION_KINDS naming the imperative and multi_turn families', () => {
     expect(INJECTION_KINDS).toContain('imperative');
     expect(INJECTION_KINDS).toContain('multi_turn');
+  });
+
+  it('re-exports estimateRun and estimateValidate as functions', () => {
+    expect(typeof estimateRun).toBe('function');
+    expect(typeof estimateValidate).toBe('function');
+  });
+
+  it('re-exports DEFAULT_CALLS_PER_MINUTE as 25', () => {
+    expect(DEFAULT_CALLS_PER_MINUTE).toBe(25);
   });
 });

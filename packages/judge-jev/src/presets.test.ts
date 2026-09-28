@@ -51,3 +51,17 @@ describe('JEV_PRESETS health endpoint', () => {
     });
   });
 });
+
+describe('JEV_PRESETS pricing', () => {
+  it('prices the gateway alias preset at $0.042 per 1M input tokens, output free', () => {
+    expect(JEV_PRESETS.vercel.pricing).toMatchObject({ inputPerMTok: 0.042, outputPerMTok: 0 });
+  });
+
+  it('gives every price row an auditable source and an ISO asOf date', () => {
+    for (const preset of Object.values(JEV_PRESETS)) {
+      if (preset.pricing === undefined) continue;
+      expect(preset.pricing.source.length).toBeGreaterThan(0);
+      expect(preset.pricing.asOf).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    }
+  });
+});
