@@ -10,6 +10,17 @@ const REFERENCE_NOTE =
   'Treat the output as correct when it states the same answer; ignore wording, citation ' +
   'markers, language and formatting; numbers are equal when they express the same quantity.';
 
+// expected.value is any JSON (case.schema.json): strings pass through, scalars use String(),
+// null/arrays/objects render as JSON text so the judge and the exact/normalized checks never see
+// "[object Object]" or an array's comma join.
+function valueText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return String(value);
+  }
+  return JSON.stringify(value);
+}
+
 // Never place this output anywhere but a question's `instructions` (§4 item 10): the reference
 // answer must never enter `state`, the channel the judged output — and only the judged output —
 // can reach.
@@ -17,7 +28,7 @@ export function renderReference(criterion: Criterion, evalCase: Case): string | 
   if (criterion.grader?.kind !== 'reference') return null;
   if (evalCase.expected === undefined) return null;
 
-  return `${criterion.instructions} Reference answer: ${String(evalCase.expected.value)}. ${REFERENCE_NOTE}`;
+  return `${criterion.instructions} Reference answer: ${valueText(evalCase.expected.value)}. ${REFERENCE_NOTE}`;
 }
 
 export type GradeCodeResult =
@@ -74,14 +85,14 @@ function numericEqual(a: number, b: number): boolean {
 
 function numericCheck(answer: string, expected: unknown): boolean {
   const answerNumber = lastNumber(answer);
-  const expectedNumber = typeof expected === 'number' ? expected : lastNumber(String(expected));
+  const expectedNumber = typeof expected === 'number' ? expected : lastNumber(valueText(expected));
   if (answerNumber === null || expectedNumber === null) return false;
   return numericEqual(answerNumber, expectedNumber);
 }
 
 function checkAnswer(check: CodeCheck, answer: string, expected: unknown): boolean {
-  if (check === 'exact') return answer.trim() === String(expected).trim();
-  if (check === 'normalized') return normalizeText(answer) === normalizeText(String(expected));
+  if (check === 'exact') return answer.trim() === valueText(expected).trim();
+  if (check === 'normalized') return normalizeText(answer) === normalizeText(valueText(expected));
   return numericCheck(answer, expected);
 }
 
