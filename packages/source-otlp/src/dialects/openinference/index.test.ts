@@ -35,23 +35,29 @@ function tree(s: OtlpSpan) {
 
 describe('openinferenceDialect.detect', () => {
   test('true when openinference.span.kind is present, whatever its value', () => {
-    expect(openinferenceDialect.detect(span('a', { 'openinference.span.kind': 'CHAIN' }), resource)).toBe(
-      true,
-    );
+    expect(
+      openinferenceDialect.detect(span('a', { 'openinference.span.kind': 'CHAIN' }), resource),
+    ).toBe(true);
   });
 
   test('false when openinference.span.kind is absent', () => {
-    expect(openinferenceDialect.detect(span('a', { 'gen_ai.system': 'openai' }), resource)).toBe(false);
+    expect(openinferenceDialect.detect(span('a', { 'gen_ai.system': 'openai' }), resource)).toBe(
+      false,
+    );
   });
 });
 
 describe('openinferenceDialect.isLlmSpan', () => {
   test('true only for kind LLM', () => {
-    expect(openinferenceDialect.isLlmSpan(span('a', { 'openinference.span.kind': 'LLM' }))).toBe(true);
+    expect(openinferenceDialect.isLlmSpan(span('a', { 'openinference.span.kind': 'LLM' }))).toBe(
+      true,
+    );
   });
 
   test('false for a TOOL span', () => {
-    expect(openinferenceDialect.isLlmSpan(span('a', { 'openinference.span.kind': 'TOOL' }))).toBe(false);
+    expect(openinferenceDialect.isLlmSpan(span('a', { 'openinference.span.kind': 'TOOL' }))).toBe(
+      false,
+    );
   });
 });
 
@@ -84,7 +90,8 @@ describe('openinferenceDialect.extractMessages — tool_calls', () => {
       'llm.output_messages.0.message.role': 'assistant',
       'llm.output_messages.0.message.tool_calls.0.tool_call.id': 'call_1',
       'llm.output_messages.0.message.tool_calls.0.tool_call.function.name': 'get_current_weather',
-      'llm.output_messages.0.message.tool_calls.0.tool_call.function.arguments': "{'city': 'London'}",
+      'llm.output_messages.0.message.tool_calls.0.tool_call.function.arguments':
+        "{'city': 'London'}",
     });
     expect(openinferenceDialect.extractMessages(s, tree(s))).toEqual([
       {
@@ -189,7 +196,9 @@ describe('openinferenceDialect.extractMessages — TOOL span mapping', () => {
     expect(openinferenceDialect.extractMessages(s, tree(s))).toEqual([
       {
         role: 'assistant',
-        parts: [{ type: 'tool_call', name: 'get_current_weather', arguments: "{'city': 'London'}" }],
+        parts: [
+          { type: 'tool_call', name: 'get_current_weather', arguments: "{'city': 'London'}" },
+        ],
       },
       { role: 'tool', parts: [{ type: 'tool_call_response', response: "{'temp_f': 55}" }] },
     ]);
