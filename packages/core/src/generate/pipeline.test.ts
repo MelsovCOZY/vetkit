@@ -17,6 +17,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { loadCases } from '../cases/load.ts';
 import { loadCriteria } from '../criteria/load.ts';
 import { generateEvals } from './pipeline.ts';
+import { CRITERIA_PROMPT } from './prompts.ts';
 
 type DoGenerate = GeneratorV1['doGenerate'];
 type DoJudge = JudgeV1['doJudge'];
@@ -389,5 +390,134 @@ describe('generateEvals', () => {
     expect(forced.report.status).toBe('ok');
     const written = await loadCriteria(join(out, 'criteria.yaml'));
     expect(written.ok && written.criteria.length).toBeGreaterThanOrEqual(5);
+  });
+
+  describe('with a fake generator that behaves like the observed model', () => {
+    // Observed (final cold gate, F-J2): the first failure-mode call names one mode, and the
+    // criteria call words its question as an absence ("Is ... missing ...?"), which
+    // INVERTED_BOOLEAN rejects. Only a top-up call and a repair re-draft recover.
+    const OBSERVED_MODES = [
+      ['missing-citation', 'The assistant answers a policy question without citing the policy.'],
+      ['rude-tone', 'The assistant is sarcastic toward the user.'],
+      ['leaks-pii', 'The assistant reveals personal data of other customers.'],
+      ['off-topic', 'The assistant changes the subject.'],
+      ['wrong-language', 'The assistant answers in a different language from the user.'],
+      ['no-order-status', 'The assistant never tells the user where the order is.'],
+    ] as const;
+    const INVERTED: Record<string, string> = {
+      'missing-citation': 'Is a citation of the refund policy missing from the response?',
+      'rude-tone': 'Is a courteous register absent from the reply to the customer?',
+      'leaks-pii': 'Is redaction of third-party email addresses lacking in the answer?',
+      'off-topic': 'Does the reply omit any answer to the question the user asked?',
+      'wrong-language': "Is the language of the user's message missing from the response?",
+      'no-order-status': 'Does the message lack a shipping status for the order?',
+    };
+    const POSITIVE: Record<string, string> = {
+      'missing-citation': 'Does the response cite the refund policy document?',
+      'rude-tone': 'Does the reply use sarcasm toward the customer?',
+      'leaks-pii': "Does the answer reveal another customer's email address?",
+      'off-topic': "Does the reply change the subject away from the user's question?",
+      'wrong-language': "Is the response written in the language of the user's message?",
+      'no-order-status': 'Does the message state where the order currently is?',
+    };
+
+    const PRESENCE = new Set(['missing-citation', 'wrong-language', 'no-order-status']);
+
+    function observed(stubborn: readonly string[] = []): FakeGenerator {
+      let modeCalls = 0;
+      const doGenerate = vi.fn<DoGenerate>((req) => {
+        const name = req.schema?.name;
+        if (name === 'failure_modes') {
+          const ids = [...req.prompt.matchAll(/^### trace (\S+)$/gm)].map((m) => m[1] ?? '');
+          const modes = modeCalls === 0 ? OBSERVED_MODES.slice(0, 1) : OBSERVED_MODES;
+          modeCalls += 1;
+          return Promise.resolve({
+            value: {
+              failureModes: modes.map(([mode, description], i) => ({
+                name: mode,
+                description,
+                exampleTraceIds: [ids[i % ids.length] ?? 'unknown'],
+              })),
+            },
+            resolvedModelId: 'acme/model-1',
+          });
+        }
+        const repair = req.system !== undefined && !req.system.startsWith(CRITERIA_PROMPT);
+        const named = OBSERVED_MODES.map(([mode]) => mode).filter((mode) =>
+          req.prompt.includes(mode),
+        );
+        return Promise.resolve({
+          value: {
+            criteria: named.map((mode) => {
+              const fixed = repair && !stubborn.includes(mode);
+              return {
+                failureMode: mode,
+                instructions: (fixed ? POSITIVE : INVERTED)[mode],
+                escape: 'The response is missing or empty.',
+                polarity: fixed && PRESENCE.has(mode) ? 'pass_when_true' : 'pass_when_false',
+                channel: 'quality',
+                checkable: 'none',
+              };
+            }),
+          },
+          resolvedModelId: 'acme/model-1',
+        });
+      });
+      const generator: GeneratorV1 = {
+        specVersion: 'v1',
+        id: 'fake-gen',
+        capabilities: { structured: 'json_schema', streaming: false },
+        doGenerate,
+      };
+      return { generator, doGenerate };
+    }
+
+    const FIFTY = Array.from({ length: 50 }, (_, i) => trace(`t${String(i).padStart(2, '0')}`));
+
+    test('yields at least 5 atomic criteria with escape options and provenance', async () => {
+      const { generator, doGenerate } = observed();
+      const { judge } = fakeJudge(0.9, 'none');
+
+      const { criteria, report } = await generateEvals({
+        source: fakeSource(FIFTY),
+        generator,
+        judge,
+        out,
+        overwrite: false,
+      });
+
+      expect(report.status).toBe('ok');
+      expect(report.failureModes.length).toBeGreaterThanOrEqual(5);
+      expect(criteria.length).toBeGreaterThanOrEqual(5);
+      for (const c of criteria) {
+        expect((c.escape ?? '').trim()).not.toBe('');
+        expect(c.provenance.traceIds.length).toBeGreaterThan(0);
+        expect(c.provenance.generator).toMatch(/^acme\/model-1#[0-9a-f]{64}$/);
+      }
+      expect(report.rejected).toEqual([]);
+      expect(report.repaired.length).toBeGreaterThanOrEqual(5);
+      expect(report.dropped).toBe(0);
+      expect(doGenerate.mock.calls.length).toBeLessThanOrEqual(3 + Math.ceil(FIFTY.length / 20));
+    });
+
+    test('a draft the repair cannot fix is dropped and counted in the report', async () => {
+      const { generator } = observed(['leaks-pii']);
+      const { judge } = fakeJudge(0.9, 'none');
+
+      const { criteria, report } = await generateEvals({
+        source: fakeSource(FIFTY),
+        generator,
+        judge,
+        out,
+        overwrite: false,
+      });
+
+      expect(criteria.map((c) => c.id)).not.toContain('leaks-pii');
+      expect(criteria.length).toBeGreaterThanOrEqual(5);
+      expect(report.dropped).toBe(1);
+      expect(report.rejected).toContainEqual(
+        expect.objectContaining({ criterionId: 'leaks-pii', ruleId: 'INVERTED_BOOLEAN' }),
+      );
+    });
   });
 });
