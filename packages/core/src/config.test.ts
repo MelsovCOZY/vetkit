@@ -191,6 +191,53 @@ describe('judge endpoint presets', () => {
   });
 });
 
+// OPEN-9 DECISION: declarative sink descriptors ({kind:'otel'|'langfuse', *Env}) resolved by
+// the CLI (mol-yxn.13), added alongside the option-A adapter objects from mol-yxn.7.
+describe('sink descriptors', () => {
+  const otelDescriptor = {
+    kind: 'otel',
+    endpoint: 'https://collector.example.test',
+    headersEnv: 'OTEL_HEADERS',
+  };
+  const otelDescriptorNoHeaders = { kind: 'otel', endpoint: 'https://collector.example.test' };
+  const langfuseDescriptor = {
+    kind: 'langfuse',
+    baseUrlEnv: 'LF_BASE_URL',
+    publicKeyEnv: 'LF_PUBLIC_KEY',
+    secretKeyEnv: 'LF_SECRET_KEY',
+  };
+
+  it('accepts an otel sink descriptor with headersEnv', () => {
+    expect(validateConfig({ ...minimal, sinks: [otelDescriptor] })).toEqual([]);
+  });
+
+  it('accepts an otel sink descriptor without headersEnv', () => {
+    expect(validateConfig({ ...minimal, sinks: [otelDescriptorNoHeaders] })).toEqual([]);
+  });
+
+  it('accepts a langfuse sink descriptor', () => {
+    expect(validateConfig({ ...minimal, sinks: [langfuseDescriptor] })).toEqual([]);
+  });
+
+  it('rejects a langfuse descriptor missing secretKeyEnv at /sinks/0/secretKeyEnv', () => {
+    const { secretKeyEnv: _secretKeyEnv, ...broken } = langfuseDescriptor;
+    const issues = issuesOf(() => defineUntyped({ ...minimal, sinks: [broken] }));
+    expect(issues).toContainEqual(expect.objectContaining({ pointer: '/sinks/0/secretKeyEnv' }));
+  });
+
+  it('rejects an unknown descriptor key', () => {
+    const issues = issuesOf(() =>
+      defineUntyped({ ...minimal, sinks: [{ ...otelDescriptor, extra: true }] }),
+    );
+    expect(issues.some((i) => i.pointer.startsWith('/sinks'))).toBe(true);
+  });
+
+  it('describeConfig names an otel sink descriptor by its kind', () => {
+    const { config } = resolveConfig({ ...minimal, sinks: [otelDescriptor] });
+    expect(describeConfig(config).join('\n')).toContain('otel');
+  });
+});
+
 describe('resolveConfig', () => {
   it('applies the documented defaults', () => {
     const { config } = resolveConfig(minimal);
