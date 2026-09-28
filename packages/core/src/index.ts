@@ -250,3 +250,6 @@ export type {
   StaleReport,
   WriteLockOptions,
 } from './validate/lock.ts';
+
+export { readRunRecord, writeRunRecord } from './run-record.ts';
+export type { RunRecord } from './run-record.ts';

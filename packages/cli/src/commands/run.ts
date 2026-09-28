@@ -11,6 +11,7 @@ import {
   type ResolvedConfig,
   type RunEvalsResult,
   type RunVerdict,
+  writeRunRecord,
 } from '@vetkit/core';
 import type { Command } from 'commander';
 import { loadVetConfig } from '../config-load.ts';
@@ -95,12 +96,15 @@ async function runCommand(options: RunOptions & Readonly<Record<string, unknown>
   const events = createEvents();
   const stopRendering = renderEvents(events, { options });
   const criteriaPath = resolve(options.criteria ?? resolve(rootDir, 'evals/criteria.yaml'));
+  const casesPath = resolve(options.cases ?? resolve(rootDir, 'evals/cases'));
+  const cacheDir = resolve(rootDir, config.cacheDir);
+  const startedAt = new Date().toISOString();
   let result: RunEvalsResult;
   try {
     result = await runEvals({
       config: {
         criteriaPath,
-        casesDir: resolve(options.cases ?? resolve(rootDir, 'evals/cases')),
+        casesDir: casesPath,
         judge: loaded.judge,
         threshold: config.thresholds.default,
         gate: options.gate === true,
@@ -109,7 +113,7 @@ async function runCommand(options: RunOptions & Readonly<Record<string, unknown>
           ...config.gate,
           allowUnpinned: options.allowUnpinned === true || config.gate.allowUnpinned,
         },
-        cacheDir: resolve(rootDir, config.cacheDir),
+        cacheDir,
       },
       lock,
       signal: controller.signal,
@@ -129,6 +133,8 @@ async function runCommand(options: RunOptions & Readonly<Record<string, unknown>
     Object.assign(extras, out.json);
     lines.push(...(out.lines ?? []));
   }
+  // The record is the --json document plus its inputs (mol-p4a.16); partial runs included.
+  await writeRunRecord(cacheDir, { ...result, ...extras, criteriaPath, casesPath, startedAt });
   emit({ ...result, ...extras }, () => [render(result), ...lines].join('\n'));
   process.exitCode = result.exitCode;
 }
