@@ -2,7 +2,14 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { NormalizedTrace, SinkAck, SinkV1, SourceV1, Verdict } from '@vetkit/spec';
+import {
+  safeParseJson,
+  type NormalizedTrace,
+  type SinkAck,
+  type SinkV1,
+  type SourceV1,
+  type Verdict,
+} from '@vetkit/spec';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { createOutbox, type Outbox } from '../outbox/outbox.ts';
 import { runWatch, type JudgeCaseFn, type RunWatchOptions } from './loop.ts';
@@ -18,7 +25,10 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
-function trace(traceId: string, overrides: Partial<NormalizedTrace['completeness']> = {}): NormalizedTrace {
+function trace(
+  traceId: string,
+  overrides: Partial<NormalizedTrace['completeness']> = {},
+): NormalizedTrace {
   return {
     traceId,
     spans: [],
@@ -120,6 +130,12 @@ function okVerdict(caseId: string): Verdict {
   };
 }
 
+const alwaysOkJudge: JudgeCaseFn = async ({ case: c }) => [okVerdict(c.id)];
+
+const throwingJudge: JudgeCaseFn = () => {
+  throw new Error('judge exploded');
+};
+
 async function waitUntil(cond: () => boolean, timeoutMs = 2000): Promise<void> {
   const start = Date.now();
   while (!cond()) {
@@ -147,12 +163,11 @@ describe('runWatch', () => {
       },
     };
     const sink = fakeSink(() => log.push('sink-write'));
-    const judge: JudgeCaseFn = async ({ case: c }) => [okVerdict(c.id)];
 
     const summary = await runWatch({
       source: finiteSource(traces),
       sampler: createSampler({ sampleRate: 0.5, inclusionPath: join(dir, 'inclusion.jsonl') }),
-      judge,
+      judge: alwaysOkJudge,
       outbox: wrappedOutbox,
       sinks: [sink],
       options: watchOptions(),
@@ -179,7 +194,7 @@ describe('runWatch', () => {
     let active = 0;
     let maxActive = 0;
     let started = 0;
-    let releaseGate: () => void = () => {};
+    let releaseGate: (() => void) | undefined;
     const gate = new Promise<void>((resolve) => {
       releaseGate = resolve;
     });
@@ -205,7 +220,7 @@ describe('runWatch', () => {
     await waitUntil(() => started === maxInFlight);
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(active).toBe(maxInFlight);
-    releaseGate();
+    releaseGate?.();
 
     const summary = await runPromise;
     expect(summary.judged).toBe(5);
@@ -224,22 +239,21 @@ describe('runWatch', () => {
         return outbox.drain(sinks);
       },
     };
-    const judge: JudgeCaseFn = async ({ case: c }) => [okVerdict(c.id)];
     let completed = 0;
-    let resolveTenDone: () => void = () => {};
+    let resolveTenDone: (() => void) | undefined;
     const tenDone = new Promise<void>((resolve) => {
       resolveTenDone = resolve;
     });
     const onVerdict = (): void => {
       completed += 1;
-      if (completed === 10) resolveTenDone();
+      if (completed === 10) resolveTenDone?.();
     };
 
     const controller = new AbortController();
     const runPromise = runWatch({
       source: blockingSource(traces),
       sampler: createSampler({ sampleRate: 0.5, inclusionPath: join(dir, 'inclusion.jsonl') }),
-      judge,
+      judge: alwaysOkJudge,
       outbox: wrappedOutbox,
       sinks: [fakeSink()],
       options: watchOptions(),
@@ -266,14 +280,11 @@ describe('runWatch', () => {
     const ids = partitionIds(1, 1, 0);
     const traces = ids.map((id) => trace(id));
     const outbox = createOutbox({ dir: join(dir, 'outbox') });
-    const judge: JudgeCaseFn = () => {
-      throw new Error('judge exploded');
-    };
 
     const summary = await runWatch({
       source: finiteSource(traces),
       sampler: createSampler({ sampleRate: 1, inclusionPath: join(dir, 'inclusion.jsonl') }),
-      judge,
+      judge: throwingJudge,
       outbox,
       sinks: [fakeSink()],
       options: watchOptions({ sampleRate: 1 }),
@@ -285,7 +296,11 @@ describe('runWatch', () => {
     const pending = pendingText
       .split('\n')
       .filter((l) => l !== '')
-      .map((l) => JSON.parse(l) as { verdict: Verdict });
+      .map((l) => {
+        const parsed = safeParseJson<{ verdict: Verdict }>(l, {});
+        if (!parsed.ok) throw parsed.error;
+        return parsed.value;
+      });
     expect(pending).toHaveLength(1);
     expect(pending[0]?.verdict.status).toBe('infra_failure');
     expect(pending[0]?.verdict.cause).toBe('judge exploded');
@@ -295,13 +310,12 @@ describe('runWatch', () => {
     const ids = partitionIds(1, 50, 0);
     const traces = ids.map((id) => trace(id));
     const outbox = createOutbox({ dir: join(dir, 'outbox') });
-    const judge: JudgeCaseFn = async ({ case: c }) => [okVerdict(c.id)];
     const inclusionPath = join(dir, 'inclusion.jsonl');
 
     const summary = await runWatch({
       source: finiteSource(traces),
       sampler: createSampler({ sampleRate: 1, inclusionPath }),
-      judge,
+      judge: alwaysOkJudge,
       outbox,
       sinks: [fakeSink()],
       options: watchOptions({ sampleRate: 1, maxInFlight: 1 }),
@@ -327,13 +341,12 @@ describe('runWatch', () => {
       },
     };
     const boom = new Error('receiver died');
-    const judge: JudgeCaseFn = async ({ case: c }) => [okVerdict(c.id)];
 
     await expect(
       runWatch({
         source: throwingSource(traces, boom),
         sampler: createSampler({ sampleRate: 1, inclusionPath: join(dir, 'inclusion.jsonl') }),
-        judge,
+        judge: alwaysOkJudge,
         outbox: wrappedOutbox,
         sinks: [fakeSink()],
         options: watchOptions({ sampleRate: 1 }),
