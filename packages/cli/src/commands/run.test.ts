@@ -54,7 +54,7 @@ function nonEmptyLines(text: string): string[] {
 }
 
 describe('vet run', () => {
-  test('--json prints exactly one JSON document {results, summary, model}; stderr only warnings', () => {
+  test('--json prints exactly one JSON document {results, summary, model}; stderr only log lines', () => {
     const result = runVet(['run', '--json'], freshProject(), fixtureEnv('pass'));
     expect(result.status).toBe(0);
     const doc = parseJson(result.stdout);
@@ -64,7 +64,8 @@ describe('vet run', () => {
       model: { resolved: 'fake-jev-pass-resolved', pinned: false },
     });
     expect(nonEmptyLines(result.stdout)).toHaveLength(1);
-    for (const line of nonEmptyLines(result.stderr)) expect(line).toMatch(/^warn /);
+    // Progress events render on stderr as info lines (render-events.ts); nothing else lands there.
+    for (const line of nonEmptyLines(result.stderr)) expect(line).toMatch(/^(warn|info) /);
   });
 
   test('--json with a config warning puts the warning on stderr only', () => {
@@ -106,6 +107,23 @@ describe('vet run', () => {
     expect(result.stdout).toMatch(/^.*\bfail\b.*case-1.*$/m);
     expect(result.stdout).toMatch(/fake-jev-fail-resolved/);
     expect(result.stdout).toMatch(/pinned: false/);
+  });
+
+  test('human mode prints run progress events on stderr, not stdout', () => {
+    const result = runVet(['run'], freshProject(), fixtureEnv('pass'));
+    expect(result.status).toBe(0);
+    expect(result.stderr).toMatch(/run: 1 case × 1 criteria/);
+    expect(result.stderr).toMatch(/case case-1 \(1\/1\)/);
+    expect(result.stderr).toMatch(/run done: 1 verdict, exit 0/);
+    expect(result.stdout).not.toMatch(/run done/);
+  });
+
+  test('--json keeps stdout exactly one JSON document while progress renders', () => {
+    const result = runVet(['run', '--json'], freshProject(), fixtureEnv('pass'));
+    expect(result.status).toBe(0);
+    expect(nonEmptyLines(result.stdout)).toHaveLength(1);
+    expect(parseJson(result.stdout)).toMatchObject({ summary: { total: 1 } });
+    expect(result.stdout).not.toMatch(/run done/);
   });
 
   test('the fixture secret never appears in stdout or stderr', () => {

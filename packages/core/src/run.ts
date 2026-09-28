@@ -18,6 +18,7 @@ import {
   type Verdict,
 } from '@vetkit/spec';
 import { loadCases } from './cases/load.ts';
+import { createEvents, type EventMap, type Events } from './events.ts';
 import { loadCriteria } from './criteria/load.ts';
 import { decideExit, evaluateGate, type ExitCode, type GatePolicy } from './gate.ts';
 import { createFileCache, type VerdictCache } from './judge/cache.ts';
@@ -58,18 +59,10 @@ export interface RunSummary {
   byCriterion: Record<string, CriterionSummary>;
 }
 
-export type RunEvent =
-  | { readonly type: 'run.start'; readonly cases: number; readonly criteria: number }
-  | { readonly type: 'run.no_cases' }
-  | { readonly type: 'case.judged'; readonly caseId: string; readonly verdicts: number }
-  | { readonly type: 'gate.no_gateable_criteria' }
-  | {
-      readonly type: 'criterion.saturated';
-      readonly criterionId: string;
-      readonly saturated: 'all_pass' | 'all_fail';
-    }
-  | { readonly type: 'run.end'; readonly summary: RunSummary; readonly exitCode: ExitCode }
-  | PacingEvent;
+/** One event on the gej bus (./events.ts), as a tagged union over EventMap. */
+export type RunEvent = {
+  readonly [K in keyof EventMap]: { readonly name: K; readonly payload: EventMap[K] };
+}[keyof EventMap];
 
 /** The fields runEvals reads; a resolved config object passes through structurally. */
 export interface RunConfig {
@@ -94,7 +87,7 @@ export interface RunJudgeInput {
   readonly lock?: Lock | null;
   /** Fallback threshold for criteria without a lock threshold (default 0.5, uncalibrated). */
   readonly threshold?: number;
-  readonly emit?: (event: RunEvent) => void;
+  readonly events?: Events;
 }
 
 function codeVerdict(criterion: Criterion, evalCase: Case): Verdict {
@@ -198,6 +191,33 @@ function decide(
   return { ...base, threshold, pass, borderline: band(p) };
 }
 
+/** Pacing notes (throttle, retry) ride on the diag channel. */
+function pacingDiag(events: Events): (event: PacingEvent) => void {
+  return (event) => {
+    if (event.type === 'judge.throttled') {
+      events.diag('warn', 'JUDGE_THROTTLED', 'judge throttled, backing off', {
+        retryAfterMs: event.retryAfterMs,
+        ceiling: event.ceiling,
+      });
+    } else {
+      events.diag('info', 'JUDGE_RETRY', 'retrying judge request', { attempt: event.attempt });
+    }
+  };
+}
+
+/** HTTP-like status for judge:response: 200 when answered (live or cached), else the error's status or 0. */
+function statusOf(err: unknown): number {
+  if (
+    typeof err === 'object' &&
+    err !== null &&
+    'status' in err &&
+    typeof err.status === 'number'
+  ) {
+    return err.status;
+  }
+  return 0;
+}
+
 function markAborted(verdicts: Verdict[]): Verdict[] {
   return verdicts.map((v) => (v.status === 'unscored' ? { ...v, cause: 'aborted' } : v));
 }
@@ -205,8 +225,8 @@ function markAborted(verdicts: Verdict[]): Verdict[] {
 /** Judges every case (one request per case per repeat) and applies thresholds; never throws on judge failure. */
 export async function runJudge(input: RunJudgeInput): Promise<RunVerdict[]> {
   const { judge, signal } = input;
-  const emit = input.emit ?? ((): void => {});
-  const limiter = input.limiter ?? createLimiter({ emit });
+  const events = input.events ?? createEvents();
+  const limiter = input.limiter ?? createLimiter({ emit: pacingDiag(events) });
   const lock = input.lock ?? null;
   const fallbackThreshold = input.threshold ?? DEFAULT_THRESHOLD;
   const repeats = Math.max(1, input.repeats ?? 1);
@@ -225,17 +245,50 @@ export async function runJudge(input: RunJudgeInput): Promise<RunVerdict[]> {
   };
 
   async function judgeOnce(evalCase: Case): Promise<Verdict[]> {
+    const stateBytes = Buffer.byteLength(evalCase.input.state, 'utf8');
+    for (const c of judged) {
+      events.emit('judge:request', { caseId: evalCase.id, criterionId: c.id, stateBytes });
+    }
+    // Observes the one doJudge call (absent on a cache hit) for status and token counts only.
+    let status = 200;
+    let inputTokens: number | undefined;
+    const observed: JudgeV1 = {
+      ...paced,
+      doJudge: async (req) => {
+        try {
+          const response = await paced.doJudge(req);
+          inputTokens = response.usage.inputTokens;
+          return response;
+        } catch (err) {
+          status = statusOf(err);
+          throw err;
+        }
+      },
+    };
+    const started = performance.now();
     const verdicts = await judgeCase({
-      judge: paced,
+      judge: observed,
       case: evalCase,
       criteria: judged,
       ...(cache === undefined ? {} : { cache }),
       ...(signal === undefined ? {} : { signal }),
     });
+    const durationMs = Math.round(performance.now() - started);
+    for (const v of verdicts) {
+      events.emit('judge:response', {
+        caseId: v.caseId,
+        criterionId: v.criterionId,
+        status: v.status === 'unscored' && status === 200 ? 0 : status,
+        durationMs,
+        ...(inputTokens === undefined ? {} : { inputTokens }),
+        cacheHit: v.cacheHit,
+      });
+    }
     return signal?.aborted === true ? markAborted(verdicts) : verdicts;
   }
 
-  async function perCase(evalCase: Case): Promise<RunVerdict[]> {
+  async function perCase(evalCase: Case, index: number): Promise<RunVerdict[]> {
+    events.emit('case:start', { caseId: evalCase.id, index, total: input.cases.length });
     const raw = coded.map((c) => codeVerdict(c, evalCase));
     if (judged.length > 0) {
       const runs = await Promise.all(Array.from({ length: repeats }, () => judgeOnce(evalCase)));
@@ -247,7 +300,14 @@ export async function runJudge(input: RunJudgeInput): Promise<RunVerdict[]> {
         ? []
         : [decide(v, criterion, evalCase, lock, fallbackThreshold)];
     });
-    emit({ type: 'case.judged', caseId: evalCase.id, verdicts: out.length });
+    for (const v of out) {
+      events.emit('verdict', {
+        caseId: v.caseId,
+        criterionId: v.criterionId,
+        status: v.status,
+        ...(v.pass === undefined ? {} : { pass: v.pass }),
+      });
+    }
     return out;
   }
 
@@ -309,7 +369,7 @@ export interface RunEvalsInput {
   /** Parsed lock, or null when none exists (lock reading lands in J3). */
   readonly lock?: Lock | null;
   readonly limiter?: Limiter;
-  readonly emit?: (event: RunEvent) => void;
+  readonly events?: Events;
 }
 
 export interface RunEvalsResult {
@@ -339,8 +399,9 @@ function runModel(verdicts: readonly Verdict[], judge: JudgeV1): Verdict['model'
 
 export async function runEvals(input: RunEvalsInput): Promise<RunEvalsResult> {
   const { config, signal } = input;
-  const emit = input.emit ?? ((): void => {});
+  const events = input.events ?? createEvents();
   const lock = input.lock ?? null;
+  const started = performance.now();
 
   const loadedCriteria = await loadCriteria(config.criteriaPath);
   if (!loadedCriteria.ok) {
@@ -355,10 +416,10 @@ export async function runEvals(input: RunEvalsInput): Promise<RunEvalsResult> {
   const { criteria } = loadedCriteria;
   const { cases } = loadedCases;
 
-  emit({ type: 'run.start', cases: cases.length, criteria: criteria.length });
-  if (cases.length === 0) emit({ type: 'run.no_cases' });
+  events.emit('run:start', { cases: cases.length, criteria: criteria.length });
+  if (cases.length === 0) events.diag('warn', 'NO_CASES', 'no cases to judge');
   if (!criteria.some((c) => c.type === 'boolean' || c.type === 'choice')) {
-    emit({ type: 'gate.no_gateable_criteria' });
+    events.diag('warn', 'NO_GATEABLE_CRITERIA', 'no boolean or choice criterion can gate');
   }
 
   const results = await runJudge({
@@ -366,7 +427,7 @@ export async function runEvals(input: RunEvalsInput): Promise<RunEvalsResult> {
     criteria,
     judge: config.judge,
     lock,
-    emit,
+    events,
     ...(config.cacheDir === undefined ? {} : { cache: createFileCache(config.cacheDir) }),
     ...(config.threshold === undefined ? {} : { threshold: config.threshold }),
     ...(input.limiter === undefined ? {} : { limiter: input.limiter }),
@@ -377,7 +438,10 @@ export async function runEvals(input: RunEvalsInput): Promise<RunEvalsResult> {
   const summary = summarise(cases, criteria, results, aborted);
   for (const [criterionId, s] of Object.entries(summary.byCriterion)) {
     if (s.saturated !== null) {
-      emit({ type: 'criterion.saturated', criterionId, saturated: s.saturated });
+      events.diag('info', 'CRITERION_SATURATED', `criterion ${criterionId} is ${s.saturated}`, {
+        passed: s.passed,
+        failed: s.failed,
+      });
     }
   }
 
@@ -404,6 +468,11 @@ export async function runEvals(input: RunEvalsInput): Promise<RunEvalsResult> {
     );
   }
 
-  emit({ type: 'run.end', summary, exitCode });
+  events.emit('run:end', {
+    cases: cases.length,
+    verdicts: results.length,
+    exitCode,
+    durationMs: Math.round(performance.now() - started),
+  });
   return { results, summary, model: runModel(results, config.judge), exitCode, gateReasons };
 }

@@ -3,10 +3,11 @@
 // and errors go to stderr. SIGINT aborts the run: partial results are still printed, with
 // summary.aborted true, and the exit code is 130 (root DECISION C5).
 import { resolve } from 'node:path';
-import { runEvals, type RunEvalsResult, type RunVerdict } from '@vetkit/core';
+import { createEvents, runEvals, type RunEvalsResult, type RunVerdict } from '@vetkit/core';
 import type { Command } from 'commander';
 import { loadVetConfig } from '../config-load.ts';
 import { CEV_EXIT, emit, getLogger, type GlobalOptions } from '../output.ts';
+import { renderEvents } from '../render-events.ts';
 
 interface RunOptions extends GlobalOptions {
   readonly config?: string;
@@ -55,6 +56,9 @@ async function runCommand(options: RunOptions): Promise<void> {
     controller.abort();
   };
   process.on('SIGINT', onSigint);
+  // Progress renders on stderr (render-events.ts); stdout stays the result document.
+  const events = createEvents();
+  const stopRendering = renderEvents(events, { options });
   let result: RunEvalsResult;
   try {
     result = await runEvals({
@@ -71,8 +75,10 @@ async function runCommand(options: RunOptions): Promise<void> {
         cacheDir: resolve(rootDir, config.cacheDir),
       },
       signal: controller.signal,
+      events,
     });
   } finally {
+    stopRendering();
     process.off('SIGINT', onSigint);
   }
 
