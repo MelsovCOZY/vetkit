@@ -35,9 +35,11 @@ test('a resolved judge is an endpoint or a JudgeV1 adapter, never a bare string'
 
 test('JudgeEndpoint and GeneratorEndpoint document their fields', () => {
   expectTypeOf<JudgeEndpoint['kind']>().toEqualTypeOf<string>();
-  expectTypeOf<JudgeEndpoint['baseURL']>().toEqualTypeOf<string>();
+  expectTypeOf<JudgeEndpoint['preset']>().toEqualTypeOf<string | undefined>();
+  expectTypeOf<JudgeEndpoint['accountId']>().toEqualTypeOf<string | undefined>();
+  expectTypeOf<JudgeEndpoint['baseURL']>().toEqualTypeOf<string | undefined>();
   expectTypeOf<JudgeEndpoint['apiKeyEnv']>().toEqualTypeOf<string>();
-  expectTypeOf<JudgeEndpoint['model']>().toEqualTypeOf<string>();
+  expectTypeOf<JudgeEndpoint['model']>().toEqualTypeOf<string | undefined>();
   expectTypeOf<JudgeEndpoint>().toHaveProperty('providerOptions');
   expectTypeOf<GeneratorEndpoint['kind']>().toEqualTypeOf<string>();
   expectTypeOf<GeneratorEndpoint['baseURL']>().toEqualTypeOf<string>();

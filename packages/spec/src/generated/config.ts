@@ -60,17 +60,28 @@ export interface AdapterRef {
     [k: string]: unknown;
   };
 }
+/**
+ * Either preset, or baseURL and model, is required; core enforces this (a schema anyOf would degrade the generated type).
+ */
 export interface JudgeEndpoint {
   /**
    * Transport kind, validated by the adapter.
    */
   kind: string;
-  baseURL: string;
+  /**
+   * Opaque preset name; the adapter validates it and supplies baseURL and model defaults.
+   */
+  preset?: string;
+  /**
+   * Account id some presets need in their URL.
+   */
+  accountId?: string;
+  baseURL?: string;
   /**
    * Name of the env var holding the key.
    */
   apiKeyEnv: string;
-  model: string;
+  model?: string;
   providerOptions?: {
     [k: string]: unknown;
   };

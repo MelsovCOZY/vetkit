@@ -212,10 +212,28 @@ function resolveRole(
   return { value: value as RegistryEntry | GeneratorEndpoint };
 }
 
+// A judge endpoint names either an opaque preset (the adapter validates the name and fills in
+// baseURL/model) or an explicit baseURL and model. Core never enumerates preset names.
+function endpointIssue(value: unknown, pointer: string): ConfigIssue | undefined {
+  if (!isRecord(value) || 'specVersion' in value) return undefined;
+  if (value['preset'] !== undefined) return undefined;
+  if (value['baseURL'] !== undefined && value['model'] !== undefined) return undefined;
+  return { pointer, message: 'endpoint needs a preset, or a baseURL and a model' };
+}
+
 /** Every problem with `input` as a JSON-pointer issue; empty when the config is valid. */
 export function validateConfig(input: unknown): ConfigIssue[] {
   if (!isRecord(input)) return [{ pointer: '', message: 'config must be an object' }];
   const issues = schemaIssues(projectConfig(input));
+  if (issues.length > 0) return issues;
+  const judgeIssue = endpointIssue(input['judge'], '/judge');
+  if (judgeIssue !== undefined) issues.push(judgeIssue);
+  if (isRecord(input['registry'])) {
+    for (const [name, entry] of Object.entries(input['registry'])) {
+      const issue = endpointIssue(entry, `/registry/${escapePointer(name)}`);
+      if (issue !== undefined) issues.push(issue);
+    }
+  }
   if (issues.length > 0) return issues;
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   const config = input as unknown as VetkitConfig;
@@ -326,7 +344,10 @@ function describeRole(
     const model = 'model' in value.capabilities ? ` model ${String(value.capabilities.model)}` : '';
     return `adapter ${value.id}${model}`;
   }
-  return `${value.kind} model ${value.model} at ${value.baseURL} (key from $${value.apiKeyEnv})`;
+  const preset = 'preset' in value && value.preset !== undefined ? ` preset ${value.preset}` : '';
+  const model = value.model === undefined ? '' : ` model ${value.model}`;
+  const at = value.baseURL === undefined ? '' : ` at ${value.baseURL}`;
+  return `${value.kind}${preset}${model}${at} (key from $${value.apiKeyEnv})`;
 }
 
 function describeRefs(refs: readonly PluginRef[]): string {

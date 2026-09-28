@@ -205,11 +205,24 @@ export const configSchema: JsonSchema = {
   $defs: {
     judgeEndpoint: {
       title: 'JudgeEndpoint',
+      description:
+        'Either preset, or baseURL and model, is required; core enforces this (a schema anyOf would degrade the generated type).',
       type: 'object',
       properties: {
         kind: {
           description: 'Transport kind, validated by the adapter.',
           type: 'string',
+        },
+        preset: {
+          description:
+            'Opaque preset name; the adapter validates it and supplies baseURL and model defaults.',
+          type: 'string',
+          minLength: 1,
+        },
+        accountId: {
+          description: 'Account id some presets need in their URL.',
+          type: 'string',
+          minLength: 1,
         },
         baseURL: {
           type: 'string',
@@ -226,7 +239,7 @@ export const configSchema: JsonSchema = {
           additionalProperties: {},
         },
       },
-      required: ['kind', 'baseURL', 'apiKeyEnv', 'model'],
+      required: ['kind', 'apiKeyEnv'],
       additionalProperties: false,
     },
     generatorEndpoint: {
