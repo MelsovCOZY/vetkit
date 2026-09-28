@@ -6,10 +6,16 @@
     "paths": {
       "@vetkit/spec": ["../spec/src/index.ts"],
       "@vetkit/core": ["../core/src/index.ts"],
-      "@vetkit/judge-jev": ["../judge-jev/src/index.ts"]
+      "@vetkit/judge-jev": ["../judge-jev/src/index.ts"],
+      "@vetkit/generator-openai-compatible": ["../generator-openai-compatible/src/index.ts"]
     }
   },
   "files": [],
   "include": ["src"],
-  "references": [{ "path": "../core" }, { "path": "../judge-jev" }, { "path": "../spec" }]
+  "references": [
+    { "path": "../core" },
+    { "path": "../generator-openai-compatible" },
+    { "path": "../judge-jev" },
+    { "path": "../spec" }
+  ]
 }

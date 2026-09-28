@@ -127,7 +127,12 @@
         "kind": { "description": "Transport kind, validated by the adapter.", "type": "string" },
         "baseURL": { "type": "string" },
         "apiKeyEnv": { "description": "Name of the env var holding the key.", "type": "string" },
-        "model": { "type": "string" }
+        "model": { "type": "string" },
+        "structured": {
+          "description": "Structured-output strategy; missing means json_schema.",
+          "type": "string",
+          "enum": ["json_schema", "json_object", "prompt"]
+        }
       },
       "required": ["kind", "baseURL", "apiKeyEnv", "model"],
       "additionalProperties": false
