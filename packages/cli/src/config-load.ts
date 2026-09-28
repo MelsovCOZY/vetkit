@@ -23,6 +23,12 @@ export interface LoadVetConfigOptions {
   readonly configPath?: string;
   /** Where descriptor apiKeyEnv names are read. Defaults to process.env. */
   readonly env?: Env;
+  /**
+   * False resolves the config for an offline command (estimate, doctor --config): an unset
+   * apiKeyEnv does not throw but is listed in missingCredentials, and that judge's doJudge
+   * rejects CONFIG_INVALID before any network call. Defaults to true.
+   */
+  readonly requireCredentials?: boolean;
 }
 
 export interface LoadedVetConfig {
@@ -30,6 +36,8 @@ export interface LoadedVetConfig {
   /** The judge, ready to call: the config's adapter object or one built from its descriptor. */
   readonly judge: JudgeV1;
   readonly warnings: readonly string[];
+  /** Env var names the judge needs but that are unset (only with requireCredentials:false). */
+  readonly missingCredentials: readonly string[];
   /** Absolute path of the loaded config file. */
   readonly configFile: string;
   /** The config file's directory: project-relative paths resolve against it. */
@@ -62,11 +70,26 @@ function invalid(message: string): VetError {
   return new VetError(CEV_ERROR_CODES.CONFIG_INVALID, message);
 }
 
-function judgeFromEndpoint(endpoint: JudgeEndpoint, env: Env): JudgeV1 {
+// Stands in for an unset key so the judge (and its capabilities) can still be built; the
+// judge wrapping it is never allowed to send a request.
+const UNSET_KEY_PLACEHOLDER = 'vetkit-unset-credential';
+
+// A judge whose key is unset: same identity and capabilities, but doJudge rejects before
+// the transport runs, so the placeholder key can never reach the network.
+function offlineJudge(judge: JudgeV1, keyEnv: string): JudgeV1 {
+  return {
+    specVersion: judge.specVersion,
+    id: judge.id,
+    capabilities: judge.capabilities,
+    doJudge: () =>
+      Promise.reject(invalid(`judge credential ${keyEnv} is not set; cannot call the judge`)),
+  };
+}
+
+function judgeFromEndpoint(endpoint: JudgeEndpoint, apiKey: string): JudgeV1 {
   if (endpoint.kind !== JUDGE_KIND) {
     throw invalid(`judge kind "${endpoint.kind}" is not supported; use "${JUDGE_KIND}"`);
   }
-  const apiKey = readEnvName(endpoint.apiKeyEnv, env);
   const providerOptions = endpoint.providerOptions;
   if (providerOptions !== undefined && !isProviderOptions(providerOptions)) {
     throw invalid('judge providerOptions must be { gateway: { zeroDataRetention, only } }');
@@ -129,9 +152,27 @@ export async function loadVetConfig(options: LoadVetConfigOptions): Promise<Load
     throw invalid(`no vetkit config found; searched ${searched}`);
   }
   const { config, warnings } = resolveConfig(loaded.config);
-  const judge =
-    'specVersion' in config.judge
-      ? config.judge
-      : judgeFromEndpoint(config.judge, options.env ?? process.env);
-  return { config, judge, warnings, configFile, rootDir: dirname(configFile) };
+  const env = options.env ?? process.env;
+  const missingCredentials: string[] = [];
+  let judge: JudgeV1;
+  if ('specVersion' in config.judge) {
+    judge = config.judge;
+  } else {
+    const keyEnv = config.judge.apiKeyEnv;
+    const value = env[keyEnv];
+    if (options.requireCredentials === false && (value === undefined || value === '')) {
+      missingCredentials.push(keyEnv);
+      judge = offlineJudge(judgeFromEndpoint(config.judge, UNSET_KEY_PLACEHOLDER), keyEnv);
+    } else {
+      judge = judgeFromEndpoint(config.judge, readEnvName(keyEnv, env));
+    }
+  }
+  return {
+    config,
+    judge,
+    warnings,
+    missingCredentials,
+    configFile,
+    rootDir: dirname(configFile),
+  };
 }

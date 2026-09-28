@@ -70,8 +70,10 @@ function renderValidate(est: ValidateEstimate): string[] {
 
 async function estimateCommand(options: EstimateOptions): Promise<void> {
   const log = getLogger();
+  // No judge call is made, so the judge key may be unset: only its capabilities are read.
   const loaded = await loadVetConfig({
     cwd: process.cwd(),
+    requireCredentials: false,
     ...(options.config === undefined ? {} : { configPath: options.config }),
   });
   for (const warning of loaded.warnings) log.warn(warning);
