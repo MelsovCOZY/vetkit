@@ -107,7 +107,12 @@ interface LockShape {
 
 function lockCriteria(dir: string): Record<string, Record<string, unknown>> {
   const text = readFileSync(join(dir, 'criteria.lock.json'), 'utf8');
-  const result = safeParseJson<LockShape>(text, { type: 'object', required: ['criteria'] });
+  const schema = {
+    type: 'object',
+    properties: { criteria: { type: 'object' } },
+    required: ['criteria'],
+  };
+  const result = safeParseJson<LockShape>(text, schema);
   if (!result.ok) throw result.error;
   return result.value.criteria;
 }
