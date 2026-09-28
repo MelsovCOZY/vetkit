@@ -227,3 +227,14 @@ describe('vet init', () => {
     expect(parseJson(result.stdout)).toMatchObject({ summary: { total: 3, aborted: false } });
   });
 });
+
+describe('the published tarball', () => {
+  test('bun pm pack lists all three templates', () => {
+    const cliDir = fileURLToPath(new URL('../../', import.meta.url));
+    const result = spawnSync('bun', ['pm', 'pack', '--dry-run'], { cwd: cliDir, encoding: 'utf8' });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('templates/criteria.yaml');
+    expect(result.stdout).toContain('templates/example.jsonl');
+    expect(result.stdout).toContain('templates/vetkit.config.ts.tmpl');
+  });
+});
