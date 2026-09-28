@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadCases, writeRunRecord, type RunRecord } from '@vetkit/core';
-import { safeParseJson, type Case } from '@vetkit/spec';
+import { safeParseJson, VetError, type Case, type ParseResult } from '@vetkit/spec';
 import { Command } from 'commander';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { handleError } from '../errors.ts';
@@ -31,8 +31,7 @@ function caseLine(c: Case): string {
   return JSON.stringify(c);
 }
 
-function parseJson<T>(text: string): T {
-  const parsed = safeParseJson<T>(text, {});
+function unwrap<T>(parsed: ParseResult<T>): T {
   if (!parsed.ok) throw parsed.error;
   return parsed.value;
 }
@@ -42,7 +41,7 @@ async function readCases(file: string): Promise<Case[]> {
   return text
     .split('\n')
     .filter((l) => l !== '')
-    .map((raw) => parseJson<Case>(raw));
+    .map((raw) => unwrap(safeParseJson<Case>(raw, {})));
 }
 
 function baseRecord(p: Project, overrides: Partial<RunRecord> = {}): RunRecord {
@@ -127,8 +126,11 @@ describe('vet cases dedupe', () => {
       `${caseLine(mkCase('case-2', 'same state'))}\n${caseLine(mkCase('case-1', ' same state '))}\n`,
     );
 
-    const doc = parseJson<{ duplicates: unknown; written: boolean }>(
-      await vet(['dedupe', '--cases', p.cases]),
+    const doc = unwrap(
+      safeParseJson<{ duplicates: unknown; written: boolean }>(
+        await vet(['dedupe', '--cases', p.cases]),
+        {},
+      ),
     );
 
     expect(doc.duplicates).toEqual([{ kept: 'case-1', removed: 'case-2' }]);
@@ -143,8 +145,8 @@ describe('vet cases dedupe', () => {
       `${caseLine(mkCase('case-2', 'same state'))}\n${caseLine(mkCase('case-1', ' same state '))}\n`,
     );
 
-    const doc = parseJson<{ written: boolean }>(
-      await vet(['dedupe', '--write', '--cases', p.cases]),
+    const doc = unwrap(
+      safeParseJson<{ written: boolean }>(await vet(['dedupe', '--write', '--cases', p.cases]), {}),
     );
 
     expect(doc.written).toBe(true);
@@ -180,10 +182,12 @@ describe('vet cases dedupe', () => {
       `${caseLine(mkCase('nd-1', stateA))}\n${caseLine(mkCase('nd-2', stateB))}\n`,
     );
 
-    const doc = parseJson<{
-      duplicates: unknown[];
-      nearDuplicates: readonly { clusterId: string; caseIds: string[] }[];
-    }>(await vet(['dedupe', '--write', '--cases', p.cases]));
+    const doc = unwrap(
+      safeParseJson<{
+        duplicates: unknown[];
+        nearDuplicates: readonly { clusterId: string; caseIds: string[] }[];
+      }>(await vet(['dedupe', '--write', '--cases', p.cases]), {}),
+    );
 
     expect(doc.duplicates).toEqual([]);
     expect(doc.nearDuplicates).toHaveLength(1);
@@ -201,8 +205,11 @@ describe('vet cases quarantine', () => {
       `${caseLine(mkCase('keep', 's1'))}\n${caseLine(mkCase('bad', 's2'))}\n`,
     );
 
-    const doc = parseJson<{ status: string }>(
-      await vet(['quarantine', 'bad', '--reason', 'garbage output', '--cases', p.cases]),
+    const doc = unwrap(
+      safeParseJson<{ status: string }>(
+        await vet(['quarantine', 'bad', '--reason', 'garbage output', '--cases', p.cases]),
+        {},
+      ),
     );
 
     expect(doc.status).toBe('quarantined');
@@ -239,8 +246,11 @@ describe('vet cases promote', () => {
       }),
     );
 
-    const doc = parseJson<{ promoted: Record<string, unknown> }>(
-      await vet(['promote', 'case-1:k-1', '--cases', p.cases, '--cache-dir', p.cacheDir]),
+    const doc = unwrap(
+      safeParseJson<{ promoted: Record<string, unknown> }>(
+        await vet(['promote', 'case-1:k-1', '--cases', p.cases, '--cache-dir', p.cacheDir]),
+        {},
+      ),
     );
 
     expect(doc.promoted).toMatchObject({
@@ -263,7 +273,7 @@ describe('vet cases promote', () => {
     );
 
     expect(exitCodeOf(error)).toBe(2);
-    expect(String((error as { message?: unknown }).message)).toContain(
+    expect(VetError.isInstance(error) && error.message).toContain(
       join(p.cacheDir, 'runs', 'latest.json'),
     );
   });
@@ -282,7 +292,9 @@ describe('vet cases review', () => {
     const p = await project();
     await pending(p, [mkCase('p-1', 's1')]);
 
-    const doc = parseJson<{ remaining: number }>(await vet(['review', 'p-1', '--cases', p.cases]));
+    const doc = unwrap(
+      safeParseJson<{ remaining: number }>(await vet(['review', 'p-1', '--cases', p.cases]), {}),
+    );
 
     expect(doc.remaining).toBe(0);
     const dateStamp = new Date().toISOString().slice(0, 10);
@@ -293,8 +305,11 @@ describe('vet cases review', () => {
     const p = await project();
     await pending(p, [mkCase('p-2', 's2')]);
 
-    const doc = parseJson<{ remaining: number }>(
-      await vet(['review', 'p-2', '--reject', '--reason', 'bad trace', '--cases', p.cases]),
+    const doc = unwrap(
+      safeParseJson<{ remaining: number }>(
+        await vet(['review', 'p-2', '--reject', '--reason', 'bad trace', '--cases', p.cases]),
+        {},
+      ),
     );
 
     expect(doc.remaining).toBe(0);
