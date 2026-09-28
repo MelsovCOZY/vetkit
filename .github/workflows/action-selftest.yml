@@ -1,0 +1,145 @@
+name: Action selftest
+
+# Runs the composite action at the repo root (action.yml) against fixtures/cli/run, whose
+# judge is in-process and fake: no key, no network. Installs vetkit from the packed tarballs
+# until a published version exists (mol-fou.11).
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  comment-script:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Comment script tests
+        run: node --test action/comment.test.mjs
+
+  pack:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.2'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        run: bun run build
+
+      - name: Pack
+        run: bun run pack
+
+      - name: Upload dist-tarballs
+        uses: actions/upload-artifact@v4
+        with:
+          name: action-selftest-tarballs
+          path: dist-tarballs
+
+  selftest:
+    needs: pack
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: pass
+            mode: pass
+            gate: 'false'
+            comment: 'true'
+            expect-exit: '0'
+            expect-passed: '1'
+            expect-failed: '0'
+          - name: fail
+            mode: fail
+            gate: 'false'
+            comment: 'false'
+            expect-exit: '1'
+            expect-passed: '0'
+            expect-failed: '1'
+          # No calibrated lock in the fixture: --gate must refuse (exit 2), and the action
+          # must fail the job with that code rather than swallow it.
+          - name: gate-refused
+            mode: pass
+            gate: 'true'
+            comment: 'false'
+            expect-exit: '2'
+            expect-passed: '1'
+            expect-failed: '0'
+    name: selftest (${{ matrix.name }})
+    env:
+      VETKIT_FIXTURE_MODE: ${{ matrix.mode }}
+      VETKIT_FIXTURE_KEY: sk-fake-selftest-0123456789abcdef
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download dist-tarballs
+        uses: actions/download-artifact@v4
+        with:
+          name: action-selftest-tarballs
+          path: dist-tarballs
+
+      - name: Run the action
+        id: vet
+        continue-on-error: true
+        uses: ./
+        with:
+          config: fixtures/cli/run/vetkit.config.ts
+          gate: ${{ matrix.gate }}
+          comment: ${{ matrix.comment }}
+          tarballs: dist-tarballs
+          artifact-name: vet-junit-${{ matrix.name }}
+          node-version: 22
+
+      - name: Assert outputs
+        env:
+          OUTCOME: ${{ steps.vet.outcome }}
+          EXIT_CODE: ${{ steps.vet.outputs.exitCode }}
+          PASSED: ${{ steps.vet.outputs.passed }}
+          FAILED: ${{ steps.vet.outputs.failed }}
+          UNSCORED: ${{ steps.vet.outputs.unscored }}
+          EXPECT_EXIT: ${{ matrix.expect-exit }}
+          EXPECT_PASSED: ${{ matrix.expect-passed }}
+          EXPECT_FAILED: ${{ matrix.expect-failed }}
+        run: |
+          set -eu
+          echo "outcome=$OUTCOME exitCode=$EXIT_CODE passed=$PASSED failed=$FAILED unscored=$UNSCORED"
+          fail() { echo "::error::$1"; exit 1; }
+          [ "$EXIT_CODE" = "$EXPECT_EXIT" ] || fail "exitCode $EXIT_CODE, expected $EXPECT_EXIT"
+          if [ "$EXPECT_EXIT" = "0" ]; then
+            [ "$OUTCOME" = "success" ] || fail "action outcome $OUTCOME, expected success"
+          else
+            [ "$OUTCOME" = "failure" ] || fail "action outcome $OUTCOME, expected failure"
+          fi
+          if [ -n "$EXPECT_PASSED" ]; then
+            [ "$PASSED" = "$EXPECT_PASSED" ] || fail "passed $PASSED, expected $EXPECT_PASSED"
+            [ "$FAILED" = "$EXPECT_FAILED" ] || fail "failed $FAILED, expected $EXPECT_FAILED"
+            [ "$UNSCORED" = "0" ] || fail "unscored $UNSCORED, expected 0"
+            [ -s vet-junit.xml ] || fail "vet-junit.xml was not written"
+          fi
+          if grep -rqF "$VETKIT_FIXTURE_KEY" vet-junit.xml .vet 2>/dev/null; then
+            fail "the fixture key leaked into the action's files"
+          fi
