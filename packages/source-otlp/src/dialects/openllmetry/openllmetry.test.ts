@@ -37,14 +37,16 @@ describe('openllmetryDialect.name / specCommit', () => {
 
 describe('detect', () => {
   test('matches on traceloop.span.kind', () => {
-    expect(openllmetryDialect.detect(span({ 'traceloop.span.kind': 'llm' }), { attributes: {} })).toBe(
-      true,
-    );
+    expect(
+      openllmetryDialect.detect(span({ 'traceloop.span.kind': 'llm' }), { attributes: {} }),
+    ).toBe(true);
   });
 
   test('matches on any traceloop.entity.* key', () => {
     expect(
-      openllmetryDialect.detect(span({ 'traceloop.entity.name': 'my_workflow' }), { attributes: {} }),
+      openllmetryDialect.detect(span({ 'traceloop.entity.name': 'my_workflow' }), {
+        attributes: {},
+      }),
     ).toBe(true);
   });
 
@@ -113,7 +115,9 @@ describe('extractMessages: llm.prompts / llm.completions indexed form', () => {
 
     const messages = openllmetryDialect.extractMessages(s);
 
-    expect(messages).toEqual([{ role: 'user', parts: [{ type: 'text', content: 'once upon a time' }] }]);
+    expect(messages).toEqual([
+      { role: 'user', parts: [{ type: 'text', content: 'once upon a time' }] },
+    ]);
   });
 
   test('a structured (non-string) content attribute is accepted as-is after schema validation', () => {
@@ -124,7 +128,9 @@ describe('extractMessages: llm.prompts / llm.completions indexed form', () => {
 
     const messages = openllmetryDialect.extractMessages(s);
 
-    expect(messages).toEqual([{ role: 'user', parts: [{ type: 'text', content: 'already-structured content' }] }]);
+    expect(messages).toEqual([
+      { role: 'user', parts: [{ type: 'text', content: 'already-structured content' }] },
+    ]);
   });
 });
 
@@ -201,7 +207,7 @@ describe('extractMessages: absent content', () => {
 });
 
 describe('extractMessages: no cross-dialect fallback', () => {
-  test('a mixed-attribute span reflects only this dialect\'s keys', () => {
+  test("a mixed-attribute span reflects only this dialect's keys", () => {
     const s = span({
       'traceloop.span.kind': 'llm',
       'llm.prompts.0.role': 'user',
@@ -212,7 +218,9 @@ describe('extractMessages: no cross-dialect fallback', () => {
 
     const messages = openllmetryDialect.extractMessages(s);
 
-    expect(messages).toEqual([{ role: 'user', parts: [{ type: 'text', content: 'openllmetry content' }] }]);
+    expect(messages).toEqual([
+      { role: 'user', parts: [{ type: 'text', content: 'openllmetry content' }] },
+    ]);
   });
 });
 
