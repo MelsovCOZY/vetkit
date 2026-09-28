@@ -68,9 +68,10 @@ export type {
   GatePolicy,
   GateResult,
 } from './gate.ts';
-export { runEvals, runJudge } from './run.ts';
+export { decideVerdict, runEvals, runJudge } from './run.ts';
 export type {
   CriterionSummary,
+  DecideVerdictResult,
   RunConfig,
   RunEvalsInput,
   RunEvalsResult,

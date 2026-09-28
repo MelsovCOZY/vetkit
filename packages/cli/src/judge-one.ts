@@ -14,6 +14,11 @@ import {
 } from '@vetkit/spec';
 import { loadVetConfig } from './config-load.ts';
 
+// Re-exported so emit-scorer.test.ts's inline typecheck tsconfig (mapping the bare `vetkit`
+// specifier straight to this file) resolves decideVerdict the same way production resolution
+// (vetkit -> cli/src/index.ts) does (contract aq4.11 point 4).
+export { decideVerdict } from '@vetkit/core';
+
 type Env = Readonly<Record<string, string | undefined>>;
 
 type DeepReadonly<T> = T extends readonly unknown[] | Record<string, unknown>

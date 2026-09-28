@@ -11,6 +11,7 @@ import {
   createFileCache,
   createLimiter,
   decideExit,
+  decideVerdict,
   evaluateGate,
   DEFAULT_FORBIDDEN_WORDS,
   defineConfig,
@@ -158,6 +159,10 @@ describe('@vetkit/core package entry', () => {
 
   it('re-exports decideExit as a function', () => {
     expect(typeof decideExit).toBe('function');
+  });
+
+  it('re-exports decideVerdict as a function', () => {
+    expect(typeof decideVerdict).toBe('function');
   });
 
   it('re-exports calibrate as a function', () => {

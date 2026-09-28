@@ -162,8 +162,94 @@ function verdictProvenance(evalCase: Case): Verdict['provenance'] | undefined {
   return Object.keys(out).length === 0 ? undefined : out;
 }
 
-function badResponse(verdict: RunVerdict): RunVerdict {
-  return { ...verdict, status: 'error', cause: CEV_ERROR_CODES.JUDGE_BAD_RESPONSE };
+/** decideVerdict's own output fields; threshold rides along only with pass/borderline. */
+export interface DecideVerdictResult {
+  status?: Verdict['status'];
+  cause?: unknown;
+  pass?: boolean;
+  borderline?: boolean;
+  threshold?: number;
+}
+
+function badResponseResult(): DecideVerdictResult {
+  return { status: 'error', cause: CEV_ERROR_CODES.JUDGE_BAD_RESPONSE };
+}
+
+/**
+ * Pure pass/escape/threshold math for one already-answered (status 'ok', answer defined,
+ * non-code-graded) verdict — boolean, choice and score, incl. pass_when_false and the
+ * EPSILON-banded borderline. No Case/Lock args: decide() resolves those into threshold/
+ * tolerance before calling this. Exported so emitted scorer modules (export-vitest) call the
+ * same math instead of duplicating it (root ledger DECISION, mol-aq4.11).
+ */
+export function decideVerdict(
+  verdict: Verdict,
+  criterion: Criterion,
+  threshold: number,
+  tolerance = 0,
+): DecideVerdictResult {
+  const answer = verdict.answer;
+  const escapeThreshold = criterion.escapeThreshold ?? DEFAULT_ESCAPE_THRESHOLD;
+  const band = (x: number): boolean => Math.abs(x - threshold) <= tolerance + EPSILON;
+
+  if (criterion.type === 'score') {
+    if (answer?.type !== 'score') return badResponseResult();
+    // Same pass value calibrate fits on (validate/calibrate.ts repeatValues): the expected level
+    // E = Σ level·p (the argmax score when no probabilities come back), or max − E for
+    // pass_when_false, where max = levels − 1.
+    const entries = Object.entries(answer.probabilities);
+    const expected =
+      entries.length === 0
+        ? answer.score
+        : entries.reduce((sum, [level, p]) => sum + Number(level) * p, 0);
+    const value =
+      criterion.polarity === 'pass_when_false'
+        ? criterion.criteria.length - 1 - expected
+        : expected;
+    return { threshold, pass: value >= threshold, borderline: band(value) };
+  }
+
+  if (criterion.type === 'choice') {
+    if (answer?.type !== 'choice') return badResponseResult();
+    // choice answers resolve the escape label through escapeKey(criterion) (criterion.escape,
+    // falling back to 'escape'); see the boolean-answered-as-choice branch below for the
+    // asymmetric case (contract aq4.11 point 2 — do not unify these).
+    const key = escapeKey(criterion);
+    if (answer.choice === key || (answer.probabilities[key] ?? 0) >= escapeThreshold) {
+      return { status: 'not_applicable', cause: 'escape' };
+    }
+    // Same pass value calibrate fits on (validate/calibrate.ts repeatValues): P(passWhen) = Σ p
+    // over the passWhen labels (the argmax label in passWhen as 1 / 0 when no probabilities come
+    // back), or 1 − P(passWhen) for pass_when_false.
+    const passWhen = new Set(criterion.passWhen ?? []);
+    const entries = Object.entries(answer.probabilities);
+    const pPass =
+      entries.length === 0
+        ? Number(passWhen.has(answer.choice))
+        : entries.filter(([label]) => passWhen.has(label)).reduce((sum, [, p]) => sum + p, 0);
+    const value = criterion.polarity === 'pass_when_false' ? 1 - pPass : pPass;
+    return { threshold, pass: value >= threshold, borderline: band(value) };
+  }
+
+  let p: number;
+  if (answer?.type === 'boolean') {
+    p = answer.probability;
+  } else if (answer?.type === 'choice') {
+    // Boolean criteria answered choice-shaped (escape) always test the literal ESCAPE_KEY
+    // constant, ignoring criterion.escape even though boolean criteria have an escape field
+    // (contract aq4.11 point 2 — this asymmetry with the choice branch above is intentional,
+    // not a bug; do not unify it).
+    if ((answer.probabilities[ESCAPE_KEY] ?? 0) >= escapeThreshold) {
+      return { status: 'not_applicable', cause: 'escape' };
+    }
+    p = answer.probabilities['yes'] ?? 0;
+  } else {
+    return badResponseResult();
+  }
+  // Thresholds live on the pass-value scale calibrate fits on: P(yes), or 1 − P(yes) for
+  // pass_when_false (validate/calibrate.ts repeatValues).
+  const value = criterion.polarity === 'pass_when_true' ? p : 1 - p;
+  return { threshold, pass: value >= threshold, borderline: band(value) };
 }
 
 function decide(
@@ -181,67 +267,17 @@ function decide(
     ...gateFields(criterion, evalCase, entry),
     ...(provenance === undefined ? {} : { provenance }),
   };
-  const answer = verdict.answer;
-  if (criterion.grader?.kind === 'code' || verdict.status !== 'ok' || answer === undefined) {
+  if (
+    criterion.grader?.kind === 'code' ||
+    verdict.status !== 'ok' ||
+    verdict.answer === undefined
+  ) {
     return base;
   }
 
   const threshold = entry?.threshold ?? fallbackThreshold;
   const tolerance = entry?.tolerance ?? 0;
-  const escapeThreshold = criterion.escapeThreshold ?? DEFAULT_ESCAPE_THRESHOLD;
-  const band = (x: number): boolean => Math.abs(x - threshold) <= tolerance + EPSILON;
-
-  if (criterion.type === 'score') {
-    if (answer.type !== 'score') return badResponse(base);
-    // Same pass value calibrate fits on (validate/calibrate.ts repeatValues): the expected level
-    // E = Σ level·p (the argmax score when no probabilities come back), or max − E for
-    // pass_when_false, where max = levels − 1.
-    const entries = Object.entries(answer.probabilities);
-    const expected =
-      entries.length === 0
-        ? answer.score
-        : entries.reduce((sum, [level, p]) => sum + Number(level) * p, 0);
-    const value =
-      criterion.polarity === 'pass_when_false'
-        ? criterion.criteria.length - 1 - expected
-        : expected;
-    return { ...base, threshold, pass: value >= threshold, borderline: band(value) };
-  }
-
-  if (criterion.type === 'choice') {
-    if (answer.type !== 'choice') return badResponse(base);
-    const key = escapeKey(criterion);
-    if (answer.choice === key || (answer.probabilities[key] ?? 0) >= escapeThreshold) {
-      return { ...base, status: 'not_applicable', cause: 'escape' };
-    }
-    // Same pass value calibrate fits on (validate/calibrate.ts repeatValues): P(passWhen) = Σ p
-    // over the passWhen labels (the argmax label in passWhen as 1 / 0 when no probabilities come
-    // back), or 1 − P(passWhen) for pass_when_false.
-    const passWhen = new Set(criterion.passWhen ?? []);
-    const entries = Object.entries(answer.probabilities);
-    const pPass =
-      entries.length === 0
-        ? Number(passWhen.has(answer.choice))
-        : entries.filter(([label]) => passWhen.has(label)).reduce((sum, [, p]) => sum + p, 0);
-    const value = criterion.polarity === 'pass_when_false' ? 1 - pPass : pPass;
-    return { ...base, threshold, pass: value >= threshold, borderline: band(value) };
-  }
-
-  let p: number;
-  if (answer.type === 'boolean') {
-    p = answer.probability;
-  } else if (answer.type === 'choice') {
-    if ((answer.probabilities[ESCAPE_KEY] ?? 0) >= escapeThreshold) {
-      return { ...base, status: 'not_applicable', cause: 'escape' };
-    }
-    p = answer.probabilities['yes'] ?? 0;
-  } else {
-    return badResponse(base);
-  }
-  // Thresholds live on the pass-value scale calibrate fits on: P(yes), or 1 − P(yes) for
-  // pass_when_false (validate/calibrate.ts repeatValues).
-  const value = criterion.polarity === 'pass_when_true' ? p : 1 - p;
-  return { ...base, threshold, pass: value >= threshold, borderline: band(value) };
+  return { ...base, ...decideVerdict(verdict, criterion, threshold, tolerance) };
 }
 
 /** Pacing notes (throttle, retry) ride on the diag channel. */
