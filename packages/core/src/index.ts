@@ -42,3 +42,6 @@ export type {
   FileCacheOptions,
   VerdictCache,
 } from './judge/cache.ts';
+
+export { createLimiter } from './judge/pacing.ts';
+export type { Limiter, LimiterOptions, LimiterStats, PacingEvent } from './judge/pacing.ts';
