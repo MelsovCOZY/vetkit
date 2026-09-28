@@ -38,6 +38,7 @@ describe('defineExporter', () => {
     const failure = new Error('disk full');
     const doExport = (): Promise<{ files: string[] }> => Promise.reject(failure);
     const exporter = defineExporter(makeExporter({ doExport }));
+    // oxlint-disable-next-line typescript/unbound-method -- identity check only, never called
     expect(exporter.doExport).toBe(doExport);
     await expect(
       exporter.doExport({ criteria: [], cases: [], lock: null, outDir: 'out' }),
