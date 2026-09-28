@@ -334,9 +334,14 @@ describe('gauntletMasterKey', () => {
 
   it('fails with reason no_escape when the criterion has no escape option', async () => {
     const score: Criterion = {
-      ...CRITERION,
+      id: 'quality',
       type: 'score',
+      instructions: 'How good is the reply?',
       criteria: ['bad', 'ok', 'good'],
+      polarity: 'pass_when_true',
+      channel: 'quality',
+      provenance: { traceIds: [] },
+      wordingHash: 'h',
     };
     const judge = fakeJudge(() => ESCAPE);
     const out = await gauntletMasterKey(score, judge, knownPass, { inputs: MASTER_KEYS });
