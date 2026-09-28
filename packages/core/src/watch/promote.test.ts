@@ -30,8 +30,13 @@ function evalCase(overrides: Partial<Case> = {}): Case {
   };
 }
 
+// dh8.5: the real onVerdict call site now always hands promoteFailure a verdict whose `id`
+// is exactly what outbox.enqueue assigned it — so every fixture here has a real id, same as
+// production, rather than relying on a synthesized fallback (dh8.3's earlier randomUUID
+// stand-in, dropped now that the real id is always available).
 function failingVerdict(overrides: Partial<Verdict> = {}): Verdict {
   return {
+    id: 'verdict-1',
     caseId: 'case-orig',
     criterionId: 'k-1',
     status: 'ok',
@@ -40,13 +45,6 @@ function failingVerdict(overrides: Partial<Verdict> = {}): Verdict {
     cacheHit: false,
     ...overrides,
   };
-}
-
-type PromotedFromProvenance = { promotedFrom?: { verdictId?: unknown } };
-
-function promotedFromVerdictId(provenance: unknown): unknown {
-  if (typeof provenance !== 'object' || provenance === null) return undefined;
-  return (provenance as PromotedFromProvenance).promotedFrom?.verdictId;
 }
 
 async function pendingFileText(): Promise<string> {
@@ -73,13 +71,24 @@ describe('promoteFailure', () => {
         promotedFrom: {
           traceId: 'trace-abc',
           criterionId: 'k-1',
+          verdictId: 'verdict-1',
           at: '2026-09-29T12:00:00.000Z',
         },
       },
     });
-    // verdictId is always present, even though the loop's onVerdict never sees the
-    // outbox-assigned Verdict.id (see BUILD report Discoveries).
-    expect(typeof promotedFromVerdictId(parsed.value.provenance)).toBe('string');
+  });
+
+  test('a verdict with no id is never promoted (dh8.5: no random-id fallback)', async () => {
+    const noId: Verdict = {
+      caseId: 'case-orig',
+      criterionId: 'k-1',
+      status: 'ok',
+      pass: false,
+      model: { requested: 'fake', resolved: 'fake-resolved', transport: 'fake', pinned: false },
+      cacheHit: false,
+    };
+    expect(promoteFailure(noId, evalCase(), dir, { now: NOW })).toBe(false);
+    await expect(pendingFileText()).rejects.toThrow();
   });
 
   test('duplicate skipped: the same traceId/criterionId is not appended twice in one file', async () => {
