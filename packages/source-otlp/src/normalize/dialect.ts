@@ -16,8 +16,14 @@ export interface DialectV1 {
   detect(span: OtlpSpan, resource: OtlpResource): boolean;
   isLlmSpan(span: OtlpSpan): boolean;
   extractMessages(span: OtlpSpan, tree: SpanTree): Message[];
-  extractUsage(span: OtlpSpan): { inputTokens?: number; outputTokens?: number } | null;
+  extractUsage(
+    span: OtlpSpan,
+  ): { inputTokens?: number; outputTokens?: number; totalTokens?: number } | null;
   contentState(span: OtlpSpan): 'captured' | 'not_captured' | 'redacted';
+  // Optional (pij.13): maps a non-LLM span (isLlmSpan false) to a Span.kind other than the
+  // 'other' default. Dialects that don't implement it, or that return undefined for a given
+  // span, leave normalizeTrace's 'other' fallback in place.
+  spanKind?(span: OtlpSpan): 'llm' | 'tool' | 'other' | undefined;
 }
 
 // Warning-only diagnostic channel for otlpSource/normalizeTrace (contract pij.2 revision 2):

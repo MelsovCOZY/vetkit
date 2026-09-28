@@ -55,13 +55,19 @@ const dialectA: DialectV1 = {
   extractUsage: (s) => {
     const input = s.attributes['fake.input'];
     const output = s.attributes['fake.output'];
-    if (typeof input !== 'number' && typeof output !== 'number') return null;
+    const total = s.attributes['fake.total'];
+    if (typeof input !== 'number' && typeof output !== 'number' && typeof total !== 'number') {
+      return null;
+    }
     return {
       ...(typeof input === 'number' ? { inputTokens: input } : {}),
       ...(typeof output === 'number' ? { outputTokens: output } : {}),
+      ...(typeof total === 'number' ? { totalTokens: total } : {}),
     };
   },
   contentState: () => 'captured',
+  // fake.kind: 'tool' -> 'tool'; anything else -> undefined (normalizeTrace falls back to 'other').
+  spanKind: (s) => (s.attributes['fake.kind'] === 'tool' ? 'tool' : undefined),
 };
 
 // Matches spans tagged fake.dialect: 'b'; never an LLM span.
@@ -156,6 +162,48 @@ describe('normalizeTrace', () => {
       { spanId: 'root', name: 'root', kind: 'llm', messageRange: [0, 1] },
       { spanId: 'child', name: 'child', kind: 'llm', messageRange: [1, 2] },
     ]);
+  });
+});
+
+// pij.13: extractUsage may report a bare totalTokens (no split); sumTokens must fold it into
+// tokens.total without a split from the same span also being present. A same-span
+// split+totalTokens double-count guard is not separately asserted here: since the pre-fix
+// sumTokens ignores totalTokens entirely, that specific case already yields the same number
+// under old and new code, so it cannot be driven red against this baseline (see BUILD report).
+describe('sumTokens: bare totalTokens (no split)', () => {
+  test('a totalTokens-only span contributes to tokens.total with input/output omitted', () => {
+    const tree = buildSpanTree([
+      span('a', undefined, 0, { 'fake.dialect': 'a', 'fake.llm': true, 'fake.total': 15 }),
+    ]);
+    const trace = normalizeTrace(tree, resource(), [dialectA]);
+
+    expect(trace.tokens).toEqual({ total: 15 });
+  });
+
+  test('a bare total on one span and a split on another sum together', () => {
+    const tree = buildSpanTree([
+      span('split', undefined, 0, {
+        'fake.dialect': 'a',
+        'fake.llm': true,
+        'fake.input': 10,
+        'fake.output': 5,
+      }),
+      span('bare', 'split', 10, { 'fake.dialect': 'a', 'fake.llm': true, 'fake.total': 8 }),
+    ]);
+    const trace = normalizeTrace(tree, resource(), [dialectA]);
+
+    expect(trace.tokens).toEqual({ input: 10, output: 5, total: 23 });
+  });
+});
+
+describe('normalizeTrace: dialect.spanKind honoured for non-LLM spans', () => {
+  test("a non-LLM span maps through the dialect's spanKind hook", () => {
+    const tree = buildSpanTree([
+      span('a', undefined, 0, { 'fake.dialect': 'a', 'fake.kind': 'tool' }),
+    ]);
+    const trace = normalizeTrace(tree, resource(), [dialectA]);
+
+    expect(trace.spans).toEqual([{ spanId: 'a', name: 'a', kind: 'tool' }]);
   });
 });
 

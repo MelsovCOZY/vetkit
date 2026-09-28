@@ -240,16 +240,38 @@ describe('extractUsage', () => {
     expect(usage).toEqual({ inputTokens: 12, outputTokens: 8 });
   });
 
-  test('llm.usage.total_tokens only: no split, input/output not reported', () => {
+  test('llm.usage.total_tokens only: no split, input/output not reported, totalTokens carried', () => {
     const usage = openllmetryDialect.extractUsage(span({ 'llm.usage.total_tokens': 20 }));
 
     expect(usage).not.toBeNull();
     expect(usage?.inputTokens).toBeUndefined();
     expect(usage?.outputTokens).toBeUndefined();
+    expect(usage?.totalTokens).toBe(20);
   });
 
   test('no usage attributes at all: null', () => {
     expect(openllmetryDialect.extractUsage(span({}))).toBeNull();
+  });
+});
+
+// pij.13: normalizeTrace uses spanKind() only for spans the dialect's own isLlmSpan already
+// excludes (traceloop.span.kind 'llm' always routes through isLlmSpan instead), so this hook
+// only needs to answer for tool/workflow/task/agent.
+describe('spanKind', () => {
+  test('traceloop.span.kind tool maps to tool', () => {
+    expect(openllmetryDialect.spanKind?.(span({ 'traceloop.span.kind': 'tool' }))).toBe('tool');
+  });
+
+  test.each(['workflow', 'task', 'agent'])('traceloop.span.kind %s maps to other', (kind) => {
+    expect(openllmetryDialect.spanKind?.(span({ 'traceloop.span.kind': kind }))).toBe('other');
+  });
+
+  test('traceloop.span.kind llm is not mapped by this hook (undefined)', () => {
+    expect(openllmetryDialect.spanKind?.(span({ 'traceloop.span.kind': 'llm' }))).toBeUndefined();
+  });
+
+  test('no traceloop.span.kind attribute: undefined', () => {
+    expect(openllmetryDialect.spanKind?.(span({}))).toBeUndefined();
   });
 });
 
