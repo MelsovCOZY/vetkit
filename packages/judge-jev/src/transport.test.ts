@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test, vi } from 'vitest';
 import { safeParseJson, VetError, type Question } from '@vetkit/spec';
-import { createJevJudge } from './transport.ts';
+import { createJevJudge, createJevJudgeFromEndpoint } from './transport.ts';
 
 interface CapturedCall {
   readonly url: string;
@@ -551,5 +551,66 @@ describe('response normalisation (routes through normalise())', () => {
     const answer = result.answers.tone;
     if (answer?.type !== 'choice') throw new Error('expected a choice answer for "tone"');
     expect(answer.confidence).toBe(0.96);
+  });
+});
+
+function codeOf(fn: () => unknown): unknown {
+  try {
+    fn();
+  } catch (error) {
+    return VetError.isInstance(error) ? error.code : error;
+  }
+  return undefined;
+}
+
+describe('createJevJudgeFromEndpoint', () => {
+  test('the cloudflare preset without accountId is CONFIG_INVALID', () => {
+    expect(
+      codeOf(() =>
+        createJevJudgeFromEndpoint({ preset: 'cloudflare', apiKeyEnv: 'K' }, { apiKey: 'k' }),
+      ),
+    ).toBe('CONFIG_INVALID');
+  });
+
+  test('an unknown preset is CONFIG_INVALID and names the known presets', () => {
+    let caught: unknown;
+    try {
+      createJevJudgeFromEndpoint({ preset: 'nope' }, { apiKey: 'k' });
+    } catch (error) {
+      caught = error;
+    }
+    expect(VetError.isInstance(caught) && caught.code).toBe('CONFIG_INVALID');
+    const message = caught instanceof Error ? caught.message : '';
+    expect(message).toContain('"nope"');
+    for (const name of ['typesafe', 'vercel', 'openrouter', 'cloudflare']) {
+      expect(message).toContain(name);
+    }
+  });
+
+  test('no preset and no baseURL/model is CONFIG_INVALID', () => {
+    expect(codeOf(() => createJevJudgeFromEndpoint({}, { apiKey: 'k' }))).toBe('CONFIG_INVALID');
+  });
+
+  test('a known preset passes through to that transport', () => {
+    const judge = createJevJudgeFromEndpoint({ preset: 'vercel' }, { apiKey: 'k' });
+    expect(judge.capabilities.transport).toBe('vercel');
+    expect(judge.capabilities.model).toBe('typesafe-ai/jev');
+  });
+
+  test('the cloudflare preset with accountId builds the cloudflare transport', () => {
+    const judge = createJevJudgeFromEndpoint(
+      { preset: 'cloudflare', accountId: 'acct' },
+      { apiKey: 'k' },
+    );
+    expect(judge.capabilities.transport).toBe('cloudflare');
+  });
+
+  test('baseURL and model without a preset build a custom transport', () => {
+    const judge = createJevJudgeFromEndpoint(
+      { baseURL: 'https://judge.example', model: 'm' },
+      { apiKey: 'k' },
+    );
+    expect(judge.capabilities.transport).toBe('custom');
+    expect(judge.capabilities.model).toBe('m');
   });
 });

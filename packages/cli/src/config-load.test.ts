@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { VetError } from '@vetkit/spec';
@@ -195,5 +195,13 @@ describe('loadVetConfig', () => {
     const error = await rejection(loadVetConfig({ cwd, configPath: 'nope.config.ts' }));
     expect(VetError.isInstance(error) && error.code).toBe('CONFIG_INVALID');
     expect(error instanceof Error && error.message).toContain(join(cwd, 'nope.config.ts'));
+  });
+});
+
+describe('config-load vendor neutrality', () => {
+  test('config-load.ts names no vendor outside comments', async () => {
+    const source = await readFile(new URL('config-load.ts', import.meta.url), 'utf8');
+    const code = source.replaceAll(/\/\*[\s\S]*?\*\//g, '').replaceAll(/\/\/.*$/gm, '');
+    expect(code.match(/vercel|openrouter|cloudflare/gi) ?? []).toHaveLength(0);
   });
 });
