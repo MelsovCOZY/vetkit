@@ -34,6 +34,15 @@ export interface JevHealthEndpoint {
   readonly url: (env: JevEnv) => string;
 }
 
+// A price row for one transport (root DECISION: the per-transport price table lives here, as
+// data with its source, never in logic). USD per 1M tokens; `asOf` is printed with estimates.
+export interface JevPricing {
+  readonly inputPerMTok: number;
+  readonly outputPerMTok: number;
+  readonly source: string;
+  readonly asOf: string;
+}
+
 export interface JevPreset {
   readonly baseURL: string;
   readonly defaultModel: string;
@@ -41,6 +50,8 @@ export interface JevPreset {
   readonly providerOptions?: JevProviderOptions;
   readonly credentials: readonly JevCredentialEnv[];
   readonly health: JevHealthEndpoint;
+  /** Absent when no price was measured: estimates then report cost 'unknown'. */
+  readonly pricing?: JevPricing;
 }
 
 // Explicit `Record<..., JevPreset>` annotation (rather than `as const satisfies`,
@@ -73,6 +84,13 @@ export const JEV_PRESETS: Record<'typesafe' | 'vercel' | 'openrouter' | 'cloudfl
       },
     ],
     health: { method: 'GET', url: () => 'https://ai-gateway.vercel.sh/typesafe/v1/models' },
+    pricing: {
+      inputPerMTok: 0.042,
+      outputPerMTok: 0,
+      source:
+        'measured in the pre-spike: 3.4M input tokens ≈ $0.143, output free (docs/research/2026-09-25-jev-vs-gemini-haystack-prespike.md, Cost)',
+      asOf: '2026-09-25',
+    },
   },
   openrouter: {
     // UNVERIFIED (contract RISK): OpenRouter's TypeSafe-compatible /api/v1/systemone
