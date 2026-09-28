@@ -29,4 +29,11 @@ export type {
   Verdict,
 } from './generated/index.ts';
 
+export {
+  caseSchema,
+  criterionSchema,
+  specVersionSchema,
+  verdictSchema,
+} from './generated/schemas.ts';
+
 export type { Answer, JudgeResponse, JudgeV1, Question } from './ports/judge.ts';

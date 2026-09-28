@@ -70,6 +70,39 @@ function exportedTypeNames(output: string): string[] {
   return names;
 }
 
+// version.schema.json's title is SpecVersionDoc (docs/contracts/j1.md), but the wire
+// name consumers ask safeParseJson for is specVersionSchema, not versionSchema.
+const SCHEMA_CONSTANT_NAME_OVERRIDES: Record<string, string> = { version: 'specVersion' };
+
+function schemaConstantName(moduleName: string): string {
+  return `${SCHEMA_CONSTANT_NAME_OVERRIDES[moduleName] ?? moduleName}Schema`;
+}
+
+// Emits packages/spec/src/generated/schemas.ts: one typed JsonSchema constant per
+// schemas/*.schema.json file, so consumers can safeParseJson/validateJson against the
+// IR without reading packages/spec/schemas/ directly (docs/contracts/j1.md).
+function buildSchemasFile(entries: { moduleName: string; schema: SchemaFile }[]): string {
+  const lines: string[] = [
+    BANNER_COMMENT,
+    // criterion.schema.json's "if"/"then" IR keywords land as an object property
+    // literally named `then`; oxlint's unicorn/no-thenable rule otherwise flags that
+    // as an accidental thenable, which this schema constant is not.
+    '/* oxlint-disable unicorn/no-thenable */\n',
+    "import type { JsonSchema } from '../json.ts';",
+    '',
+  ];
+
+  for (const { moduleName, schema } of entries) {
+    const constName = schemaConstantName(moduleName);
+    lines.push(
+      `export const ${constName}: JsonSchema = ${JSON.stringify(schema, null, 2)} as const;`,
+      '',
+    );
+  }
+
+  return `${lines.join('\n')}\n`;
+}
+
 async function compileSchema(filePath: string, moduleName: string, schema: SchemaFile) {
   // SchemaFile only names the fields this script reads; json-schema-to-typescript's
   // own JSONSchema4 type covers the full JSON Schema surface, so this is a trusted
@@ -94,6 +127,7 @@ async function main(): Promise<void> {
     .toSorted();
 
   const indexLines: string[] = [BANNER_COMMENT];
+  const schemaEntries: { moduleName: string; schema: SchemaFile }[] = [];
 
   for (const fileName of schemaFileNames) {
     const filePath = join(SCHEMAS_DIR, fileName);
@@ -107,9 +141,12 @@ async function main(): Promise<void> {
     for (const typeName of exportedTypeNames(output)) {
       indexLines.push(`export type { ${typeName} } from './${moduleName}.ts';`);
     }
+
+    schemaEntries.push({ moduleName, schema });
   }
 
   writeFileSync(join(GENERATED_DIR, 'index.ts'), `${indexLines.join('\n')}\n`);
+  writeFileSync(join(GENERATED_DIR, 'schemas.ts'), buildSchemasFile(schemaEntries));
 
   const oxfmtBin = join(REPO_ROOT, 'node_modules', '.bin', 'oxfmt');
   execFileSync(oxfmtBin, [GENERATED_DIR], { cwd: REPO_ROOT, stdio: 'inherit' });
