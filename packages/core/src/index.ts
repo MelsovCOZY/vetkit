@@ -171,3 +171,15 @@ export type {
   MasterKeyResult,
   PermutationVerdict,
 } from './validate/gauntlet-controls.ts';
+
+export { DEFAULT_CALLS_PER_MINUTE, estimateRun, estimateValidate } from './estimate.ts';
+export type {
+  CostEstimate,
+  EstimatePart,
+  EstimatePricing,
+  EstimateRunInput,
+  EstimateValidateInput,
+  RunEstimate,
+  Unknowable,
+  ValidateEstimate,
+} from './estimate.ts';
