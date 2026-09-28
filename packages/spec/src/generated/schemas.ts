@@ -459,9 +459,15 @@ export const criterionSchema: JsonSchema = {
             type: 'string',
           },
         },
-        passWhen: true,
+        passWhen: {
+          type: 'array',
+          minItems: 1,
+          items: {
+            type: 'string',
+          },
+        },
       },
-      required: ['type', 'escape', 'criteria'],
+      required: ['type', 'escape', 'criteria', 'passWhen'],
     },
     {
       properties: {
@@ -863,6 +869,12 @@ export const verdictSchema: JsonSchema = {
     },
     gateReason: {
       enum: ['score_not_gateable', 'language_not_calibrated'],
+    },
+    borderline: {
+      type: 'boolean',
+    },
+    calibrated: {
+      type: 'boolean',
     },
   },
   required: ['caseId', 'criterionId', 'status', 'model', 'cacheHit'],

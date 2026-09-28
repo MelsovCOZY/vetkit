@@ -81,7 +81,9 @@
     "cause": {},
     "explanation": { "type": "string" },
     "gated": { "type": "boolean" },
-    "gateReason": { "enum": ["score_not_gateable", "language_not_calibrated"] }
+    "gateReason": { "enum": ["score_not_gateable", "language_not_calibrated"] },
+    "borderline": { "type": "boolean" },
+    "calibrated": { "type": "boolean" }
   },
   "required": ["caseId", "criterionId", "status", "model", "cacheHit"],
   "additionalProperties": false,

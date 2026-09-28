@@ -12,6 +12,8 @@ import {
   type JudgeV1,
   type Lock,
   type LockCriterion,
+  validateJson,
+  verdictSchema,
 } from '@vetkit/spec';
 import type { Limiter } from './judge/pacing.ts';
 import { evaluateGate } from './gate.ts';
@@ -237,6 +239,20 @@ describe('runEvals results and summary', () => {
     expect(v?.threshold).toBe(0.5);
     expect(v?.calibrated).toBe(false);
     expect(out.exitCode).toBe(0);
+  });
+
+  test('every runEvals verdict validates against the published verdictSchema', async () => {
+    const paths = await suite([BOOL_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
+    const { judge } = scriptedJudge({ S1: { 'answers-question': yes(0.9) } });
+    const out = await runEvals({ config: { ...paths, judge } });
+
+    expect(out.results).toHaveLength(1);
+    for (const v of out.results) {
+      expect(v).toHaveProperty('borderline');
+      expect(v).toHaveProperty('calibrated');
+      const r = validateJson(v, verdictSchema);
+      expect(r.ok ? [] : r.error.cause).toEqual([]);
+    }
   });
 
   test('pass_when_false polarity passes a low probability', async () => {

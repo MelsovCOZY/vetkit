@@ -6,6 +6,7 @@ criteria:
       polite: The reply is courteous and warm.
       neutral: The reply is matter-of-fact.
       rude: The reply is dismissive.
+    passWhen: [polite]
     escape: The reply has no discernible tone.
     polarity: pass_when_true
     channel: quality
