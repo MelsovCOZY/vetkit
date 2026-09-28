@@ -1,7 +1,24 @@
-import { describe, expect, test, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, test } from 'vitest';
 import type { Answer, Criterion, JudgeResponse, JudgeV1 } from '@vetkit/spec';
-import type { GradingResult as FixtureGradingResult } from '../fixtures/promptfoo-grading-result.d.ts';
 import { toPromptfooAssertion } from './promptfoo.ts';
+
+// Read (not import) the fixture: a static cross-boundary type import from src/ into fixtures/
+// breaks scripts/tsconfig.test.ts's isolated-workspace typecheck copy, which copies only each
+// package's package.json/tsconfig.json/src (never fixtures/) — see that file's
+// createIsolatedWorkspace(). A plain fs read at test-run time has no such compile-time
+// dependency, so it asserts the same "shape matches the fixture" property without it.
+const FIXTURE_PATH = fileURLToPath(
+  new URL('../fixtures/promptfoo-grading-result.d.ts', import.meta.url),
+);
+
+function fixtureFieldNames(): string[] {
+  const text = readFileSync(FIXTURE_PATH, 'utf8');
+  return [...text.matchAll(/^\s*(\w+)\??:/gm)]
+    .map((m) => m[1])
+    .filter((name): name is string => name !== undefined);
+}
 
 const booleanCriterion: Criterion = {
   id: 'answers-question',
@@ -38,7 +55,7 @@ function fakeJudge(impl: JudgeV1['doJudge']): JudgeV1 {
       transport: 'fake',
       model: 'jev-fake-model',
     },
-    doJudge: vi.fn(impl),
+    doJudge: impl,
   };
 }
 
@@ -48,13 +65,17 @@ describe('toPromptfooAssertion', () => {
       Promise.resolve(response({ [booleanCriterion.id]: { type: 'boolean', probability: 0.9 } })),
     );
     const assertion = toPromptfooAssertion({ judge, criterion: booleanCriterion });
-    const result: FixtureGradingResult = await assertion('a clear answer');
+    const result = await assertion('a clear answer');
     expect(result.pass).toBe(true);
     expect(typeof result.score).toBe('number');
     expect(typeof result.reason).toBe('string');
     expect(result.namedScores?.[booleanCriterion.id]).toBeCloseTo(0.9);
     expect(result.metadata?.model).toBeDefined();
     expect(result.graderError).not.toBe(true);
+    const fixtureFields = fixtureFieldNames();
+    for (const key of Object.keys(result)) {
+      expect(fixtureFields).toContain(key);
+    }
   });
 
   test('graderError:true only for a transport failure', async () => {

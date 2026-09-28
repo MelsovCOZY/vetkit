@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test } from 'vitest';
 import type { CachedJudgment, VerdictCache } from '@vetkit/core';
 import type { Answer, Criterion, JudgeResponse, JudgeV1 } from '@vetkit/spec';
 import { createScorer } from './scorer.ts';
@@ -49,7 +49,7 @@ function fakeJudge(impl: JudgeV1['doJudge']): JudgeV1 {
       transport: 'fake',
       model: 'jev-fake-model',
     },
-    doJudge: vi.fn(impl),
+    doJudge: impl,
   };
 }
 
@@ -102,9 +102,13 @@ describe('createScorer', () => {
   });
 
   test('reuses a supplied cache across two calls with the same state', async () => {
-    const doJudge = vi.fn<JudgeV1['doJudge']>(() =>
-      Promise.resolve(response({ [booleanCriterion.id]: { type: 'boolean', probability: 0.9 } })),
-    );
+    let callCount = 0;
+    const doJudge: JudgeV1['doJudge'] = () => {
+      callCount += 1;
+      return Promise.resolve(
+        response({ [booleanCriterion.id]: { type: 'boolean', probability: 0.9 } }),
+      );
+    };
     const judge: JudgeV1 = {
       specVersion: 'v1',
       id: 'judge-fake',
@@ -128,7 +132,7 @@ describe('createScorer', () => {
     const score = createScorer({ judge, criterion: booleanCriterion, cache });
     await score({ output: 'same state' });
     await score({ output: 'same state' });
-    expect(doJudge).toHaveBeenCalledTimes(1);
+    expect(callCount).toBe(1);
   });
 
   test('score criterion passes by threshold band using decideVerdict', async () => {
