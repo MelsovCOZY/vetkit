@@ -197,6 +197,32 @@ function isNestedAuthenticationError(body: unknown): boolean {
   return detail.error_type === 'authentication_error';
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+// Reads `value[key]` only after narrowing to a plain object, so an untrusted body
+// never needs an `as Record<...>` assertion to walk it.
+function fieldOf(value: unknown, key: string): unknown {
+  return isRecord(value) ? value[key] : undefined;
+}
+
+const ERROR_TYPE_HINT_PATTERN = /^[a-z_]{1,64}$/;
+
+// Vercel AI Gateway's 403 body nests the classified error type at `error.type`
+// (e.g. no_providers_available, customer_verification_required); TypeSafe's own
+// nests it one level deeper at `detail.error_type` (see isNestedAuthenticationError
+// above for the auth case). Anything that isn't a short lowercase token — missing,
+// wrong shape, or an upstream body we don't recognise — falls back to 'forbidden'
+// rather than ever surfacing the raw body as a hint.
+function extractErrorTypeHint(body: unknown): string {
+  const errorType =
+    fieldOf(fieldOf(body, 'error'), 'type') ?? fieldOf(fieldOf(body, 'detail'), 'error_type');
+  return typeof errorType === 'string' && ERROR_TYPE_HINT_PATTERN.test(errorType)
+    ? errorType
+    : 'forbidden';
+}
+
 async function toJudgeError(
   response: Response,
   apiKey: string,
@@ -219,6 +245,14 @@ async function toJudgeError(
     return new VetError('JUDGE_UNAVAILABLE', 'judge account has no credit', {
       cause,
       details: { retryable: false, hint: 'no credit' },
+    });
+  }
+
+  if (status === 403) {
+    const hint = extractErrorTypeHint(body);
+    return new VetError('JUDGE_UNAVAILABLE', `judge unavailable (HTTP 403: ${hint})`, {
+      cause,
+      details: { retryable: false, hint },
     });
   }
 
