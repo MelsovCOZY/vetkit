@@ -11,4 +11,8 @@ export default defineConfig({
   // tsdown's fixedExtension default (true on platform 'node') would emit .mjs/.d.mts,
   // which does not match the exports map's ./dist/index.js and ./dist/index.d.ts.
   fixedExtension: false,
+  // emit-scorer.ts loads scorer.ts.tmpl via a URL relative to its own (built) module
+  // location, so the template must land next to it at dist/templates/scorer.ts.tmpl —
+  // otherwise the built CLI's `vet export --to vitest` throws ENOENT (mol-aq4.14).
+  copy: [{ from: 'src/templates/scorer.ts.tmpl', to: 'dist/templates' }],
 });
