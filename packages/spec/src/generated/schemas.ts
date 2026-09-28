@@ -426,6 +426,9 @@ export const criterionSchema: JsonSchema = {
     enabled: {
       type: 'boolean',
     },
+    contentDependent: {
+      type: 'boolean',
+    },
     provenance: {
       type: 'object',
       properties: {

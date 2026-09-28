@@ -15,6 +15,7 @@ export type Criterion = {
   polarity: 'pass_when_true' | 'pass_when_false';
   channel: 'outcome' | 'safety' | 'quality';
   enabled?: boolean;
+  contentDependent?: boolean;
   provenance: {
     traceIds: string[];
     generator?: string;

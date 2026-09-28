@@ -19,6 +19,7 @@
     "polarity": { "enum": ["pass_when_true", "pass_when_false"] },
     "channel": { "enum": ["outcome", "safety", "quality"] },
     "enabled": { "type": "boolean" },
+    "contentDependent": { "type": "boolean" },
     "provenance": {
       "type": "object",
       "properties": {
