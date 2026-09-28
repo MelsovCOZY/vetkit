@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 // `setupFiles` must be absolute: package projects below set their own `root`
 // (packages/<name>), so a relative './vitest.setup.ts' would resolve against
@@ -55,6 +55,10 @@ const packageProjects = readdirSync('packages', { withFileTypes: true })
         enabled: true,
         include: ['**/*.test-d.ts'],
       },
+      // e2e/** is the e2e project's territory only (see below); without this, a
+      // package's default project silently collects and skips its own e2e journey
+      // test instead of leaving it to `--project e2e`.
+      exclude: [...configDefaults.exclude, '**/e2e/**'],
     },
   }));
 
@@ -96,16 +100,16 @@ export default defineConfig({
         },
       },
       // Final-gate smokes against the real Jev endpoint. Opt-in only: without
-      // CEV_E2E=1, `bun run test` must not collect e2e/** at all (the fetch guard
-      // in vitest.setup.ts already lets CEV_E2E=1 tests through). Gate smokes can
-      // take minutes, hence the long timeout.
+      // CEV_E2E=1, `bun run test` must not collect e2e/** (or packages/*/e2e/**) at
+      // all (the fetch guard in vitest.setup.ts already lets CEV_E2E=1 tests
+      // through). Gate smokes can take minutes, hence the long timeout.
       ...(process.env.CEV_E2E === '1'
         ? [
             {
               extends: true,
               test: {
                 name: 'e2e',
-                include: ['e2e/**/*.e2e.test.ts'],
+                include: ['e2e/**/*.e2e.test.ts', 'packages/*/e2e/**/*.e2e.test.ts'],
                 testTimeout: 900_000,
               },
             },
