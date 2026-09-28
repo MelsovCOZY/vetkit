@@ -58,6 +58,10 @@ const INPUT_EXIT_CODES = new Set([
   'LABELS_TOO_FEW',
   'JUDGE_UNAUTHORIZED',
   'OUTBOX_CORRUPT',
+  // J5 (docs/contracts/j5.md "Error codes"): exact entries so SOURCE_EMPTY exits 2 rather than
+  // falling through to the SOURCE_* warning rule below, and OTLP_PARSE exits 2 rather than 70.
+  'SOURCE_EMPTY',
+  'OTLP_PARSE',
 ]);
 
 const HINTS: Readonly<Record<Category, string>> = {
