@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { JEV_CREDENTIAL_PRIORITY, JEV_PRESETS, type JevPresetName } from '@vetkit/judge-jev';
 import type { Command } from 'commander';
 
 // Structural stand-in for NodeJS.WritableStream (see errors.ts / logger.ts): keeps this
@@ -27,50 +28,20 @@ export interface EnvVarDoc {
   readonly transport: string;
 }
 
-export type JudgeTransport = 'vercel' | 'openrouter' | 'cloudflare' | 'typesafe';
+export type JudgeTransport = JevPresetName;
 
-// The four judge credentials the design accepts, and the transport each unblocks.
-// Priority order here is also the tie-break order when more than one is set (root
-// ledger RISK "amends TYPESAFE_API_KEY is not set..."). Kept local to this file
-// rather than imported from judge-jev/presets.ts: that module doesn't (yet) export
-// per-preset apiKeyEnv/healthUrl metadata, and packages/cli has no dependency on
-// judge-jev — see Deviations in this bead's report.
-export const ENV_VARS: readonly EnvVarDoc[] = [
-  {
-    name: 'AI_GATEWAY_API_KEY',
-    purpose: 'judge credential for the Vercel AI Gateway transport (typesafe-ai/jev alias)',
-    transport: 'vercel',
-  },
-  {
-    name: 'OPENROUTER_API_KEY',
-    purpose: 'judge credential for the OpenRouter Decisions transport',
-    transport: 'openrouter',
-  },
-  {
-    name: 'CLOUDFLARE_API_TOKEN',
-    purpose:
-      'judge credential (paired with CLOUDFLARE_ACCOUNT_ID) for the Cloudflare Workers AI transport',
-    transport: 'cloudflare',
-  },
-  {
-    name: 'CLOUDFLARE_ACCOUNT_ID',
-    purpose:
-      'account id (paired with CLOUDFLARE_API_TOKEN) for the Cloudflare Workers AI transport',
-    transport: 'cloudflare',
-  },
-  {
-    name: 'TYPESAFE_API_KEY',
-    purpose: 'judge credential for the TypeSafe direct transport',
-    transport: 'typesafe',
-  },
-];
+// The judge credentials the design accepts and the transport each unblocks, derived
+// from the judge-jev presets. Priority order is also the tie-break order when more than
+// one is set (JEV_CREDENTIAL_PRIORITY).
+const TRANSPORT_PRIORITY: readonly JudgeTransport[] = JEV_CREDENTIAL_PRIORITY;
 
-const TRANSPORT_PRIORITY: readonly JudgeTransport[] = [
-  'vercel',
-  'openrouter',
-  'cloudflare',
-  'typesafe',
-];
+export const ENV_VARS: readonly EnvVarDoc[] = TRANSPORT_PRIORITY.flatMap((transport) =>
+  JEV_PRESETS[transport].credentials.map((c) => ({
+    name: c.name,
+    purpose: c.purpose,
+    transport,
+  })),
+);
 
 type Env = Record<string, string | undefined>;
 
@@ -79,18 +50,7 @@ function isSet(value: string | undefined): value is string {
 }
 
 function transportCredentialPresent(transport: JudgeTransport, env: Env): boolean {
-  switch (transport) {
-    case 'vercel':
-      return isSet(env.AI_GATEWAY_API_KEY);
-    case 'openrouter':
-      return isSet(env.OPENROUTER_API_KEY);
-    case 'cloudflare':
-      return isSet(env.CLOUDFLARE_API_TOKEN) && isSet(env.CLOUDFLARE_ACCOUNT_ID);
-    case 'typesafe':
-      return isSet(env.TYPESAFE_API_KEY);
-    default:
-      return false;
-  }
+  return JEV_PRESETS[transport].credentials.every((c) => isSet(env[c.name]));
 }
 
 function selectTransport(env: Env): JudgeTransport | undefined {
@@ -191,39 +151,12 @@ function checkLefthook(installed: boolean): DoctorCheck {
   };
 }
 
-interface HealthSpec {
-  readonly method: 'GET' | 'HEAD';
-  readonly url: (env: Env) => string;
-  readonly headers: (env: Env) => Record<string, string>;
+// Health endpoints come from the judge-jev presets; every probe authenticates with the
+// preset's first credential as a bearer token.
+function healthHeaders(transport: JudgeTransport, env: Env): Record<string, string> {
+  const bearer = JEV_PRESETS[transport].credentials[0]?.name;
+  return { Authorization: `Bearer ${(bearer === undefined ? undefined : env[bearer]) ?? ''}` };
 }
-
-// Health URLs/dialects per docs/research/2026-09-25 toolchain findings (root ledger
-// RISK "OpenRouter/Cloudflare health endpoints differ"): each transport gets its own
-// probe rather than one shared shape. Not imported from judge-jev/presets.ts — see
-// the ENV_VARS comment above.
-const HEALTH: Record<JudgeTransport, HealthSpec> = {
-  vercel: {
-    method: 'GET',
-    url: () => 'https://ai-gateway.vercel.sh/typesafe/v1/models',
-    headers: (env) => ({ Authorization: `Bearer ${env.AI_GATEWAY_API_KEY ?? ''}` }),
-  },
-  typesafe: {
-    method: 'GET',
-    url: () => 'https://api.typesafe.ai/v1/models',
-    headers: (env) => ({ Authorization: `Bearer ${env.TYPESAFE_API_KEY ?? ''}` }),
-  },
-  openrouter: {
-    method: 'GET',
-    url: () => 'https://openrouter.ai/api/v1/models?output_modalities=all',
-    headers: (env) => ({ Authorization: `Bearer ${env.OPENROUTER_API_KEY ?? ''}` }),
-  },
-  cloudflare: {
-    method: 'HEAD',
-    url: (env) =>
-      `https://api.cloudflare.com/client/v4/accounts/${env.CLOUDFLARE_ACCOUNT_ID ?? ''}/ai/run`,
-    headers: (env) => ({ Authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN ?? ''}` }),
-  },
-};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -272,12 +205,13 @@ async function checkJudgeHealth(
   env: Env,
   fetchImpl: typeof fetch,
 ): Promise<DoctorCheck> {
-  const spec = HEALTH[transport];
+  const preset = JEV_PRESETS[transport];
+  const spec = preset.health;
   const url = spec.url(env);
   try {
     const res = await fetchImpl(url, {
       method: spec.method,
-      headers: spec.headers(env),
+      headers: healthHeaders(transport, env),
       signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) {
@@ -298,9 +232,10 @@ async function checkJudgeHealth(
     if (typeof releaseDate === 'string') parts.push(`release_date=${releaseDate}`);
     if (typeof finalProvider === 'string') parts.push(`finalProvider=${finalProvider}`);
     if (typeof credentialType === 'string') parts.push(`credentialType=${credentialType}`);
+    const gateway = preset.providerOptions?.gateway;
     const zdrNote =
-      transport === 'vercel'
-        ? ' (zero-data-retention is best-effort only: routes solely to typesafe-ai; the live provider catalog reports no ZDR guarantee)'
+      gateway?.zeroDataRetention === true
+        ? ` (zero-data-retention is best-effort only: routes solely to ${gateway.only.join(', ')}; the live provider catalog reports no ZDR guarantee)`
         : '';
     return {
       name: 'judge endpoint health',
