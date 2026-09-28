@@ -329,6 +329,79 @@ describe('genAiLegacyDialect.extractMessages: indexed attributes', () => {
   });
 });
 
+// pij.14: gen_ai.{prompt,completion}.{n}.tool_calls.{i}.{id,name,arguments} (an assistant turn
+// calling a tool) and gen_ai.{prompt,completion}.{n}.tool_call_id (a tool turn responding to one)
+// map onto tool_call / tool_call_response parts instead of text.
+describe('genAiLegacyDialect.extractMessages: tool calls (indexed attrs)', () => {
+  test('completion.{n}.tool_calls.{i}.{id,name,arguments}: a tool_call part after any text', () => {
+    const s = span({
+      'gen_ai.completion.0.role': 'assistant',
+      'gen_ai.completion.0.content': "I'll check the weather.",
+      'gen_ai.completion.0.tool_calls.0.id': 'call_1',
+      'gen_ai.completion.0.tool_calls.0.name': 'get_weather',
+      'gen_ai.completion.0.tool_calls.0.arguments': '{"city":"Paris"}',
+    });
+
+    expect(genAiLegacyDialect.extractMessages(s, tree)).toEqual([
+      {
+        role: 'assistant',
+        parts: [
+          { type: 'text', content: "I'll check the weather." },
+          { type: 'tool_call', id: 'call_1', name: 'get_weather', arguments: '{"city":"Paris"}' },
+        ],
+      },
+    ]);
+  });
+
+  test('prompt.{n}.tool_call_id: content becomes a tool_call_response, not text', () => {
+    const s = span({
+      'gen_ai.prompt.0.role': 'tool',
+      'gen_ai.prompt.0.tool_call_id': 'call_1',
+      'gen_ai.prompt.0.content': '{"temp_c":18}',
+    });
+
+    expect(genAiLegacyDialect.extractMessages(s, tree)).toEqual([
+      {
+        role: 'tool',
+        parts: [{ type: 'tool_call_response', id: 'call_1', response: '{"temp_c":18}' }],
+      },
+    ]);
+  });
+
+  test('multiple tool_calls at one index are ordered by their own sub-index', () => {
+    const s = span({
+      'gen_ai.completion.0.role': 'assistant',
+      'gen_ai.completion.0.content': 'using two tools',
+      'gen_ai.completion.0.tool_calls.1.id': 'call_2',
+      'gen_ai.completion.0.tool_calls.1.name': 'get_time',
+      'gen_ai.completion.0.tool_calls.0.id': 'call_1',
+      'gen_ai.completion.0.tool_calls.0.name': 'get_weather',
+    });
+
+    expect(genAiLegacyDialect.extractMessages(s, tree)).toEqual([
+      {
+        role: 'assistant',
+        parts: [
+          { type: 'text', content: 'using two tools' },
+          { type: 'tool_call', id: 'call_1', name: 'get_weather' },
+          { type: 'tool_call', id: 'call_2', name: 'get_time' },
+        ],
+      },
+    ]);
+  });
+
+  test('a tool_call missing its function name is skipped', () => {
+    const s = span({
+      'gen_ai.completion.0.role': 'assistant',
+      'gen_ai.completion.0.tool_calls.0.id': 'call_1',
+    });
+
+    expect(genAiLegacyDialect.extractMessages(s, tree)).toEqual([
+      { role: 'assistant', parts: [{ type: 'text', content: '' }] },
+    ]);
+  });
+});
+
 describe('genAiLegacyDialect.extractMessages: legacy content events', () => {
   test('gen_ai.content.prompt / gen_ai.content.completion events with a JSON body', () => {
     const s = span({}, [
