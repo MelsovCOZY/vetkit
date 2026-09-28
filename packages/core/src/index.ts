@@ -183,3 +183,6 @@ export type {
   Unknowable,
   ValidateEstimate,
 } from './estimate.ts';
+
+export { createOutbox } from './outbox/outbox.ts';
+export type { DrainResult, Outbox, OutboxOptions, ReconcileResult } from './outbox/outbox.ts';
