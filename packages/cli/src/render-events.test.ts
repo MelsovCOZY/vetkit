@@ -133,6 +133,26 @@ describe('renderEvents', () => {
     expect(lines.some((line) => line.includes('90 more case'))).toBe(true);
   });
 
+  it('logs cause status/errorType at debug level for an unscored verdict, never body or key', () => {
+    const { stream, lines } = sink();
+    const events = createEvents();
+    renderEvents(events, {
+      options: {},
+      logger: createLogger({ stream, color: false, level: 'debug' }),
+    });
+    events.emit('verdict', {
+      caseId: 'c0',
+      criterionId: 'k1',
+      status: 'unscored',
+      cause: { status: 403, errorType: 'no_providers_available' },
+    });
+    const verdictLine = lines.find((line) => line.includes('verdict c0/k1'));
+    expect(verdictLine).toContain('403');
+    expect(verdictLine).toContain('no_providers_available');
+    expect(verdictLine).not.toContain('body');
+    expect(verdictLine).not.toContain('secret');
+  });
+
   it('stops rendering after the returned unsubscribe is called', () => {
     const { stream, lines } = sink();
     const events = createEvents();
