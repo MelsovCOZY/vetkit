@@ -38,6 +38,9 @@ export type {
 export { buildSpanTree } from './reader/tree.ts';
 export type { SpanNode, SpanTree } from './reader/tree.ts';
 
+export { startReceiver } from './receiver/index.ts';
+export type { Receiver, StartReceiverOptions } from './receiver/index.ts';
+
 export { detectDialect, groupByTraceId, normalizeTrace, sumTokens } from './normalize/index.ts';
 export type { DialectV1, OtlpDiag, TraceGroup } from './normalize/index.ts';
 

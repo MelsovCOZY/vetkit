@@ -37,6 +37,7 @@
     "@vetkit/sink-langfuse": "workspace:^",
     "@vetkit/sink-otel": "workspace:^",
     "@vetkit/source-jsonl": "workspace:^",
+    "@vetkit/source-otlp": "workspace:^",
     "@vetkit/spec": "workspace:^"
   },
   "scripts": {

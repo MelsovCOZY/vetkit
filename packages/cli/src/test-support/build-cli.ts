@@ -31,6 +31,7 @@ export const BUILD_ORDER = [
   'sink-otel',
   'sink-langfuse',
   'source-jsonl',
+  'source-otlp',
   'export-vitest',
   'cli',
 ] as const;

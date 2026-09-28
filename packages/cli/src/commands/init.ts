@@ -19,18 +19,30 @@ import {
   type ResolvedConfig,
 } from '@vetkit/core';
 import { JEV_CREDENTIAL_PRIORITY, JEV_PRESETS, type JevPresetName } from '@vetkit/judge-jev';
-import { CEV_ERROR_CODES, VetError, type GeneratorV1 } from '@vetkit/spec';
+import {
+  CEV_ERROR_CODES,
+  VetError,
+  type GeneratorV1,
+  type NormalizedTrace,
+  type SourceV1,
+} from '@vetkit/spec';
 import type { Command } from 'commander';
 import { loadVetConfig } from '../config-load.ts';
 import { generatorFromEndpoint } from '../generators.ts';
 import { CEV_EXIT, emit, getLogger, isInteractive, prompt, type GlobalOptions } from '../output.ts';
-import { resolveSource } from '../sources.ts';
+import { resolveSource, type SourceOptions } from '../sources.ts';
+import { buildOtlpSummary } from './init-otlp.ts';
 
 interface InitOptions extends GlobalOptions {
   readonly dir?: string;
   readonly force?: boolean;
   readonly source?: string;
   readonly out?: string;
+  // J5 (bead mol-pij.8): forwarded to resolveSource as SourceOptions, for otlp::<port>'s
+  // receiver mode. Commander hands option values through as strings; the jsonl factory (and
+  // any other prefix that ignores SourceOptions) never sees these at all.
+  readonly until?: string;
+  readonly seconds?: string;
 }
 
 // A criteria.yaml lint drops error-severity criteria (core's lintCriteria); root design
@@ -202,6 +214,22 @@ async function generateIntoOut(
   return result;
 }
 
+// Tees every trace the wrapped source yields into `sink`, as a side effect of the one read
+// generateEvals already does — no second pass over the source. Used only to build the otlp:
+// summary (orchestrator DECISION, mol-pij.8): buildOtlpSummary needs each trace's dialect and
+// tokens, which GenerateEvalsResult does not carry.
+function tapSource(source: SourceV1, sink: NormalizedTrace[]): SourceV1 {
+  return {
+    ...source,
+    async *doRead(opts) {
+      for await (const trace of source.doRead(opts)) {
+        sink.push(trace);
+        yield trace;
+      }
+    },
+  };
+}
+
 async function generateCommand(options: InitOptions & { source: string }): Promise<void> {
   if (options.out === undefined || options.out === '') {
     throw invalid('--source requires --out <dir>');
@@ -210,7 +238,13 @@ async function generateCommand(options: InitOptions & { source: string }): Promi
   const force = options.force === true;
   await ensureOutAvailable(out, force);
 
-  const source = resolveSource(options.source);
+  const sourceOptions: SourceOptions = {
+    ...(options.until === undefined ? {} : { until: Number(options.until) }),
+    ...(options.seconds === undefined ? {} : { seconds: Number(options.seconds) }),
+  };
+  const source = resolveSource(options.source, sourceOptions);
+  const collectedTraces: NormalizedTrace[] = [];
+  const tappedSource = tapSource(source, collectedTraces);
   const loaded = await loadVetConfig({ cwd: process.cwd() });
   const log = getLogger();
   for (const warning of loaded.warnings) log.warn(warning);
@@ -222,7 +256,7 @@ async function generateCommand(options: InitOptions & { source: string }): Promi
   let result: GenerateEvalsResult;
   try {
     result = await generateIntoOut(
-      { source, generator, judge: loaded.judge, signal: controller.signal },
+      { source: tappedSource, generator, judge: loaded.judge, signal: controller.signal },
       out,
       force,
     );
@@ -230,8 +264,14 @@ async function generateCommand(options: InitOptions & { source: string }): Promi
     process.off('SIGINT', onSigint);
   }
 
+  // Additive: only an `otlp:`-sourced run carries a summary (source.id 'otlp/file' or
+  // 'otlp/receiver'); every other --source keeps emit()'s existing {criteria, cases, report}
+  // document unchanged.
+  const summary = source.id.startsWith('otlp/')
+    ? buildOtlpSummary(collectedTraces, result)
+    : undefined;
   emit(
-    result,
+    summary === undefined ? result : { ...result, summary },
     () =>
       `wrote ${String(result.criteria.length)} criteria and ${String(result.cases.length)} cases to ${out}`,
   );
@@ -250,6 +290,8 @@ export function registerInit(program: Command): Command {
       'directory to write criteria.yaml and cases/ into (required with --source)',
     )
     .option('--force', 'overwrite existing scaffold or --out files')
+    .option('--until <n>', 'stop a streaming --source (e.g. otlp::<port>) after n traces')
+    .option('--seconds <s>', 'stop a streaming --source (e.g. otlp::<port>) after s seconds')
     .action(async (_options: unknown, command: Command) => {
       const options = command.optsWithGlobals<InitOptions>();
       if (options.source === undefined) {

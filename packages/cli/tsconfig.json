@@ -11,7 +11,8 @@
       "@vetkit/generator-openai-compatible": ["../generator-openai-compatible/src/index.ts"],
       "@vetkit/sink-langfuse": ["../sink-langfuse/src/index.ts"],
       "@vetkit/sink-otel": ["../sink-otel/src/index.ts"],
-      "@vetkit/source-jsonl": ["../source-jsonl/src/index.ts"]
+      "@vetkit/source-jsonl": ["../source-jsonl/src/index.ts"],
+      "@vetkit/source-otlp": ["../source-otlp/src/index.ts"]
     }
   },
   "files": [],
@@ -24,6 +25,7 @@
     { "path": "../sink-langfuse" },
     { "path": "../sink-otel" },
     { "path": "../source-jsonl" },
+    { "path": "../source-otlp" },
     { "path": "../spec" }
   ]
 }
