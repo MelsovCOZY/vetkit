@@ -2,10 +2,13 @@
 
 export type { Case } from './case.ts';
 export type { PluginRef } from './config.ts';
+export type { SinkRef } from './config.ts';
 export type { ConfigDoc } from './config.ts';
 export type { GeneratorEndpoint } from './config.ts';
 export type { AdapterRef } from './config.ts';
 export type { JudgeEndpoint } from './config.ts';
+export type { OtelSinkDescriptor } from './config.ts';
+export type { LangfuseSinkDescriptor } from './config.ts';
 export type { ThresholdsPolicy } from './config.ts';
 export type { WatchConfig } from './config.ts';
 export type { GateConfig } from './config.ts';
