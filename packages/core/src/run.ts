@@ -5,7 +5,7 @@
 // Pass semantics (DECISION: escape and pass semantics): boolean criteria come back as a 3-way
 // choice {yes, no, escape}; p = P(yes), P(escape) >= escapeThreshold gives not_applicable,
 // pass = p >= threshold (pass_when_true) or 1-p >= threshold (pass_when_false). Choice passes when
-// the chosen label is in passWhen. Score passes when the expected level E >= threshold (max − E
+// P(passWhen) = Σ p over the passWhen labels >= threshold (1 − P for pass_when_false). Score passes when the expected level E >= threshold (max − E
 // for pass_when_false). Only boolean and choice criteria gate (eval-quality brief §5.2 item 14);
 // code-graded criteria never reach the judge.
 import {
@@ -214,7 +214,17 @@ function decide(
     if (answer.choice === key || (answer.probabilities[key] ?? 0) >= escapeThreshold) {
       return { ...base, status: 'not_applicable', cause: 'escape' };
     }
-    return { ...base, pass: (criterion.passWhen ?? []).includes(answer.choice) };
+    // Same pass value calibrate fits on (validate/calibrate.ts repeatValues): P(passWhen) = Σ p
+    // over the passWhen labels (the argmax label in passWhen as 1 / 0 when no probabilities come
+    // back), or 1 − P(passWhen) for pass_when_false.
+    const passWhen = new Set(criterion.passWhen ?? []);
+    const entries = Object.entries(answer.probabilities);
+    const pPass =
+      entries.length === 0
+        ? Number(passWhen.has(answer.choice))
+        : entries.filter(([label]) => passWhen.has(label)).reduce((sum, [, p]) => sum + p, 0);
+    const value = criterion.polarity === 'pass_when_false' ? 1 - pPass : pPass;
+    return { ...base, threshold, pass: value >= threshold, borderline: band(value) };
   }
 
   let p: number;
