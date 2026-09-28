@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  bandCases,
   buildRequest,
+  calibrate,
   cacheKey,
   clusteredSE,
   clusterKeys,
   computeWordingHash,
+  correctedPassRate,
   createFileCache,
   createLimiter,
   decideExit,
@@ -21,8 +24,11 @@ import {
   pairedClusteredDiff,
   referenceRequirement,
   renderReference,
+  repeatTolerance,
+  repeatValues,
   runEvals,
   runJudge,
+  splitByHash,
 } from './index.ts';
 
 describe('@vetkit/core package entry', () => {
@@ -116,5 +122,29 @@ describe('@vetkit/core package entry', () => {
 
   it('re-exports decideExit as a function', () => {
     expect(typeof decideExit).toBe('function');
+  });
+
+  it('re-exports calibrate as a function', () => {
+    expect(typeof calibrate).toBe('function');
+  });
+
+  it('re-exports bandCases as a function', () => {
+    expect(typeof bandCases).toBe('function');
+  });
+
+  it('re-exports correctedPassRate as a function', () => {
+    expect(typeof correctedPassRate).toBe('function');
+  });
+
+  it('re-exports repeatTolerance as a function', () => {
+    expect(typeof repeatTolerance).toBe('function');
+  });
+
+  it('re-exports repeatValues as a function', () => {
+    expect(typeof repeatValues).toBe('function');
+  });
+
+  it('re-exports splitByHash as a function', () => {
+    expect(typeof splitByHash).toBe('function');
   });
 });
