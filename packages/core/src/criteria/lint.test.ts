@@ -116,10 +116,12 @@ describe('lint issue shape', () => {
     expect(rule?.why).toMatch(/2026-09-25-jev-eval-generation-brief\.md/);
   });
 
-  test('every rule fixture in RULE_FIXTURES is error severity', () => {
+  test('DEEP_INDIRECTION warns; FORBIDDEN_WORD and the other eight rules are errors', () => {
     const severity = new Map(LINT_RULES.map((rule) => [rule.id, rule.severity]));
 
+    expect(severity.get('DEEP_INDIRECTION')).toBe('warn');
     for (const [, id] of RULE_FIXTURES) {
+      if (id === 'DEEP_INDIRECTION') continue;
       expect(severity.get(id)).toBe('error');
     }
   });
