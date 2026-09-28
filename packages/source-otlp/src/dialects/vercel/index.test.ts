@@ -39,9 +39,9 @@ function resource(): OtlpResource {
 
 describe('vercelDialect.detect', () => {
   test('matches on ai.operationId alone', () => {
-    expect(vercelDialect.detect(span('a', { 'ai.operationId': 'ai.generateText' }), resource())).toBe(
-      true,
-    );
+    expect(
+      vercelDialect.detect(span('a', { 'ai.operationId': 'ai.generateText' }), resource()),
+    ).toBe(true);
   });
 
   test('matches on ai.model.id alone', () => {
@@ -54,7 +54,10 @@ describe('vercelDialect.detect', () => {
 
   test('does not match a span with none of the three keys', () => {
     expect(
-      vercelDialect.detect(span('a', { 'gen_ai.system': 'openai', 'gen_ai.prompt': 'hi' }), resource()),
+      vercelDialect.detect(
+        span('a', { 'gen_ai.system': 'openai', 'gen_ai.prompt': 'hi' }),
+        resource(),
+      ),
     ).toBe(false);
   });
 });
@@ -158,7 +161,9 @@ describe('vercelDialect.extractMessages', () => {
     expect(messages).toEqual([
       {
         role: 'assistant',
-        parts: [{ type: 'tool_call', id: 'call_1', name: 'get_weather', arguments: { city: 'SF' } }],
+        parts: [
+          { type: 'tool_call', id: 'call_1', name: 'get_weather', arguments: { city: 'SF' } },
+        ],
       },
     ]);
   });
@@ -190,7 +195,9 @@ describe('vercelDialect.extractMessages', () => {
       'ai.response.toolCalls': '[not valid',
     });
     const messages = vercelDialect.extractMessages(s, buildSpanTree([s]));
-    expect(messages).toEqual([{ role: 'assistant', parts: [{ type: 'parse_error', detail: expect.any(String) }] }]);
+    expect(messages).toEqual([
+      { role: 'assistant', parts: [{ type: 'parse_error', detail: expect.any(String) }] },
+    ]);
   });
 
   test('recordInputs:false / recordOutputs:false (no content attributes) yields no messages', () => {
@@ -206,7 +213,7 @@ describe('vercelDialect.extractMessages', () => {
     expect(vercelDialect.extractMessages(s, buildSpanTree([s]))).toEqual([]);
   });
 
-  test('never reads another dialect\'s attributes (no cross-dialect fallback)', () => {
+  test("never reads another dialect's attributes (no cross-dialect fallback)", () => {
     const s = span('inner', {
       'ai.operationId': 'ai.generateText.doGenerate',
       'ai.prompt': 'vercel prompt',
@@ -214,7 +221,9 @@ describe('vercelDialect.extractMessages', () => {
       'gen_ai.system': 'openai',
     });
     const messages = vercelDialect.extractMessages(s, buildSpanTree([s]));
-    expect(messages).toEqual([{ role: 'user', parts: [{ type: 'text', content: 'vercel prompt' }] }]);
+    expect(messages).toEqual([
+      { role: 'user', parts: [{ type: 'text', content: 'vercel prompt' }] },
+    ]);
   });
 });
 
@@ -252,9 +261,9 @@ describe('vercelDialect.contentState', () => {
   });
 
   test('captured even when that content attribute is malformed JSON (attribute was present)', () => {
-    expect(
-      vercelDialect.contentState(span('inner', { 'ai.prompt.messages': '{not valid' })),
-    ).toBe('captured');
+    expect(vercelDialect.contentState(span('inner', { 'ai.prompt.messages': '{not valid' }))).toBe(
+      'captured',
+    );
   });
 
   test('not_captured when no content attribute is present', () => {
