@@ -134,3 +134,14 @@ export type {
   Events,
   Listener,
 } from './events.ts';
+
+export { gauntletLength, gauntletPositionSwap } from './validate/gauntlet-bias.ts';
+export type {
+  GauntletBiasEvent,
+  GauntletSkipReason,
+  LengthOptions,
+  LengthResult,
+  PaddingTemplate,
+  PositionSwapOptions,
+  PositionSwapResult,
+} from './validate/gauntlet-bias.ts';
