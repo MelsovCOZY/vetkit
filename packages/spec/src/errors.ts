@@ -71,6 +71,10 @@ export const CEV_ERROR_CODES = {
   // 429 exhausted after 3 retries, or any other non-OK response.
   SOURCE_AUTH: 'SOURCE_AUTH',
   SOURCE_UNREACHABLE: 'SOURCE_UNREACHABLE',
+  // mol-aq4.3: `vet export --to <id>` (an unregistered exporter id) and `vet export
+  // --require-lock` (no criteria.lock.json); both exit 2 (cli errors.ts EXPORT_* rule).
+  EXPORT_TARGET_UNKNOWN: 'EXPORT_TARGET_UNKNOWN',
+  EXPORT_NO_LOCK: 'EXPORT_NO_LOCK',
 } as const;
 
 export type CevErrorCode = (typeof CEV_ERROR_CODES)[keyof typeof CEV_ERROR_CODES];

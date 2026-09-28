@@ -90,7 +90,9 @@ function resolveExit(code: string, strict: boolean): Resolved {
   if (
     unprefixed === 'NOT_INTERACTIVE' ||
     unprefixed.startsWith('CONFIG') ||
-    unprefixed.startsWith('GATE_')
+    unprefixed.startsWith('GATE_') ||
+    // mol-aq4.3: `vet export`'s EXPORT_TARGET_UNKNOWN / EXPORT_NO_LOCK.
+    unprefixed.startsWith('EXPORT_')
   ) {
     return { category: 'config', exitCode: EXIT_USAGE, warn: false };
   }
