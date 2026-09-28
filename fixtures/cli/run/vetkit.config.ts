@@ -21,7 +21,10 @@ function waitForAbort(signal: AbortSignal | undefined): Promise<never> {
   return new Promise((_resolve, reject) => {
     const started = process.env['VETKIT_FIXTURE_STARTED'];
     if (started !== undefined) writeFileSync(started, 'started');
+    // A pending promise alone does not keep node alive; a real judge's fetch would.
+    const keepAlive = setTimeout(() => {}, 60_000);
     const fail = (): void => {
+      clearTimeout(keepAlive);
       const error = new Error('aborted');
       error.name = 'AbortError';
       reject(error);
