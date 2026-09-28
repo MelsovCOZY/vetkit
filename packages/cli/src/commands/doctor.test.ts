@@ -263,3 +263,11 @@ describe('renderTable / renderJson', () => {
     expect(parseJson(renderJson(result))).toEqual(result);
   });
 });
+
+describe('doctor.ts vendor neutrality', () => {
+  test('names no vendor outside comments (vendor metadata comes from @vetkit/judge-jev)', () => {
+    const source = readFileSync(fileURLToPath(new URL('./doctor.ts', import.meta.url)), 'utf8');
+    const code = source.replaceAll(/\/\*[\s\S]*?\*\//g, '').replaceAll(/(^|\s)\/\/.*$/gm, '$1');
+    expect(code).not.toMatch(/vercel|typesafe\.ai|openrouter|cloudflare/i);
+  });
+});
