@@ -38,11 +38,11 @@ function fakeFetch(
     const parsed = safeParseJson<OtlpBody>(text, { type: 'object' });
     if (!parsed.ok) throw parsed.error;
     const body = parsed.value;
-    calls.push({ url: String(input), init: init ?? {}, body });
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    calls.push({ url, init: init ?? {}, body });
     return Promise.resolve(respond(calls.length));
   };
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  return { fetch: impl as typeof fetch, calls };
+  return { fetch: impl, calls };
 }
 
 function verdict(overrides: Partial<Verdict> = {}): Verdict {
@@ -60,6 +60,18 @@ function verdict(overrides: Partial<Verdict> = {}): Verdict {
     ...overrides,
   };
 }
+
+function without(v: Verdict, key: 'answer' | 'provenance'): Verdict {
+  const copy = { ...v };
+  delete copy[key];
+  return copy;
+}
+
+function byString(a: string | undefined, b: string | undefined): number {
+  return (a ?? '').localeCompare(b ?? '');
+}
+
+const throwingFetch: typeof fetch = () => Promise.reject(new TypeError('getaddrinfo'));
 
 function records(call: Captured | undefined): OtlpLogRecord[] {
   return call?.body.resourceLogs.flatMap((r) => r.scopeLogs.flatMap((s) => s.logRecords)) ?? [];
@@ -158,7 +170,7 @@ describe('createOtelSink', () => {
   test('unscored: error.type is the status and no score attributes are emitted', async () => {
     const { fetch, calls } = fakeFetch();
     const sink = createOtelSink({ endpoint: 'http://collector:4318', fetch });
-    const ack = await sink.doWrite([verdict({ status: 'unscored', answer: undefined })], {});
+    const ack = await sink.doWrite([without(verdict({ status: 'unscored' }), 'answer')], {});
     expect(ack.accepted).toEqual(['v-1']);
     const rec = records(calls[0])[0];
     expect(attr(rec, 'error.type')).toEqual({ stringValue: 'unscored' });
@@ -181,7 +193,7 @@ describe('createOtelSink', () => {
   test('uncorrelated item is rejected while its correlated batch-mate is still sent', async () => {
     const { fetch, calls } = fakeFetch();
     const sink = createOtelSink({ endpoint: 'http://collector:4318', fetch });
-    const ack = await sink.doWrite([verdict({ id: 'lost', provenance: undefined }), verdict()], {});
+    const ack = await sink.doWrite([without(verdict({ id: 'lost' }), 'provenance'), verdict()], {});
     expect(ack.accepted).toEqual(['v-1']);
     expect(ack.rejected).toEqual([{ id: 'lost', reason: 'no correlation id', retryable: false }]);
     expect(records(calls[0])).toHaveLength(1);
@@ -249,12 +261,15 @@ describe('createOtelSink', () => {
     expect(ack.accepted).toHaveLength(2);
     expect(ack.rejected).toHaveLength(1);
     expect(ack.rejected[0]?.retryable).toBe(true);
-    expect([...ack.accepted, ack.rejected[0]?.id].toSorted()).toEqual(['v-1', 'v-2', 'v-3']);
+    expect([...ack.accepted, ack.rejected[0]?.id].toSorted(byString)).toEqual([
+      'v-1',
+      'v-2',
+      'v-3',
+    ]);
   });
 
   test('fetch throwing maps to SINK_UNREACHABLE:network for every item, never throws', async () => {
-    const fetch: typeof globalThis.fetch = () => Promise.reject(new TypeError('getaddrinfo'));
-    const sink = createOtelSink({ endpoint: 'http://collector:4318', fetch });
+    const sink = createOtelSink({ endpoint: 'http://collector:4318', fetch: throwingFetch });
     const ack = await sink.doWrite([verdict()], {});
     expect(ack.rejected).toEqual([
       { id: 'v-1', reason: 'SINK_UNREACHABLE:network', retryable: true },
@@ -289,7 +304,7 @@ describe('createOtelSink', () => {
       {},
     );
     expect(calls).toHaveLength(2);
-    expect(ack.accepted.toSorted()).toEqual(['v-1', 'v-2']);
+    expect(ack.accepted.toSorted(byString)).toEqual(['v-1', 'v-2']);
     for (const call of calls) expect(records(call)).toHaveLength(1);
   });
 });
