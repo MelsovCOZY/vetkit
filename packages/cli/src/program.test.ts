@@ -50,6 +50,12 @@ describe('vet bin', () => {
     expect(result.stdout).toMatch(/^\s+label\b/m);
   });
 
+  test('--help lists the init command', () => {
+    const result = runBin(['--help']);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toMatch(/^\s+init\b/m);
+  });
+
   test('--help lists the run command', () => {
     const result = runBin(['--help']);
     expect(result.status).toBe(0);
