@@ -3,7 +3,7 @@
 
 import { describe, expect, test } from 'vitest';
 import type { Case, Criterion, NormalizedTrace } from '@vetkit/spec';
-import { partitionCases, statusForTrace, type CriterionWithFlag } from './completeness.ts';
+import { partitionCases, statusForTrace } from './completeness.ts';
 
 function completeness(
   overrides: Partial<NormalizedTrace['completeness']> = {},
@@ -15,7 +15,7 @@ function makeCase(id: string, provenance: unknown): Case {
   return { id, input: { state: 'state' }, provenance, tags: [] };
 }
 
-function criterion(id: string, contentDependent?: boolean): CriterionWithFlag {
+function criterion(id: string, contentDependent?: boolean): Criterion {
   const base: Criterion = {
     id,
     type: 'boolean',

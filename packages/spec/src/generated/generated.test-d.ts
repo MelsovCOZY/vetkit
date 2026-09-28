@@ -29,6 +29,12 @@ test('Criterion.passWhen is required and non-empty on choice; escapeThreshold is
   expectTypeOf<Criterion['escapeThreshold']>().toEqualTypeOf<number | undefined>();
 });
 
+// bead classified-evals-mol-0nw.27: Criterion.contentDependent is optional metadata,
+// excluded from wordingHash (docs/contracts/j1.md).
+test('Criterion.contentDependent is an optional boolean', () => {
+  expectTypeOf<Criterion['contentDependent']>().toEqualTypeOf<boolean | undefined>();
+});
+
 test('Case is a narrow object type, not Record<string, unknown>', () => {
   expectTypeOf<Case['id']>().toEqualTypeOf<string>();
   expectTypeOf<Case['tags']>().toEqualTypeOf<string[]>();

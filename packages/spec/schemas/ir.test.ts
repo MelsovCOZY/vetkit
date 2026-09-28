@@ -200,6 +200,28 @@ describe('criterion.schema.json', () => {
 
     expect(result.ok).toBe(false);
   });
+
+  // bead classified-evals-mol-0nw.27: contentDependent?: boolean, metadata excluded from
+  // wordingHash (docs/contracts/j1.md).
+  test('accepts a boolean criterion with contentDependent:false', () => {
+    const result = parseIr(
+      JSON.stringify({ ...booleanCriterion, contentDependent: false }),
+      criterionSchema,
+    );
+
+    expect(result.ok).toBe(true);
+  });
+
+  // Rejected by contentDependent's own `{"type":"boolean"}` constraint, not by
+  // additionalProperties (mol-0nw.27 contract revision 3).
+  test('rejects contentDependent when it is not a boolean', () => {
+    const result = parseIr(
+      JSON.stringify({ ...booleanCriterion, contentDependent: 'yes' }),
+      criterionSchema,
+    );
+
+    expect(result.ok).toBe(false);
+  });
 });
 
 describe('case.schema.json', () => {
