@@ -32,8 +32,8 @@ test('SinkV1 has no kind key and capabilities is exactly { batch; idempotent }',
 });
 
 test("defineSink rejects specVersion 'v2' at the type level", () => {
-  // @ts-expect-error specVersion must be 'v1'
   defineSink({
+    // @ts-expect-error specVersion must be 'v1'
     specVersion: 'v2',
     id: 'otel/logs',
     capabilities: { batch: 1, idempotent: true },
