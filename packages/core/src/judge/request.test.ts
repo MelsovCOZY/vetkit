@@ -322,7 +322,9 @@ describe('judgeCase', () => {
 
   test('an already-aborted signal yields unscored JUDGE_TIMEOUT with no judge or cache I/O', async () => {
     const { judge, doJudge } = fakeJudge();
-    const cache: VerdictCache = { get: vi.fn(), set: vi.fn() };
+    const get = vi.fn<VerdictCache['get']>();
+    const set = vi.fn<VerdictCache['set']>();
+    const cache: VerdictCache = { get, set };
     const controller = new AbortController();
     controller.abort();
     const verdicts = await judgeCase({
@@ -333,8 +335,8 @@ describe('judgeCase', () => {
       signal: controller.signal,
     });
     expect(doJudge).not.toHaveBeenCalled();
-    expect(cache.get).not.toHaveBeenCalled();
-    expect(cache.set).not.toHaveBeenCalled();
+    expect(get).not.toHaveBeenCalled();
+    expect(set).not.toHaveBeenCalled();
     expect(verdicts.every((v) => v.status === 'unscored' && v.cause === 'JUDGE_TIMEOUT')).toBe(
       true,
     );
