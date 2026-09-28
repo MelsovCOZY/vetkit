@@ -42,6 +42,8 @@ import {
 } from './index.ts';
 import { createEvents, EVENT_NAMES } from './index.ts';
 
+import { gauntletLength, gauntletPositionSwap } from './index.ts';
+
 describe('@vetkit/core package entry', () => {
   it('re-exports loadCriteria as a function', () => {
     expect(typeof loadCriteria).toBe('function');
@@ -205,5 +207,13 @@ describe('@vetkit/core package entry', () => {
 
   it('re-exports EVENT_NAMES naming the run:start event', () => {
     expect(EVENT_NAMES.RUN_START).toBe('run:start');
+  });
+
+  it('re-exports gauntletPositionSwap as a function', () => {
+    expect(typeof gauntletPositionSwap).toBe('function');
+  });
+
+  it('re-exports gauntletLength as a function', () => {
+    expect(typeof gauntletLength).toBe('function');
   });
 });
