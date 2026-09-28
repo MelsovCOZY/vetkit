@@ -134,6 +134,17 @@ describe('vet bin: check --outbox and lock refresh (p4a.2)', () => {
   });
 });
 
+describe('vet bin: rerun --disputed (mol-p4a.3)', () => {
+  test('--help lists the rerun command; rerun --help lists --disputed', () => {
+    const top = runBin(['--help']);
+    expect(top.status).toBe(0);
+    expect(top.stdout).toMatch(/^\s+rerun\b/m);
+    const rerun = runBin(['rerun', '--help']);
+    expect(rerun.status).toBe(0);
+    expect(rerun.stdout).toMatch(/--disputed\b/);
+  });
+});
+
 describe('vet bin: criteria (mol-e3g)', () => {
   test('--help lists the criteria command', () => {
     const result = runBin(['--help']);

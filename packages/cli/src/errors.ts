@@ -62,6 +62,8 @@ const INPUT_EXIT_CODES = new Set([
   // falling through to the SOURCE_* warning rule below, and OTLP_PARSE exits 2 rather than 70.
   'SOURCE_EMPTY',
   'OTLP_PARSE',
+  // mol-p4a.3: `vet rerun` with no persisted run record (a missing input, like CASE_INVALID).
+  'RUN_NOT_FOUND',
 ]);
 
 const HINTS: Readonly<Record<Category, string>> = {

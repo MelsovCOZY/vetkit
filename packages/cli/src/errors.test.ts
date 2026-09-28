@@ -183,6 +183,11 @@ describe('handleError unprefixed literal codes', () => {
     expect(result.stderr).toContain('warning SOURCE_READ: source truncated\n');
   });
 
+  test('an unprefixed RUN_NOT_FOUND code exits 2 (mol-p4a.3 `vet rerun`)', () => {
+    const result = run(markerError('RUN_NOT_FOUND', 'no run record'));
+    expect(result.code).toBe(EXIT_USAGE);
+  });
+
   test('an unprefixed unknown class code falls back to INTERNAL exit 70', () => {
     const result = run(markerError('FOO_BAR', 'never seen this one'));
     expect(result.code).toBe(EXIT_INTERNAL);
