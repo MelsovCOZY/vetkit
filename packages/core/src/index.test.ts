@@ -16,7 +16,12 @@ import {
   defineConfig,
   describeConfig,
   formatLabelRow,
+  gauntletConstantOutput,
+  gauntletInjection,
+  gauntletLabelPermutation,
+  gauntletMasterKey,
   gradeCode,
+  INJECTION_KINDS,
   judgeCase,
   LABEL_CSV_HEADER,
   LINT_RULES,
@@ -215,5 +220,26 @@ describe('@vetkit/core package entry', () => {
 
   it('re-exports gauntletLength as a function', () => {
     expect(typeof gauntletLength).toBe('function');
+  });
+
+  it('re-exports gauntletInjection as a function', () => {
+    expect(typeof gauntletInjection).toBe('function');
+  });
+
+  it('re-exports gauntletMasterKey as a function', () => {
+    expect(typeof gauntletMasterKey).toBe('function');
+  });
+
+  it('re-exports gauntletLabelPermutation as a function', () => {
+    expect(typeof gauntletLabelPermutation).toBe('function');
+  });
+
+  it('re-exports gauntletConstantOutput as a function', () => {
+    expect(typeof gauntletConstantOutput).toBe('function');
+  });
+
+  it('re-exports INJECTION_KINDS naming the imperative and multi_turn families', () => {
+    expect(INJECTION_KINDS).toContain('imperative');
+    expect(INJECTION_KINDS).toContain('multi_turn');
   });
 });
