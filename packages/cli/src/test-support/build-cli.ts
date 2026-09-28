@@ -1,27 +1,30 @@
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { closeSync, existsSync, openSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// program.test.ts and types-public.test.ts both need packages/cli built before they run
-// (fresh checkout / `bun run test` before `bun run build`), and vitest runs test files
-// in parallel workers. Two independent `bun x tsdown` invocations racing on the same
-// dist/ directory is exactly the flake this module exists to remove: one worker's
-// `tsdown --publint` can read dist/ mid-write by the other. This helper makes both
-// test files share a single build, guarded by an O_EXCL lock file so only one worker
-// ever runs tsdown per vitest invocation; the rest wait for dist/ to stop being stale.
+// The CLI tests spawn packages/cli/dist/bin.js, which imports @vetkit/spec, core and
+// judge-jev through their package.json exports (./dist). On a fresh checkout none of
+// those dist/ directories exist, so this helper builds the whole chain in dependency
+// order. vitest runs test files in parallel workers, and two tsdown runs racing on one
+// dist/ directory flake (one worker's `tsdown --publint` reads dist/ mid-write), so the
+// build runs under an O_EXCL lock file: one worker builds, the rest wait for dist/ to
+// stop being stale.
 
-const packageRoot = fileURLToPath(new URL('../..', import.meta.url));
-const srcDir = fileURLToPath(new URL('..', import.meta.url));
-const distDir = join(packageRoot, 'dist');
-// A fixed, well-known path so unrelated processes (this package has one build target)
-// contend on the same lock rather than each picking a private temp file.
-const lockPath = join(tmpdir(), 'vetkit-cli-build.lock');
+const repoRoot = fileURLToPath(new URL('../../../..', import.meta.url));
+// Dependency order: each package's dist must exist before the next one builds.
+const BUILD_ORDER = ['spec', 'core', 'judge-jev', 'cli'] as const;
+const packageRoots = BUILD_ORDER.map((name) => join(repoRoot, 'packages', name));
+// Keyed by the repo root so separate checkouts (git worktrees) never share a lock,
+// while every worker of one checkout contends on the same file.
+const repoHash = createHash('sha256').update(repoRoot).digest('hex').slice(0, 16);
+const lockPath = join(tmpdir(), `vetkit-build-${repoHash}.lock`);
 
-const LOCK_STALE_MS = 60_000;
+const LOCK_STALE_MS = 180_000;
 const LOCK_POLL_MS = 50;
-const WAIT_TIMEOUT_MS = 60_000;
+const WAIT_TIMEOUT_MS = 180_000;
 
 function newestMtimeMs(dir: string): number {
   let newest = 0;
@@ -35,9 +38,14 @@ function newestMtimeMs(dir: string): number {
   return newest;
 }
 
-function isDistStale(): boolean {
+function isPackageStale(packageRoot: string): boolean {
+  const distDir = join(packageRoot, 'dist');
   if (!existsSync(distDir)) return true;
-  return newestMtimeMs(srcDir) > newestMtimeMs(distDir);
+  return newestMtimeMs(join(packageRoot, 'src')) > newestMtimeMs(distDir);
+}
+
+function isDistStale(): boolean {
+  return packageRoots.some(isPackageStale);
 }
 
 function isEexist(err: unknown): boolean {
@@ -67,9 +75,13 @@ function lockAgeMs(): number {
 }
 
 function runBuild(): void {
-  const result = spawnSync('bun', ['x', 'tsdown'], { cwd: packageRoot, encoding: 'utf8' });
-  if (result.status !== 0) {
-    throw new Error(`tsdown build failed for packages/cli:\n${result.stdout}\n${result.stderr}`);
+  for (const packageRoot of packageRoots) {
+    const result = spawnSync('bun', ['x', 'tsdown'], { cwd: packageRoot, encoding: 'utf8' });
+    if (result.status !== 0) {
+      throw new Error(
+        `tsdown build failed for ${packageRoot}:\n${result.stdout}\n${result.stderr}`,
+      );
+    }
   }
 }
 
@@ -78,10 +90,10 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Builds packages/cli at most once across parallel vitest workers, sharing the build
- * via a lock-guarded file under the OS temp dir. Rebuilds only when dist/ is missing
- * or older than the newest file under src/, and resolves only once the build (by this
- * call or a concurrent one) has finished.
+ * Builds spec → core → judge-jev → cli at most once across parallel vitest workers,
+ * sharing the build via a lock-guarded file under the OS temp dir. Rebuilds when any
+ * of those packages' dist/ is missing or older than the newest file under its src/, and
+ * resolves only once the build (by this call or a concurrent one) has finished.
  */
 export async function ensureCliBuilt(): Promise<void> {
   if (!isDistStale()) return;
@@ -105,7 +117,7 @@ export async function ensureCliBuilt(): Promise<void> {
     if (!isDistStale()) return;
 
     if (Date.now() > deadline) {
-      throw new Error(`timed out waiting for packages/cli build lock at ${lockPath}`);
+      throw new Error(`timed out waiting for the workspace build lock at ${lockPath}`);
     }
 
     await sleep(LOCK_POLL_MS);
