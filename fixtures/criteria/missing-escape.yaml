@@ -1,0 +1,8 @@
+criteria:
+  - id: answers-question
+    type: boolean
+    instructions: Does the reply directly answer the user's question?
+    polarity: pass_when_true
+    channel: outcome
+    provenance:
+      traceIds: [trace-1]
