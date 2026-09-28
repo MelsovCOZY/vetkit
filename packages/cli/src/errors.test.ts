@@ -185,6 +185,16 @@ describe('handleError unprefixed literal codes', () => {
     expect(result.stderr).toContain('warning SOURCE_READ: source truncated\n');
   });
 
+  test('an unprefixed EXPORT_TARGET_UNKNOWN code exits 2 (mol-aq4.3 `vet export --to`)', () => {
+    const result = run(markerError('EXPORT_TARGET_UNKNOWN', "unknown export target 'nope'"));
+    expect(result.code).toBe(EXIT_USAGE);
+  });
+
+  test('an unprefixed EXPORT_NO_LOCK code exits 2 (mol-aq4.3 `vet export --require-lock`)', () => {
+    const result = run(markerError('EXPORT_NO_LOCK', 'no lock file'));
+    expect(result.code).toBe(EXIT_USAGE);
+  });
+
   test('an unprefixed RUN_NOT_FOUND code exits 2 (mol-p4a.3 `vet rerun`)', () => {
     const result = run(markerError('RUN_NOT_FOUND', 'no run record'));
     expect(result.code).toBe(EXIT_USAGE);

@@ -1,0 +1,10 @@
+{
+  "testResults": [
+    {
+      "assertionResults": [
+        { "fullName": "criteria.yaml > c1 · helpful", "status": "passed" },
+        { "fullName": "criteria.yaml > c2 · helpful", "status": "passed" }
+      ]
+    }
+  ]
+}
