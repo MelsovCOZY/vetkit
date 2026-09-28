@@ -12,6 +12,14 @@ import { fileURLToPath } from 'node:url';
 // dist/ directory flake (one worker's `tsdown --publint` reads dist/ mid-write), so the
 // build runs under an O_EXCL lock file: one worker builds, the rest wait for dist/ to
 // stop being stale.
+//
+// The build runs once per vitest run, from the cli project's globalSetup (global-setup.ts)
+// before any test worker starts, and never again while tests run. tsdown cleans dist/
+// before writing it, and other tests plant files in packages/*/src mid-run (making src
+// look newer than dist), so a mid-run rebuild deleted packages/core/dist under the bins
+// other workers were spawning (mol-p4a.10). globalSetup marks the run as built through
+// DIST_READY_ENV, which the forked workers inherit; ensureCliBuilt() then only builds
+// when called outside that setup.
 
 const repoRoot = fileURLToPath(new URL('../../../..', import.meta.url));
 // Dependency order: each package's dist must exist before the next one builds.
@@ -89,13 +97,15 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+export const DIST_READY_ENV = 'VETKIT_TEST_DIST_READY';
+
 /**
- * Builds spec → core → judge-jev → cli at most once across parallel vitest workers,
- * sharing the build via a lock-guarded file under the OS temp dir. Rebuilds when any
- * of those packages' dist/ is missing or older than the newest file under its src/, and
+ * Builds spec → core → judge-jev → cli at most once across parallel callers, sharing
+ * the build via a lock-guarded file under the OS temp dir. Rebuilds when any of those
+ * packages' dist/ is missing or older than the newest file under its src/, and
  * resolves only once the build (by this call or a concurrent one) has finished.
  */
-export async function ensureCliBuilt(): Promise<void> {
+export async function buildWorkspace(): Promise<void> {
   if (!isDistStale()) return;
 
   const deadline = Date.now() + WAIT_TIMEOUT_MS;
@@ -122,4 +132,14 @@ export async function ensureCliBuilt(): Promise<void> {
 
     await sleep(LOCK_POLL_MS);
   }
+}
+
+/**
+ * Resolves once spec, core, judge-jev and cli have a dist/ for this vitest run. Under
+ * the cli project's globalSetup the build has already happened, so this never builds
+ * (or cleans) dist/ while tests are running.
+ */
+export async function ensureCliBuilt(): Promise<void> {
+  if (process.env[DIST_READY_ENV] === '1') return;
+  await buildWorkspace();
 }

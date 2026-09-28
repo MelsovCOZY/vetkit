@@ -9,6 +9,9 @@ import { defineConfig } from 'vitest/config';
 const setupFile = fileURLToPath(new URL('./vitest.setup.ts', import.meta.url));
 
 const repoRoot = fileURLToPath(new URL('.', import.meta.url));
+const cliGlobalSetup = fileURLToPath(
+  new URL('./packages/cli/src/test-support/global-setup.ts', import.meta.url),
+);
 
 // Cross-package imports (e.g. packages/cli/src/errors.ts importing @vetkit/spec) resolve
 // through each workspace package's package.json `exports`, which point at ./dist — build
@@ -42,6 +45,9 @@ const packageProjects = readdirSync('packages', { withFileTypes: true })
     root: `packages/${entry.name}`,
     test: {
       name: entry.name,
+      // The cli tests spawn packages/cli/dist/bin.js; build its workspace chain once per
+      // run here, before any worker starts, instead of from inside the tests (mol-p4a.10).
+      globalSetup: entry.name === 'cli' ? [cliGlobalSetup] : [],
       // The named verify command for generated type tests (e.g. generated.test-d.ts)
       // needs this enabled per-package, or vitest reports "No test files found" and
       // exits 0 without type-checking anything.
