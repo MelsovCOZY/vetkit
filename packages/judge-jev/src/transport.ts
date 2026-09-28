@@ -1,9 +1,11 @@
-// TypeSafe-compatible Jev transport: one `createJevJudge()` factory, four
-// transports (typesafe | vercel | openrouter presets, or a fully custom baseURL +
-// model), all speaking the `/v1/systemone` dialect. Plain fetch only — the
+// TypeSafe-compatible Jev transport: one `createJevJudge()` factory, five
+// transports (typesafe | vercel | openrouter presets or a fully custom baseURL +
+// model, all speaking the `/v1/systemone` dialect; plus the cloudflare preset, whose
+// REST run endpoint and envelope live in cloudflare.ts). Plain fetch only — the
 // @typesafe-ai/sdk peer stays optional and unused here (docs/contracts/j1.md
 // "Ports"; root ledger DECISION: access layer).
 import { VetError, type JudgeV1, type Question } from '@vetkit/spec';
+import { createCloudflareTransport } from './cloudflare.ts';
 import { normalise } from './normalise.ts';
 import { JEV_PRESETS, type JevPresetName, type JevProviderOptions } from './presets.ts';
 
@@ -13,8 +15,13 @@ const MAX_STATE_TOKENS = 32_000;
 const QUESTION_TYPES: ReadonlyArray<Question['type']> = ['boolean', 'choice', 'score'];
 
 export type CreateJevJudgeOptions = (
-  | { readonly preset: JevPresetName; readonly baseURL?: string; readonly model?: string }
+  | {
+      readonly preset: Exclude<JevPresetName, 'cloudflare'>;
+      readonly baseURL?: string;
+      readonly model?: string;
+    }
   | { readonly preset?: undefined; readonly baseURL: string; readonly model: string }
+  | { readonly preset: 'cloudflare'; readonly accountId: string; readonly apiKeyEnv?: string }
 ) & {
   readonly apiKey: string;
   readonly providerOptions?: JevProviderOptions;
@@ -23,32 +30,55 @@ export type CreateJevJudgeOptions = (
 };
 
 interface ResolvedTransport {
-  readonly baseURL: string;
+  readonly url: string;
   readonly model: string;
   readonly pinned: boolean;
   readonly transport: JevPresetName | 'custom';
-  readonly providerOptions?: JevProviderOptions;
+  buildBody(state: string, questions: Record<string, WireQuestion>): unknown;
+  mapHttpStatus(status: number): VetError | undefined;
+  unwrap(wireResponse: unknown): unknown;
+}
+
+function systemOneTransport(
+  baseURL: string,
+  model: string,
+  transport: JevPresetName | 'custom',
+  providerOptions: JevProviderOptions | undefined,
+): ResolvedTransport {
+  return {
+    url: `${baseURL}${SYSTEMONE_PATH}`,
+    model,
+    pinned: transport === 'custom' ? false : JEV_PRESETS[transport].pinned,
+    transport,
+    buildBody: (state, questions): WireRequestBody => ({
+      model,
+      state,
+      questions,
+      ...(providerOptions !== undefined ? { providerOptions } : {}),
+    }),
+    mapHttpStatus: () => undefined,
+    unwrap: (wireResponse) => wireResponse,
+  };
 }
 
 function resolveTransport(opts: CreateJevJudgeOptions): ResolvedTransport {
-  if (opts.preset !== undefined) {
-    const preset = JEV_PRESETS[opts.preset];
-    const providerOptions = opts.providerOptions ?? preset.providerOptions;
+  if (opts.preset === 'cloudflare') {
     return {
-      baseURL: opts.baseURL ?? preset.baseURL,
-      model: opts.model ?? preset.defaultModel,
-      pinned: preset.pinned,
-      transport: opts.preset,
-      ...(providerOptions !== undefined ? { providerOptions } : {}),
+      ...createCloudflareTransport(opts),
+      pinned: JEV_PRESETS.cloudflare.pinned,
+      transport: 'cloudflare',
     };
   }
-  return {
-    baseURL: opts.baseURL,
-    model: opts.model,
-    pinned: false,
-    transport: 'custom',
-    ...(opts.providerOptions !== undefined ? { providerOptions: opts.providerOptions } : {}),
-  };
+  if (opts.preset !== undefined) {
+    const preset = JEV_PRESETS[opts.preset];
+    return systemOneTransport(
+      opts.baseURL ?? preset.baseURL,
+      opts.model ?? preset.defaultModel,
+      opts.preset,
+      opts.providerOptions ?? preset.providerOptions,
+    );
+  }
+  return systemOneTransport(opts.baseURL, opts.model, 'custom', opts.providerOptions);
 }
 
 // Wire shapes for the /typesafe/v1/systemone dialect only.
@@ -245,11 +275,11 @@ export function createJevJudge(opts: CreateJevJudgeOptions): JudgeV1 {
     throw new VetError('CONFIG_INVALID', 'apiKey must not be empty');
   }
 
-  const { baseURL, model, pinned, transport, providerOptions } = resolveTransport(opts);
+  const resolved = resolveTransport(opts);
+  const { url, model, pinned, transport } = resolved;
   const apiKey = opts.apiKey;
   const fetchImpl = opts.fetch ?? fetch;
   const deadlineMs = opts.deadlineMs ?? DEFAULT_DEADLINE_MS;
-  const url = `${baseURL}${SYSTEMONE_PATH}`;
 
   return {
     specVersion: 'v1',
@@ -268,12 +298,7 @@ export function createJevJudge(opts: CreateJevJudgeOptions): JudgeV1 {
         wireQuestions[key] = toWireQuestion(question);
       }
 
-      const body: WireRequestBody = {
-        model,
-        state: req.state,
-        questions: wireQuestions,
-        ...(providerOptions !== undefined ? { providerOptions } : {}),
-      };
+      const body = resolved.buildBody(req.state, wireQuestions);
 
       const deadlineSignal = AbortSignal.timeout(deadlineMs);
       const signal =
@@ -299,7 +324,9 @@ export function createJevJudge(opts: CreateJevJudgeOptions): JudgeV1 {
       }
 
       if (!response.ok) {
-        throw await toJudgeError(response, apiKey, model);
+        throw (
+          resolved.mapHttpStatus(response.status) ?? (await toJudgeError(response, apiKey, model))
+        );
       }
 
       let wireResponse: unknown;
@@ -315,7 +342,11 @@ export function createJevJudge(opts: CreateJevJudgeOptions): JudgeV1 {
         );
       }
 
-      return normalise(wireResponse, { model, questions: req.questions }, transport);
+      return normalise(
+        resolved.unwrap(wireResponse),
+        { model, questions: req.questions },
+        transport,
+      );
     },
   };
 }
