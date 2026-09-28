@@ -471,6 +471,9 @@ async function validate(
   const project = await loadProject(options, deps, true);
   const { loaded, criteria, cases } = project;
   const { judge, rootDir } = loaded;
+  // `enabled: false` (vet criteria disable, mol-e3g): never judged or calibrated; the
+  // lock carries no entry for it (mirrors runEvals' active/disabled split in run.ts).
+  const active = criteria.filter((c) => c.enabled !== false);
   const labelSet = await loadLabelSet(
     resolve(options.labels ?? join(rootDir, 'evals/labels')),
     project,
@@ -486,9 +489,9 @@ async function validate(
 
   const labelsOf = (c: Criterion): CalibrationLabel[] =>
     (labelSet.get(c.id) ?? []).map(({ caseId, label }) => ({ caseId, label }));
-  const labelledIds = new Set(criteria.flatMap((c) => labelsOf(c).map((l) => l.caseId)));
+  const labelledIds = new Set(active.flatMap((c) => labelsOf(c).map((l) => l.caseId)));
   const labelledCases = cases.filter((c) => labelledIds.has(c.id));
-  const judged = criteria.filter((c) => c.grader?.kind !== 'code');
+  const judged = active.filter((c) => c.grader?.kind !== 'code');
 
   events.diag('info', 'VALIDATE_ESTIMATE', 'judge calls before top-up and gauntlets', {
     calls: judged.length === 0 ? 0 : labelledCases.length * repeats,
@@ -498,7 +501,7 @@ async function validate(
   events.diag('debug', 'VALIDATE_PHASE_CALIBRATION', 'validate: calibration');
   const verdicts = await runJudge({
     cases: labelledCases,
-    criteria,
+    criteria: active,
     judge,
     bypassCache: true,
     repeats,
@@ -506,7 +509,7 @@ async function validate(
   });
 
   const calibrated = new Map<string, { calibration: CalibrationResult; repeats: Repeats }>();
-  for (const c of criteria) {
+  for (const c of active) {
     const labels = labelsOf(c);
     const own = labelledCases.filter((k) => labels.some((l) => l.caseId === k.id));
     const reps: Repeats = new Map();
@@ -543,7 +546,7 @@ async function validate(
     string,
     { calibration: CalibrationResult; gauntlet: GauntletMap; detail: Detail }
   > = {};
-  for (const c of criteria) {
+  for (const c of active) {
     const entry = calibrated.get(c.id);
     if (entry === undefined) continue;
     const { gauntlet, detail } =
@@ -562,11 +565,11 @@ async function validate(
     results[c.id] = { calibration: entry.calibration, gauntlet, detail };
   }
 
-  const lock = buildLock({ model: runModel(verdicts, judge), criteria, cases, results });
+  const lock = buildLock({ model: runModel(verdicts, judge), criteria: active, cases, results });
   await writeLockAtomic(lockPath, lock, { events, since });
 
   const report = {
-    criteria: criteria.map((c) => {
+    criteria: active.map((c) => {
       const r = results[c.id];
       const e = lock.criteria[c.id];
       const cal = r?.calibration;

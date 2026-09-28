@@ -99,8 +99,10 @@ async function estimateCommand(options: EstimateOptions): Promise<void> {
   }
 
   const pricing = pricingFor(judge.capabilities.transport);
+  // `enabled: false` (vet criteria disable, mol-e3g): never judged, so it never bills.
+  const active = criteria.criteria.filter((c) => c.enabled !== false);
   const input = {
-    criteria: criteria.criteria,
+    criteria: active,
     cases: cases.cases,
     model: judge.capabilities.model,
     cacheDir: resolve(rootDir, config.cacheDir),
