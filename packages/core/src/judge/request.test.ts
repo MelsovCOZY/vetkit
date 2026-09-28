@@ -200,10 +200,10 @@ describe('buildRequest', () => {
   });
 
   test('judged content sits in state only, never in any question field', () => {
-    const req = buildRequest(evalCase, criteria);
-    expect(req.state).toContain(SENTINEL);
-    expect(req.state).toBe(evalCase.input.state);
-    expect(JSON.stringify(req.questions)).not.toContain(SENTINEL);
+    const built = buildRequest(evalCase, criteria);
+    expect(built.state).toContain(SENTINEL);
+    expect(built.state).toBe(evalCase.input.state);
+    expect(JSON.stringify(built.questions)).not.toContain(SENTINEL);
   });
 
   test('reference grader renders expected into instructions, never into state', () => {
