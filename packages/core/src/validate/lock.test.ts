@@ -221,8 +221,18 @@ describe('buildLock', () => {
 
   test('code grader: gauntlet recorded skipped, still calibrated', () => {
     const c = criterion({ checkable: 'math', grader: { kind: 'code', check: 'numeric' } });
+    // A code grader needs a reference on every case (referenceRequirement).
+    const referenced = cases().map((k) => ({
+      ...k,
+      expected: { value: '4', source: 'user' as const },
+    }));
     const e = entryOf(
-      buildLock(inputs({ results: { [c.id]: { calibration: calibration(), gauntlet: {} } } }, c)),
+      buildLock(
+        inputs(
+          { cases: referenced, results: { [c.id]: { calibration: calibration(), gauntlet: {} } } },
+          c,
+        ),
+      ),
     );
     expect(Object.values(e.gauntlet).every((g) => g === 'skipped')).toBe(true);
     expect(e.status).toBe('calibrated');
