@@ -183,3 +183,7 @@ export type {
   Unknowable,
   ValidateEstimate,
 } from './estimate.ts';
+
+export { CALIBRATION_MIN_REPEATS } from './validate/calibrate.ts';
+export { POSITION_SWAP_MAX_ORDERS } from './validate/gauntlet-bias.ts';
+export { MASTER_KEY_MIN_REPEATS } from './validate/gauntlet-controls.ts';

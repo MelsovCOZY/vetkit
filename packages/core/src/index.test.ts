@@ -49,6 +49,11 @@ import { createEvents, EVENT_NAMES } from './index.ts';
 
 import { gauntletLength, gauntletPositionSwap } from './index.ts';
 import { DEFAULT_CALLS_PER_MINUTE, estimateRun, estimateValidate } from './index.ts';
+import {
+  CALIBRATION_MIN_REPEATS,
+  MASTER_KEY_MIN_REPEATS,
+  POSITION_SWAP_MAX_ORDERS,
+} from './index.ts';
 
 describe('@vetkit/core package entry', () => {
   it('re-exports loadCriteria as a function', () => {
@@ -251,5 +256,17 @@ describe('@vetkit/core package entry', () => {
 
   it('re-exports DEFAULT_CALLS_PER_MINUTE as 25', () => {
     expect(DEFAULT_CALLS_PER_MINUTE).toBe(25);
+  });
+
+  it('re-exports CALIBRATION_MIN_REPEATS as 3 (J3 judge repeats per labelled case)', () => {
+    expect(CALIBRATION_MIN_REPEATS).toBe(3);
+  });
+
+  it('re-exports POSITION_SWAP_MAX_ORDERS as 6 (option orders judged per case at most)', () => {
+    expect(POSITION_SWAP_MAX_ORDERS).toBe(6);
+  });
+
+  it('re-exports MASTER_KEY_MIN_REPEATS as 3 (repeats per master-key input at least)', () => {
+    expect(MASTER_KEY_MIN_REPEATS).toBe(3);
   });
 });

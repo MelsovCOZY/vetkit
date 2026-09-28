@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { VetError } from '@vetkit/spec';
-import { describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import { loadVetConfig } from './config-load.ts';
 
 const ADAPTER_CONFIG = `export default {
@@ -46,6 +46,10 @@ async function rejection(promise: Promise<unknown>): Promise<unknown> {
   }
   throw new Error('expected loadVetConfig to reject');
 }
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe('loadVetConfig', () => {
   test('finds vetkit.config.ts in cwd and passes an adapter judge through unchanged', async () => {
@@ -111,6 +115,58 @@ describe('loadVetConfig', () => {
     const error = await rejection(loadVetConfig({ cwd, env: {} }));
     expect(VetError.isInstance(error) && error.code).toBe('CONFIG_INVALID');
     expect(error instanceof Error && error.message).toContain('FIXTURE_UNSET_KEY');
+  });
+
+  test('requireCredentials:false resolves an unset apiKeyEnv and flags it as missing', async () => {
+    const cwd = await project({
+      'vetkit.config.ts': descriptorConfig({
+        kind: 'typesafe-compatible',
+        preset: 'vercel',
+        apiKeyEnv: 'FIXTURE_UNSET_KEY',
+      }),
+    });
+    const loaded = await loadVetConfig({ cwd, env: {}, requireCredentials: false });
+    expect(loaded.missingCredentials).toEqual(['FIXTURE_UNSET_KEY']);
+    expect(loaded.judge.capabilities.transport).toBe('vercel');
+    expect(loaded.judge.capabilities.model).toEqual(expect.any(String));
+  });
+
+  test('requireCredentials:false with the key set flags nothing missing', async () => {
+    const cwd = await project({
+      'vetkit.config.ts': descriptorConfig({
+        kind: 'typesafe-compatible',
+        preset: 'vercel',
+        apiKeyEnv: 'FIXTURE_JUDGE_KEY',
+      }),
+    });
+    const loaded = await loadVetConfig({
+      cwd,
+      env: { FIXTURE_JUDGE_KEY: 'k-123' },
+      requireCredentials: false,
+    });
+    expect(loaded.missingCredentials).toEqual([]);
+  });
+
+  test('a judge resolved without its key rejects CONFIG_INVALID and never calls fetch', async () => {
+    const fetchSpy = vi.fn(async () => new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchSpy);
+    const cwd = await project({
+      'vetkit.config.ts': descriptorConfig({
+        kind: 'typesafe-compatible',
+        preset: 'vercel',
+        apiKeyEnv: 'FIXTURE_UNSET_KEY',
+      }),
+    });
+    const loaded = await loadVetConfig({ cwd, env: {}, requireCredentials: false });
+    const error = await rejection(
+      loaded.judge.doJudge({
+        state: 's',
+        questions: { q: { type: 'boolean', instructions: 'is it?' } },
+      }),
+    );
+    expect(VetError.isInstance(error) && error.code).toBe('CONFIG_INVALID');
+    expect(error instanceof Error && error.message).toContain('FIXTURE_UNSET_KEY');
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   test('an unknown descriptor kind is CONFIG_INVALID naming the kind', async () => {

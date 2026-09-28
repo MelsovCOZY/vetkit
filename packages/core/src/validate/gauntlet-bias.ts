@@ -8,7 +8,11 @@ import { judgeCase } from '../judge/request.ts';
 /** Position consistency floor (vetkit choice, brief §5.3; re-tune after the JS spike). */
 const DEFAULT_MIN_CONSISTENCY = 0.9;
 const MIN_SAMPLES = 10;
-const MAX_ORDERS = 6;
+/**
+ * Option orders judged per sample case in the position-swap gauntlet, at most: all n! orders
+ * for n ≤ 3 option keys, else 6. The length gauntlet's calls depend on its padding pack.
+ */
+export const POSITION_SWAP_MAX_ORDERS = 6;
 const ESCAPE_KEY = 'escape';
 const EPSILON = 1e-9;
 
@@ -110,7 +114,7 @@ function enumerateOrders(keys: readonly string[], seed: number): string[][] {
   const seen = new Set(orders.map((o) => o.join('\u0000')));
   const rand = mulberry32(seed);
   // n ≥ 4 gives ≥ 24 permutations, so 4 distinct shuffles always exist; the bound is a safety net.
-  for (let tries = 0; orders.length < MAX_ORDERS && tries < 1000; tries += 1) {
+  for (let tries = 0; orders.length < POSITION_SWAP_MAX_ORDERS && tries < 1000; tries += 1) {
     const order = shuffle(keys, rand);
     const id = order.join('\u0000');
     if (seen.has(id)) continue;

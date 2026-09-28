@@ -13,6 +13,7 @@ import {
   type EstimatePricing,
 } from './estimate.ts';
 import { buildRequest, cacheKey } from './judge/request.ts';
+import { CALIBRATION_MIN_REPEATS } from './validate/calibrate.ts';
 
 // fixtures/projects/j1 is absent on this base; the criteria fixture project stands in for it:
 // three criteria (boolean, choice, score) and two cases.
@@ -180,6 +181,13 @@ describe('estimateValidate', () => {
     expect(byName['gauntlet-controls']?.calls).toBe('unknown');
     expect(est.total.calls).toBe('unknown');
     expect(est.total.cost).toBe('unknown');
+  });
+
+  it('validate uses the calibration repeat count when repeats is not given', async () => {
+    const est = await estimateValidate({ criteria, cases, model: MODEL, pricing });
+    const calibration = est.parts.find((p) => p.name === 'calibration');
+    expect(calibration?.calls).toBe(est.base.calls * CALIBRATION_MIN_REPEATS);
+    expect(calibration?.cost).toMatchObject({ source: pricing.source });
   });
 
   it('validate subtracts cached cases from the base before multiplying', async () => {

@@ -111,6 +111,8 @@ type JudgePlan =
       readonly keyEnv: string;
       readonly transport: string;
       readonly probe?: JudgeTransport;
+      /** The config's accountId (the cloudflare preset), used in place of the env's. */
+      readonly accountId?: string;
     }
   | { readonly kind: 'preset'; readonly transport: JudgeTransport }
   | { readonly kind: 'adapter'; readonly id: string; readonly transport: string };
@@ -128,6 +130,7 @@ function judgePlan(judge: ResolvedConfig['judge']): JudgePlan {
     keyEnv: judge.apiKeyEnv,
     transport: preset ?? `custom ${judge.baseURL ?? ''}`.trim(),
     ...(isPresetName(preset) ? { probe: preset } : {}),
+    ...(judge.accountId === undefined ? {} : { accountId: judge.accountId }),
   };
 }
 
@@ -184,9 +187,15 @@ async function checkPlannedJudgeHealth(
     };
   }
   // The preset's probe authenticates with its first credential name; point that at the key
-  // variable the config names.
-  const bearer = JEV_PRESETS[plan.probe].credentials[0]?.name;
-  const probeEnv = bearer === undefined ? env : { ...env, [bearer]: env[plan.keyEnv] };
+  // variable the config names. A preset whose endpoint takes an accountId pairs the bearer
+  // with an account-id credential (its second) that the probe URL reads; the config's
+  // accountId stands in for it.
+  const [bearer, accountVar] = JEV_PRESETS[plan.probe].credentials.map((c) => c.name);
+  const keyed = bearer === undefined ? env : { ...env, [bearer]: env[plan.keyEnv] };
+  const probeEnv =
+    accountVar === undefined || plan.accountId === undefined
+      ? keyed
+      : { ...keyed, [accountVar]: plan.accountId };
   return checkJudgeHealth(plan.probe, probeEnv, fetchImpl);
 }
 
@@ -419,23 +428,17 @@ function defaultConfigExists(cwd: string): boolean {
   );
 }
 
-// Doctor must resolve the config even when a key it names is unset (reporting that is its
-// job), but loadVetConfig builds the judge and so reads each apiKeyEnv. It gets an env where
-// every name reads as a placeholder; the judge built from it is discarded, never called.
-const PLACEHOLDER_ENV: Env = new Proxy<Env>(
-  {},
-  { get: (_target, key) => (typeof key === 'string' ? 'doctor-placeholder' : undefined) },
-);
-
 type ConfigLoad =
   | { readonly ok: true; readonly loaded: LoadedVetConfig }
   | { readonly ok: false; readonly message: string };
 
 async function loadForDoctor(cwd: string, config: true | string): Promise<ConfigLoad> {
   try {
+    // Doctor must resolve the config even when a key it names is unset (reporting that is
+    // its job); the judge loadVetConfig builds is discarded, never called.
     const loaded = await loadVetConfig({
       cwd,
-      env: PLACEHOLDER_ENV,
+      requireCredentials: false,
       ...(config === true ? {} : { configPath: config }),
     });
     return { ok: true, loaded };

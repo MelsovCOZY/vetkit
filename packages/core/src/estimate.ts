@@ -5,6 +5,7 @@
 import { readdir } from 'node:fs/promises';
 import type { Case, Criterion } from '@vetkit/spec';
 import { buildRequest, cacheKey } from './judge/request.ts';
+import { CALIBRATION_MIN_REPEATS } from './validate/calibrate.ts';
 
 /** The measured gateway pace (UX brief §2.1): about 25 judge calls per minute. */
 export const DEFAULT_CALLS_PER_MINUTE = 25;
@@ -59,7 +60,7 @@ export interface EstimatePart {
 }
 
 export interface EstimateValidateInput extends EstimateRunInput {
-  /** Judge repeats per labelled case (J3 calibration); absent → that part is 'unknown'. */
+  /** Judge repeats per labelled case (J3 calibration); defaults to CALIBRATION_MIN_REPEATS. */
   readonly repeats?: number;
   /** Variants per case in each gauntlet pack; an absent size → that part is 'unknown'. */
   readonly gauntletPackSizes?: { readonly bias?: number; readonly controls?: number };
@@ -149,15 +150,14 @@ function scaled(
 export async function estimateValidate(input: EstimateValidateInput): Promise<ValidateEstimate> {
   const base = await estimateRun(input);
   const packs = input.gauntletPackSizes ?? {};
+  const repeats = input.repeats ?? CALIBRATION_MIN_REPEATS;
   const parts = [
-    scaled('calibration', base, input.repeats, input.pricing),
+    scaled('calibration', base, repeats, input.pricing),
     scaled('gauntlet-bias', base, packs.bias, input.pricing),
     scaled('gauntlet-controls', base, packs.controls, input.pricing),
   ];
   const known = parts.every((p) => p.calls !== 'unknown');
-  const factor = known
-    ? (input.repeats ?? 0) + (packs.bias ?? 0) + (packs.controls ?? 0)
-    : undefined;
+  const factor = known ? repeats + (packs.bias ?? 0) + (packs.controls ?? 0) : undefined;
   const { name: _name, ...total } = scaled('calibration', base, factor, input.pricing);
   return { for: 'validate', base, parts, total, warnings: base.warnings };
 }

@@ -58,19 +58,17 @@ function fetchStub(dir: string): { preload: string; marker: string } {
   return { preload, marker };
 }
 
-function runVet(args: readonly string[], cwd: string): Result {
+function runVet(args: readonly string[], cwd: string, withKey = true): Result {
   const { preload, marker } = fetchStub(cwd);
   rmSync(marker, { force: true });
-  const result = spawnSync(process.execPath, [binPath, ...args], {
-    cwd,
-    encoding: 'utf8',
-    env: {
-      ...process.env,
-      NO_COLOR: '1',
-      VETKIT_ESTIMATE_KEY: 'dummy-key',
-      NODE_OPTIONS: `--import=${pathToFileURL(preload).href}`,
-    },
-  });
+  const env: Record<string, string | undefined> = {
+    ...process.env,
+    NO_COLOR: '1',
+    VETKIT_ESTIMATE_KEY: 'dummy-key',
+    NODE_OPTIONS: `--import=${pathToFileURL(preload).href}`,
+  };
+  if (!withKey) delete env['VETKIT_ESTIMATE_KEY'];
+  const result = spawnSync(process.execPath, [binPath, ...args], { cwd, encoding: 'utf8', env });
   return { ...result, fetched: existsSync(marker) };
 }
 
@@ -109,6 +107,15 @@ describe('vet estimate', () => {
       source: pricing.source,
       asOf: pricing.asOf,
     });
+  });
+
+  test('runs with the judge key env var unset: no credential is needed and no fetch', () => {
+    const { dir } = pricedProject();
+    const result = runVet(['estimate', '--json'], dir, false);
+    expect(result.stderr).not.toMatch(/VETKIT_ESTIMATE_KEY/);
+    expect(result.status).toBe(0);
+    expect(result.fetched).toBe(false);
+    expect(parseJson(result.stdout)).toMatchObject({ for: 'run', calls: 1 });
   });
 
   test('human output names the calls, the cache hit count, the minutes and the price asOf', () => {
@@ -158,6 +165,27 @@ describe('vet estimate', () => {
     const human = runVet(['estimate', '--for', 'validate'], freshProject());
     expect(human.status).toBe(0);
     expect(human.stdout).toMatch(/gauntlet-bias.*unknown/);
+  });
+
+  test('--for validate prints numbers for calibration from the exported repeat count', async () => {
+    const { CALIBRATION_MIN_REPEATS } = await import('@vetkit/core');
+    const result = runVet(['estimate', '--for', 'validate', '--json'], freshProject());
+    expect(result.status).toBe(0);
+    expect(result.fetched).toBe(false);
+    const doc = parseJson(result.stdout);
+    expect(doc['parts']).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'calibration',
+          calls: CALIBRATION_MIN_REPEATS,
+          minutes: expect.any(Number),
+        }),
+      ]),
+    );
+    const human = runVet(['estimate', '--for', 'validate'], freshProject());
+    expect(human.stdout).toMatch(
+      new RegExp(`calibration: calls ${String(CALIBRATION_MIN_REPEATS)}\\b`),
+    );
   });
 
   test('zero cases prints nothing to estimate and exits 0', () => {
