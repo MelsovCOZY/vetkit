@@ -44,12 +44,18 @@ function makeDialect(): DialectV1 {
       if (text === 'PARSE_ERROR') {
         return [{ role: 'assistant', parts: [{ type: 'parse_error', detail: 'bad json' }] }];
       }
-      return [{ role: 'assistant', parts: [{ type: 'text', content: String(text) }] }];
+      return [
+        {
+          role: 'assistant',
+          parts: [{ type: 'text', content: typeof text === 'string' ? text : '' }],
+        },
+      ];
     },
     extractUsage: () => null,
-    contentState: (s) =>
-      (s.attributes['state'] as 'captured' | 'not_captured' | 'redacted' | undefined) ??
-      'captured',
+    contentState: (s) => {
+      const state = s.attributes['state'];
+      return state === 'not_captured' || state === 'redacted' ? state : 'captured';
+    },
   };
 }
 

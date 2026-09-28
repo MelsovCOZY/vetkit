@@ -16,7 +16,7 @@ function makeCase(id: string, provenance: unknown): Case {
 }
 
 function criterion(id: string, contentDependent?: boolean): CriterionWithFlag {
-  return {
+  const base: Criterion = {
     id,
     type: 'boolean',
     instructions: 'x',
@@ -25,8 +25,8 @@ function criterion(id: string, contentDependent?: boolean): CriterionWithFlag {
     channel: 'quality',
     provenance: { traceIds: [] },
     wordingHash: 'hash',
-    ...(contentDependent === undefined ? {} : { contentDependent }),
-  } as CriterionWithFlag;
+  };
+  return contentDependent === undefined ? base : { ...base, contentDependent };
 }
 
 describe('statusForTrace', () => {
