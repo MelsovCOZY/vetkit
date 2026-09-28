@@ -108,6 +108,23 @@ describe('VetError', () => {
     }
   });
 
+  test('accepts the five J2 codes (source/generator)', () => {
+    const j2Codes = [
+      'SOURCE_UNREADABLE',
+      'TRACE_INVALID',
+      'GENERATOR_UNAVAILABLE',
+      'GENERATOR_BAD_OUTPUT',
+      'GENERATOR_CAPABILITY',
+    ] as const;
+
+    for (const code of j2Codes) {
+      expect(Object.values(CEV_ERROR_CODES)).toContain(code);
+      const err = new VetError(code, 'message');
+      expect(VetError.isInstance(err)).toBe(true);
+      expect(err.code).toBe(code);
+    }
+  });
+
   test('details round-trips through the constructor options', () => {
     const err = new VetError('CACHE_IO', 'cache write failed', {
       details: {
