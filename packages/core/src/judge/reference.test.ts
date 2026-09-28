@@ -128,6 +128,16 @@ describe('renderReference', () => {
 
     expect(renderReference(criterion, evalCase)).toBeNull();
   });
+
+  test('renders an object expected.value as JSON text, never [object Object]', () => {
+    const criterion = referenceCriterion('Did the assistant answer correctly?');
+    const evalCase = makeCase('case-json', 'Paris', { a: 1 });
+
+    const rendered = renderReference(criterion, evalCase);
+
+    expect(rendered).toContain('{"a":1}');
+    expect(rendered).not.toContain('[object Object]');
+  });
 });
 
 describe('gradeCode', () => {
@@ -146,6 +156,20 @@ describe('gradeCode', () => {
       pass: row.pass,
       probability: row.pass ? 1 : 0,
     });
+  });
+
+  test('exact passes when the answer is the JSON text of an array expected.value', () => {
+    const criterion = codeCriterion('exact');
+    const evalCase = makeCase('array-json', '["x","y"]', ['x', 'y']);
+
+    expect(gradeCode(criterion, evalCase)).toEqual({ status: 'ok', pass: true, probability: 1 });
+  });
+
+  test('exact fails when the answer is the comma join of an array expected.value', () => {
+    const criterion = codeCriterion('exact');
+    const evalCase = makeCase('array-join', 'x,y', ['x', 'y']);
+
+    expect(gradeCode(criterion, evalCase)).toEqual({ status: 'ok', pass: false, probability: 0 });
   });
 
   test('is not_applicable reference_missing when the case has no expected', () => {
