@@ -38,10 +38,14 @@ git clone --quiet "$ROOT" "$CLONE_DIR"
 
 (
   cd "$CLONE_DIR"
-  bun install --frozen-lockfile
-  bun run check
-  bun run build
-  bun run pack
+  env -u CEV_E2E -u VITEST -u VITEST_POOL_ID -u VITEST_WORKER_ID -u NODE_ENV \
+    bun install --frozen-lockfile
+  env -u CEV_E2E -u VITEST -u VITEST_POOL_ID -u VITEST_WORKER_ID -u NODE_ENV \
+    bun run check
+  env -u CEV_E2E -u VITEST -u VITEST_POOL_ID -u VITEST_WORKER_ID -u NODE_ENV \
+    bun run build
+  env -u CEV_E2E -u VITEST -u VITEST_POOL_ID -u VITEST_WORKER_ID -u NODE_ENV \
+    bun run pack
 )
 
 PACKAGE_COUNT=$(find "$CLONE_DIR/packages" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
