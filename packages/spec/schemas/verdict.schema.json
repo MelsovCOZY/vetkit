@@ -58,6 +58,7 @@
     }
   },
   "properties": {
+    "id": { "type": "string" },
     "caseId": { "type": "string" },
     "criterionId": { "type": "string" },
     "status": {
@@ -83,7 +84,20 @@
     "gated": { "type": "boolean" },
     "gateReason": { "enum": ["score_not_gateable", "language_not_calibrated"] },
     "borderline": { "type": "boolean" },
-    "calibrated": { "type": "boolean" }
+    "calibrated": { "type": "boolean" },
+    "provenance": {
+      "type": "object",
+      "properties": {
+        "traceId": { "type": "string" },
+        "spanId": { "type": "string" },
+        "responseId": { "type": "string" },
+        "observationId": { "type": "string" },
+        "dialect": { "type": "string" },
+        "schemaUrl": { "type": "string" }
+      },
+      "required": [],
+      "additionalProperties": false
+    }
   },
   "required": ["caseId", "criterionId", "status", "model", "cacheHit"],
   "additionalProperties": false,

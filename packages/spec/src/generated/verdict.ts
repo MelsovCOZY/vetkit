@@ -39,6 +39,7 @@ export type Answer1 =
     };
 
 export interface Verdict {
+  id?: string;
   caseId: string;
   criterionId: string;
   status:
@@ -62,6 +63,14 @@ export interface Verdict {
   gateReason?: 'score_not_gateable' | 'language_not_calibrated';
   borderline?: boolean;
   calibrated?: boolean;
+  provenance?: {
+    traceId?: string;
+    spanId?: string;
+    responseId?: string;
+    observationId?: string;
+    dialect?: string;
+    schemaUrl?: string;
+  };
 }
 export interface Model {
   requested: string;

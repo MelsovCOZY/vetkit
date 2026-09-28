@@ -39,6 +39,13 @@ export const CEV_ERROR_CODES = {
   UNSCORED_ONLY: 'UNSCORED_ONLY',
   // mol-p4a.7: a malformed labels row (q4q.2), exit 2 naming file:line.
   LABELS_INVALID: 'LABELS_INVALID',
+  // J6 contract (docs/contracts/j6.md "Error codes"): sink write outcomes and the outbox's
+  // corrupt-file config error. OUTBOX_CORRUPT is thrown, never a doWrite rejection.
+  SINK_REJECTED: 'SINK_REJECTED',
+  SINK_UNREACHABLE: 'SINK_UNREACHABLE',
+  SINK_AUTH: 'SINK_AUTH',
+  SINK_PAYLOAD_TOO_LARGE: 'SINK_PAYLOAD_TOO_LARGE',
+  OUTBOX_CORRUPT: 'OUTBOX_CORRUPT',
 } as const;
 
 export type CevErrorCode = (typeof CEV_ERROR_CODES)[keyof typeof CEV_ERROR_CODES];
