@@ -16,7 +16,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
-import type { Case, Verdict } from '@vetkit/spec';
+import { safeParseJson, type Case, type JsonSchema, type Verdict } from '@vetkit/spec';
 import type { PromotedCase } from './types.ts';
 
 export interface PromoteFailureOptions {
@@ -29,24 +29,26 @@ function dayFile(dir: string, now: Date): string {
   return join(dir, 'pending', `promoted-${iso}.jsonl`);
 }
 
-type IdLine = { id?: unknown };
+interface IdLine {
+  readonly id: string;
+}
 
-// Best-effort dedupe read: a corrupt line is skipped rather than thrown (this is a dedupe
-// check, not the J1 loader's validation chokepoint).
+const ID_LINE_SCHEMA: JsonSchema = {
+  type: 'object',
+  properties: { id: { type: 'string' } },
+  required: ['id'],
+};
+
+// Best-effort dedupe read through the one JSON.parse chokepoint (safeParseJson): a corrupt
+// or non-matching line is skipped rather than thrown (this is a dedupe check, not the J1
+// loader's validation).
 function existingIds(file: string): Set<string> {
   const ids = new Set<string>();
   if (!existsSync(file)) return ids;
   for (const line of readFileSync(file, 'utf8').split('\n')) {
     if (line === '') continue;
-    try {
-      const parsed: unknown = JSON.parse(line);
-      if (typeof parsed === 'object' && parsed !== null) {
-        const id = (parsed as IdLine).id;
-        if (typeof id === 'string') ids.add(id);
-      }
-    } catch {
-      // Corrupt line: not this function's concern, skip it for dedupe purposes.
-    }
+    const parsed = safeParseJson<IdLine>(line, ID_LINE_SCHEMA);
+    if (parsed.ok) ids.add(parsed.value.id);
   }
   return ids;
 }
