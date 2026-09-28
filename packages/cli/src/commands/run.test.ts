@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -280,4 +280,34 @@ describe('vet run persists .vet/runs/latest.json (mol-p4a.16)', () => {
       exitCode: 130,
     });
   }, 60_000);
+});
+
+describe('vet run and evals/cases/pending/ (dh8.3, root DECISION UX brief C11)', () => {
+  test('no pending/ directory: the stderr pending-count line reads 0', () => {
+    const result = runVet(['run'], freshProject(), fixtureEnv('pass'));
+    expect(result.status).toBe(0);
+    expect(result.stderr).toMatch(/\b0\b.*pending/);
+  });
+
+  test('a case under evals/cases/pending/ is not judged, and the stderr line counts it', () => {
+    const project = freshProject();
+    const pendingDir = join(project, 'evals', 'cases', 'pending');
+    mkdirSync(pendingDir, { recursive: true });
+    writeFileSync(
+      join(pendingDir, 'promoted-2026-09-29.jsonl'),
+      `${JSON.stringify({
+        id: 'promoted-trace-1-tone',
+        input: { state: 'User: hi' },
+        provenance: {
+          promotedFrom: { traceId: 'trace-1', criterionId: 'tone', at: '2026-09-29T00:00:00.000Z' },
+        },
+        tags: [],
+      })}\n`,
+    );
+    const result = runVet(['run', '--json'], project, fixtureEnv('pass'));
+    expect(result.status).toBe(0);
+    // Only the fixture's one non-pending case was judged; the pending one never reaches the loader.
+    expect(parseJson(result.stdout)).toMatchObject({ summary: { total: 1 } });
+    expect(result.stderr).toMatch(/\b1\b.*pending/);
+  });
 });
