@@ -150,8 +150,9 @@ describe.each(packageNames.length ? packageNames : EXPECTED_PACKAGE_NAMES)('pack
     expect(pkg?.engines?.node).toBe('>=22.12');
   });
 
-  it('publishes only dist', () => {
-    expect(pkg?.files).toEqual(['dist']);
+  it('publishes only dist (cli also ships templates)', () => {
+    if (dir === 'cli') expect(pkg?.files).toEqual(['dist', 'templates']);
+    else expect(pkg?.files).toEqual(['dist']);
   });
 
   it('exports only types+import conditions, plus ./package.json', () => {
