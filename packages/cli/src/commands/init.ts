@@ -19,12 +19,19 @@ import {
   type ResolvedConfig,
 } from '@vetkit/core';
 import { JEV_CREDENTIAL_PRIORITY, JEV_PRESETS, type JevPresetName } from '@vetkit/judge-jev';
-import { CEV_ERROR_CODES, VetError, type GeneratorV1 } from '@vetkit/spec';
+import {
+  CEV_ERROR_CODES,
+  VetError,
+  type GeneratorV1,
+  type NormalizedTrace,
+  type SourceV1,
+} from '@vetkit/spec';
 import type { Command } from 'commander';
 import { loadVetConfig } from '../config-load.ts';
 import { generatorFromEndpoint } from '../generators.ts';
 import { CEV_EXIT, emit, getLogger, isInteractive, prompt, type GlobalOptions } from '../output.ts';
 import { resolveSource, type SourceOptions } from '../sources.ts';
+import { buildOtlpSummary } from './init-otlp.ts';
 
 interface InitOptions extends GlobalOptions {
   readonly dir?: string;
@@ -207,6 +214,22 @@ async function generateIntoOut(
   return result;
 }
 
+// Tees every trace the wrapped source yields into `sink`, as a side effect of the one read
+// generateEvals already does — no second pass over the source. Used only to build the otlp:
+// summary (orchestrator DECISION, mol-pij.8): buildOtlpSummary needs each trace's dialect and
+// tokens, which GenerateEvalsResult does not carry.
+function tapSource(source: SourceV1, sink: NormalizedTrace[]): SourceV1 {
+  return {
+    ...source,
+    async *doRead(opts) {
+      for await (const trace of source.doRead(opts)) {
+        sink.push(trace);
+        yield trace;
+      }
+    },
+  };
+}
+
 async function generateCommand(options: InitOptions & { source: string }): Promise<void> {
   if (options.out === undefined || options.out === '') {
     throw invalid('--source requires --out <dir>');
@@ -220,6 +243,8 @@ async function generateCommand(options: InitOptions & { source: string }): Promi
     ...(options.seconds === undefined ? {} : { seconds: Number(options.seconds) }),
   };
   const source = resolveSource(options.source, sourceOptions);
+  const collectedTraces: NormalizedTrace[] = [];
+  const tappedSource = tapSource(source, collectedTraces);
   const loaded = await loadVetConfig({ cwd: process.cwd() });
   const log = getLogger();
   for (const warning of loaded.warnings) log.warn(warning);
@@ -231,7 +256,7 @@ async function generateCommand(options: InitOptions & { source: string }): Promi
   let result: GenerateEvalsResult;
   try {
     result = await generateIntoOut(
-      { source, generator, judge: loaded.judge, signal: controller.signal },
+      { source: tappedSource, generator, judge: loaded.judge, signal: controller.signal },
       out,
       force,
     );
@@ -239,8 +264,14 @@ async function generateCommand(options: InitOptions & { source: string }): Promi
     process.off('SIGINT', onSigint);
   }
 
+  // Additive: only an `otlp:`-sourced run carries a summary (source.id 'otlp/file' or
+  // 'otlp/receiver'); every other --source keeps emit()'s existing {criteria, cases, report}
+  // document unchanged.
+  const summary = source.id.startsWith('otlp/')
+    ? buildOtlpSummary(collectedTraces, result)
+    : undefined;
   emit(
-    result,
+    summary === undefined ? result : { ...result, summary },
     () =>
       `wrote ${String(result.criteria.length)} criteria and ${String(result.cases.length)} cases to ${out}`,
   );
