@@ -94,6 +94,14 @@
         "@typesafe-ai/sdk",
       ],
     },
+    "packages/scorers": {
+      "name": "@vetkit/scorers",
+      "version": "0.0.0",
+      "dependencies": {
+        "@vetkit/core": "workspace:^",
+        "@vetkit/spec": "workspace:^",
+      },
+    },
     "packages/sink-langfuse": {
       "name": "@vetkit/sink-langfuse",
       "version": "0.0.0",
@@ -639,6 +647,8 @@
     "@vetkit/generator-openai-compatible": ["@vetkit/generator-openai-compatible@workspace:packages/generator-openai-compatible"],
 
     "@vetkit/judge-jev": ["@vetkit/judge-jev@workspace:packages/judge-jev"],
+
+    "@vetkit/scorers": ["@vetkit/scorers@workspace:packages/scorers"],
 
     "@vetkit/sink-langfuse": ["@vetkit/sink-langfuse@workspace:packages/sink-langfuse"],
 
