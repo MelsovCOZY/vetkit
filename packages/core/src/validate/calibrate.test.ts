@@ -164,6 +164,14 @@ function cleanTrain(nPerClass: number, extra: Partial<Row> = {}): Row[] {
   return [...fails, ...passes];
 }
 
+function judged(answer: JudgeResponse['answers'][string]): JudgeResponse {
+  return {
+    answers: { [BOOL.id]: answer },
+    usage: { inputTokens: 1, outputTokens: 1 },
+    model: { requested: 'm', resolved: 'm', transport: 't', pinned: false },
+  };
+}
+
 function run(input: readonly Row[], criterion: Criterion = BOOL) {
   const { labels, repeats, cases } = build(input);
   return calibrate(criterion, labels, repeats, cases, { seed: SEED });
@@ -336,6 +344,53 @@ describe('repeat tolerance and band cases', () => {
     };
     const values = repeatValues(SCORE, new Map([['a', [response]]]));
     expect(values.get('a')?.[0]).toBeCloseTo(1.5, 10);
+  });
+
+  // mol-q4q.13: boolean criteria reach Jev as a {yes, no, escape} choice; P(pass) is P(yes), the
+  // same rule run.ts decide uses.
+  test('repeatValues takes P(yes) for a boolean criterion answered as a yes/no/escape choice', () => {
+    const response = judged({
+      type: 'choice',
+      choice: 'yes',
+      confidence: 0.7,
+      probabilities: { yes: 0.7, no: 0.2, escape: 0.1 },
+    });
+    const values = repeatValues(BOOL, new Map([['a', [response]]]));
+    expect(values.get('a')?.[0]).toBeCloseTo(0.7, 10);
+  });
+
+  test('repeatValues takes the probability for a boolean criterion answered as a boolean', () => {
+    const response = judged({ type: 'boolean', probability: 0.35 });
+    const values = repeatValues(BOOL, new Map([['a', [response]]]));
+    expect(values.get('a')?.[0]).toBeCloseTo(0.35, 10);
+  });
+
+  test('a boolean criterion calibrated from yes/no/escape choice answers fits a threshold', () => {
+    const { labels, repeats, cases } = build([
+      ...cleanTrain(25),
+      ...rows('heldOut', 30, 'pass', 0.9),
+      ...rows('heldOut', 30, 'fail', 0.1),
+    ]);
+    const asChoice = new Map(
+      [...repeats].map(([id, responses]) => [
+        id,
+        responses.map((r) => {
+          const a = r.answers[BOOL.id];
+          const p = a?.type === 'boolean' ? a.probability : Number.NaN;
+          return judged({
+            type: 'choice',
+            choice: p >= 0.5 ? 'yes' : 'no',
+            confidence: Math.max(p, 1 - p),
+            probabilities: { yes: p, no: 1 - p, escape: 0 },
+          });
+        }),
+      ]),
+    );
+    const result = calibrate(BOOL, labels, asChoice, cases, { seed: SEED });
+    expect(result.threshold).toBeGreaterThan(0.7);
+    expect(result.threshold).toBeLessThanOrEqual(0.8);
+    expect(result.tpr).toBe(1);
+    expect(result.tnr).toBe(1);
   });
 });
 
