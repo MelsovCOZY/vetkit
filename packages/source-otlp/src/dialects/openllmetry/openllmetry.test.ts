@@ -4,6 +4,7 @@
 
 import { describe, expect, test } from 'vitest';
 import type { AnyValue, OtlpSpan } from '../../reader/index.ts';
+import { buildSpanTree, type SpanTree } from '../../reader/tree.ts';
 import { openllmetryDialect } from './index.ts';
 
 function span(attributes: Record<string, AnyValue> = {}): OtlpSpan {
@@ -22,6 +23,12 @@ function span(attributes: Record<string, AnyValue> = {}): OtlpSpan {
     status: { code: 0 },
     idEncoding: 'hex',
   };
+}
+
+// extractMessages takes (span, tree); this dialect ignores tree, but DialectV1 still requires
+// callers to supply it.
+function treeOf(s: OtlpSpan): SpanTree {
+  return buildSpanTree([s]);
 }
 
 describe('openllmetryDialect.name / specCommit', () => {
@@ -98,7 +105,7 @@ describe('extractMessages: llm.prompts / llm.completions indexed form', () => {
       'llm.completions.0.content': 'yes, keep it away from dogs',
     });
 
-    const messages = openllmetryDialect.extractMessages(s);
+    const messages = openllmetryDialect.extractMessages(s, treeOf(s));
 
     expect(messages).toEqual([
       { role: 'system', parts: [{ type: 'text', content: 'you are a vet assistant' }] },
@@ -113,7 +120,7 @@ describe('extractMessages: llm.prompts / llm.completions indexed form', () => {
       'llm.prompts.0.content': 'once upon a time',
     });
 
-    const messages = openllmetryDialect.extractMessages(s);
+    const messages = openllmetryDialect.extractMessages(s, treeOf(s));
 
     expect(messages).toEqual([
       { role: 'user', parts: [{ type: 'text', content: 'once upon a time' }] },
@@ -126,7 +133,7 @@ describe('extractMessages: llm.prompts / llm.completions indexed form', () => {
       'llm.prompts.0.content': [{ type: 'text', content: 'already-structured content' }],
     });
 
-    const messages = openllmetryDialect.extractMessages(s);
+    const messages = openllmetryDialect.extractMessages(s, treeOf(s));
 
     expect(messages).toEqual([
       { role: 'user', parts: [{ type: 'text', content: 'already-structured content' }] },
@@ -144,7 +151,7 @@ describe('extractMessages: gen_ai legacy form emitted by traceloop', () => {
       'gen_ai.completion.0.content': '5mg twice daily',
     });
 
-    const messages = openllmetryDialect.extractMessages(s);
+    const messages = openllmetryDialect.extractMessages(s, treeOf(s));
 
     expect(messages).toEqual([
       { role: 'user', parts: [{ type: 'text', content: 'what is the dosage for a 10kg dog?' }] },
@@ -162,7 +169,7 @@ describe('extractMessages: traceloop.entity.input/output on a workflow span', ()
       'traceloop.entity.output': '{"risk":"moderate"}',
     });
 
-    const messages = openllmetryDialect.extractMessages(s);
+    const messages = openllmetryDialect.extractMessages(s, treeOf(s));
 
     expect(messages).toEqual([
       {
@@ -179,7 +186,7 @@ describe('extractMessages: traceloop.entity.input/output on a workflow span', ()
       'traceloop.entity.input': '{not valid json',
     });
 
-    const messages = openllmetryDialect.extractMessages(s);
+    const messages = openllmetryDialect.extractMessages(s, treeOf(s));
 
     expect(messages).toHaveLength(1);
     expect(messages[0]?.role).toBe('user');
@@ -192,7 +199,7 @@ describe('extractMessages: absent content', () => {
   test('a role without a content attribute still emits a message, with empty parts', () => {
     const s = span({ 'llm.prompts.0.role': 'user' });
 
-    const messages = openllmetryDialect.extractMessages(s);
+    const messages = openllmetryDialect.extractMessages(s, treeOf(s));
 
     expect(messages).toEqual([{ role: 'user', parts: [] }]);
   });
@@ -200,7 +207,7 @@ describe('extractMessages: absent content', () => {
   test('a span with no prompt/completion/entity attributes at all yields no messages', () => {
     const s = span({ 'traceloop.span.kind': 'llm' });
 
-    const messages = openllmetryDialect.extractMessages(s);
+    const messages = openllmetryDialect.extractMessages(s, treeOf(s));
 
     expect(messages).toEqual([]);
   });
@@ -216,7 +223,7 @@ describe('extractMessages: no cross-dialect fallback', () => {
       'input.value': 'openinference content',
     });
 
-    const messages = openllmetryDialect.extractMessages(s);
+    const messages = openllmetryDialect.extractMessages(s, treeOf(s));
 
     expect(messages).toEqual([
       { role: 'user', parts: [{ type: 'text', content: 'openllmetry content' }] },
