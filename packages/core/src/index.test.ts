@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildRequest,
+  cacheKey,
   clusteredSE,
   clusterKeys,
   computeWordingHash,
+  createFileCache,
   DEFAULT_FORBIDDEN_WORDS,
   gradeCode,
+  judgeCase,
   LINT_RULES,
   lintCriteria,
   loadCases,
@@ -71,5 +75,21 @@ describe('@vetkit/core package entry', () => {
 
   it('re-exports pairedClusteredDiff as a function', () => {
     expect(typeof pairedClusteredDiff).toBe('function');
+  });
+
+  it('re-exports buildRequest as a function', () => {
+    expect(typeof buildRequest).toBe('function');
+  });
+
+  it('re-exports judgeCase as a function', () => {
+    expect(typeof judgeCase).toBe('function');
+  });
+
+  it('re-exports cacheKey as a function', () => {
+    expect(typeof cacheKey).toBe('function');
+  });
+
+  it('re-exports createFileCache as a function', () => {
+    expect(typeof createFileCache).toBe('function');
   });
 });

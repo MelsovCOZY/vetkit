@@ -32,3 +32,13 @@ export type {
   NearDuplicateResult,
   PairedClusteredDiffResult,
 } from './validate/clusters.ts';
+
+export { buildRequest, cacheKey, judgeCase } from './judge/request.ts';
+export type { BuildRequestOptions, JudgeCaseInput, JudgeRequest } from './judge/request.ts';
+export { createFileCache } from './judge/cache.ts';
+export type {
+  CacheDiagEvent,
+  CachedJudgment,
+  FileCacheOptions,
+  VerdictCache,
+} from './judge/cache.ts';
