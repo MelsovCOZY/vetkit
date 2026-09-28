@@ -16,6 +16,9 @@ import {
 } from './normalize/index.ts';
 import { readOtlpJson } from './reader/index.ts';
 import { buildSpanTree } from './reader/tree.ts';
+import { DEFAULT_DIALECT_ORDER } from './default-dialects.ts';
+
+export { DEFAULT_DIALECT_ORDER } from './default-dialects.ts';
 
 export { readOtlpDir, readOtlpJson } from './reader/index.ts';
 export type {
@@ -45,12 +48,11 @@ export interface OtlpSourceOptions {
 }
 
 // otlpSource: a SourceV1 over a fixed list of OTLP/JSON files (bead mol-pij.2). Grouping spans
-// into per-trace SpanTrees and cascading through `opts.dialects` (default order comes from
-// pij.11 — an empty/omitted list here means every trace normalises to 'unknown') is the only
-// job; `opts.dialects ?? []` is passed straight to normalizeTrace. `opts.listen` (a receiver) is
-// explicitly out of scope (pij.8).
+// into per-trace SpanTrees and cascading through `opts.dialects` is the only job. `opts.dialects`
+// undefined falls back to DEFAULT_DIALECT_ORDER (mol-pij.11); an explicit `[]` still means every
+// trace normalises to 'unknown'. `opts.listen` (a receiver) is explicitly out of scope (pij.8).
 export function otlpSource(opts: OtlpSourceOptions): SourceV1 {
-  const dialects = opts.dialects ?? [];
+  const dialects = opts.dialects ?? DEFAULT_DIALECT_ORDER;
   const files = opts.files ?? [];
 
   async function* doRead(): AsyncGenerator<NormalizedTrace> {
