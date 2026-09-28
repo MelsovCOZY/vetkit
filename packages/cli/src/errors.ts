@@ -64,6 +64,11 @@ const INPUT_EXIT_CODES = new Set([
   'OTLP_PARSE',
   // mol-p4a.3: `vet rerun` with no persisted run record (a missing input, like CASE_INVALID).
   'RUN_NOT_FOUND',
+  // J7 (docs/contracts/j7.md "Error codes", mol-zde): exact entries so `vet watch`'s
+  // RECEIVER_BIND (port already in use) and WATCH_CONFIG (--sample outside 0..1) exit 2
+  // rather than falling through to the unknown-code INTERNAL (70) fallback below.
+  'RECEIVER_BIND',
+  'WATCH_CONFIG',
 ]);
 
 const HINTS: Readonly<Record<Category, string>> = {
