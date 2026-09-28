@@ -1,0 +1,9 @@
+{
+  "models": [
+    {
+      "name": "jev",
+      "description": "TypeSafe AI System One evaluation model. Accepts shared state and typed questions, returning choices, scores, and boolean probabilities. Limits: 64,000 tokens total per request; 32,000 tokens for the state plus the longest question. No streaming or output-token limit.",
+      "release_date": "2026-09-15"
+    }
+  ]
+}

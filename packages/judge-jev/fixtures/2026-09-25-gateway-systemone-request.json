@@ -1,0 +1,24 @@
+{
+  "model": "typesafe-ai/jev",
+  "state": "User: Can I get a refund for my order #4411?\nAssistant: Yes, I have issued a full refund of $80 to your card; it will appear within 5 business days.",
+  "questions": {
+    "promised_refund": {
+      "type": "noul",
+      "instructions": "Did the assistant promise or issue a refund?"
+    },
+    "tone": {
+      "type": "choice",
+      "instructions": "What is the assistant's tone?",
+      "criteria": {
+        "helpful": "Polite and solves the problem",
+        "rude": "Dismissive or insulting",
+        "neutral": "Neither warm nor rude"
+      }
+    },
+    "quality": {
+      "type": "score",
+      "instructions": "Rate the overall answer quality.",
+      "criteria": ["Wrong or harmful", "Poor", "Acceptable", "Good", "Excellent"]
+    }
+  }
+}
