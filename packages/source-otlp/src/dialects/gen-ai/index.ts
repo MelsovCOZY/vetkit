@@ -90,10 +90,11 @@ const RAW_MESSAGES_SCHEMA: JsonSchema = {
 // array of {role, parts} messages.
 const RAW_PARTS_ARRAY_SCHEMA: JsonSchema = { type: 'array', items: RAW_PART_SCHEMA };
 
-// A part kind this repo's MessagePart union does not carry (packages/spec/schemas/
-// trace.schema.json $defs.MessagePart: text | tool_call | tool_call_response | parse_error —
-// no 'reasoning', unlike the upstream semconv draft) is downgraded to a text part rather than
-// dropped or thrown on. See BUILD report Deviations.
+// Root DECISION: the trace IR MessagePart set is text{content} / tool_call /
+// tool_call_response{id?,response} / parse_error{detail} — no 'reasoning' variant, unlike the
+// upstream semconv draft, and reasoning parts are DROPPED (never downgraded to text). Any other
+// unmapped part kind (not in the semconv table at all) still downgrades to a text part rather
+// than being dropped or thrown on, so unrecognised-but-real content is never silently lost.
 function mapPart(raw: RawPart): MessagePart {
   switch (raw.type) {
     case 'text':
@@ -119,8 +120,17 @@ function mapPart(raw: RawPart): MessagePart {
   }
 }
 
+// Drops reasoning parts before mapping; every other kind (known or unmapped) passes through.
+function mapParts(raw: readonly RawPart[]): MessagePart[] {
+  return raw.filter((part) => part.type !== 'reasoning').map(mapPart);
+}
+
+// A message left with zero parts after dropping its reasoning content carries nothing, so it is
+// omitted entirely rather than kept as an empty-parts message.
 function messagesFromRaw(raw: readonly RawMessage[], fallbackRole: Message['role']): Message[] {
-  return raw.map((m) => ({ role: mapRole(m.role, fallbackRole), parts: m.parts.map(mapPart) }));
+  return raw
+    .map((m) => ({ role: mapRole(m.role, fallbackRole), parts: mapParts(m.parts) }))
+    .filter((m) => m.parts.length > 0);
 }
 
 function parseErrorMessage(role: Message['role'], detail: string): Message[] {
@@ -145,14 +155,14 @@ function parseSystemInstructions(value: AnyValue | undefined): Message[] {
   if (value === undefined) return [];
   if (typeof value === 'string') {
     const parsed = safeParseJson<RawPart[]>(value, RAW_PARTS_ARRAY_SCHEMA);
-    return parsed.ok
-      ? [{ role: 'system', parts: parsed.value.map(mapPart) }]
-      : parseErrorMessage('system', parsed.error.message);
+    if (!parsed.ok) return parseErrorMessage('system', parsed.error.message);
+    const parts = mapParts(parsed.value);
+    return parts.length > 0 ? [{ role: 'system', parts }] : [];
   }
   const validated = validateJson<RawPart[]>(value, RAW_PARTS_ARRAY_SCHEMA);
-  return validated.ok
-    ? [{ role: 'system', parts: validated.value.map(mapPart) }]
-    : parseErrorMessage('system', validated.error.message);
+  if (!validated.ok) return parseErrorMessage('system', validated.error.message);
+  const parts = mapParts(validated.value);
+  return parts.length > 0 ? [{ role: 'system', parts }] : [];
 }
 
 // -- genAiDialect (latest) ----------------------------------------------------------------------
