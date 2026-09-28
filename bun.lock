@@ -41,6 +41,7 @@
         "@vetkit/judge-jev": "workspace:^",
         "@vetkit/sink-langfuse": "workspace:^",
         "@vetkit/sink-otel": "workspace:^",
+        "@vetkit/source-jsonl": "workspace:^",
         "@vetkit/spec": "workspace:^",
         "c12": "^3.3.4",
         "commander": "15.0.0",

@@ -35,6 +35,7 @@
     "@vetkit/judge-jev": "workspace:^",
     "@vetkit/sink-langfuse": "workspace:^",
     "@vetkit/sink-otel": "workspace:^",
+    "@vetkit/source-jsonl": "workspace:^",
     "@vetkit/spec": "workspace:^"
   },
   "scripts": {
