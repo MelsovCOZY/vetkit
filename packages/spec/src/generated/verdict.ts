@@ -60,6 +60,8 @@ export interface Verdict {
   explanation?: string;
   gated?: boolean;
   gateReason?: 'score_not_gateable' | 'language_not_calibrated';
+  borderline?: boolean;
+  calibrated?: boolean;
 }
 export interface Model {
   requested: string;

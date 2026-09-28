@@ -618,6 +618,12 @@ export const verdictSchema: JsonSchema = {
     gateReason: {
       enum: ['score_not_gateable', 'language_not_calibrated'],
     },
+    borderline: {
+      type: 'boolean',
+    },
+    calibrated: {
+      type: 'boolean',
+    },
   },
   required: ['caseId', 'criterionId', 'status', 'model', 'cacheHit'],
   additionalProperties: false,
