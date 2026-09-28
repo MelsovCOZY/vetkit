@@ -54,6 +54,7 @@ import {
   MASTER_KEY_MIN_REPEATS,
   POSITION_SWAP_MAX_ORDERS,
 } from './index.ts';
+import { createOutbox } from './index.ts';
 
 describe('@vetkit/core package entry', () => {
   it('re-exports loadCriteria as a function', () => {
@@ -268,5 +269,9 @@ describe('@vetkit/core package entry', () => {
 
   it('re-exports MASTER_KEY_MIN_REPEATS as 3 (repeats per master-key input at least)', () => {
     expect(MASTER_KEY_MIN_REPEATS).toBe(3);
+  });
+
+  it('re-exports createOutbox as a function', () => {
+    expect(typeof createOutbox).toBe('function');
   });
 });

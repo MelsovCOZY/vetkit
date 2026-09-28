@@ -15,6 +15,9 @@ and is registered through `defineSink()`. The mappings below are copied from
   the outbox then retries only the ids the ack lists as retryable, never the whole batch.
 - `doWrite` returns a `SinkAck`. Its `accepted` and `rejected[].id` values are `Verdict.id`.
 - The outbox is single-writer and holds a `.lock` file while it writes.
+- Delivery is at-least-once for a sink declaring `idempotent: false`: an unlisted id (neither
+  accepted nor rejected) is dead-lettered rather than resent, but a `doWrite` that times out or
+  throws after partially writing can still leave a duplicate on the backend.
 
 ## Correlation
 

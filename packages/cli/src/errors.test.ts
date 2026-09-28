@@ -89,6 +89,11 @@ describe('handleError code classes', () => {
     expect(result.code).toBe(EXIT_USAGE);
   });
 
+  test('an OUTBOX_CORRUPT code exits 2 (j6 config error)', () => {
+    const result = run(markerError('OUTBOX_CORRUPT', 'pending.jsonl:2: Invalid JSON'));
+    expect(result.code).toBe(EXIT_USAGE);
+  });
+
   test('an UNSCORED_ONLY class code exits 3', () => {
     const result = run(markerError('E_UNSCORED_ONLY', 'nothing scored'));
     expect(result.code).toBe(EXIT_UNSCORED_ONLY);

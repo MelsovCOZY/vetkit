@@ -57,6 +57,7 @@ const INPUT_EXIT_CODES = new Set([
   'LABELS_INVALID',
   'LABELS_TOO_FEW',
   'JUDGE_UNAUTHORIZED',
+  'OUTBOX_CORRUPT',
 ]);
 
 const HINTS: Readonly<Record<Category, string>> = {
