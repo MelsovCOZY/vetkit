@@ -167,6 +167,27 @@ describe('vet estimate', () => {
     expect(human.stdout).toMatch(/gauntlet-bias.*unknown/);
   });
 
+  test('--for validate prints numbers for calibration from the exported repeat count', async () => {
+    const { CALIBRATION_MIN_REPEATS } = await import('@vetkit/core');
+    const result = runVet(['estimate', '--for', 'validate', '--json'], freshProject());
+    expect(result.status).toBe(0);
+    expect(result.fetched).toBe(false);
+    const doc = parseJson(result.stdout);
+    expect(doc['parts']).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'calibration',
+          calls: CALIBRATION_MIN_REPEATS,
+          minutes: expect.any(Number),
+        }),
+      ]),
+    );
+    const human = runVet(['estimate', '--for', 'validate'], freshProject());
+    expect(human.stdout).toMatch(
+      new RegExp(`calibration: calls ${String(CALIBRATION_MIN_REPEATS)}\\b`),
+    );
+  });
+
   test('zero cases prints nothing to estimate and exits 0', () => {
     const dir = freshProject();
     writeFileSync(join(dir, 'evals', 'cases', 'cases.jsonl'), '');
