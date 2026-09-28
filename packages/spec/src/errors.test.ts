@@ -161,6 +161,17 @@ describe('VetError', () => {
     }
   });
 
+  test('accepts EXPORT_TARGET_UNKNOWN and EXPORT_NO_LOCK (mol-aq4.3 `vet export`)', () => {
+    const exportCodes = ['EXPORT_TARGET_UNKNOWN', 'EXPORT_NO_LOCK'] as const;
+
+    for (const code of exportCodes) {
+      expect(CEV_ERROR_CODES[code]).toBe(code);
+      const err = new VetError(code, 'message');
+      expect(VetError.isInstance(err)).toBe(true);
+      expect(err.code).toBe(code);
+    }
+  });
+
   test('details round-trips through the constructor options', () => {
     const err = new VetError('CACHE_IO', 'cache write failed', {
       details: {

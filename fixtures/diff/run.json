@@ -1,0 +1,6 @@
+{
+  "results": [
+    { "caseId": "c1", "criterionId": "helpful", "pass": true },
+    { "caseId": "c2", "criterionId": "helpful", "pass": false }
+  ]
+}

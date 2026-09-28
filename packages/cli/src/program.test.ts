@@ -68,6 +68,12 @@ describe('vet bin', () => {
     expect(result.stdout).toMatch(/^\s+run\b/m);
   });
 
+  test('--help lists the export command', () => {
+    const result = runBin(['--help']);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toMatch(/^\s+export\b/m);
+  });
+
   test('run --help lists the --sink option', () => {
     const result = runBin(['run', '--help']);
     expect(result.status).toBe(0);

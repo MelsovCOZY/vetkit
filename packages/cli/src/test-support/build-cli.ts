@@ -31,6 +31,7 @@ export const BUILD_ORDER = [
   'sink-otel',
   'sink-langfuse',
   'source-jsonl',
+  'export-vitest',
   'cli',
 ] as const;
 const packageRoots = BUILD_ORDER.map((name) => join(repoRoot, 'packages', name));

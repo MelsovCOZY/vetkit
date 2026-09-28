@@ -4,6 +4,7 @@ import { registerCheck } from './commands/check.ts';
 import { registerCriteria } from './commands/criteria.ts';
 import { registerDoctor } from './commands/doctor.ts';
 import { registerEstimate } from './commands/estimate.ts';
+import { registerExport } from './commands/export.ts';
 import { registerInit } from './commands/init.ts';
 import { registerLabel } from './commands/label.ts';
 import { registerLint } from './commands/lint.ts';
@@ -73,6 +74,7 @@ export function createProgram(): Command {
   registerLock(program);
   registerCriteria(program);
   registerLint(program);
+  registerExport(program);
   return program;
 }
 
