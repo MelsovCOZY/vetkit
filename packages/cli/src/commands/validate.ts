@@ -584,7 +584,14 @@ async function validate(
       if (prior !== undefined) lock.criteria[c.id] = prior;
     }
   }
-  await writeLockAtomic(lockPath, lock, { events, since });
+  // j3.md: fewer than 100 labels per judged criterion is a refusal; it must not create or
+  // overwrite criteria.lock.json (an empty/stale lock would otherwise un-gate `vet run`).
+  const short = judged
+    .map((c) => ({ id: c.id, n: labelsOf(c).length }))
+    .filter(({ n }) => n < MIN_LABELS);
+  if (short.length === 0) {
+    await writeLockAtomic(lockPath, lock, { events, since });
+  }
 
   const report = {
     criteria: active.map((c) => {
@@ -623,14 +630,13 @@ async function validate(
         (c) =>
           `${c.id}: ${String(c.status)}${c.reasons.length === 0 ? '' : ` (${c.reasons.join(', ')})`}`,
       ),
-      `lock written: ${lockPath}`,
+      short.length === 0
+        ? `lock written: ${lockPath}`
+        : `refusing to write ${lockPath} (too few labels)`,
     ].join('\n'),
   );
 
-  // j3.md: fewer than 100 labels per judged criterion exits 2 with the count, after the lock.
-  const short = judged
-    .map((c) => ({ id: c.id, n: labelsOf(c).length }))
-    .filter(({ n }) => n < MIN_LABELS);
+  // j3.md: fewer than 100 labels per judged criterion exits 2 with the count.
   if (short.length > 0) {
     throw new VetError(
       CEV_ERROR_CODES.LABELS_TOO_FEW,
