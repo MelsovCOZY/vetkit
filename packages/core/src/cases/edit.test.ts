@@ -49,6 +49,28 @@ async function readCases(file: string): Promise<Case[]> {
   });
 }
 
+async function writePending(root: string, name: string, cases: Case[]): Promise<void> {
+  await mkdir(join(root, 'pending'), { recursive: true });
+  await writeFile(join(root, 'pending', name), cases.map((c) => `${caseLine(c)}\n`).join(''));
+}
+
+function evalCase(overrides: Partial<Case> = {}): Case {
+  return mkCase('case-orig', 'user: hi', { traceId: 'trace-abc', ...overrides });
+}
+
+function failingVerdict(overrides: Partial<Verdict> = {}): Verdict {
+  return {
+    id: 'case-orig:k-1',
+    caseId: 'case-orig',
+    criterionId: 'k-1',
+    status: 'ok',
+    pass: false,
+    model: { requested: 'fake', resolved: 'fake-resolved', transport: 'fake', pinned: false },
+    cacheHit: false,
+    ...overrides,
+  };
+}
+
 describe('dedupeKey', () => {
   test('is the same for state that only differs by leading/trailing whitespace', () => {
     expect(dedupeKey('hello world')).toBe(dedupeKey('  hello world  '));
@@ -70,7 +92,11 @@ describe('findDuplicates', () => {
   });
 
   test('a repeated normalised state reports the earliest id kept, the rest removed', () => {
-    const cases = [mkCase('case-3', 'same state'), mkCase('case-1', ' same state '), mkCase('case-2', 'same state')];
+    const cases = [
+      mkCase('case-3', 'same state'),
+      mkCase('case-1', ' same state '),
+      mkCase('case-2', 'same state'),
+    ];
     expect(findDuplicates(cases)).toEqual([
       { kept: 'case-1', removed: 'case-2' },
       { kept: 'case-1', removed: 'case-3' },
@@ -138,13 +164,8 @@ describe('quarantineCase', () => {
 });
 
 describe('listPendingCases and reviewCase', () => {
-  async function writePending(name: string, cases: Case[]): Promise<void> {
-    await mkdir(join(dir, 'pending'), { recursive: true });
-    await writeFile(join(dir, 'pending', name), cases.map((c) => `${caseLine(c)}\n`).join(''));
-  }
-
   test('listPendingCases reads every *.jsonl under <dir>/pending', async () => {
-    await writePending('promoted-2026-09-28.jsonl', [mkCase('p-1', 's1')]);
+    await writePending(dir, 'promoted-2026-09-28.jsonl', [mkCase('p-1', 's1')]);
 
     const pending = await listPendingCases(dir);
 
@@ -152,7 +173,7 @@ describe('listPendingCases and reviewCase', () => {
   });
 
   test('reviewCase accept moves the case into promoted-<today>.jsonl and out of pending', async () => {
-    await writePending('promoted-2026-09-28.jsonl', [mkCase('p-1', 's1')]);
+    await writePending(dir, 'promoted-2026-09-28.jsonl', [mkCase('p-1', 's1')]);
 
     const moved = await reviewCase(dir, 'p-1', 'accept', { now: NOW });
 
@@ -162,7 +183,7 @@ describe('listPendingCases and reviewCase', () => {
   });
 
   test('reviewCase reject moves the case into quarantine.jsonl with the reason', async () => {
-    await writePending('promoted-2026-09-28.jsonl', [mkCase('p-2', 's2')]);
+    await writePending(dir, 'promoted-2026-09-28.jsonl', [mkCase('p-2', 's2')]);
 
     const moved = await reviewCase(dir, 'p-2', 'reject', { reason: 'bad trace', now: NOW });
 
@@ -182,23 +203,6 @@ describe('listPendingCases and reviewCase', () => {
 });
 
 describe('promoteVerdict', () => {
-  function evalCase(overrides: Partial<Case> = {}): Case {
-    return mkCase('case-orig', 'user: hi', { traceId: 'trace-abc', ...overrides });
-  }
-
-  function failingVerdict(overrides: Partial<Verdict> = {}): Verdict {
-    return {
-      id: 'case-orig:k-1',
-      caseId: 'case-orig',
-      criterionId: 'k-1',
-      status: 'ok',
-      pass: false,
-      model: { requested: 'fake', resolved: 'fake-resolved', transport: 'fake', pinned: false },
-      cacheHit: false,
-      ...overrides,
-    };
-  }
-
   test('appends one PromotedCase to <dir>/promoted-<date>.jsonl with provenance.promotedFrom.verdictId', async () => {
     const promoted = await promoteVerdict(dir, failingVerdict(), evalCase(), NOW);
 
