@@ -211,3 +211,20 @@ export {
   FAILURE_MODES_SCHEMA,
   promptHash,
 } from './generate/prompts.ts';
+
+export { extractCases } from './generate/cases.ts';
+export type { ExtractCasesInput, ExtractCasesResult, TraceStatus } from './generate/cases.ts';
+export { dedupeCriteria } from './generate/dedupe.ts';
+export type {
+  DedupeCriteriaInput,
+  DedupeCriteriaResult,
+  DuplicateRecord,
+} from './generate/dedupe.ts';
+export { generateEvals } from './generate/pipeline.ts';
+export type {
+  GenerateConfig,
+  GenerateEvalsInput,
+  GenerateEvalsResult,
+  GenerateIssue,
+  GenerateReport,
+} from './generate/pipeline.ts';
