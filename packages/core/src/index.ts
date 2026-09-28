@@ -134,3 +134,40 @@ export type {
   Events,
   Listener,
 } from './events.ts';
+
+export { gauntletLength, gauntletPositionSwap } from './validate/gauntlet-bias.ts';
+export type {
+  GauntletBiasEvent,
+  GauntletBiasSkipReason,
+  LengthOptions,
+  LengthResult,
+  PaddingTemplate,
+  PositionSwapOptions,
+  PositionSwapResult,
+} from './validate/gauntlet-bias.ts';
+
+export {
+  gauntletConstantOutput,
+  gauntletInjection,
+  gauntletLabelPermutation,
+  gauntletMasterKey,
+  INJECTION_KINDS,
+} from './validate/gauntlet-controls.ts';
+export type {
+  ConstantEntry,
+  ConstantOutputOptions,
+  ConstantOutputResult,
+  FamilyScore,
+  GauntletControlsSkipReason,
+  GauntletJudgeOptions,
+  InjectionEntry,
+  InjectionKind,
+  InjectionOptions,
+  InjectionResult,
+  LabelPermutationOptions,
+  LabelPermutationResult,
+  MasterKeyEntry,
+  MasterKeyOptions,
+  MasterKeyResult,
+  PermutationVerdict,
+} from './validate/gauntlet-controls.ts';
