@@ -99,8 +99,10 @@ function countingJudge(
 ): Counting {
   const pByState = new Map(rows.map((r) => [`S-${r.id}`, r.p]));
   let phase = 'none';
-  events.on('diag', ({ code, data }) => {
-    if (code === 'VALIDATE_PHASE' && typeof data?.['phase'] === 'string') phase = data['phase'];
+  // DiagData carries numbers and booleans only, so the phase rides in the code.
+  const PREFIX = 'VALIDATE_PHASE_';
+  events.on('diag', ({ code }) => {
+    if (code.startsWith(PREFIX)) phase = code.slice(PREFIX.length).toLowerCase();
   });
   const pinned = opts.pinned ?? true;
   const transport = opts.transport ?? 'fake-transport';
