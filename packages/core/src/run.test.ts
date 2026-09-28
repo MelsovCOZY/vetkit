@@ -859,3 +859,93 @@ describe('verdict provenance', () => {
     expect(v?.provenance).toBeUndefined();
   });
 });
+
+// ---------- pre-judge gate refusal (q4q.11) ----------
+
+describe('gate refusal before any judge call (q4q.11)', () => {
+  test('--gate with no lock refuses with 0 judge calls, naming criteria.lock.json', async () => {
+    const paths = await suite([BOOL_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
+    const { judge, doJudge } = scriptedJudge({ S1: { 'answers-question': yes(0.9) } });
+    const out = await runEvals({ config: { ...paths, judge, gate: true } });
+
+    expect(doJudge).toHaveBeenCalledTimes(0);
+    expect(out.exitCode).toBe(2);
+    expect(out.results).toEqual([]);
+    expect(out.gateReasons.join('\n')).toContain('criteria.lock.json');
+  });
+
+  test('--gate with an uncalibrated referenced criterion refuses with 0 calls: GATE_UNCALIBRATED names it', async () => {
+    const paths = await suite([BOOL_YAML, CHOICE_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
+    const { judge, doJudge } = scriptedJudge({
+      S1: { 'answers-question': yes(0.9), tone: tone('polite') },
+    });
+    const lock = lockOf({
+      'answers-question': lockCriterion(),
+      tone: lockCriterion({ status: 'uncalibrated' }),
+    });
+    const out = await runEvals({ config: { ...paths, judge, gate: true }, lock });
+
+    expect(doJudge).toHaveBeenCalledTimes(0);
+    expect(out.exitCode).toBe(2);
+    expect(out.gateReasons.join('\n')).toContain('GATE_UNCALIBRATED');
+    expect(out.gateReasons.join('\n')).toContain("'tone'");
+  });
+
+  test('--ci on a floating lock refuses with 0 calls: GATE_UNPINNED', async () => {
+    const paths = await suite([BOOL_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
+    const { judge, doJudge } = scriptedJudge({ S1: { 'answers-question': yes(0.9) } });
+    const lock = lockOf({ 'answers-question': lockCriterion({ status: 'floating' }) }, false);
+    const out = await runEvals({ config: { ...paths, judge, ci: true }, lock });
+
+    expect(doJudge).toHaveBeenCalledTimes(0);
+    expect(out.exitCode).toBe(2);
+    expect(out.gateReasons.join('\n')).toContain('GATE_UNPINNED');
+  });
+
+  test('--ci --allow-unpinned on a floating lock judges and exits by results', async () => {
+    const paths = await suite([BOOL_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
+    const { judge, doJudge } = scriptedJudge(
+      { S1: { 'answers-question': yes(0.9) } },
+      { pinned: false },
+    );
+    const lock = lockOf({ 'answers-question': lockCriterion({ status: 'floating' }) }, false);
+    const out = await runEvals({
+      config: { ...paths, judge, ci: true, gatePolicy: { allowUnpinned: true } },
+      lock,
+    });
+
+    expect(doJudge).toHaveBeenCalledTimes(1);
+    expect(out.exitCode).toBe(0);
+  });
+
+  test('--gate --allow-unpinned accepts floating entries and exits by results', async () => {
+    const paths = await suite([BOOL_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
+    const lock = lockOf({ 'answers-question': lockCriterion({ status: 'floating' }) }, false);
+    const passing = scriptedJudge({ S1: { 'answers-question': yes(0.9) } }, { pinned: false });
+    const ok = await runEvals({
+      config: { ...paths, judge: passing.judge, gate: true, gatePolicy: { allowUnpinned: true } },
+      lock,
+    });
+    expect(ok.exitCode).toBe(0);
+    expect(ok.gateReasons).toEqual([]);
+
+    const failing = scriptedJudge({ S1: { 'answers-question': yes(0.1) } }, { pinned: false });
+    const bad = await runEvals({
+      config: { ...paths, judge: failing.judge, gate: true, gatePolicy: { allowUnpinned: true } },
+      lock,
+    });
+    expect(bad.exitCode).toBe(1);
+  });
+
+  test('a score criterion uncalibrated in the lock does not block the pre-judge gate', async () => {
+    const paths = await suite([BOOL_YAML, SCORE_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
+    const { judge, doJudge } = scriptedJudge({
+      S1: { 'answers-question': yes(0.9), helpfulness: score(0.1) },
+    });
+    const lock = lockOf({ 'answers-question': lockCriterion() });
+    const out = await runEvals({ config: { ...paths, judge, gate: true }, lock });
+
+    expect(doJudge).toHaveBeenCalledTimes(1);
+    expect(out.exitCode).toBe(0);
+  });
+});
