@@ -12,17 +12,23 @@
 // never buffers unboundedly (RISK note); `judge` itself is invoked through the shared J1 pacing
 // limiter (judge/pacing.ts) so watch, run and validate pace against the same Retry-After state
 // (UX brief C1).
-import type { Case, SinkV1, SourceV1, Verdict } from '@vetkit/spec';
+import type { Case, Criterion, SinkV1, SourceV1, Verdict } from '@vetkit/spec';
 import { extractCases } from '../generate/cases.ts';
+import { partitionCases, type ExclusionStatus } from '../judge/completeness.ts';
 import { createLimiter } from '../judge/pacing.ts';
 import type { Outbox } from '../outbox/outbox.ts';
 import type { Sampler } from './sampler.ts';
 import type { WatchOptions } from './types.ts';
 
-/** One judged case in, one Verdict per criterion out. Bound to criteria + a JudgeV1 by the
- * caller (dh8.3): the loop itself never sees criteria, only this callable. */
+/** One judged case in, one Verdict per criterion out. `criteria` is already the judgeable
+ * subset for this case (bead classified-evals-mol-dh8.4: `partitionCases` has already excluded
+ * content-dependent criteria for a non-ok trace). Bound to a JudgeV1 by the caller (dh8.3). */
 export interface JudgeCaseFn {
-  (input: { readonly case: Case; readonly signal: AbortSignal }): Promise<Verdict[]>;
+  (input: {
+    readonly case: Case;
+    readonly criteria: readonly Criterion[];
+    readonly signal: AbortSignal;
+  }): Promise<Verdict[]>;
 }
 
 export interface RunWatchOptions extends WatchOptions {
@@ -34,6 +40,7 @@ export interface RunWatchInput {
   readonly source: SourceV1;
   readonly sampler: Sampler;
   readonly judge: JudgeCaseFn;
+  readonly criteria: readonly Criterion[];
   readonly outbox: Outbox;
   readonly sinks: readonly SinkV1[];
   readonly options: RunWatchOptions;
@@ -50,6 +57,10 @@ export interface CoverageSummary {
   readonly promoted: number;
   readonly produced: number;
   readonly acknowledged: number;
+  /** Cases excluded from (full or partial) judging by completeness status (root DECISION,
+   * dh8.4): a case can be counted here and still be judged, on its content-independent
+   * criteria only — see `partitionCases`. */
+  readonly excluded: Record<ExclusionStatus, number>;
 }
 
 const DEFAULT_JUDGE_TIMEOUT_MS = 30_000;
@@ -75,7 +86,7 @@ function infraFailureVerdict(caseId: string, cause: string): Verdict {
 }
 
 export async function runWatch(input: RunWatchInput): Promise<CoverageSummary> {
-  const { source, sampler, judge, outbox, sinks, options, signal, onVerdict } = input;
+  const { source, sampler, judge, criteria, outbox, sinks, options, signal, onVerdict } = input;
   const judgeTimeoutMs = options.judgeTimeoutMs ?? DEFAULT_JUDGE_TIMEOUT_MS;
   const limiter = createLimiter({ maxInFlight: options.maxInFlight });
 
@@ -83,6 +94,11 @@ export async function runWatch(input: RunWatchInput): Promise<CoverageSummary> {
   let sampled = 0;
   let judged = 0;
   let promoted = 0;
+  const excluded: Record<ExclusionStatus, number> = {
+    content_not_captured: 0,
+    truncated: 0,
+    incomplete_trace: 0,
+  };
   let pendingSinceDrain = 0;
   let draining: Promise<void> | undefined;
   const tasks = new Set<Promise<void>>();
@@ -134,13 +150,14 @@ export async function runWatch(input: RunWatchInput): Promise<CoverageSummary> {
     return draining;
   }
 
-  async function judgeOne(evalCase: Case): Promise<void> {
+  async function judgeOne(evalCase: Case, caseCriteria: readonly Criterion[]): Promise<void> {
     const perCall = AbortSignal.any([signal, AbortSignal.timeout(judgeTimeoutMs)]);
     let verdicts: Verdict[];
     try {
-      verdicts = await limiter.run(() => judge({ case: evalCase, signal: perCall }), {
-        signal: perCall,
-      });
+      verdicts = await limiter.run(
+        () => judge({ case: evalCase, criteria: caseCriteria, signal: perCall }),
+        { signal: perCall },
+      );
     } catch (err) {
       // Edge case: "Abort during a judge call → the in-flight call is aborted via the signal,
       // its verdict is 'infra_failure:aborted' and NOT enqueued (nothing to write back)."
@@ -170,15 +187,25 @@ export async function runWatch(input: RunWatchInput): Promise<CoverageSummary> {
 
       // oxlint-disable-next-line no-await-in-loop
       await acquireSlot();
-      const { cases } = extractCases({ traces: [trace], criteria: [] });
+      // includeIncomplete: true (dh8.4) — a truncated/incomplete trace with a real conversation
+      // still becomes a Case (with completeness-carrying provenance), so partitionCases below
+      // can select its content-independent criteria instead of the whole trace being dropped.
+      const { cases } = extractCases({ traces: [trace], criteria, includeIncomplete: true });
       const evalCase = cases[0];
       if (evalCase === undefined) {
-        // Excluded by statusForTrace (content_not_captured/truncated/incomplete_trace) or
-        // no_conversation: nothing to judge for this trace.
+        // No conversation at all (or content_not_captured with no messages): nothing to judge.
         releaseSlot();
         continue;
       }
-      const task = judgeOne(evalCase).finally(releaseSlot);
+      const { judgeable, excluded: excludedHere } = partitionCases([evalCase], criteria);
+      for (const e of excludedHere) excluded[e.status] += 1;
+      const entry = judgeable[0];
+      if (entry === undefined || entry.criteria.length === 0) {
+        // Excluded, and no content-independent criteria left to judge it on.
+        releaseSlot();
+        continue;
+      }
+      const task = judgeOne(entry.case, entry.criteria).finally(releaseSlot);
       tasks.add(task);
       void task.finally(() => tasks.delete(task));
     }
@@ -203,5 +230,6 @@ export async function runWatch(input: RunWatchInput): Promise<CoverageSummary> {
     promoted,
     produced: reconciled.produced,
     acknowledged: reconciled.acknowledged,
+    excluded,
   };
 }
