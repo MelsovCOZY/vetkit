@@ -18,3 +18,17 @@ export type {
   LintRuleId,
   LintSeverity,
 } from './criteria/lint.ts';
+
+export {
+  clusteredSE,
+  clusterKeys,
+  nearDuplicateClusters,
+  pairedClusteredDiff,
+} from './validate/clusters.ts';
+export type {
+  ClusteredSEResult,
+  NearDuplicateEvent,
+  NearDuplicateOptions,
+  NearDuplicateResult,
+  PairedClusteredDiffResult,
+} from './validate/clusters.ts';
