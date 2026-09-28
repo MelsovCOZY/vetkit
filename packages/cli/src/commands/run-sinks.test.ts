@@ -392,8 +392,9 @@ describe('vet run CEV_JUDGE_BASE_URL forced judge failure (bug F3/F4, gate 7lg A
     });
     expect(result.status).toBe(0);
     expect(parseJson(result.stdout)).toMatchObject({ exitCode: 0 });
+    // fixtureEvals (shared with run.test.ts) has exactly one case and one criterion.
     const received = readLines(otelOut);
-    expect(received).toHaveLength(N);
+    expect(received).toHaveLength(1);
     for (const v of received) {
       expect(v['status']).toBe('unscored');
       expect(v['cause']).toBe('JUDGE_TIMEOUT');
