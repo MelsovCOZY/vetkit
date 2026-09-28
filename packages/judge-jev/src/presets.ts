@@ -6,8 +6,10 @@
 // "Ports"; root ledger PREMISE, live probe 2026-09-26).
 //
 // model.pinned (docs/contracts/j1.md "Ports", DECISION pinning honesty): Vercel is an
-// alias only, so it is pinned:false; TypeSafe direct and OpenRouter each serve one
-// fixed build, so they are pinned:true.
+// alias only, so it is pinned:false; so is Cloudflare Workers AI (no version is
+// selectable); TypeSafe direct and OpenRouter each serve one
+// fixed build, so they are pinned:true. Cloudflare speaks its own REST run endpoint
+// (cloudflare.ts), not `/v1/systemone`.
 
 export interface JevProviderOptions {
   readonly gateway: {
@@ -26,7 +28,7 @@ export interface JevPreset {
 // Explicit `Record<..., JevPreset>` annotation (rather than `as const satisfies`,
 // which --isolatedDeclarations rejects) keeps every entry structurally uniform, so
 // `.providerOptions` is a valid (optional) access on any preset looked up by name.
-export const JEV_PRESETS: Record<'typesafe' | 'vercel' | 'openrouter', JevPreset> = {
+export const JEV_PRESETS: Record<'typesafe' | 'vercel' | 'openrouter' | 'cloudflare', JevPreset> = {
   typesafe: {
     baseURL: 'https://api.typesafe.ai',
     defaultModel: 'jev-1.13.0',
@@ -50,6 +52,13 @@ export const JEV_PRESETS: Record<'typesafe' | 'vercel' | 'openrouter', JevPreset
     baseURL: 'https://openrouter.ai/api',
     defaultModel: 'typesafe/jev-1.13',
     pinned: true,
+  },
+  cloudflare: {
+    // UNVERIFIED (bead RISK): the {result, success, errors} REST envelope is taken from
+    // Cloudflare's docs and has not been exercised with a real token yet.
+    baseURL: 'https://api.cloudflare.com/client/v4',
+    defaultModel: 'typesafe/jev',
+    pinned: false,
   },
 };
 
