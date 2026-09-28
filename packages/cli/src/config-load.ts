@@ -8,6 +8,7 @@ import { readEnvName, resolveConfig, type ResolvedConfig } from '@vetkit/core';
 import { createJevJudgeFromEndpoint, type JevProviderOptions } from '@vetkit/judge-jev';
 import { CEV_ERROR_CODES, VetError, type JudgeEndpoint, type JudgeV1 } from '@vetkit/spec';
 import { loadConfig } from 'c12';
+import { diagEnabled, withJudgeDiag } from './diag.ts';
 
 type Env = Readonly<Record<string, string | undefined>>;
 
@@ -131,6 +132,8 @@ export async function loadVetConfig(options: LoadVetConfigOptions): Promise<Load
       judge = judgeFromEndpoint(config.judge, readEnvName(keyEnv, env));
     }
   }
+  // CEV_DIAG=1: count real judge requests (cache hits never reach doJudge) for diag.ts.
+  if (diagEnabled(env)) judge = withJudgeDiag(judge);
   return {
     config,
     judge,
