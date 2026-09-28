@@ -66,8 +66,8 @@ The judge-failure rule: `error.type` is set and NO score attributes are emitted 
 | `traceId` | `provenance.traceId` |
 | `observationId` | `provenance.observationId` (optional) |
 | `name` | criterionId |
-| `value` | the answer's value (`stringValue` for choice) |
-| `dataType` | boolean → `BOOLEAN`, choice → `CATEGORICAL` (stringValue), score → `NUMERIC` |
+| `value` | boolean → 0\|1, choice → the choice string, score → expected level (number) |
+| `dataType` | boolean → `BOOLEAN`, choice → `CATEGORICAL`, score → `NUMERIC` |
 | `comment` | explanation |
 | auth | basic auth `base64(pk:sk)` |
 
