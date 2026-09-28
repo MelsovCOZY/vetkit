@@ -130,6 +130,34 @@ function escapeKey(criterion: Criterion): string {
   return Object.hasOwn(criterion.criteria, escape) ? escape : ESCAPE_KEY;
 }
 
+const PROV_KEYS = [
+  'traceId',
+  'spanId',
+  'responseId',
+  'observationId',
+  'dialect',
+  'schemaUrl',
+] as const;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * The case's correlation ids for sinks. Picks only the six schema keys (verdict provenance is
+ * additionalProperties:false, and the outbox re-validates every line); case.traceId wins.
+ */
+function verdictProvenance(evalCase: Case): Verdict['provenance'] | undefined {
+  const source = isRecord(evalCase.provenance) ? evalCase.provenance : {};
+  const out: NonNullable<Verdict['provenance']> = {};
+  for (const key of PROV_KEYS) {
+    const value = source[key];
+    if (typeof value === 'string') out[key] = value;
+  }
+  if (evalCase.traceId !== undefined) out.traceId = evalCase.traceId;
+  return Object.keys(out).length === 0 ? undefined : out;
+}
+
 function badResponse(verdict: RunVerdict): RunVerdict {
   return { ...verdict, status: 'error', cause: CEV_ERROR_CODES.JUDGE_BAD_RESPONSE };
 }
@@ -142,10 +170,12 @@ function decide(
   fallbackThreshold: number,
 ): RunVerdict {
   const entry = lock?.criteria[criterion.id];
+  const provenance = verdictProvenance(evalCase);
   const base: RunVerdict = {
     ...verdict,
     calibrated: entry?.status === 'calibrated',
     ...gateFields(criterion, evalCase, entry),
+    ...(provenance === undefined ? {} : { provenance }),
   };
   const answer = verdict.answer;
   if (criterion.grader?.kind === 'code' || verdict.status !== 'ok' || answer === undefined) {

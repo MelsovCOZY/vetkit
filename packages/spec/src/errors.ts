@@ -46,6 +46,8 @@ export const CEV_ERROR_CODES = {
   SINK_AUTH: 'SINK_AUTH',
   SINK_PAYLOAD_TOO_LARGE: 'SINK_PAYLOAD_TOO_LARGE',
   OUTBOX_CORRUPT: 'OUTBOX_CORRUPT',
+  // mol-yxn.7: `vet run --sink` names a sink that vetkit.config.ts does not configure (exit 2).
+  CONFIG_UNKNOWN_SINK: 'CONFIG_UNKNOWN_SINK',
   // J2 contract (mol-76a.1, root DECISION on o8i gaps): source reads, trace validation and
   // generator outcomes. GENERATOR_CAPABILITY is a declared-strategy mismatch, never a
   // silent downgrade (docs/contracts/j2.md "Generation contract").
