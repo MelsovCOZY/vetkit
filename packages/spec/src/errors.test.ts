@@ -132,6 +132,17 @@ describe('VetError', () => {
     }
   });
 
+  test('accepts the three J5 codes (OTLP reader, receiver, empty source)', () => {
+    const j5Codes = ['OTLP_PARSE', 'OTLP_UNSUPPORTED_CONTENT_TYPE', 'SOURCE_EMPTY'] as const;
+
+    for (const code of j5Codes) {
+      expect(CEV_ERROR_CODES[code]).toBe(code);
+      const err = new VetError(code, 'message');
+      expect(VetError.isInstance(err)).toBe(true);
+      expect(err.code).toBe(code);
+    }
+  });
+
   test('details round-trips through the constructor options', () => {
     const err = new VetError('CACHE_IO', 'cache write failed', {
       details: {

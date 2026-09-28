@@ -56,6 +56,12 @@ export const CEV_ERROR_CODES = {
   GENERATOR_UNAVAILABLE: 'GENERATOR_UNAVAILABLE',
   GENERATOR_BAD_OUTPUT: 'GENERATOR_BAD_OUTPUT',
   GENERATOR_CAPABILITY: 'GENERATOR_CAPABILITY',
+  // J5 contract (docs/contracts/j5.md "Error codes", mol-pij.1): an OTLP body that is not an
+  // ExportTraceServiceRequest, a non-JSON body at the receiver (HTTP 415), and a source that
+  // produced 0 traces.
+  OTLP_PARSE: 'OTLP_PARSE',
+  OTLP_UNSUPPORTED_CONTENT_TYPE: 'OTLP_UNSUPPORTED_CONTENT_TYPE',
+  SOURCE_EMPTY: 'SOURCE_EMPTY',
 } as const;
 
 export type CevErrorCode = (typeof CEV_ERROR_CODES)[keyof typeof CEV_ERROR_CODES];
