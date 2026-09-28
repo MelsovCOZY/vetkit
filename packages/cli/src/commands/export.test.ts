@@ -62,6 +62,20 @@ function fakeExporter(id: string, files: string[] = ['fake.evals.test.ts']): Exp
   };
 }
 
+// Records every outDir doExport was called with, in call order.
+function recordingExporter(id: string): { exporter: ExporterV1; outDirs: string[] } {
+  const outDirs: string[] = [];
+  const exporter: ExporterV1 = {
+    specVersion: 'v1',
+    id,
+    doExport: (input: { criteria: Criterion[]; cases: Case[]; lock: unknown; outDir: string }) => {
+      outDirs.push(input.outDir);
+      return Promise.resolve({ files: [join(input.outDir, 'out.evals.test.ts')] });
+    },
+  };
+  return { exporter, outDirs };
+}
+
 let stdout: string[] = [];
 
 afterEach(() => {
@@ -145,5 +159,28 @@ describe('vet export', () => {
     expect(exitCodeOf(error)).toBe(2);
     if (!VetError.isInstance(error)) throw new Error('expected a VetError');
     expect(error.code).toBe(CEV_ERROR_CODES.EXPORT_NO_LOCK);
+  });
+
+  test('a single --criteria file calls doExport with the output dir unchanged', async () => {
+    const root = await project();
+    const { exporter, outDirs } = recordingExporter('fake-single-out');
+    registerExporter('fake-single-out', exporter);
+    await vet(['export', '--to', 'fake-single-out'], depsFor(root));
+    expect(outDirs).toEqual([join(root, 'evals/vitest')]);
+  });
+
+  test('two --criteria files each get their own outDir subdir named after their basename', async () => {
+    const root = await project();
+    await writeFile(join(root, 'evals', 'other.yaml'), CRITERIA_YAML);
+    const { exporter, outDirs } = recordingExporter('fake-multi-out');
+    registerExporter('fake-multi-out', exporter);
+    await vet(
+      ['export', '--to', 'fake-multi-out', '--criteria', 'evals/criteria.yaml', 'evals/other.yaml'],
+      depsFor(root),
+    );
+    expect(outDirs).toEqual([
+      join(root, 'evals/vitest', 'criteria'),
+      join(root, 'evals/vitest', 'other'),
+    ]);
   });
 });
