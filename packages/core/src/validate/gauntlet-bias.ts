@@ -12,7 +12,7 @@ const MAX_ORDERS = 6;
 const ESCAPE_KEY = 'escape';
 const EPSILON = 1e-9;
 
-export type GauntletSkipReason = 'too_few_samples' | 'score_criterion';
+export type GauntletBiasSkipReason = 'too_few_samples' | 'score_criterion';
 
 export interface GauntletBiasEvent {
   readonly type: 'gauntlet.length_correlation';
@@ -36,7 +36,7 @@ export interface PositionSwapResult {
   readonly orders: readonly (readonly string[])[];
   /** True when there were more permutations than the 6 orders judged. */
   readonly capped: boolean;
-  readonly reason?: GauntletSkipReason;
+  readonly reason?: GauntletBiasSkipReason;
 }
 
 export interface PaddingTemplate {
@@ -66,7 +66,7 @@ export interface LengthResult {
   readonly truncationSkipped: number;
   /** States whose judgment failed or escaped; never counted as flips. */
   readonly inconclusive: number;
-  readonly reason?: GauntletSkipReason;
+  readonly reason?: GauntletBiasSkipReason;
 }
 
 function mulberry32(seed: number): () => number {
@@ -124,7 +124,7 @@ function choiceDecision(answer: Answer | undefined): string | undefined {
   return answer?.type === 'choice' ? answer.choice : undefined;
 }
 
-function swapSkipped(reason: GauntletSkipReason): PositionSwapResult {
+function swapSkipped(reason: GauntletBiasSkipReason): PositionSwapResult {
   return { result: 'skipped', consistency: 0, inconclusive: 0, orders: [], capped: false, reason };
 }
 
@@ -288,7 +288,7 @@ function grade(
   return { p, pass: p >= threshold };
 }
 
-function lengthSkipped(reason: GauntletSkipReason): LengthResult {
+function lengthSkipped(reason: GauntletBiasSkipReason): LengthResult {
   return {
     result: 'skipped',
     paddingFlips: 0,

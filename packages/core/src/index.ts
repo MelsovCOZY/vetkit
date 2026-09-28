@@ -138,7 +138,7 @@ export type {
 export { gauntletLength, gauntletPositionSwap } from './validate/gauntlet-bias.ts';
 export type {
   GauntletBiasEvent,
-  GauntletSkipReason,
+  GauntletBiasSkipReason,
   LengthOptions,
   LengthResult,
   PaddingTemplate,
@@ -158,8 +158,8 @@ export type {
   ConstantOutputOptions,
   ConstantOutputResult,
   FamilyScore,
+  GauntletControlsSkipReason,
   GauntletJudgeOptions,
-  GauntletSkipReason,
   InjectionEntry,
   InjectionKind,
   InjectionOptions,

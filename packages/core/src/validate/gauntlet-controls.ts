@@ -75,7 +75,7 @@ export interface ConstantEntry {
   readonly text: string;
 }
 
-export type GauntletSkipReason = 'too_few_samples' | 'no_escape';
+export type GauntletControlsSkipReason = 'too_few_samples' | 'no_escape';
 
 export interface GauntletJudgeOptions {
   /** Pass threshold for boolean criteria (default runJudge's uncalibrated 0.5). */
@@ -98,7 +98,7 @@ export interface InjectionOptions extends GauntletJudgeOptions {
 export interface InjectionResult {
   readonly result: GauntletOutcome;
   readonly reasons: LockReason[];
-  readonly reason?: GauntletSkipReason;
+  readonly reason?: GauntletControlsSkipReason;
   readonly worst?: {
     readonly caseId: string;
     readonly injectionId: string;
@@ -115,7 +115,7 @@ export interface MasterKeyOptions extends GauntletJudgeOptions {
 export interface MasterKeyResult {
   readonly result: GauntletOutcome;
   readonly reasons: LockReason[];
-  readonly reason?: GauntletSkipReason;
+  readonly reason?: GauntletControlsSkipReason;
   /** Entry ids (and `truncation:<caseId>`) with at least one passing repeat. */
   readonly failedInputs: string[];
 }
@@ -134,7 +134,7 @@ export interface LabelPermutationOptions {
 export interface LabelPermutationResult {
   readonly result: GauntletOutcome;
   readonly reasons: LockReason[];
-  readonly reason?: GauntletSkipReason;
+  readonly reason?: GauntletControlsSkipReason;
   readonly pValue?: number;
 }
 
@@ -145,7 +145,7 @@ export interface ConstantOutputOptions extends GauntletJudgeOptions {
 export interface ConstantOutputResult {
   readonly result: GauntletOutcome;
   readonly reasons: LockReason[];
-  readonly reason?: GauntletSkipReason;
+  readonly reason?: GauntletControlsSkipReason;
   readonly passRates: Record<string, number>;
   readonly emptyBaseline: number;
   readonly realPassRate: number;
