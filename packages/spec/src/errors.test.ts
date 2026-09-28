@@ -143,6 +143,13 @@ describe('VetError', () => {
     }
   });
 
+  test('accepts RUN_NOT_FOUND (missing run record, mol-p4a.3 `vet rerun`)', () => {
+    expect(CEV_ERROR_CODES.RUN_NOT_FOUND).toBe('RUN_NOT_FOUND');
+    const err = new VetError('RUN_NOT_FOUND', 'no run record at .vet/runs/latest.json');
+    expect(VetError.isInstance(err)).toBe(true);
+    expect(err.code).toBe('RUN_NOT_FOUND');
+  });
+
   test('details round-trips through the constructor options', () => {
     const err = new VetError('CACHE_IO', 'cache write failed', {
       details: {
