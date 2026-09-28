@@ -48,19 +48,19 @@ function parseJson<T = unknown>(text: string): T {
 }
 
 // Ground truth from core/src/criteria/lint.ts's LINT_RULES: every rule these fixtures name
-// is 'error' severity except FORBIDDEN_WORD and DEEP_INDIRECTION, which are 'warn'.
+// is 'error' severity (the 10-file loop).
 const ERROR_SEVERITY_FIXTURES = [
   'compound-level.yaml',
   'computation.yaml',
   'contradicts-instruction.yaml',
+  'deep-indirection.yaml',
   'double-negative.yaml',
   'escape-missing.yaml',
+  'forbidden-word.yaml',
   'inverted-boolean.yaml',
   'negation-pair.yaml',
   'non-atomic.yaml',
 ];
-
-const WARN_ONLY_FIXTURES = ['deep-indirection.yaml', 'forbidden-word.yaml'];
 
 describe('vet lint', () => {
   test.each(ERROR_SEVERITY_FIXTURES)('%s: an error-severity issue exits 1', (name) => {
@@ -75,14 +75,6 @@ describe('vet lint', () => {
       expect(issue.path.length).toBeGreaterThan(0);
       expect(issue.message.length).toBeGreaterThan(0);
     }
-  });
-
-  test.each(WARN_ONLY_FIXTURES)('%s: only warn-severity issues exit 0', (name) => {
-    const result = runLint([`${badDir}${name}`, '--json']);
-    expect(result.status).toBe(0);
-    const doc = parseJson<LintDoc>(result.stdout);
-    expect(doc.issues.length).toBeGreaterThan(0);
-    expect(doc.issues.every((issue) => issue.severity === 'warn')).toBe(true);
   });
 
   test('a clean criteria.yaml exits 0 with no issues', () => {
