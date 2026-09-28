@@ -2,9 +2,10 @@
 // Under --json stdout carries exactly one JSON document (the runEvals result as-is); warnings
 // and errors go to stderr. SIGINT aborts the run: partial results are still printed, with
 // summary.aborted true, and the exit code is 130 (root DECISION C5).
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import {
   createEvents,
+  loadCases,
   LOCK_FILE,
   readLockOrNull,
   runEvals,
@@ -68,6 +69,16 @@ function render(result: RunEvalsResult): string {
   return lines.join('\n');
 }
 
+// evals/cases/pending/ is where promote.ts (dh8.3) writes auto-promoted cases; the J1
+// loader's default evals/cases/*.jsonl glob never recurses into it (docs/contracts/j7.md
+// "Promotion"), so a case sitting there is otherwise invisible until `vet cases review`
+// (mol-p4a.1) moves it up a level. A missing pending/ directory (the common case before any
+// promotion has happened) counts as 0, not an error.
+async function countPendingCases(casesPath: string): Promise<number> {
+  const result = await loadCases(join(casesPath, 'pending'));
+  return result.ok ? result.cases.length : 0;
+}
+
 async function runCommand(options: RunOptions & Readonly<Record<string, unknown>>): Promise<void> {
   const log = getLogger();
   const cwd = process.cwd();
@@ -97,6 +108,10 @@ async function runCommand(options: RunOptions & Readonly<Record<string, unknown>
   const stopRendering = renderEvents(events, { options });
   const criteriaPath = resolve(options.criteria ?? resolve(rootDir, 'evals/criteria.yaml'));
   const casesPath = resolve(options.cases ?? resolve(rootDir, 'evals/cases'));
+  const pendingCount = await countPendingCases(casesPath);
+  log.info(
+    `${String(pendingCount)} promoted case(s) pending review in ${join(casesPath, 'pending')} (run \`vet cases review\`)`,
+  );
   const cacheDir = resolve(rootDir, config.cacheDir);
   const startedAt = new Date().toISOString();
   let result: RunEvalsResult;
