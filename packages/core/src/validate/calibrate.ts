@@ -119,7 +119,8 @@ function scoreMax(criterion: Criterion): number {
 }
 
 /**
- * Per-case pass values, one per repeat: P(pass) for boolean/choice, the expected level for score.
+ * Per-case pass values, one per repeat: P(pass) for boolean/choice (P(yes) when a boolean arrives
+ * as a yes/no/escape choice), the expected level for score.
  * `pass_when_false` inverts (1 − p, or max − E). Repeats without an answer for the criterion are
  * skipped.
  */
@@ -136,7 +137,11 @@ export function repeatValues(
       const answer = response.answers[criterion.id];
       let v: number | undefined;
       if (answer?.type === 'boolean') v = answer.probability;
-      else if (answer?.type === 'choice') {
+      else if (answer?.type === 'choice' && criterion.type === 'boolean') {
+        // Boolean criteria are asked as a {yes, no, escape} choice: P(pass) is P(yes), as in
+        // run.ts decide.
+        v = answer.probabilities['yes'] ?? 0;
+      } else if (answer?.type === 'choice') {
         v = Object.entries(answer.probabilities)
           .filter(([key]) => passWhen.has(key))
           .reduce((sum, [, p]) => sum + p, 0);

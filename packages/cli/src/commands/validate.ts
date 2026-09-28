@@ -44,7 +44,6 @@ import {
   CEV_ERROR_CODES,
   safeParseJson,
   VetError,
-  type Answer,
   type Case,
   type Criterion,
   type GauntletOutcome,
@@ -280,14 +279,6 @@ async function loadCorpora(dir: string, events: Events): Promise<Corpora> {
 
 type Repeats = Map<string, JudgeResponse[]>;
 
-// Boolean criteria are asked as a {yes, no, escape} choice; calibrate reads P(yes) as a boolean.
-function calibrationAnswer(criterion: Criterion, answer: Answer): Answer {
-  if (criterion.type === 'boolean' && answer.type === 'choice') {
-    return { type: 'boolean', probability: answer.probabilities['yes'] ?? 0 };
-  }
-  return answer;
-}
-
 function addRepeats(
   into: Repeats,
   criterion: Criterion,
@@ -297,7 +288,7 @@ function addRepeats(
   for (const v of verdicts) {
     if (v.criterionId !== criterion.id || v.status !== 'ok' || v.answer === undefined) continue;
     const response: JudgeResponse = {
-      answers: { [criterion.id]: calibrationAnswer(criterion, v.answer) },
+      answers: { [criterion.id]: v.answer },
       usage: { inputTokens: 0, outputTokens: 0 },
       model: v.model,
     };
