@@ -19,6 +19,12 @@ const judgeEndpoint = {
 
 const minimal: VetkitConfig = { judge: judgeEndpoint };
 
+// Feeds defineConfig shapes its static type rejects, as a JS config file would at load time.
+function defineUntyped(input: unknown): unknown {
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  return defineConfig(input as VetkitConfig);
+}
+
 function fakeJudge(): JudgeV1 {
   return {
     specVersion: 'v1',
@@ -77,32 +83,28 @@ describe('defineConfig / validateConfig', () => {
   });
 
   it('rejects a config without judge, naming judge (never a default provider)', () => {
-    const issues = issuesOf(() => defineConfig({} as unknown as VetkitConfig));
+    const issues = issuesOf(() => defineUntyped({}));
     expect(issues.map((i) => i.pointer)).toContain('/judge');
   });
 
   it('rejects watch.sampleRate 1.5 at /watch/sampleRate', () => {
-    const issues = issuesOf(() =>
-      defineConfig({ ...minimal, watch: { sampleRate: 1.5 } } as unknown as VetkitConfig),
-    );
+    const issues = issuesOf(() => defineUntyped({ ...minimal, watch: { sampleRate: 1.5 } }));
     expect(issues.map((i) => i.pointer)).toContain('/watch/sampleRate');
   });
 
   it('rejects an unknown top-level key (typo protection)', () => {
-    const issues = issuesOf(() =>
-      defineConfig({ ...minimal, judeg: 'x' } as unknown as VetkitConfig),
-    );
+    const issues = issuesOf(() => defineUntyped({ ...minimal, judeg: 'x' }));
     expect(issues.map((i) => i.pointer)).toContain('/judeg');
   });
 
   it('lists an issue for every invalid top-level field, each with a message', () => {
     const issues = issuesOf(() =>
-      defineConfig({
+      defineUntyped({
         ...minimal,
         cacheDir: 3,
         gate: { allowUnpinned: 'yes' },
         typo: true,
-      } as unknown as VetkitConfig),
+      }),
     );
     const pointers = issues.map((i) => i.pointer);
     expect(pointers).toContain('/cacheDir');
@@ -113,7 +115,7 @@ describe('defineConfig / validateConfig', () => {
 
   it('puts every pointer and message into the error message', () => {
     try {
-      defineConfig({ ...minimal, watch: { sampleRate: 1.5 } } as unknown as VetkitConfig);
+      defineUntyped({ ...minimal, watch: { sampleRate: 1.5 } });
     } catch (error) {
       expect(String(error)).toContain('/watch/sampleRate');
       return;
@@ -123,7 +125,7 @@ describe('defineConfig / validateConfig', () => {
 
   it('rejects a judge endpoint missing model', () => {
     const { model: _model, ...noModel } = judgeEndpoint;
-    const issues = issuesOf(() => defineConfig({ judge: noModel } as unknown as VetkitConfig));
+    const issues = issuesOf(() => defineUntyped({ judge: noModel }));
     expect(issues.some((i) => i.pointer.startsWith('/judge'))).toBe(true);
   });
 });
@@ -192,7 +194,8 @@ describe('resolveConfig', () => {
   });
 
   it('rejects a judge adapter object without doJudge', () => {
-    const { doJudge: _doJudge, ...broken } = fakeJudge();
+    const { specVersion, id, capabilities } = fakeJudge();
+    const broken = { specVersion, id, capabilities };
     const issues = issuesOf(() => resolveConfig({ judge: broken }));
     expect(issues.map((i) => i.pointer)).toContain('/judge');
   });
