@@ -28,6 +28,8 @@ export const BUILD_ORDER = [
   'core',
   'judge-jev',
   'generator-openai-compatible',
+  'sink-otel',
+  'sink-langfuse',
   'cli',
 ] as const;
 const packageRoots = BUILD_ORDER.map((name) => join(repoRoot, 'packages', name));
