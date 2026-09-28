@@ -351,3 +351,60 @@ export function createJevJudge(opts: CreateJevJudgeOptions): JudgeV1 {
     },
   };
 }
+
+/** A judge endpoint as a config file declares it: a preset, or a baseURL and a model. */
+export interface JevEndpoint {
+  readonly preset?: string;
+  readonly baseURL?: string;
+  readonly model?: string;
+  readonly accountId?: string;
+  readonly apiKeyEnv?: string;
+}
+
+function isPresetName(name: string): name is JevPresetName {
+  return Object.hasOwn(JEV_PRESETS, name);
+}
+
+function invalidEndpoint(message: string): VetError {
+  return new VetError('CONFIG_INVALID', message);
+}
+
+/**
+ * Builds the judge for a config-declared endpoint, owning every per-preset rule so callers
+ * stay vendor-neutral. Throws VetError CONFIG_INVALID on an unknown preset, a preset missing
+ * what it needs, or no preset without both baseURL and model.
+ */
+export function createJevJudgeFromEndpoint(
+  endpoint: JevEndpoint,
+  extra: { readonly apiKey: string; readonly providerOptions?: JevProviderOptions },
+): JudgeV1 {
+  const { preset, baseURL, model } = endpoint;
+  if (preset === undefined) {
+    if (baseURL === undefined || model === undefined) {
+      throw invalidEndpoint('judge endpoint needs a preset, or a baseURL and a model');
+    }
+    return createJevJudge({ baseURL, model, ...extra });
+  }
+  if (!isPresetName(preset)) {
+    throw invalidEndpoint(
+      `unknown judge preset "${preset}"; known: ${Object.keys(JEV_PRESETS).join(', ')}`,
+    );
+  }
+  if (preset === 'cloudflare') {
+    if (endpoint.accountId === undefined) {
+      throw invalidEndpoint('judge preset "cloudflare" needs accountId');
+    }
+    return createJevJudge({
+      preset,
+      accountId: endpoint.accountId,
+      ...(endpoint.apiKeyEnv === undefined ? {} : { apiKeyEnv: endpoint.apiKeyEnv }),
+      ...extra,
+    });
+  }
+  return createJevJudge({
+    preset,
+    ...(baseURL === undefined ? {} : { baseURL }),
+    ...(model === undefined ? {} : { model }),
+    ...extra,
+  });
+}

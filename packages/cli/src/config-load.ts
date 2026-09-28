@@ -5,12 +5,7 @@
 // its key read from the env var the config names (DECISION: Architecture as presented).
 import { dirname, resolve } from 'node:path';
 import { readEnvName, resolveConfig, type ResolvedConfig } from '@vetkit/core';
-import {
-  createJevJudge,
-  JEV_PRESETS,
-  type JevPresetName,
-  type JevProviderOptions,
-} from '@vetkit/judge-jev';
+import { createJevJudgeFromEndpoint, type JevProviderOptions } from '@vetkit/judge-jev';
 import { CEV_ERROR_CODES, VetError, type JudgeEndpoint, type JudgeV1 } from '@vetkit/spec';
 import { loadConfig } from 'c12';
 
@@ -47,10 +42,6 @@ export interface LoadedVetConfig {
 const CONFIG_NAME = 'vetkit';
 const JUDGE_KIND = 'typesafe-compatible';
 const EXTENSIONS = '{ts,mts,cts,js,mjs,cjs,json}';
-
-function isPreset(name: string): name is JevPresetName {
-  return Object.hasOwn(JEV_PRESETS, name);
-}
 
 function isProviderOptions(value: unknown): value is JevProviderOptions {
   if (typeof value !== 'object' || value === null || !('gateway' in value)) return false;
@@ -95,34 +86,7 @@ function judgeFromEndpoint(endpoint: JudgeEndpoint, apiKey: string): JudgeV1 {
     throw invalid('judge providerOptions must be { gateway: { zeroDataRetention, only } }');
   }
   const extra = { apiKey, ...(providerOptions === undefined ? {} : { providerOptions }) };
-  const { preset, baseURL, model } = endpoint;
-  if (preset === undefined) {
-    if (baseURL === undefined || model === undefined) {
-      throw invalid('judge endpoint needs a preset, or a baseURL and a model');
-    }
-    return createJevJudge({ baseURL, model, ...extra });
-  }
-  if (!isPreset(preset)) {
-    throw invalid(
-      `unknown judge preset "${preset}"; known: ${Object.keys(JEV_PRESETS).join(', ')}`,
-    );
-  }
-  if (preset === 'cloudflare') {
-    if (endpoint.accountId === undefined)
-      throw invalid('judge preset "cloudflare" needs accountId');
-    return createJevJudge({
-      preset,
-      accountId: endpoint.accountId,
-      apiKeyEnv: endpoint.apiKeyEnv,
-      ...extra,
-    });
-  }
-  return createJevJudge({
-    preset,
-    ...(baseURL === undefined ? {} : { baseURL }),
-    ...(model === undefined ? {} : { model }),
-    ...extra,
-  });
+  return createJevJudgeFromEndpoint(endpoint, extra);
 }
 
 /** Loads, validates and resolves vetkit.config.*; throws VetError CONFIG_INVALID on any problem. */
