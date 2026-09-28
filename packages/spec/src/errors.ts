@@ -62,6 +62,9 @@ export const CEV_ERROR_CODES = {
   OTLP_PARSE: 'OTLP_PARSE',
   OTLP_UNSUPPORTED_CONTENT_TYPE: 'OTLP_UNSUPPORTED_CONTENT_TYPE',
   SOURCE_EMPTY: 'SOURCE_EMPTY',
+  // mol-p4a.3: `vet rerun` finds no persisted run record (<cacheDir>/runs/latest.json,
+  // mol-p4a.16) to re-judge from; exits 2 (cli errors.ts).
+  RUN_NOT_FOUND: 'RUN_NOT_FOUND',
 } as const;
 
 export type CevErrorCode = (typeof CEV_ERROR_CODES)[keyof typeof CEV_ERROR_CODES];
