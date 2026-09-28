@@ -379,21 +379,17 @@ describe('vet run CEV_JUDGE_BASE_URL forced judge failure (bug F3/F4, gate 7lg A
     cpSync(fixtureEvals, join(dir, 'evals'), { recursive: true });
     writeFileSync(join(dir, 'vetkit.config.ts'), ENDPOINT_CONFIG);
     const otelOut = join(dir, 'otel.jsonl');
-    const result = spawnSync(
-      process.execPath,
-      [binPath, 'run', '--sink', 'otel', '--json'],
-      {
-        cwd: dir,
-        env: {
-          ...process.env,
-          NO_COLOR: '1',
-          FAKE_OTEL_OUT: otelOut,
-          FIXTURE_JUDGE_KEY: 'sk-fixture-do-not-print-baseurl',
-          CEV_JUDGE_BASE_URL: 'http://127.0.0.1:9',
-        },
-        encoding: 'utf8',
+    const result = spawnSync(process.execPath, [binPath, 'run', '--sink', 'otel', '--json'], {
+      cwd: dir,
+      env: {
+        ...process.env,
+        NO_COLOR: '1',
+        FAKE_OTEL_OUT: otelOut,
+        FIXTURE_JUDGE_KEY: 'sk-fixture-do-not-print-baseurl',
+        CEV_JUDGE_BASE_URL: 'http://127.0.0.1:9',
       },
-    );
+      encoding: 'utf8',
+    });
     expect(result.status).toBe(0);
     expect(parseJson(result.stdout)).toMatchObject({ exitCode: 0 });
     const received = readLines(otelOut);
