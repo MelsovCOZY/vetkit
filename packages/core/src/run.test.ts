@@ -17,8 +17,11 @@ import {
 } from '@vetkit/spec';
 import type { Limiter } from './judge/pacing.ts';
 import { createEvents, EVENT_NAMES, type EventMap, type Events } from './events.ts';
+import { loadCriteria } from './criteria/load.ts';
 import { evaluateGate } from './gate.ts';
 import { runEvals, runJudge, type RunConfig, type RunVerdict } from './run.ts';
+import { calibrate, type CalibrationLabel } from './validate/calibrate.ts';
+import { buildLock, readLock, writeLockAtomic } from './validate/lock.ts';
 
 // ---------- fixtures ----------
 
@@ -947,5 +950,67 @@ describe('gate refusal before any judge call (q4q.11)', () => {
 
     expect(doJudge).toHaveBeenCalledTimes(1);
     expect(out.exitCode).toBe(0);
+  });
+});
+
+// ---------- one threshold scale across calibrate, lock and run (mol-q4q.14) ----------
+
+describe('pass_when_false threshold scale: calibrate → lock → runEvals', () => {
+  test('a pass_when_false criterion calibrated at t ≠ 0.5 passes exactly the cases on the pass side of t', async () => {
+    // Not rude (label pass): P(yes) 0.1 → pass value 0.9. Rude (label fail): P(yes) 0.5 → pass
+    // value 0.5. Any t in (0.5, 0.9] separates them, so the fitted t sits well above 0.5.
+    const cases: CaseLine[] = [];
+    const labels: CalibrationLabel[] = [];
+    const script: Script = {};
+    const repeats = new Map<string, JudgeResponse[]>();
+    for (let i = 0; i < 120; i += 1) {
+      const pass = i % 2 === 0;
+      const id = `c${String(i)}`;
+      const state = `S${String(i)}`;
+      const answer = yes(pass ? 0.1 : 0.5);
+      cases.push({ id, input: { state } });
+      labels.push({ caseId: id, label: pass ? 'pass' : 'fail' });
+      script[state] = { 'is-rude': answer };
+      const response: JudgeResponse = {
+        answers: { 'is-rude': answer },
+        usage: { inputTokens: 1, outputTokens: 0 },
+        model: { requested: 'fake/jev', resolved: 'fake/jev-1', transport: 'fake', pinned: true },
+      };
+      repeats.set(id, [response, response, response]);
+    }
+    const paths = await suite([NEG_YAML], cases);
+    const loaded = await loadCriteria(paths.criteriaPath);
+    if (!loaded.ok) throw new Error('criteria did not load');
+    const criterion = loaded.criteria[0];
+    if (criterion === undefined) throw new Error('no criterion');
+    const fullCases = cases.map((c) => ({ provenance: {}, tags: [], ...c }));
+
+    const calibration = calibrate(criterion, labels, repeats, fullCases);
+    const t = calibration.threshold;
+    expect(t).toBeDefined();
+    expect(Math.abs((t ?? 0.5) - 0.5)).toBeGreaterThan(0.1);
+    expect(calibration.tpr).toBe(1);
+    expect(calibration.tnr).toBe(1);
+
+    const lockPath = join(await mkdtemp(join(tmpdir(), 'vetkit-lock-')), 'criteria.lock.json');
+    const built = buildLock({
+      model: { requested: 'fake/jev', resolved: 'fake/jev-1', transport: 'fake', pinned: true },
+      criteria: [criterion],
+      cases: fullCases,
+      results: { 'is-rude': { calibration, gauntlet: GAUNTLET_PASS } },
+    });
+    await writeLockAtomic(lockPath, built);
+    const lock = await readLock(lockPath);
+    if ('error' in lock) throw lock.error;
+    expect(lock.criteria['is-rude']?.threshold).toBe(t);
+
+    const { judge } = scriptedJudge(script);
+    const out = await runEvals({ config: { ...paths, judge }, lock });
+
+    for (const { caseId, label } of labels) {
+      const v = find(out.results, caseId, 'is-rude');
+      expect(v?.threshold).toBe(t);
+      expect({ caseId, pass: v?.pass }).toEqual({ caseId, pass: label === 'pass' });
+    }
   });
 });

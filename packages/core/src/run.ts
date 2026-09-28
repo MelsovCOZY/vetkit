@@ -4,7 +4,7 @@
 //
 // Pass semantics (DECISION: escape and pass semantics): boolean criteria come back as a 3-way
 // choice {yes, no, escape}; p = P(yes), P(escape) >= escapeThreshold gives not_applicable,
-// pass = p >= threshold (pass_when_true) or p < threshold (pass_when_false). Choice passes when
+// pass = p >= threshold (pass_when_true) or 1-p >= threshold (pass_when_false). Choice passes when
 // the chosen label is in passWhen. Score passes when score >= threshold. Only boolean and choice
 // criteria gate (eval-quality brief §5.2 item 14); code-graded criteria never reach the judge.
 import {
@@ -220,8 +220,10 @@ function decide(
   } else {
     return badResponse(base);
   }
-  const pass = criterion.polarity === 'pass_when_true' ? p >= threshold : p < threshold;
-  return { ...base, threshold, pass, borderline: band(p) };
+  // Thresholds live on the pass-value scale calibrate fits on: P(yes), or 1 − P(yes) for
+  // pass_when_false (validate/calibrate.ts repeatValues).
+  const value = criterion.polarity === 'pass_when_true' ? p : 1 - p;
+  return { ...base, threshold, pass: value >= threshold, borderline: band(value) };
 }
 
 /** Pacing notes (throttle, retry) ride on the diag channel. */
