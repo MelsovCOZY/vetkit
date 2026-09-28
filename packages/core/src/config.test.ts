@@ -243,6 +243,30 @@ describe('resolveConfig', () => {
     expect(config.generator).toEqual(generator);
   });
 
+  it('resolveConfig keeps generator.structured', () => {
+    const generator = {
+      kind: 'openai-compatible',
+      baseURL: 'https://gen.example/v1',
+      apiKeyEnv: 'MY_GEN_KEY',
+      model: 'gen-model',
+      structured: 'json_object',
+    } as const;
+    expect(resolveConfig({ ...minimal, generator }).config.generator).toEqual(generator);
+  });
+
+  it('validateConfig reports /generator/structured for an unknown value', () => {
+    const generator = {
+      kind: 'openai-compatible',
+      baseURL: 'https://gen.example/v1',
+      apiKeyEnv: 'MY_GEN_KEY',
+      model: 'gen-model',
+      structured: 'tool',
+    };
+    const issues = validateConfig({ ...minimal, generator });
+    expect(issues.length).toBeGreaterThan(0);
+    expect(issues.some((i) => i.pointer.startsWith('/generator'))).toBe(true);
+  });
+
   it('rejects a judge string absent from the registry, never picking a default', () => {
     const issues = issuesOf(() => resolveConfig({ judge: 'jev' }));
     expect(issues.map((i) => i.pointer)).toContain('/judge');
