@@ -26,6 +26,7 @@ const fakeJudge: JudgeV1 = {
   doJudge: () =>
     Promise.resolve({
       answers: {},
+      usage: { inputTokens: 1, outputTokens: 1 },
       model: { requested: 'm', resolved: 'm', transport: 'inline', pinned: true },
     }),
 };
