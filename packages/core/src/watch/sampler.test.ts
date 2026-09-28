@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { CEV_ERROR_CODES, VetError, type NormalizedTrace } from '@vetkit/spec';
+import { CEV_ERROR_CODES, safeParseJson, VetError, type NormalizedTrace } from '@vetkit/spec';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { createSampler, hashToUnit } from './sampler.ts';
 import type { InclusionRecord } from './types.ts';
@@ -20,7 +20,10 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
-function trace(traceId: string, overrides: Partial<NormalizedTrace['completeness']> = {}): NormalizedTrace {
+function trace(
+  traceId: string,
+  overrides: Partial<NormalizedTrace['completeness']> = {},
+): NormalizedTrace {
   return {
     traceId,
     spans: [],
@@ -40,7 +43,11 @@ async function lines(file: string): Promise<InclusionRecord[]> {
   return text
     .split('\n')
     .filter((l) => l !== '')
-    .map((l) => JSON.parse(l) as InclusionRecord);
+    .map((l) => {
+      const parsed = safeParseJson<InclusionRecord>(l, {});
+      if (!parsed.ok) throw parsed.error;
+      return parsed.value;
+    });
 }
 
 describe('hashToUnit', () => {
@@ -117,7 +124,9 @@ describe('createSampler', () => {
 
   test("a trace with completeness.missingParents=true is 'filtered:incomplete', never sampled", () => {
     const sampler = createSampler({ sampleRate: 1, inclusionPath });
-    const { sampled, record } = sampler.decide(trace('t-missing-parents', { missingParents: true }));
+    const { sampled, record } = sampler.decide(
+      trace('t-missing-parents', { missingParents: true }),
+    );
     expect(sampled).toBe(false);
     expect(record.reason).toBe('filtered:incomplete');
   });
