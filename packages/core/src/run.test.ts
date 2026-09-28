@@ -1165,3 +1165,45 @@ describe('choice threshold scale matches calibrate repeatValues (DECISION 2026-0
     expect(find(out.results, 'c-rude', 'tone3')).toMatchObject({ threshold: 0.5, pass: false });
   });
 });
+
+// ---------- disabled criteria (mol-e3g) ----------
+
+describe('disabled criteria (enabled: false)', () => {
+  const DISABLED_YAML = NEG_YAML.replace(
+    '    channel: safety\n',
+    '    channel: safety\n    enabled: false\n',
+  );
+
+  test('are left out of the judge request and reported not_applicable with cause disabled', async () => {
+    const paths = await suite([BOOL_YAML, DISABLED_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
+    const { judge, doJudge } = scriptedJudge({ S1: { 'answers-question': yes(0.9) } });
+    const out = await runEvals({ config: { ...paths, judge } });
+
+    expect(Object.keys(doJudge.mock.calls[0]?.[0].questions ?? {})).toEqual(['answers-question']);
+    expect(find(out.results, 'c1', 'is-rude')).toMatchObject({
+      status: 'not_applicable',
+      cause: 'disabled',
+    });
+    expect(out.exitCode).toBe(0);
+  });
+
+  test('a disabled verdict validates against verdictSchema', async () => {
+    const paths = await suite([BOOL_YAML, DISABLED_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
+    const { judge } = scriptedJudge({ S1: { 'answers-question': yes(0.9) } });
+    const out = await runEvals({ config: { ...paths, judge } });
+
+    const v = find(out.results, 'c1', 'is-rude');
+    const r = validateJson(v, verdictSchema);
+    expect(r.ok ? [] : r.error.cause).toEqual([]);
+  });
+
+  test('--gate does not demand calibration for a disabled criterion', async () => {
+    const paths = await suite([BOOL_YAML, DISABLED_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
+    const { judge } = scriptedJudge({ S1: { 'answers-question': yes(0.9) } });
+    const lock = lockOf({ 'answers-question': lockCriterion() });
+    const out = await runEvals({ config: { ...paths, judge, gate: true }, lock });
+
+    expect(out.gateReasons).toEqual([]);
+    expect(out.exitCode).toBe(0);
+  });
+});

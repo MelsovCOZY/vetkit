@@ -119,3 +119,11 @@ describe('vet bin: validate and check (q4q.6)', () => {
     expect(result.stdout).toMatch(/--ci\b/);
   });
 });
+
+describe('vet bin: criteria (mol-e3g)', () => {
+  test('--help lists the criteria command', () => {
+    const result = runBin(['--help']);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toMatch(/^\s+criteria\s/m);
+  });
+});

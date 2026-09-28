@@ -361,3 +361,27 @@ describe('@vetkit/core lock exports (q4q.6)', () => {
     expect(datasetHash([])).toMatch(/^[0-9a-f]{64}$/);
   });
 });
+
+import {
+  formatCriteriaDocument,
+  markUncalibrated,
+  parseCriteriaDocument,
+  removeCriterion,
+  removeLockEntry,
+  setEnabled,
+} from './index.ts';
+
+describe('@vetkit/core criteria edit exports (mol-e3g)', () => {
+  it('re-exports the criteria edit functions', () => {
+    for (const fn of [
+      formatCriteriaDocument,
+      markUncalibrated,
+      parseCriteriaDocument,
+      removeCriterion,
+      removeLockEntry,
+      setEnabled,
+    ]) {
+      expect(typeof fn).toBe('function');
+    }
+  });
+});
