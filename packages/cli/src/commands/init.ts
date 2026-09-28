@@ -266,10 +266,14 @@ async function generateCommand(options: InitOptions & { source: string }): Promi
 
   // Additive: only an `otlp:`-sourced run carries a summary (source.id 'otlp/file' or
   // 'otlp/receiver'); every other --source keeps emit()'s existing {criteria, cases, report}
-  // document unchanged.
+  // document unchanged. J5 gate (mol-pij.15): also written to <out>/summary.json, since a
+  // caller scripting on the written directory (not stdout) needs it there too.
   const summary = source.id.startsWith('otlp/')
     ? buildOtlpSummary(collectedTraces, result)
     : undefined;
+  if (summary !== undefined) {
+    await writeAtomic(join(out, 'summary.json'), JSON.stringify(summary));
+  }
   emit(
     summary === undefined ? result : { ...result, summary },
     () =>
