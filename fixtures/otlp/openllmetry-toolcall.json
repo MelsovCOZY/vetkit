@@ -1,0 +1,188 @@
+{
+  "_source": "traceloop/openllmetry semconv manifest gen-ai-dev/1.42.0-dev (github.com/traceloop/openllmetry issue #3515) -- llm.prompts/completions.{n}.content as a JSON-encoded MessagePart[] carrying tool_call/tool_call_response (mol-pij.14; dialect module itself not owned by this bead)",
+  "resourceSpans": [
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "vet-demo"
+            }
+          }
+        ]
+      },
+      "scopeSpans": [
+        {
+          "scope": {
+            "name": "vet-demo-instrumentation"
+          },
+          "spans": [
+            {
+              "traceId": "00000000000000000000000000000029",
+              "spanId": "000000000000002a",
+              "name": "handle_chat_request",
+              "kind": 1,
+              "startTimeUnixNano": "1700000000000000000",
+              "endTimeUnixNano": "1700000001000000000",
+              "attributes": []
+            },
+            {
+              "traceId": "00000000000000000000000000000029",
+              "spanId": "000000000000002b",
+              "parentSpanId": "000000000000002a",
+              "name": "chat-turn-1",
+              "kind": 1,
+              "startTimeUnixNano": "1700000001000000000",
+              "endTimeUnixNano": "1700000002000000000",
+              "attributes": [
+                {
+                  "key": "traceloop.span.kind",
+                  "value": {
+                    "stringValue": "llm"
+                  }
+                },
+                {
+                  "key": "llm.request.type",
+                  "value": {
+                    "stringValue": "chat"
+                  }
+                },
+                {
+                  "key": "llm.prompts.0.role",
+                  "value": {
+                    "stringValue": "system"
+                  }
+                },
+                {
+                  "key": "llm.prompts.0.content",
+                  "value": {
+                    "stringValue": "You are a helpful assistant with access to a get_weather tool."
+                  }
+                },
+                {
+                  "key": "llm.prompts.1.role",
+                  "value": {
+                    "stringValue": "user"
+                  }
+                },
+                {
+                  "key": "llm.prompts.1.content",
+                  "value": {
+                    "stringValue": "What is the weather in Paris?"
+                  }
+                },
+                {
+                  "key": "llm.completions.0.role",
+                  "value": {
+                    "stringValue": "assistant"
+                  }
+                },
+                {
+                  "key": "llm.completions.0.content",
+                  "value": {
+                    "stringValue": "[{\"type\":\"text\",\"content\":\"I'll check the weather in Paris for you.\"},{\"type\":\"tool_call\",\"id\":\"call_1\",\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"Paris\\\"}\"}]"
+                  }
+                }
+              ]
+            },
+            {
+              "traceId": "00000000000000000000000000000029",
+              "spanId": "000000000000002c",
+              "parentSpanId": "000000000000002b",
+              "name": "get_weather",
+              "kind": 1,
+              "startTimeUnixNano": "1700000002000000000",
+              "endTimeUnixNano": "1700000003000000000",
+              "attributes": [
+                {
+                  "key": "traceloop.span.kind",
+                  "value": {
+                    "stringValue": "tool"
+                  }
+                },
+                {
+                  "key": "traceloop.entity.name",
+                  "value": {
+                    "stringValue": "get_weather"
+                  }
+                },
+                {
+                  "key": "traceloop.entity.input",
+                  "value": {
+                    "stringValue": "{\"city\":\"Paris\"}"
+                  }
+                },
+                {
+                  "key": "traceloop.entity.output",
+                  "value": {
+                    "stringValue": "{\"temp_c\":18,\"condition\":\"cloudy\"}"
+                  }
+                }
+              ]
+            },
+            {
+              "traceId": "00000000000000000000000000000029",
+              "spanId": "000000000000002d",
+              "parentSpanId": "000000000000002c",
+              "name": "chat-turn-2",
+              "kind": 1,
+              "startTimeUnixNano": "1700000003000000000",
+              "endTimeUnixNano": "1700000004000000000",
+              "attributes": [
+                {
+                  "key": "traceloop.span.kind",
+                  "value": {
+                    "stringValue": "llm"
+                  }
+                },
+                {
+                  "key": "llm.request.type",
+                  "value": {
+                    "stringValue": "chat"
+                  }
+                },
+                {
+                  "key": "llm.prompts.0.role",
+                  "value": {
+                    "stringValue": "tool"
+                  }
+                },
+                {
+                  "key": "llm.prompts.0.content",
+                  "value": {
+                    "stringValue": "[{\"type\":\"tool_call_response\",\"id\":\"call_1\",\"response\":\"{\\\"temp_c\\\":18,\\\"condition\\\":\\\"cloudy\\\"}\"}]"
+                  }
+                },
+                {
+                  "key": "llm.completions.0.role",
+                  "value": {
+                    "stringValue": "assistant"
+                  }
+                },
+                {
+                  "key": "llm.completions.0.content",
+                  "value": {
+                    "stringValue": "It is 18 degrees Celsius and cloudy in Paris."
+                  }
+                },
+                {
+                  "key": "gen_ai.usage.prompt_tokens",
+                  "value": {
+                    "intValue": 120
+                  }
+                },
+                {
+                  "key": "gen_ai.usage.completion_tokens",
+                  "value": {
+                    "intValue": 45
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,146 @@
+{
+  "_source": "Vercel AI SDK telemetry docs, content/docs/03-ai-sdk-core/60-telemetry.mdx @ 2026-09-25 (github.com/vercel/ai) -- ai.response.toolCalls / ai.prompt.messages {type:\"tool-result\"} content-part round trip (mol-pij.14)",
+  "resourceSpans": [
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "vet-demo"
+            }
+          }
+        ]
+      },
+      "scopeSpans": [
+        {
+          "scope": {
+            "name": "vet-demo-instrumentation"
+          },
+          "spans": [
+            {
+              "traceId": "0000000000000000000000000000002e",
+              "spanId": "000000000000002f",
+              "name": "handle_chat_request",
+              "kind": 1,
+              "startTimeUnixNano": "1700000000000000000",
+              "endTimeUnixNano": "1700000001000000000",
+              "attributes": []
+            },
+            {
+              "traceId": "0000000000000000000000000000002e",
+              "spanId": "0000000000000030",
+              "parentSpanId": "000000000000002f",
+              "name": "chat-turn-1",
+              "kind": 1,
+              "startTimeUnixNano": "1700000001000000000",
+              "endTimeUnixNano": "1700000002000000000",
+              "attributes": [
+                {
+                  "key": "ai.operationId",
+                  "value": {
+                    "stringValue": "ai.generateText.doGenerate"
+                  }
+                },
+                {
+                  "key": "ai.prompt.messages",
+                  "value": {
+                    "stringValue": "[{\"role\":\"system\",\"content\":\"You are a helpful assistant with access to a get_weather tool.\"},{\"role\":\"user\",\"content\":\"What is the weather in Paris?\"}]"
+                  }
+                },
+                {
+                  "key": "ai.response.text",
+                  "value": {
+                    "stringValue": "I'll check the weather in Paris for you."
+                  }
+                },
+                {
+                  "key": "ai.response.toolCalls",
+                  "value": {
+                    "stringValue": "[{\"toolCallId\":\"call_1\",\"toolName\":\"get_weather\",\"args\":\"{\\\"city\\\":\\\"Paris\\\"}\"}]"
+                  }
+                }
+              ]
+            },
+            {
+              "traceId": "0000000000000000000000000000002e",
+              "spanId": "0000000000000031",
+              "parentSpanId": "0000000000000030",
+              "name": "get_weather",
+              "kind": 1,
+              "startTimeUnixNano": "1700000002000000000",
+              "endTimeUnixNano": "1700000003000000000",
+              "attributes": [
+                {
+                  "key": "ai.operationId",
+                  "value": {
+                    "stringValue": "ai.toolCall"
+                  }
+                },
+                {
+                  "key": "ai.toolCall.name",
+                  "value": {
+                    "stringValue": "get_weather"
+                  }
+                },
+                {
+                  "key": "ai.toolCall.args",
+                  "value": {
+                    "stringValue": "{\"city\":\"Paris\"}"
+                  }
+                },
+                {
+                  "key": "ai.toolCall.result",
+                  "value": {
+                    "stringValue": "{\"temp_c\":18,\"condition\":\"cloudy\"}"
+                  }
+                }
+              ]
+            },
+            {
+              "traceId": "0000000000000000000000000000002e",
+              "spanId": "0000000000000032",
+              "parentSpanId": "0000000000000031",
+              "name": "chat-turn-2",
+              "kind": 1,
+              "startTimeUnixNano": "1700000003000000000",
+              "endTimeUnixNano": "1700000004000000000",
+              "attributes": [
+                {
+                  "key": "ai.operationId",
+                  "value": {
+                    "stringValue": "ai.generateText.doGenerate"
+                  }
+                },
+                {
+                  "key": "ai.prompt.messages",
+                  "value": {
+                    "stringValue": "[{\"role\":\"tool\",\"content\":[{\"type\":\"tool-result\",\"toolCallId\":\"call_1\",\"toolName\":\"get_weather\",\"result\":\"{\\\"temp_c\\\":18,\\\"condition\\\":\\\"cloudy\\\"}\"}]}]"
+                  }
+                },
+                {
+                  "key": "ai.response.text",
+                  "value": {
+                    "stringValue": "It is 18 degrees Celsius and cloudy in Paris."
+                  }
+                },
+                {
+                  "key": "ai.usage.promptTokens",
+                  "value": {
+                    "intValue": 120
+                  }
+                },
+                {
+                  "key": "ai.usage.completionTokens",
+                  "value": {
+                    "intValue": 45
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

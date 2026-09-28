@@ -6,17 +6,11 @@
 // (root -> llm -> tool -> llm); fixtures/otlp/golden/ holds the expected normalized output this
 // test deep-equals against.
 //
-// DEVIATION (see BUILD report): the shared conversation uses only `text` MessageParts, never
-// `tool_call`/`tool_call_response`. genAiLegacyDialect
-// (packages/source-otlp/src/dialects/gen-ai/index.ts legacyIndexedMessages/legacyEventBody) has
-// no structured-part support at all, and neither openinference's llm.input_messages/
-// llm.output_messages reader nor vercel's ai.prompt.messages reader can produce a
-// `tool_call_response` part inside a span's own messages (openinference's TOOL-span mapping that
-// can is never reached — normalizeTrace only calls extractMessages on LLM spans). A literal
-// tool-call round trip identical across all five dialects is not achievable with the merged
-// dialect code, so this fixture set proves parity on the dimension the contract states most
-// strongly (identical `messages` and `tokens` across all five files) using content every dialect
-// can represent.
+// This corpus's shared conversation uses only `text` MessageParts, never `tool_call`/
+// `tool_call_response` (see mol-pij.9 BUILD report Discoveries) — genAiLegacyDialect,
+// openinference and vercel could not yet map their native tool-call attributes to those parts.
+// That gap is bead mol-pij.14: a second corpus below (TOOLCALL_DIALECT_FILES) carries the same
+// conversation with a real tool_call/tool_call_response round trip, proving that parity too.
 
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -39,6 +33,17 @@ const DIALECT_FILES = [
   'openinference',
   'openllmetry',
   'vercel',
+] as const;
+
+// pij.14: a second corpus, one tool-call conversation (assistant tool_call -> tool
+// tool_call_response -> final assistant text) per dialect, alongside the text-only corpus above
+// (kept as-is). Same shared tokens.json (120/45/165) since the token attributes are unchanged.
+const TOOLCALL_DIALECT_FILES = [
+  'gen_ai-latest-toolcall',
+  'gen_ai-legacy-toolcall',
+  'openinference-toolcall',
+  'openllmetry-toolcall',
+  'vercel-toolcall',
 ] as const;
 
 interface ProjectedSpan {
@@ -110,16 +115,16 @@ function project(trace: NormalizedTrace): Projected {
   };
 }
 
-async function readGoldenCases(): Promise<GoldenCase[]> {
-  const text = await readFile(join(FIXTURES_DIR, 'golden', 'cases.jsonl'), 'utf8');
+async function readGoldenCases(fileName: string): Promise<GoldenCase[]> {
+  const text = await readFile(join(FIXTURES_DIR, 'golden', fileName), 'utf8');
   return text
     .split('\n')
     .filter((line) => line.trim() !== '')
     .map((line) => unwrap(safeParseJson<GoldenCase>(line, GOLDEN_CASE_SCHEMA)));
 }
 
-async function readTokensGolden(): Promise<NormalizedTrace['tokens']> {
-  const text = await readFile(join(FIXTURES_DIR, 'golden', 'tokens.json'), 'utf8');
+async function readTokensGolden(fileName: string): Promise<NormalizedTrace['tokens']> {
+  const text = await readFile(join(FIXTURES_DIR, 'golden', fileName), 'utf8');
   return unwrap(safeParseJson<NormalizedTrace['tokens']>(text, TOKENS_SCHEMA));
 }
 
@@ -135,7 +140,7 @@ async function normalizeOneTrace(file: string): Promise<NormalizedTrace> {
 
 describe('fixture authorship is traceable', () => {
   test('every fixtures/otlp/*.json file has a non-empty top-level _source field', async () => {
-    for (const file of [...DIALECT_FILES, 'incomplete']) {
+    for (const file of [...DIALECT_FILES, ...TOOLCALL_DIALECT_FILES, 'incomplete']) {
       const text = await readFile(join(FIXTURES_DIR, `${file}.json`), 'utf8');
       const raw = unwrap(safeParseJson<Record<string, unknown>>(text, FIXTURE_FILE_SCHEMA));
       const source = raw['_source'];
@@ -145,44 +150,70 @@ describe('fixture authorship is traceable', () => {
   });
 });
 
+// Shared by both the text-only and the tool-call golden describes below: normalizes every file
+// in `files`, asserts messages/tokens are identical across all of them (golden diff 0), and
+// checks each file's full projection against its own per-file golden case.
+async function assertCrossDialectParity(
+  files: readonly string[],
+  casesFileName: string,
+  tokensFileName: string,
+): Promise<void> {
+  const [goldenCases, tokensGolden] = await Promise.all([
+    readGoldenCases(casesFileName),
+    readTokensGolden(tokensFileName),
+  ]);
+
+  const projected = new Map<string, Projected>();
+  for (const file of files) {
+    const trace = await normalizeOneTrace(file);
+    projected.set(file, project(trace));
+  }
+
+  const [firstFile, ...restFiles] = files;
+  if (firstFile === undefined) throw new Error('unreachable: files is non-empty');
+  const first = projected.get(firstFile);
+  if (first === undefined) throw new Error('unreachable');
+
+  // Cross-dialect parity: the same conversation normalizes to the same messages and the same
+  // token totals no matter which dialect encoded it (golden diff 0 across five dialects).
+  for (const file of restFiles) {
+    const entry = projected.get(file);
+    expect(entry?.messages).toEqual(first.messages);
+    expect(entry?.tokens).toEqual(first.tokens);
+  }
+  for (const file of files) {
+    expect(projected.get(file)?.tokens).toEqual(tokensGolden);
+  }
+
+  // Per-file golden: spans/kinds may legitimately differ by dialect (e.g. only openllmetry
+  // maps a tool span to Span.kind 'tool' via its spanKind hook), so each file is checked
+  // against its own golden entry rather than against the other four files.
+  for (const file of files) {
+    const golden = goldenCases.find((c) => c.file === file);
+    expect(golden, `no golden case for ${file}`).toBeDefined();
+    if (golden === undefined) continue;
+    expect(projected.get(file)).toEqual({
+      messages: golden.messages,
+      spans: golden.spans,
+      tokens: tokensGolden,
+    });
+  }
+}
+
 describe('golden fixtures: cross-dialect parity (root acceptance J5)', () => {
   test('all five dialect fixtures normalize to identical messages and tokens, and match their own golden spans/kinds', async () => {
-    const [goldenCases, tokensGolden] = await Promise.all([readGoldenCases(), readTokensGolden()]);
+    await assertCrossDialectParity(DIALECT_FILES, 'cases.jsonl', 'tokens.json');
+  });
+});
 
-    const projected = new Map<string, Projected>();
-    for (const file of DIALECT_FILES) {
-      const trace = await normalizeOneTrace(file);
-      projected.set(file, project(trace));
-    }
-
-    const [firstFile, ...restFiles] = DIALECT_FILES;
-    const first = projected.get(firstFile);
-    if (first === undefined) throw new Error('unreachable');
-
-    // Cross-dialect parity: the same conversation normalizes to the same messages and the same
-    // token totals no matter which dialect encoded it (golden diff 0 across five dialects).
-    for (const file of restFiles) {
-      const entry = projected.get(file);
-      expect(entry?.messages).toEqual(first.messages);
-      expect(entry?.tokens).toEqual(first.tokens);
-    }
-    for (const file of DIALECT_FILES) {
-      expect(projected.get(file)?.tokens).toEqual(tokensGolden);
-    }
-
-    // Per-file golden: spans/kinds may legitimately differ by dialect (e.g. only openllmetry
-    // maps a tool span to Span.kind 'tool' via its spanKind hook), so each file is checked
-    // against its own golden entry rather than against the other four files.
-    for (const file of DIALECT_FILES) {
-      const golden = goldenCases.find((c) => c.file === file);
-      expect(golden, `no golden case for ${file}`).toBeDefined();
-      if (golden === undefined) continue;
-      expect(projected.get(file)).toEqual({
-        messages: golden.messages,
-        spans: golden.spans,
-        tokens: tokensGolden,
-      });
-    }
+// pij.14: the same parity property, proven on a conversation that actually exercises tool_call /
+// tool_call_response parts (the text-only corpus above never does — see its DEVIATION note,
+// since resolved). Ids are each dialect's own native id (e.g. "call_1"), normalised by
+// normalizeTrace to tool_call_1 identically for all five, so the golden messages below use that
+// normalised id, not any dialect's native one.
+describe('golden fixtures: cross-dialect parity for a tool-call conversation (root acceptance J5, mol-pij.14)', () => {
+  test('all five dialect fixtures normalize a tool_call/tool_call_response round trip identically', async () => {
+    await assertCrossDialectParity(TOOLCALL_DIALECT_FILES, 'cases-toolcall.jsonl', 'tokens.json');
   });
 });
 
