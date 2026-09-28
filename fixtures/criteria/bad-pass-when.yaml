@@ -1,0 +1,13 @@
+criteria:
+  - id: tone
+    type: choice
+    instructions: Which tone does the reply take?
+    criteria:
+      polite: The reply is courteous.
+      rude: The reply is dismissive or insulting.
+    passWhen: [polite, friendly]
+    escape: The reply has no discernible tone.
+    polarity: pass_when_true
+    channel: quality
+    provenance:
+      traceIds: []

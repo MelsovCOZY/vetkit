@@ -1,0 +1,32 @@
+criteria:
+  - id: answers-question
+    type: boolean
+    instructions: |
+      Does the reply directly answer the user's question?
+    escape: The reply is empty or not in a readable language.
+    polarity: pass_when_true
+    channel: outcome
+    provenance:
+      traceIds: [trace-1]
+  - id: tone
+    type: choice
+    instructions: Which tone does the reply take?
+    criteria:
+      polite: The reply is courteous.
+      neutral: The reply is matter-of-fact.
+      rude: The reply is dismissive or insulting.
+    passWhen: [polite, neutral]
+    escape: The reply has no discernible tone.
+    polarity: pass_when_true
+    channel: quality
+    provenance:
+      traceIds: [trace-2, trace-3]
+      generator: hand-written
+  - id: helpfulness
+    type: score
+    instructions: How helpful is the reply?
+    criteria: [not helpful, somewhat helpful, very helpful]
+    polarity: pass_when_true
+    channel: quality
+    provenance:
+      traceIds: []
