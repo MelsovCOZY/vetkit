@@ -55,6 +55,7 @@ import {
   POSITION_SWAP_MAX_ORDERS,
 } from './index.ts';
 import { createOutbox } from './index.ts';
+import { gauntletParaphrase, gauntletPolarity } from './index.ts';
 
 describe('@vetkit/core package entry', () => {
   it('re-exports loadCriteria as a function', () => {
@@ -273,5 +274,10 @@ describe('@vetkit/core package entry', () => {
 
   it('re-exports createOutbox as a function', () => {
     expect(typeof createOutbox).toBe('function');
+  });
+
+  it('re-exports gauntletParaphrase and gauntletPolarity as functions', () => {
+    expect(typeof gauntletParaphrase).toBe('function');
+    expect(typeof gauntletPolarity).toBe('function');
   });
 });
