@@ -123,3 +123,14 @@ export type {
   LoadLabelsResult,
   ParseLabelsResult,
 } from './validate/labels.ts';
+
+export { createEvents, EVENT_NAMES } from './events.ts';
+export type {
+  DiagData,
+  DiagEvent,
+  DiagLevel,
+  EventMap,
+  EventName,
+  Events,
+  Listener,
+} from './events.ts';
