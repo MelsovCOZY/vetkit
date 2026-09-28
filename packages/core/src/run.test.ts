@@ -1063,3 +1063,105 @@ describe('score threshold scale matches calibrate repeatValues', () => {
     expect(find(out.results, 'c1', 'helpfulness')).toMatchObject({ threshold: 1.5, pass: false });
   });
 });
+
+// ---------- choice threshold scale: P(passWhen), 1 − P(passWhen) for pass_when_false (mol-q4q.16) ----------
+
+const TONE3_YAML = `  - id: tone3
+    type: choice
+    instructions: Which tone does the reply take?
+    criteria:
+      polite: The reply is courteous.
+      curt: The reply is short but not insulting.
+      rude: The reply is insulting.
+    passWhen: [polite]
+    escape: The reply has no tone.
+    polarity: pass_when_true
+    channel: quality
+    provenance: { traceIds: [] }
+`;
+
+function picked(choice: string, probabilities: Record<string, number>): Answer {
+  return { type: 'choice', choice, confidence: 0.5, probabilities };
+}
+
+describe('choice threshold scale matches calibrate repeatValues (DECISION 2026-09-28, q4q.14)', () => {
+  test('spread mass: argmax in passWhen but P(passWhen) below the threshold fails', async () => {
+    const paths = await suite([TONE3_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
+    const { judge } = scriptedJudge({
+      S1: { tone3: picked('polite', { polite: 0.4, curt: 0.3, rude: 0.3, escape: 0 }) },
+    });
+    const out = await runEvals({ config: { ...paths, judge } });
+
+    expect(find(out.results, 'c1', 'tone3')).toMatchObject({ threshold: 0.5, pass: false });
+  });
+
+  test('a lock threshold ≠ 0.5 is applied to P(passWhen), not to the argmax label', async () => {
+    const paths = await suite(
+      [TONE3_YAML],
+      [
+        { id: 'c-low', input: { state: 'S-low' } },
+        { id: 'c-lower', input: { state: 'S-lower' } },
+      ],
+    );
+    const { judge } = scriptedJudge({
+      // argmax rude, but P(polite) 0.35 clears 0.3.
+      'S-low': { tone3: picked('rude', { polite: 0.35, curt: 0.05, rude: 0.6, escape: 0 }) },
+      'S-lower': { tone3: picked('rude', { polite: 0.2, curt: 0.1, rude: 0.7, escape: 0 }) },
+    });
+    const lock = lockOf({ tone3: lockCriterion({ status: 'uncalibrated', threshold: 0.3 }) });
+    const out = await runEvals({ config: { ...paths, judge }, lock });
+
+    expect(find(out.results, 'c-low', 'tone3')).toMatchObject({ threshold: 0.3, pass: true });
+    expect(find(out.results, 'c-lower', 'tone3')).toMatchObject({ threshold: 0.3, pass: false });
+  });
+
+  test('borderline is judged on P(passWhen) against the lock tolerance', async () => {
+    const paths = await suite([TONE3_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
+    const { judge } = scriptedJudge({
+      S1: { tone3: picked('polite', { polite: 0.62, curt: 0.2, rude: 0.18, escape: 0 }) },
+    });
+    const lock = lockOf({
+      tone3: lockCriterion({ status: 'uncalibrated', threshold: 0.6, tolerance: 0.05 }),
+    });
+    const out = await runEvals({ config: { ...paths, judge }, lock });
+
+    expect(find(out.results, 'c1', 'tone3')).toMatchObject({ pass: true, borderline: true });
+  });
+
+  test('pass_when_false choice compares 1 − P(passWhen) to the threshold', async () => {
+    const yaml = TONE3_YAML.replace('pass_when_true', 'pass_when_false');
+    const paths = await suite(
+      [yaml],
+      [
+        { id: 'c-rare', input: { state: 'S-rare' } },
+        { id: 'c-often', input: { state: 'S-often' } },
+      ],
+    );
+    const { judge } = scriptedJudge({
+      'S-rare': { tone3: picked('rude', { polite: 0.2, curt: 0.1, rude: 0.7, escape: 0 }) },
+      'S-often': { tone3: picked('polite', { polite: 0.8, curt: 0.1, rude: 0.1, escape: 0 }) },
+    });
+    const out = await runEvals({ config: { ...paths, judge } });
+
+    expect(find(out.results, 'c-rare', 'tone3')).toMatchObject({ threshold: 0.5, pass: true });
+    expect(find(out.results, 'c-often', 'tone3')).toMatchObject({ threshold: 0.5, pass: false });
+  });
+
+  test('empty probabilities fall back to the argmax label in passWhen as 1 / 0', async () => {
+    const paths = await suite(
+      [TONE3_YAML],
+      [
+        { id: 'c-polite', input: { state: 'S-polite' } },
+        { id: 'c-rude', input: { state: 'S-rude' } },
+      ],
+    );
+    const { judge } = scriptedJudge({
+      'S-polite': { tone3: picked('polite', {}) },
+      'S-rude': { tone3: picked('rude', {}) },
+    });
+    const out = await runEvals({ config: { ...paths, judge } });
+
+    expect(find(out.results, 'c-polite', 'tone3')).toMatchObject({ threshold: 0.5, pass: true });
+    expect(find(out.results, 'c-rude', 'tone3')).toMatchObject({ threshold: 0.5, pass: false });
+  });
+});
