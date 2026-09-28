@@ -289,7 +289,11 @@ describe('vet validate', () => {
         paraphrase: { agreement: null, spread: null },
         injection: { families: {} },
         position_swap: { consistency: expect.any(Number), inconclusive: expect.any(Number) },
-        length: { paddingFlips: 0, truncationFlips: 0, lengthVerdictCorrelation: null },
+        length: {
+          paddingFlips: 0,
+          truncationFlips: 0,
+          lengthVerdictCorrelation: expect.any(Number),
+        },
       },
     });
     const cpr = isRecord(tone['correctedPassRate']) ? tone['correctedPassRate'] : {};
@@ -309,15 +313,16 @@ describe('vet validate', () => {
     expect(counting.calibrationCalls.get('S-border')).toBe(15);
     expect(counting.calibrationCalls.get('S-p0')).toBe(3);
     expect(counting.calibrationCalls.get('S-f0')).toBe(3);
-    // No generator and no corpora: these gauntlets never ran (revision 8).
+    // No generator: paraphrase and polarity never ran (revision 8). The shipped corpora
+    // (mol-q4q.12) do run by default; only their pass/fail outcome depends on the mock judge.
     const g = (await lockAt(root)).criteria['tone']?.gauntlet;
     expect(g).toMatchObject({
       paraphrase: 'skipped',
       polarity: 'skipped',
-      injection: 'skipped',
-      master_key: 'skipped',
-      constant_output: 'skipped',
-      length: 'skipped',
+      injection: 'pass',
+      master_key: 'fail',
+      constant_output: 'pass',
+      length: 'pass',
     });
   });
 
@@ -345,14 +350,16 @@ describe('vet validate', () => {
     expect(counting.calibrationCalls.get('S-border')).toBe(15);
   });
 
-  test('missing injections.json → injection skipped, criterion uncalibrated with reason injection', async () => {
+  test('--gauntlet <emptyDir> → injection skipped, criterion uncalibrated with reason injection', async () => {
     const rows = standardRows();
     const root = await project(rows);
+    const dir = join(root, 'empty-gauntlet');
+    await mkdir(dir, { recursive: true });
     const events = createEvents();
     const diags: string[] = [];
     events.on('diag', ({ level, code }) => diags.push(`${level}:${code}`));
     const { judge } = countingJudge(rows, events);
-    await vet(['validate'], depsFor(root, judge, events));
+    await vet(['validate', '--gauntlet', dir], depsFor(root, judge, events));
 
     const entry = (await lockAt(root)).criteria['tone'];
     expect(entry?.gauntlet.injection).toBe('skipped');
@@ -364,16 +371,28 @@ describe('vet validate', () => {
   test('an empty corpus file counts as missing', async () => {
     const rows = standardRows();
     const root = await project(rows);
-    await mkdir(join(root, 'evals', 'gauntlet'), { recursive: true });
-    await writeFile(
-      join(root, 'evals', 'gauntlet', 'injections.json'),
-      JSON.stringify({ version: 1, injections: [] }),
-    );
+    const dir = join(root, 'empty-injections-gauntlet');
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, 'injections.json'), JSON.stringify({ version: 1, injections: [] }));
+    const events = createEvents();
+    const { judge } = countingJudge(rows, events);
+    await vet(['validate', '--gauntlet', dir], depsFor(root, judge, events));
+
+    expect((await lockAt(root)).criteria['tone']?.gauntlet.injection).toBe('skipped');
+  });
+
+  test('no --gauntlet flag defaults to the shipped corpora (mol-q4q.12)', async () => {
+    const rows = standardRows();
+    const root = await project(rows);
     const events = createEvents();
     const { judge } = countingJudge(rows, events);
     await vet(['validate'], depsFor(root, judge, events));
 
-    expect((await lockAt(root)).criteria['tone']?.gauntlet.injection).toBe('skipped');
+    const g = (await lockAt(root)).criteria['tone']?.gauntlet;
+    expect(g?.injection).not.toBe('skipped');
+    expect(g?.master_key).not.toBe('skipped');
+    expect(g?.constant_output).not.toBe('skipped');
+    expect(g?.length).not.toBe('skipped');
   });
 
   test('--gauntlet <dir> with the shipped corpora runs the corpus gauntlets', async () => {

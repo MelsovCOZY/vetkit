@@ -402,3 +402,19 @@ describe('@vetkit/core criteria edit exports (mol-e3g)', () => {
     }
   });
 });
+
+import { DEFAULT_GAUNTLET_CORPORA, type DefaultCorpora } from './index.ts';
+
+describe('@vetkit/core shipped gauntlet corpora exports (mol-q4q.12)', () => {
+  it('re-exports DEFAULT_GAUNTLET_CORPORA with non-empty injections, masterKeys, constants and paddings', () => {
+    expect(DEFAULT_GAUNTLET_CORPORA.injections.length).toBeGreaterThan(0);
+    expect(DEFAULT_GAUNTLET_CORPORA.masterKeys.length).toBeGreaterThan(0);
+    expect(DEFAULT_GAUNTLET_CORPORA.constants.length).toBeGreaterThan(0);
+    expect(DEFAULT_GAUNTLET_CORPORA.paddings.length).toBeGreaterThan(0);
+  });
+
+  it('re-exports the DefaultCorpora type', () => {
+    const corpora: DefaultCorpora = DEFAULT_GAUNTLET_CORPORA;
+    expect(corpora.injections).toBe(DEFAULT_GAUNTLET_CORPORA.injections);
+  });
+});

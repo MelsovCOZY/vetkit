@@ -10,6 +10,7 @@ import {
   calibrate,
   correctedPassRate,
   createEvents,
+  DEFAULT_GAUNTLET_CORPORA,
   gauntletConstantOutput,
   gauntletInjection,
   gauntletLabelPermutation,
@@ -250,7 +251,13 @@ async function readCorpus<T>(
   return undefined;
 }
 
-async function loadCorpora(dir: string, events: Events): Promise<Corpora> {
+// `--gauntlet` omitted: the shipped corpora (packages/core/src/validate/corpora.ts, mol-q4q.12)
+// rather than an evals/gauntlet directory, so a fresh project gets real gauntlets out of the box.
+async function loadCorpora(dir: string | undefined, events: Events): Promise<Corpora> {
+  if (dir === undefined) {
+    const { injections, masterKeys, constants, paddings } = DEFAULT_GAUNTLET_CORPORA;
+    return { injections, masterKeys, constants, paddings };
+  }
   const injections = await readCorpus<InjectionEntry>(dir, 'injections.json', 'injections', events);
   const masterKeys = await readCorpus<MasterKeyEntry>(dir, 'master-keys.json', 'inputs', events);
   const constants = await readCorpus<ConstantEntry>(
@@ -483,7 +490,7 @@ async function validate(
   const repeats = parseRepeats(options.repeats, events);
   const generator = await resolveGenerator(loaded.config.generator);
   const corpora = await loadCorpora(
-    resolve(options.gauntlet ?? join(rootDir, 'evals/gauntlet')),
+    options.gauntlet === undefined ? undefined : resolve(options.gauntlet),
     events,
   );
   const lockPath = resolve(options.lock ?? join(rootDir, LOCK_FILE));
