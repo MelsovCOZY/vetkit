@@ -1,0 +1,176 @@
+{
+  "_source": "OpenInference semantic_conventions.md @ 7feb0c4ba2fd77cb76036712e21d06ff15a2be22 (github.com/Arize-ai/openinference) -- openinference.span.kind, llm.{input,output}_messages.{n}.message.{role,content}, llm.token_count.{prompt,completion} rows",
+  "resourceSpans": [
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "vet-demo"
+            }
+          }
+        ]
+      },
+      "scopeSpans": [
+        {
+          "scope": {
+            "name": "vet-demo-instrumentation"
+          },
+          "spans": [
+            {
+              "traceId": "0000000000000000000000000000000b",
+              "spanId": "000000000000000c",
+              "name": "handle_chat_request",
+              "kind": 1,
+              "startTimeUnixNano": "1700000000000000000",
+              "endTimeUnixNano": "1700000001000000000",
+              "attributes": []
+            },
+            {
+              "traceId": "0000000000000000000000000000000b",
+              "spanId": "000000000000000d",
+              "parentSpanId": "000000000000000c",
+              "name": "chat-turn-1",
+              "kind": 1,
+              "startTimeUnixNano": "1700000001000000000",
+              "endTimeUnixNano": "1700000002000000000",
+              "attributes": [
+                {
+                  "key": "openinference.span.kind",
+                  "value": {
+                    "stringValue": "LLM"
+                  }
+                },
+                {
+                  "key": "llm.input_messages.0.message.role",
+                  "value": {
+                    "stringValue": "system"
+                  }
+                },
+                {
+                  "key": "llm.input_messages.0.message.content",
+                  "value": {
+                    "stringValue": "You are a helpful assistant with access to a get_weather tool."
+                  }
+                },
+                {
+                  "key": "llm.input_messages.1.message.role",
+                  "value": {
+                    "stringValue": "user"
+                  }
+                },
+                {
+                  "key": "llm.input_messages.1.message.content",
+                  "value": {
+                    "stringValue": "What is the weather in Paris?"
+                  }
+                },
+                {
+                  "key": "llm.output_messages.0.message.role",
+                  "value": {
+                    "stringValue": "assistant"
+                  }
+                },
+                {
+                  "key": "llm.output_messages.0.message.content",
+                  "value": {
+                    "stringValue": "I'll check the weather in Paris for you."
+                  }
+                }
+              ]
+            },
+            {
+              "traceId": "0000000000000000000000000000000b",
+              "spanId": "000000000000000e",
+              "parentSpanId": "000000000000000d",
+              "name": "get_weather",
+              "kind": 1,
+              "startTimeUnixNano": "1700000002000000000",
+              "endTimeUnixNano": "1700000003000000000",
+              "attributes": [
+                {
+                  "key": "openinference.span.kind",
+                  "value": {
+                    "stringValue": "TOOL"
+                  }
+                },
+                {
+                  "key": "tool.name",
+                  "value": {
+                    "stringValue": "get_weather"
+                  }
+                },
+                {
+                  "key": "input.value",
+                  "value": {
+                    "stringValue": "{\"city\":\"Paris\"}"
+                  }
+                },
+                {
+                  "key": "output.value",
+                  "value": {
+                    "stringValue": "{\"temp_c\":18,\"condition\":\"cloudy\"}"
+                  }
+                }
+              ]
+            },
+            {
+              "traceId": "0000000000000000000000000000000b",
+              "spanId": "000000000000000f",
+              "parentSpanId": "000000000000000e",
+              "name": "chat-turn-2",
+              "kind": 1,
+              "startTimeUnixNano": "1700000003000000000",
+              "endTimeUnixNano": "1700000004000000000",
+              "attributes": [
+                {
+                  "key": "openinference.span.kind",
+                  "value": {
+                    "stringValue": "LLM"
+                  }
+                },
+                {
+                  "key": "llm.input_messages.0.message.role",
+                  "value": {
+                    "stringValue": "tool"
+                  }
+                },
+                {
+                  "key": "llm.input_messages.0.message.content",
+                  "value": {
+                    "stringValue": "temperature: 18C, condition: cloudy"
+                  }
+                },
+                {
+                  "key": "llm.output_messages.0.message.role",
+                  "value": {
+                    "stringValue": "assistant"
+                  }
+                },
+                {
+                  "key": "llm.output_messages.0.message.content",
+                  "value": {
+                    "stringValue": "It is 18 degrees Celsius and cloudy in Paris."
+                  }
+                },
+                {
+                  "key": "llm.token_count.prompt",
+                  "value": {
+                    "intValue": 120
+                  }
+                },
+                {
+                  "key": "llm.token_count.completion",
+                  "value": {
+                    "intValue": 45
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
