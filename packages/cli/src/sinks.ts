@@ -1,10 +1,17 @@
-// Sink resolution for `vet run --sink <names>` (mol-yxn.7). Sinks are adapter objects built in
-// vetkit.config.ts (option A); a bare string ref has no loader yet, so naming one is refused.
-// A name matches a ref by exact id, else by the id's prefix before '/' when exactly one ref has
-// that prefix ('otel' -> 'otel/logs'). handleError's JSON drops details, so every message
-// names the sink and the configured names itself.
-import type { ResolvedConfig } from '@vetkit/core';
+// Sink resolution for `vet run --sink <names>` (mol-yxn.7). A configured sink is a bare
+// string, an adapter object built in vetkit.config.ts (option A), or a `{kind,*Env}`
+// descriptor this module resolves into a @vetkit/sink-otel / @vetkit/sink-langfuse adapter
+// by reading the named env vars (OPEN-9 DECISION, mol-yxn.13). A name matches a ref by
+// exact id/kind, else by the id's prefix before '/' when exactly one ref has that prefix
+// ('otel' -> 'otel/logs'). A descriptor is named by its `kind` ('otel'), which differs from
+// its built sink's outbox id ('otel/logs'), so `--sink otel/logs` will not match an
+// `{kind:'otel',...}` descriptor. handleError's JSON drops details, so every message names
+// the sink and the configured names itself, and every descriptor error names the *Env
+// variable, never its value.
+import { readEnvName, type ResolvedConfig } from '@vetkit/core';
 import { CEV_ERROR_CODES, defineSink, VetError, type PluginRef, type SinkV1 } from '@vetkit/spec';
+import { createLangfuseSink } from '@vetkit/sink-langfuse';
+import { createOtelSink } from '@vetkit/sink-otel';
 
 export interface ResolvedSink {
   /** The name as given on the command line; keys the per-sink counts. */
@@ -12,14 +19,18 @@ export interface ResolvedSink {
   readonly sink: SinkV1;
 }
 
+type SinkRef = ResolvedConfig['sinks'][number];
+type SinkDescriptor = Exclude<SinkRef, PluginRef>;
 type SinkConfig = Pick<ResolvedConfig, 'sinks'>;
 
-function refId(ref: PluginRef): string {
-  return typeof ref === 'string' ? ref : ref.id;
+/** The name a ref matches `--sink` by: itself, an adapter object's id, or a descriptor's kind. */
+export function sinkRefName(ref: SinkRef): string {
+  if (typeof ref === 'string') return ref;
+  return 'kind' in ref ? ref.kind : ref.id;
 }
 
 export function configuredSinkNames(config: SinkConfig): string[] {
-  return config.sinks.map(refId);
+  return config.sinks.map(sinkRefName);
 }
 
 function listed(names: readonly string[]): string {
@@ -32,6 +43,10 @@ function unknownSink(message: string, configured: readonly string[]): VetError {
     CEV_ERROR_CODES.CONFIG_UNKNOWN_SINK,
     `${message}; configured: ${listed(configured)}`,
   );
+}
+
+function configInvalid(message: string): VetError {
+  return new VetError(CEV_ERROR_CODES.CONFIG_INVALID, message);
 }
 
 function isSinkShape(ref: object): ref is SinkV1 {
@@ -55,17 +70,102 @@ function toSink(ref: Exclude<PluginRef, string>): SinkV1 {
   return defineSink(ref);
 }
 
-export function resolveSinks(config: SinkConfig, names: readonly string[]): ResolvedSink[] {
+// OTEL_EXPORTER_OTLP_HEADERS syntax (W3C Baggage, no metadata): comma-separated k=v pairs.
+// Each pair splits on the FIRST '=' only (base64 tokens end in '='), key and value are
+// trimmed, empty entries are skipped, and the value is percent-decoded. Never echoes the
+// pair or the key on failure — only the *Env variable name is named.
+function parseOtlpHeaders(raw: string, envName: string): Record<string, string> {
+  const headers: Record<string, string> = {};
+  const invalid = (): VetError =>
+    configInvalid(`Environment variable ${envName} is not valid OTLP header syntax`);
+  for (const entry of raw.split(',')) {
+    if (entry.trim() === '') continue;
+    const eq = entry.indexOf('=');
+    if (eq === -1) throw invalid();
+    const key = entry.slice(0, eq).trim();
+    const rawValue = entry.slice(eq + 1).trim();
+    if (key === '') throw invalid();
+    try {
+      headers[key] = decodeURIComponent(rawValue);
+    } catch (error) {
+      if (error instanceof URIError) throw invalid();
+      throw error;
+    }
+  }
+  return headers;
+}
+
+function buildOtelSink(
+  descriptor: Extract<SinkDescriptor, { kind: 'otel' }>,
+  env: Readonly<Record<string, string | undefined>>,
+  fetchImpl: typeof fetch | undefined,
+): SinkV1 {
+  const headers =
+    descriptor.headersEnv === undefined
+      ? undefined
+      : parseOtlpHeaders(readEnvName(descriptor.headersEnv, env), descriptor.headersEnv);
+  try {
+    return createOtelSink({
+      endpoint: descriptor.endpoint,
+      ...(headers === undefined ? {} : { headers }),
+      ...(fetchImpl === undefined ? {} : { fetch: fetchImpl }),
+    });
+  } catch (error) {
+    if (error instanceof TypeError) throw configInvalid(`sink 'otel': endpoint is not a valid URL`);
+    throw error;
+  }
+}
+
+function buildLangfuseSink(
+  descriptor: Extract<SinkDescriptor, { kind: 'langfuse' }>,
+  env: Readonly<Record<string, string | undefined>>,
+  fetchImpl: typeof fetch | undefined,
+): SinkV1 {
+  const baseUrl = readEnvName(descriptor.baseUrlEnv, env);
+  if (!URL.canParse(baseUrl)) {
+    throw configInvalid(`Environment variable ${descriptor.baseUrlEnv} is not a valid URL`);
+  }
+  const publicKey = readEnvName(descriptor.publicKeyEnv, env);
+  const secretKey = readEnvName(descriptor.secretKeyEnv, env);
+  return createLangfuseSink({
+    baseUrl,
+    publicKey,
+    secretKey,
+    ...(fetchImpl === undefined ? {} : { fetch: fetchImpl }),
+  });
+}
+
+function buildDescriptorSink(
+  descriptor: SinkDescriptor,
+  env: Readonly<Record<string, string | undefined>>,
+  fetchImpl: typeof fetch | undefined,
+): SinkV1 {
+  return descriptor.kind === 'otel'
+    ? buildOtelSink(descriptor, env, fetchImpl)
+    : buildLangfuseSink(descriptor, env, fetchImpl);
+}
+
+export function resolveSinks(
+  config: SinkConfig,
+  names: readonly string[],
+  options: {
+    readonly env?: Readonly<Record<string, string | undefined>>;
+    readonly fetch?: typeof fetch;
+  } = {},
+): ResolvedSink[] {
+  const env = options.env ?? process.env;
   const configured = configuredSinkNames(config);
   const out: ResolvedSink[] = [];
   for (const name of new Set(names)) {
-    const exact = config.sinks.filter((ref) => refId(ref) === name);
+    const exact = config.sinks.filter((ref) => sinkRefName(ref) === name);
     const matches =
-      exact.length > 0 ? exact : config.sinks.filter((ref) => refId(ref).split('/')[0] === name);
+      exact.length > 0
+        ? exact
+        : config.sinks.filter((ref) => sinkRefName(ref).split('/')[0] === name);
     const [ref] = matches;
     if (ref === undefined) throw unknownSink(`unknown sink '${name}'`, configured);
     if (matches.length > 1) {
-      const candidates = matches.map(refId).join(', ');
+      const candidates = matches.map(sinkRefName).join(', ');
       throw unknownSink(`sink '${name}' is ambiguous: matches ${candidates}`, configured);
     }
     if (typeof ref === 'string') {
@@ -74,7 +174,7 @@ export function resolveSinks(config: SinkConfig, names: readonly string[]): Reso
         configured,
       );
     }
-    const sink = toSink(ref);
+    const sink = 'kind' in ref ? buildDescriptorSink(ref, env, options.fetch) : toSink(ref);
     if (!out.some((r) => r.sink === sink)) out.push({ name, sink });
   }
   return out;

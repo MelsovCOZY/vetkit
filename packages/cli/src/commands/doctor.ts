@@ -6,6 +6,7 @@ import { JEV_CREDENTIAL_PRIORITY, JEV_PRESETS, type JevPresetName } from '@vetki
 import type { Command } from 'commander';
 import { loadVetConfig, type LoadedVetConfig } from '../config-load.ts';
 import { colors } from '../output.ts';
+import { sinkRefName } from '../sinks.ts';
 
 // Structural stand-in for NodeJS.WritableStream (see errors.ts / logger.ts): keeps this
 // module's public surface independent of @types/node ambient globals.
@@ -232,7 +233,7 @@ function checkConfiguredSinks(sinks: ResolvedConfig['sinks']): DoctorCheck {
       detail: `sink name(s) ${bare.join(', ')} resolve to no adapter object — cannot verify their credentials`,
     };
   }
-  const ids = sinks.map((s) => (typeof s === 'string' ? s : s.id));
+  const ids = sinks.map(sinkRefName);
   return {
     name,
     status: 'pass',

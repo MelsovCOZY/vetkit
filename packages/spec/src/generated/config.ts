@@ -6,6 +6,7 @@ export type PluginRef =
       specVersion: 'v1';
       id: string;
     };
+export type SinkRef = PluginRef | OtelSinkDescriptor | LangfuseSinkDescriptor;
 
 /**
  * Declarative shape of vetkit.config.ts. Adapter objects are checked as {specVersion, id, capabilities} projections; their methods are checked structurally in core.
@@ -30,9 +31,9 @@ export interface ConfigDoc {
    */
   sources?: PluginRef[];
   /**
-   * Result sinks: opaque names or sink adapter objects.
+   * Result sinks: opaque names, sink adapter objects, or {kind,*Env} descriptors resolved by the CLI.
    */
-  sinks?: PluginRef[];
+  sinks?: SinkRef[];
   thresholds?: ThresholdsPolicy;
   watch?: WatchConfig;
   gate?: GateConfig;
@@ -89,6 +90,29 @@ export interface JudgeEndpoint {
   providerOptions?: {
     [k: string]: unknown;
   };
+}
+export interface OtelSinkDescriptor {
+  kind: 'otel';
+  endpoint: string;
+  /**
+   * Name of the env var holding the OTLP headers (OTEL_EXPORTER_OTLP_HEADERS syntax: k=v,k2=v2).
+   */
+  headersEnv?: string;
+}
+export interface LangfuseSinkDescriptor {
+  kind: 'langfuse';
+  /**
+   * Name of the env var holding the Langfuse base URL.
+   */
+  baseUrlEnv: string;
+  /**
+   * Name of the env var holding the Langfuse public key.
+   */
+  publicKeyEnv: string;
+  /**
+   * Name of the env var holding the Langfuse secret key.
+   */
+  secretKeyEnv: string;
 }
 export interface ThresholdsPolicy {
   /**
