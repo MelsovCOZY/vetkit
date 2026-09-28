@@ -1,2 +1,4 @@
-// Placeholder src entry; real exports land in mol-76a.3.
-void 0;
+// Named re-exports only — no `export *` (oxc/no-barrel-file).
+export { createOpenAICompatibleGenerator } from './generator.ts';
+export type { OpenAICompatibleGeneratorOptions } from './generator.ts';
+export { normaliseOpenAIStrict } from './strict.ts';
