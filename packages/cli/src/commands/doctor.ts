@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { JEV_CREDENTIAL_PRIORITY, JEV_PRESETS, type JevPresetName } from '@vetkit/judge-jev';
 import type { Command } from 'commander';
+import { colors } from '../output.ts';
 
 // Structural stand-in for NodeJS.WritableStream (see errors.ts / logger.ts): keeps this
 // module's public surface independent of @types/node ambient globals.
@@ -312,8 +313,24 @@ export async function runDoctor(deps: DoctorDeps = {}): Promise<DoctorResult> {
   return { checks, exitCode };
 }
 
-export function renderTable(checks: readonly DoctorCheck[]): string {
-  return checks.map((c) => `${c.status.padEnd(4)} ${c.name.padEnd(22)} ${c.detail}`).join('\n');
+// `paint` colours only the status word; the padding stays outside it so the plain text
+// is byte-identical whether colour is on or off.
+export function renderTable(
+  checks: readonly DoctorCheck[],
+  paint: (status: CheckStatus, text: string) => string = (_status, text) => text,
+): string {
+  return checks
+    .map(
+      (c) =>
+        `${paint(c.status, c.status)}${' '.repeat(Math.max(0, 4 - c.status.length))} ${c.name.padEnd(22)} ${c.detail}`,
+    )
+    .join('\n');
+}
+
+function statusPainter(): (status: CheckStatus, text: string) => string {
+  const c = colors();
+  const byStatus = { pass: c.green, warn: c.yellow, fail: c.red, info: c.cyan } as const;
+  return (status, text) => byStatus[status](text);
 }
 
 export function renderJson(result: DoctorResult): string {
@@ -331,16 +348,25 @@ export function registerDoctor(program: Command, deps: RegisterDoctorDeps = {}):
   return program
     .command('doctor')
     .description('check environment, judge credentials and judge endpoint health')
-    .option('--json', 'print machine-readable JSON')
     .option('--reveal-suffix', 'show the last 4 characters of a set credential')
     .option('--strict', 'treat warnings as failures for the exit code')
-    .action(async (options: { json?: boolean; revealSuffix?: boolean; strict?: boolean }) => {
+    .action(async (_options: unknown, command: Command) => {
+      // --json is a global program option; optsWithGlobals merges it with doctor's own.
+      const options = command.optsWithGlobals<{
+        json?: boolean;
+        revealSuffix?: boolean;
+        strict?: boolean;
+      }>();
       const result = await runDoctor({
         ...deps,
         revealSuffix: options.revealSuffix ?? deps.revealSuffix ?? false,
         strict: options.strict ?? deps.strict ?? false,
       });
-      stdout.write(options.json ? `${renderJson(result)}\n` : `${renderTable(result.checks)}\n`);
+      stdout.write(
+        options.json
+          ? `${renderJson(result)}\n`
+          : `${renderTable(result.checks, statusPainter())}\n`,
+      );
       setExitCode(result.exitCode);
     });
 }

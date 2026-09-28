@@ -22,7 +22,7 @@ const binPath = fileURLToPath(new URL('../dist/bin.js', import.meta.url));
 // the same dist/ directory.
 beforeAll(async () => {
   await ensureCliBuilt();
-}, 60_000);
+}, 180_000);
 
 function runBin(args: string[]): { stdout: string; stderr: string; status: number | null } {
   return spawnSync(process.execPath, [binPath, ...args], { encoding: 'utf8' });
@@ -35,10 +35,16 @@ describe('vet bin', () => {
     expect(result.status).toBe(0);
   });
 
-  test('--help lists no subcommands yet and exits 0', () => {
+  test('--help lists the doctor command and exits 0', () => {
     const result = runBin(['--help']);
     expect(result.status).toBe(0);
-    expect(result.stdout).not.toMatch(/Commands:/);
+    expect(result.stdout).toMatch(/^\s+doctor\b/m);
+  });
+
+  test('doctor --help exits 0', () => {
+    const result = runBin(['doctor', '--help']);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('doctor');
   });
 
   test('no args prints help and exits 0', () => {

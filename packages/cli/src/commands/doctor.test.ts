@@ -214,7 +214,8 @@ describe('runDoctor', () => {
 
 describe('registerDoctor', () => {
   test('wires a doctor subcommand that prints JSON and reports the exit code', async () => {
-    const program = new Command();
+    // --json is a global program option (createProgram); doctor reads it via optsWithGlobals.
+    const program = new Command().option('--json');
     program.exitOverride();
     const lines: string[] = [];
     let exitCode: number | undefined;
@@ -250,7 +251,26 @@ describe('docs/configuration.md env-docs', () => {
   });
 });
 
+describe('registerDoctor --json is global', () => {
+  test('doctor defines no local --json option', () => {
+    const program = new Command().option('--json');
+    const doctor = registerDoctor(program);
+    expect(doctor.options.some((o) => o.long === '--json')).toBe(false);
+  });
+});
+
 describe('renderTable / renderJson', () => {
+  test('renderTable without a painter is plain padded text', () => {
+    const checks = [{ name: 'node', status: 'pass' as const, detail: 'v22.23.2 >= 22.12' }];
+    expect(renderTable(checks)).toBe(`pass ${'node'.padEnd(22)} v22.23.2 >= 22.12`);
+  });
+
+  test('renderTable paints only the status word, keeping the padding outside it', () => {
+    const checks = [{ name: 'bun', status: 'info' as const, detail: 'x' }];
+    const table = renderTable(checks, (status, text) => `<${status}:${text}>`);
+    expect(table).toBe(`<info:info> ${'bun'.padEnd(22)} x`);
+  });
+
   test('renderTable includes every check name and status', () => {
     const checks = [{ name: 'node', status: 'pass' as const, detail: 'v22.23.2 >= 22.12' }];
     const table = renderTable(checks);
