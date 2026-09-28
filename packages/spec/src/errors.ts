@@ -37,6 +37,8 @@ export const CEV_ERROR_CODES = {
   GATE_UNPINNED: 'GATE_UNPINNED',
   NOT_INTERACTIVE: 'NOT_INTERACTIVE',
   UNSCORED_ONLY: 'UNSCORED_ONLY',
+  // mol-p4a.7: a malformed labels row (q4q.2), exit 2 naming file:line.
+  LABELS_INVALID: 'LABELS_INVALID',
 } as const;
 
 export type CevErrorCode = (typeof CEV_ERROR_CODES)[keyof typeof CEV_ERROR_CODES];
