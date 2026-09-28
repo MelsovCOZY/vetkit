@@ -62,3 +62,12 @@ export type {
 
 export { defineSink } from './ports/sink.ts';
 export type { SinkAck, SinkV1 } from './ports/sink.ts';
+
+export { defineSource } from './ports/source.ts';
+export type { SourceV1 } from './ports/source.ts';
+
+export { defineGenerator } from './ports/generator.ts';
+export type { GeneratorV1 } from './ports/generator.ts';
+
+export { traceSchema } from './generated/schemas.ts';
+export type { Message, MessagePart, NormalizedTrace, Span } from './generated/index.ts';

@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vetkit.dev/schemas/trace.schema.json",
+  "title": "NormalizedTrace",
+  "type": "object",
+  "$defs": {
+    "MessagePart": {
+      "title": "MessagePart",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "text" },
+            "content": { "type": "string" }
+          },
+          "required": ["type", "content"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "tool_call" },
+            "id": { "type": "string" },
+            "name": { "type": "string" },
+            "arguments": {}
+          },
+          "required": ["type", "name"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "tool_call_response" },
+            "id": { "type": "string" },
+            "response": {}
+          },
+          "required": ["type", "response"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "parse_error" },
+            "detail": { "type": "string" }
+          },
+          "required": ["type", "detail"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Message": {
+      "title": "Message",
+      "type": "object",
+      "properties": {
+        "role": { "enum": ["user", "assistant", "system", "tool"] },
+        "parts": { "type": "array", "items": { "$ref": "#/$defs/MessagePart" } }
+      },
+      "required": ["role", "parts"],
+      "additionalProperties": false
+    },
+    "Span": {
+      "title": "Span",
+      "type": "object",
+      "properties": {
+        "spanId": { "type": "string" },
+        "parentSpanId": { "type": "string" },
+        "name": { "type": "string" },
+        "kind": { "enum": ["llm", "tool", "other"] },
+        "messageRange": {
+          "type": "array",
+          "prefixItems": [
+            { "type": "integer", "minimum": 0 },
+            { "type": "integer", "minimum": 0 }
+          ],
+          "items": { "type": "integer", "minimum": 0 },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "attributes": { "type": "object", "additionalProperties": true }
+      },
+      "required": ["spanId", "name"],
+      "additionalProperties": false
+    }
+  },
+  "properties": {
+    "traceId": { "type": "string" },
+    "spans": { "type": "array", "items": { "$ref": "#/$defs/Span" } },
+    "messages": { "type": "array", "items": { "$ref": "#/$defs/Message" } },
+    "dialect": { "type": "string" },
+    "dialectVersion": { "type": "string" },
+    "schemaUrl": { "type": "string" },
+    "completeness": {
+      "type": "object",
+      "properties": {
+        "contentCaptured": { "type": "boolean" },
+        "truncated": { "type": "boolean" },
+        "missingParents": { "type": "boolean" }
+      },
+      "required": ["contentCaptured", "truncated", "missingParents"],
+      "additionalProperties": false
+    },
+    "tokens": {
+      "type": "object",
+      "properties": {
+        "input": { "type": "integer", "minimum": 0 },
+        "output": { "type": "integer", "minimum": 0 },
+        "total": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": ["traceId", "spans", "messages", "dialect", "completeness"],
+  "additionalProperties": false
+}

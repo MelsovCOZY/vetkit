@@ -46,6 +46,14 @@ export const CEV_ERROR_CODES = {
   SINK_AUTH: 'SINK_AUTH',
   SINK_PAYLOAD_TOO_LARGE: 'SINK_PAYLOAD_TOO_LARGE',
   OUTBOX_CORRUPT: 'OUTBOX_CORRUPT',
+  // J2 contract (mol-76a.1, root DECISION on o8i gaps): source reads, trace validation and
+  // generator outcomes. GENERATOR_CAPABILITY is a declared-strategy mismatch, never a
+  // silent downgrade (docs/contracts/j2.md "Generation contract").
+  SOURCE_UNREADABLE: 'SOURCE_UNREADABLE',
+  TRACE_INVALID: 'TRACE_INVALID',
+  GENERATOR_UNAVAILABLE: 'GENERATOR_UNAVAILABLE',
+  GENERATOR_BAD_OUTPUT: 'GENERATOR_BAD_OUTPUT',
+  GENERATOR_CAPABILITY: 'GENERATOR_CAPABILITY',
 } as const;
 
 export type CevErrorCode = (typeof CEV_ERROR_CODES)[keyof typeof CEV_ERROR_CODES];
