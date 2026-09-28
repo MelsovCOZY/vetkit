@@ -1,0 +1,2 @@
+{"traceId":"own-1","messages":[{"role":"user","parts":[{"type":"text","content":"What is the refund window?"}]},{"role":"assistant","parts":[{"type":"text","content":"Refunds are accepted within 30 days of purchase."}]}]}
+{"traceId":"own-2","messages":[{"role":"user","parts":[{"type":"text","content":"Cancel my order 1234."}]},{"role":"assistant","parts":[{"type":"text","content":"Order 1234 has been cancelled."}]}],"spans":[{"spanId":"s1","name":"chat","kind":"llm","messageRange":[0,1]}]}
