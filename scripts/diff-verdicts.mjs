@@ -52,6 +52,9 @@ function countDifferences(runPath, vitestPath) {
   const run = loadRunVerdicts(runPath);
   const vitest = loadVitestVerdicts(vitestPath);
   const keys = new Set([...run.keys(), ...vitest.keys()]);
+  if (keys.size === 0) {
+    throw new Error('compared set is empty: no run and vitest verdicts share a key');
+  }
   let differences = 0;
   for (const key of keys) {
     if (run.get(key) !== vitest.get(key)) differences += 1;
@@ -65,6 +68,12 @@ if (runPath === undefined || vitestPath === undefined) {
   process.exit(2);
 }
 
-const differences = countDifferences(runPath, vitestPath);
+let differences;
+try {
+  differences = countDifferences(runPath, vitestPath);
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exit(1);
+}
 console.log(`differences: ${differences}`);
 process.exit(differences === 0 ? 0 : 1);
