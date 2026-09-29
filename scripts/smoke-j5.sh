@@ -43,18 +43,23 @@ vet() { bun "$BIN" "$@"; }
 # Gate DECISION (c): diff against fixtures/otlp/golden/init-cases.jsonl (vet-init Case shape,
 # bug pij.15), not golden/cases.jsonl (pij.9's unrelated normalized-trace golden). Normalization
 # matches packages/cli/src/commands/init-otlp.test.ts's normalizeCase(): strip .id, .traceId and
-# .provenance.traceIds (leaving any other provenance keys untouched).
+# .provenance.{traceIds,traceId,spanId} (leaving any other provenance keys untouched). Before
+# stripping, bug mol-dh8.6 requires every generated case to actually carry
+# .provenance.traceId/.spanId (docs/sinks.md "Correlation") — checked per dialect below.
 DIALECTS="gen_ai-latest gen_ai-legacy openinference openllmetry vercel"
-NORMALIZE='del(.id, .traceId, .provenance.traceIds)'
+NORMALIZE='del(.id, .traceId, .provenance.traceIds, .provenance.traceId, .provenance.spanId)'
+IDS_PRESENT='all(.[]; (.provenance.traceId | type) == "string" and (.provenance.spanId | type) == "string")'
 GOLDEN_CASES="$ROOT/fixtures/otlp/golden/init-cases.jsonl"
 ac1_failed=0
 for d in $DIALECTS; do
   rm -rf "$OUT/$d"
   vet init --source "otlp:$ROOT/fixtures/otlp/$d.json" --json --out "$OUT/$d" >"$OUT/$d.stdout.json" 2>"$OUT/$d.stderr.txt"
   code=$?
+  ids_code=1
+  jq -e -s "$IDS_PRESENT" "$OUT/$d/cases/generated.jsonl" >/dev/null 2>"$OUT/$d.ids.err" && ids_code=0
   diff <(jq -S "$NORMALIZE" "$OUT/$d/cases/generated.jsonl" 2>/dev/null) <(jq -S "$NORMALIZE" "$GOLDEN_CASES") >"$OUT/$d.diff.txt" 2>&1
   dcode=$?
-  if [ "$code" -ne 0 ] || [ "$dcode" -ne 0 ]; then ac1_failed=1; fi
+  if [ "$code" -ne 0 ] || [ "$dcode" -ne 0 ] || [ "$ids_code" -ne 0 ]; then ac1_failed=1; fi
 done
 result "AC1: 5-dialect golden diff (for d in $DIALECTS; do vet init --source otlp:fixtures/otlp/\$d.json --json --out ...; diff <(jq -S '$NORMALIZE' out/cases/generated.jsonl) golden/init-cases.jsonl; done)" \
   0 0 "$ac1_failed" \
