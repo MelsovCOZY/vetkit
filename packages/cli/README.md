@@ -1,8 +1,6 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/MelsovCOZY/vetkit/master/assets/logo.png" alt="vetkit logo" width="192" height="192">
-</p>
-
-# vetkit
+<h1 align="center">
+  <img src="https://raw.githubusercontent.com/MelsovCOZY/vetkit/master/assets/logo.png" alt="vetkit" width="192" height="192">
+</h1>
 
 Generate, validate and run LLM evals from the command line. Installs the `vet` binary.
 

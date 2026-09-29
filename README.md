@@ -1,8 +1,6 @@
-<p align="center">
-  <img src="assets/logo.png" alt="vetkit logo" width="256" height="256">
-</p>
-
-<h1 align="center">vetkit</h1>
+<h1 align="center">
+  <img src="assets/logo.png" alt="vetkit" width="256" height="256">
+</h1>
 
 <p align="center">Generate, validate and run LLM evals from the command line.</p>
 
