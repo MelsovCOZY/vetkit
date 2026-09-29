@@ -116,3 +116,16 @@ describe.each(Object.entries(cases))('%s: unknown role diag', (_name, c) => {
     expect(c.dialect.extractMessages(s, buildSpanTree([s]))[0]?.role).toBe('user');
   });
 });
+
+describe.each(Object.entries(cases))('%s: roles named like Object.prototype members', (_name, c) => {
+  test.each(['constructor', '__proto__', 'toString', 'hasOwnProperty'])(
+    "role '%s' maps to user with one unknown_role diag",
+    (role) => {
+      const { messages, diags } = run(c, role);
+      expect(messages).toHaveLength(1);
+      expect(messages[0]?.role).toBe('user');
+      expect(diags).toHaveLength(1);
+      expect(diags[0]).toMatchObject({ code: 'unknown_role', level: 'warn' });
+    },
+  );
+});

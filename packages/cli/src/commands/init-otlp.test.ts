@@ -251,6 +251,29 @@ describe('otlpSourceFromArg: receiver', () => {
     await drained;
   }, 10_000);
 
+  test('CEV_DIAG=1 writes an unknown_role diag for a trace posted to the receiver', async () => {
+    vi.stubEnv('CEV_DIAG', '1');
+    const { lines, restore } = watchStderr();
+    try {
+      const source = otlpSourceFromArg(':0', { until: 1 });
+      const drained = (async () => {
+        for await (const trace of source.doRead({})) void trace;
+      })();
+      const port = await waitForListeningPort(lines);
+      const res = await fetch(`http://127.0.0.1:${String(port)}/v1/traces`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: narratorTraceBody(),
+      });
+      expect(res.status).toBe(200);
+      await drained;
+    } finally {
+      restore();
+      vi.unstubAllEnvs();
+    }
+    expect(lines.filter((l) => l.includes('unknown_role'))).toHaveLength(1);
+  }, 10_000);
+
   test('otlp::0 parses to an ephemeral port', async () => {
     const { lines, restore } = watchStderr();
     const controller = new AbortController();
