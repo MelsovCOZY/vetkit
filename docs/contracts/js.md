@@ -37,7 +37,7 @@ the IR, core and adapters are built.
   `POST https://ai-gateway.vercel.sh/v1/chat/completions` (OpenAI-compatible) with
   `response_format: {type:'json_schema'}`.
   Verify: `spike/judge.test.ts` and `spike/corpus.test.ts` assert the request bodies against the
-  shapes above.
+  shape of `docs/research/fixtures/2026-09-25-gateway-systemone-request.json`.
 - **AC-5 (call budget).** One judge request per trace per repeat carrying all 10 criteria
   (≤ 50×3 = 150 judge calls, cached on disk so re-runs make 0 network calls), ≤ 60 generator calls.
   Verify: `spike/data/cache/` file count ≤ 150 and a second `bun spike/judge.ts` run logs
@@ -67,7 +67,7 @@ the IR, core and adapters are built.
 - The judge hypothesis is confirmed on real data: Jev is a reliable, ~20× cheaper multilingual judge
   for reference-match, abstention and faithfulness questions. Consequences: (1) JS keeps its
   purpose (generated criteria vs human labels) but reuses the pre-spike judge and analysis scripts
-  and the verdict cache for c1–c3 (done for the spike, tables already in the pre-spike report);
+  and the verdict cache for c1–c3 (`docs/research/fixtures/jev-haystack/{judge.py,analyze.py,cases.jsonl,verdicts.jsonl}`; done for the spike, tables already in the pre-spike report);
   (2) judge-jev must implement request pacing + Retry-After backoff and cache by content hash
   (dedup 1,368 → 1,038 calls in the pre-spike run); (3) the escape/3-way choice design is
   validated; (4) a lint rule for regex-based abstention scoring is a candidate generated criterion.

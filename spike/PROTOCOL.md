@@ -31,8 +31,9 @@ a limitation, not fixed) because the local Langfuse 4.43 instance runs in v4 `ev
 `corpus-text.json`): `question, answer, contexts[{docId,text}], reference, unanswerable, lang,
 variant, baseline{faithfulness, context_relevance, judgeModel}`.
 
-Pre-spike artifacts already exist and are reused as-is, not regenerated: the pre-spike judge and
-analysis scripts, the case set and the verdict cache for c1–c3 (these tables are done for the
+Pre-spike artifacts already exist and are reused as-is, not regenerated:
+`docs/research/fixtures/jev-haystack/{judge.py,analyze.py,cases.jsonl,verdicts.jsonl}` (the judge and
+analysis scripts, the case set and the verdict cache for c1–c3; these tables are done for the
 spike).
 
 ## Criteria set
