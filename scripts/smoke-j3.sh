@@ -18,8 +18,12 @@
 # (paraphrase + polarity wordings) is an OpenAI-compatible model on the same gateway key
 # (CEV_J3_GENERATOR_MODEL, default anthropic/claude-haiku-4.5): a handful of calls per criterion.
 #
-# Key: AI_GATEWAY_API_KEY from the environment, else from VETKIT_ENV_FILE (default: the repo
-# .env) via `bun --env-file`. The key is never printed, and neither are judge bodies.
+# Judge transport: CEV_SMOKE_JUDGE=vercel (default, unpinned alias) or openrouter (pinned). It
+# selects the key env var, the preflight probe and whether AC3a expects GATE_UNPINNED.
+#
+# Key: AI_GATEWAY_API_KEY (vercel) or OPENROUTER_API_KEY (openrouter) from the environment, else
+# from VETKIT_ENV_FILE (default: the repo .env) via `bun --env-file`. The generator always uses
+# AI_GATEWAY_API_KEY. The key is never printed, and neither are judge bodies.
 #
 # Dry run (no network, plumbing only): VETKIT_SMOKE_CONFIG=<vetkit.config.ts with an in-process
 # judge> replaces the project configs and skips the preflight; the CEV_JUDGE_BASE_URL edge then
@@ -34,6 +38,13 @@ ENV_FILE="${VETKIT_ENV_FILE:-$ROOT/.env}"
 BIN="$ROOT/packages/cli/dist/bin.js"
 FAILED=0
 
+JUDGE="${CEV_SMOKE_JUDGE:-vercel}"
+case "$JUDGE" in
+  vercel) KEY_ENV=AI_GATEWAY_API_KEY ;;
+  openrouter) KEY_ENV=OPENROUTER_API_KEY ;;
+  *) printf 'smoke-j3: CEV_SMOKE_JUDGE must be vercel or openrouter, got "%s"\n' "$JUDGE" >&2; exit 2 ;;
+esac
+
 say() { printf 'smoke-j3: %s\n' "$*"; }
 result() { # <label> <expected> <observed-exit> <ok 0|1> [detail]
   local status=PASS
@@ -42,9 +53,9 @@ result() { # <label> <expected> <observed-exit> <ok 0|1> [detail]
 }
 
 ENV_ARGS=()
-if [ -z "${AI_GATEWAY_API_KEY:-}" ]; then
+if [ -z "${!KEY_ENV:-}" ]; then
   if [ ! -f "$ENV_FILE" ]; then
-    say "AI_GATEWAY_API_KEY is unset and $ENV_FILE does not exist" >&2
+    say "$KEY_ENV is unset and $ENV_FILE does not exist" >&2
     exit 1
   fi
   ENV_ARGS=("--env-file=$ENV_FILE")
@@ -70,18 +81,25 @@ say "building"
 # Preflight: the judge upstream answers 429 "high demand" when it is busy (shared gateway key).
 # Wait for one 200 on the recorded refund request (up to ~10 minutes) so the run below measures
 # vetkit, not the queue. Only the HTTP status is printed.
-if [ -z "${AI_GATEWAY_API_KEY:-}" ]; then
-  KEY="$(bun "${ENV_ARGS[@]}" -e 'process.stdout.write(process.env.AI_GATEWAY_API_KEY ?? "")')"
+if [ -z "${!KEY_ENV:-}" ]; then
+  KEY="$(KEY_ENV="$KEY_ENV" bun "${ENV_ARGS[@]}" -e 'process.stdout.write(process.env[process.env.KEY_ENV] ?? "")')"
 else
-  KEY="$AI_GATEWAY_API_KEY"
+  KEY="${!KEY_ENV}"
+fi
+PROBE_BODY="$ROOT/docs/research/fixtures/2026-09-25-gateway-systemone-request.json"
+if [ "$JUDGE" = vercel ]; then
+  PROBE_URL=https://ai-gateway.vercel.sh/typesafe/v1/systemone
+  PROBE_MODEL=typesafe-ai/jev
+else
+  PROBE_URL=https://openrouter.ai/api/v1/systemone
+  PROBE_MODEL=typesafe/jev-1.13
 fi
 status=000
 [ -n "${VETKIT_SMOKE_CONFIG:-}" ] && status=200
 for _ in $(seq 1 30); do
   [ "$status" = 200 ] && break
-  status="$(curl -s -o /dev/null -w '%{http_code}' https://ai-gateway.vercel.sh/typesafe/v1/systemone \
-    -H "Authorization: Bearer $KEY" -H 'content-type: application/json' \
-    -d @"$ROOT/docs/research/fixtures/2026-09-25-gateway-systemone-request.json")"
+  status="$(jq -c --arg m "$PROBE_MODEL" '.model = $m' "$PROBE_BODY" | curl -s -o /dev/null -w '%{http_code}' "$PROBE_URL" \
+    -H "Authorization: Bearer $KEY" -H 'content-type: application/json' -d @-)"
   [ "$status" = 200 ] && break
   sleep 20
 done
@@ -165,10 +183,15 @@ result "AC5: vet run --gate --json (score never gates; exit follows boolean only
 
 vet c1 run --ci --cases passcases
 code=$?
-grep -Eq 'GATE_UNPINNED' c1.err c1.out
-named=$?
-result "AC3a: vet run --ci (unpinned lock) -> exit 2 naming GATE_UNPINNED" 2 "$code" "$([ "$code" -eq 2 ] && echo "$named" || echo 1)" \
-  "$(grep -m1 -Ei 'unpinned' c1.err)"
+if [ "$JUDGE" = vercel ]; then
+  grep -Eq 'GATE_UNPINNED' c1.err c1.out
+  named=$?
+  result "AC3a: vet run --ci (unpinned lock) -> exit 2 naming GATE_UNPINNED" 2 "$code" "$([ "$code" -eq 2 ] && echo "$named" || echo 1)" \
+    "$(grep -m1 -Ei 'unpinned' c1.err)"
+else
+  result "AC3a: vet run --ci (pinned lock) -> exit 0" 0 "$code" "$([ "$code" -eq 0 ] && echo 0 || echo 1)" \
+    "$(head -1 c1.err)"
+fi
 vet c2 run --ci --allow-unpinned --cases passcases
 code=$?
 result "AC3b: vet run --ci --allow-unpinned -> exit 0" 0 "$code" "$([ "$code" -eq 0 ] && echo 0 || echo 1)" \
@@ -231,11 +254,13 @@ result "AC2-full: vet run --gate (all P2 criteria) -> exit 2" 2 "$code" "$([ "$c
 # ---------------------------------------------------------------- P3: judge unavailable
 # A refused connection (CEV_JUDGE_BASE_URL=http://127.0.0.1:9) is retried with backoff, so a
 # full `vet validate` outage run would take hours; the edge is checked on one `vet run` case
-# (cause JUDGE_UNAVAILABLE). The validate-outage edge is NOT RUN here.
+# (cause JUDGE_UNAVAILABLE). The validate-outage edge is NOT RUN here. The case must be uncached
+# (the CLI has no cache-bypass flag; a cache hit never reaches the judge): a fresh id and text.
 cd "$WORK/p1" || exit 1
 say "P3 vet run with CEV_JUDGE_BASE_URL=http://127.0.0.1:9"
 mkdir onecase
-head -1 passcases/pass.jsonl >onecase/one.jsonl
+head -1 passcases/pass.jsonl |
+  jq -c '.id = "j3-uncached-0" | .input |= map_values(tostring + " (uncached probe)")' >onecase/one.jsonl
 CEV_JUDGE_BASE_URL=http://127.0.0.1:9 vet u1 run --json --cases onecase
 code=$?
 jq -e '[.results[] | select(.criterionId=="answer_correct") | .status == "unscored" and (.cause | tostring | test("JUDGE_UNAVAILABLE"))] | all' u1.out >/dev/null
