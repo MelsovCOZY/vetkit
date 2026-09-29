@@ -59,6 +59,13 @@ const ADAPTER_CONFIG = `export default {
 };
 `;
 
+const SINK_CONFIG = `export default {
+  judge: { kind: 'typesafe-compatible', preset: 'vercel', apiKeyEnv: 'DOCTOR_JUDGE_KEY' },
+  sinks: [{ kind: 'otel', endpoint: 'https://otel.example.test', headersEnv: 'DOCTOR_OTEL_HEADERS' }],
+  thresholds: { default: 0.7 },
+};
+`;
+
 interface Run {
   readonly stdout: string;
   readonly exitCode: number | undefined;
@@ -217,5 +224,42 @@ describe('vet doctor --config (text)', () => {
     expect(run.stdout).toContain('  judge: typesafe-compatible preset vercel');
     expect(run.stdout).toContain('(key from $DOCTOR_JUDGE_KEY)');
     expect(run.stdout).toContain('  cacheDir: .vet');
+  });
+});
+
+function sinkRow(stdout: string): unknown {
+  const doc = parseJson(stdout);
+  if (typeof doc !== 'object' || doc === null || !('checks' in doc) || !Array.isArray(doc.checks)) {
+    throw new Error('doctor --json output has no checks');
+  }
+  return doc.checks.find(
+    (c: unknown) =>
+      typeof c === 'object' && c !== null && 'name' in c && c.name === 'sink credentials',
+  );
+}
+
+describe('vet doctor sink descriptor credentials', () => {
+  test('--json carries the warn row naming the unset variable; the exit code stays 0', async () => {
+    const cwd = await project({ 'vetkit.config.ts': SINK_CONFIG });
+    const run = await doctor(['--config', '--json'], cwd, { DOCTOR_JUDGE_KEY: SECRET });
+    expect(sinkRow(run.stdout)).toMatchObject({
+      status: 'warn',
+      detail: expect.stringContaining('DOCTOR_OTEL_HEADERS=<unset>'),
+    });
+    expect(run.exitCode).toBe(0);
+  });
+
+  test('--json carries the pass row when the variable is set, without printing its value', async () => {
+    const cwd = await project({ 'vetkit.config.ts': SINK_CONFIG });
+    const run = await doctor(['--config', '--json'], cwd, {
+      DOCTOR_JUDGE_KEY: SECRET,
+      DOCTOR_OTEL_HEADERS: GEN_SECRET,
+    });
+    expect(sinkRow(run.stdout)).toMatchObject({
+      status: 'pass',
+      detail: expect.stringContaining('DOCTOR_OTEL_HEADERS=<set>'),
+    });
+    expect(run.stdout).not.toContain(GEN_SECRET);
+    expect(run.exitCode).toBe(0);
   });
 });

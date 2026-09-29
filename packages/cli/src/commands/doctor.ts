@@ -222,7 +222,15 @@ function checkConfiguredGenerator(
       };
 }
 
-function checkConfiguredSinks(sinks: ResolvedConfig['sinks']): DoctorCheck {
+// A descriptor names its credential variables in `*Env` properties (optional ones may be
+// absent); doctor reports each by name and set/unset, never by value.
+function descriptorEnvNames(descriptor: object): string[] {
+  return Object.entries(descriptor)
+    .filter(([key, v]) => key.endsWith('Env') && typeof v === 'string')
+    .map(([, v]) => String(v));
+}
+
+function checkConfiguredSinks(sinks: ResolvedConfig['sinks'], env: Env): DoctorCheck {
   const name = 'sink credentials';
   if (sinks.length === 0) return { name, status: 'info', detail: 'no sinks configured' };
   const bare = sinks.filter((s): s is string => typeof s === 'string');
@@ -233,12 +241,22 @@ function checkConfiguredSinks(sinks: ResolvedConfig['sinks']): DoctorCheck {
       detail: `sink name(s) ${bare.join(', ')} resolve to no adapter object — cannot verify their credentials`,
     };
   }
-  const ids = sinks.map(sinkRefName);
-  return {
-    name,
-    status: 'pass',
-    detail: `sink adapter(s) ${ids.join(', ')} supply their own credentials`,
-  };
+  const descriptors = sinks.filter((s) => typeof s !== 'string' && 'kind' in s);
+  const adapters = sinks.filter((s) => typeof s !== 'string' && !('kind' in s));
+  const parts: string[] = [];
+  if (adapters.length > 0) {
+    parts.push(`adapter(s) ${adapters.map(sinkRefName).join(', ')} supply their own credentials`);
+  }
+  let unset = false;
+  for (const d of descriptors) {
+    const vars = descriptorEnvNames(d).map((n) => credentialStatusText(n, env, false));
+    unset ||= vars.some((v) => v.endsWith('=<unset>'));
+    parts.push(`descriptor ${sinkRefName(d)} (${vars.join(', ')})`);
+  }
+  const detail = `sink ${parts.join('; ')}`;
+  return unset
+    ? { name, status: 'warn', detail: `${detail} — set the unset variable(s) before running` }
+    : { name, status: 'pass', detail };
 }
 
 // Every `*Env` string becomes <set>/<unset> (the variable name is dropped too); an adapter
@@ -513,7 +531,7 @@ async function inspect(deps: DoctorDeps): Promise<DoctorRun> {
       { name: 'config', status: 'pass', detail: `loaded ${configFile}` },
       checkPlannedJudgeCredential(plan, env, revealSuffix),
       checkConfiguredGenerator(config.generator, env, revealSuffix),
-      checkConfiguredSinks(config.sinks),
+      checkConfiguredSinks(config.sinks, env),
       checkLefthook(lefthookInstalled),
       await checkPlannedJudgeHealth(plan, env, fetchImpl),
     ];
