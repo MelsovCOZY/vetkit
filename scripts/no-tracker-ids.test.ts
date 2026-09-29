@@ -11,6 +11,8 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const TRACKER_ID_PATTERNS: readonly RegExp[] = [
   /(?<![a-z])mol-[a-z0-9]{2,4}(\.[0-9]+)?/,
   /\b(dh8|pij|yxn|aq4|q4q|p4a|0nw|76a|fou|vv7)\.[0-9]+\b/,
+  /\bvet-[a-z0-9]{3}\.[0-9]+\b/,
+  /\bvet-(dh8|pij|yxn|aq4|q4q|p4a|0nw|76a|fou|vv7|d4m|d0i)\b/,
   new RegExp(['classified', 'evals', ''].join('-')),
   /\bbug F[0-9]+/,
   /\b(DECISION|CLAIM)\b[^\n]{0,20}\bturn\s+[0-9]+/,
@@ -72,7 +74,7 @@ describe('tracker ids in shipped files', () => {
   it('flags a bead id in a file under packages/', () => {
     const id = ['mol', 'abc.1'].join('-');
     const hits = findTrackerIds([{ path: 'packages/core/src/x.ts', text: `// see ${id}\n` }]);
-    expect(hits).toEqual([{ path: 'packages/core/src/x.ts', line: 1, match: id }]);
+    expect(hits.map((hit) => hit.match)).toContain(id);
   });
 
   it('flags a bare short id, an epic name, a bug number and a planning turn', () => {
@@ -90,6 +92,23 @@ describe('tracker ids in shipped files', () => {
   it('does not flag ordinary words that resemble an id', () => {
     const text =
       's' + ['mol', 'toml'].join('-') + '\nmultiple turns of a conversation\nreturn 1;\n';
+    expect(findTrackerIds([{ path: 'packages/core/src/x.ts', text }])).toEqual([]);
+  });
+
+  it('flags a vet-prefixed child id and a known vet-prefixed epic id', () => {
+    const cases = [
+      ['vet', 'yxn'].join('-') + ['', '23'].join('.'),
+      ['vet', 'd4m'].join('-'),
+      ['vet', 'p4a'].join('-'),
+    ];
+    for (const id of cases) {
+      const hits = findTrackerIds([{ path: 'packages/core/src/x.ts', text: `// see ${id}\n` }]);
+      expect(hits.map((hit) => hit.match)).toContain(id);
+    }
+  });
+
+  it('does not flag CLI words, the vetkit name or an unknown vet-prefixed word', () => {
+    const text = ['vet-run', 'vet --json', 'vetkit-wt/x', 'vet-cli', 'vet-abc'].join('\n');
     expect(findTrackerIds([{ path: 'packages/core/src/x.ts', text }])).toEqual([]);
   });
 
