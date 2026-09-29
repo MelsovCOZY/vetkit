@@ -1,5 +1,5 @@
-// Pure Verdict -> OTLP/JSON span encoding for the OpenInference EVALUATOR carrier (docs/sinks.md
-// "otel-openinference"). The target span has ended, so feedback rides on a NEW span that has
+// Pure Verdict -> OTLP/JSON span encoding for the OpenInference EVALUATOR carrier.
+// The target span has ended, so feedback rides on a NEW span that has
 // exactly one Span Link to the target and no parent
 // (https://github.com/Arize-ai/openinference/blob/main/spec/annotations.md).
 import { randomBytes } from 'node:crypto';

@@ -1,5 +1,5 @@
 // Cascade, token and message-ordering tests. Two ~20-line fake dialects stand
-// in for the real gen_ai/openinference/etc modules, which do not exist yet.
+// in for the real gen_ai/openinference/etc modules.
 
 import { describe, expect, test, vi } from 'vitest';
 import type { Message } from '@vetkit/spec';
@@ -168,9 +168,8 @@ describe('normalizeTrace', () => {
 
 // extractUsage may report a bare totalTokens (no split); sumTokens must fold it into
 // tokens.total without a split from the same span also being present. A same-span
-// split+totalTokens double-count guard is not separately asserted here: since the pre-fix
-// sumTokens ignores totalTokens entirely, that specific case already yields the same number
-// under old and new code, so it cannot be driven red against this baseline (see BUILD report).
+// split+totalTokens double-count guard is not separately asserted here: a sumTokens that
+// ignored totalTokens entirely would yield the same number for that case.
 describe('sumTokens: bare totalTokens (no split)', () => {
   test('a totalTokens-only span contributes to tokens.total with input/output omitted', () => {
     const tree = buildSpanTree([

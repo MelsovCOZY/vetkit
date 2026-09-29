@@ -1,11 +1,10 @@
-// OTLP/HTTP receiver: a plain node:http server accepting
-// `POST /v1/traces` with an OTLP/JSON ExportTraceServiceRequest body, JSON only (no
-// protobuf/gRPC — docs/contracts/j5.md "Input contract"). Every request is parsed through
-// readOtlpJson (the same schema chokepoint the file source uses), grouped by traceId and
-// normalized (default dialect cascade unless the caller passes its own), and `onRequest` is
-// called once per trace in the body — a duplicate traceId across two separate requests is
-// not this module's concern (cross-request dedupe lives in the
-// CLI's otlpSourceFromArg, not here). This module keeps no state across requests.
+// OTLP/HTTP receiver: a plain node:http server accepting `POST /v1/traces` with an OTLP/JSON
+// ExportTraceServiceRequest body, JSON only (no protobuf/gRPC). Every request is parsed
+// through readOtlpJson (the same schema chokepoint the file source uses), grouped by traceId
+// and normalized (default dialect cascade unless the caller passes its own), and `onRequest`
+// is called once per trace in the body. A duplicate traceId across two separate requests is
+// not this module's concern (cross-request dedupe lives in the CLI's otlpSourceFromArg, not
+// here). This module keeps no state across requests.
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { promisify } from 'node:util';
 import { gunzip } from 'node:zlib';

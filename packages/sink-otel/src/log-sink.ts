@@ -1,5 +1,5 @@
 // `otel/logs` sink: POSTs one gen_ai.evaluation.result LogRecord per verdict as OTLP/JSON to
-// an OTLP/HTTP logs endpoint. Injected fetch, no SDK pipeline (root DECISION: access layer).
+// an OTLP/HTTP logs endpoint. Injected fetch, no SDK pipeline.
 // Rejections are data: HTTP and network failures map to ack entries, never throws.
 import {
   defineSink,

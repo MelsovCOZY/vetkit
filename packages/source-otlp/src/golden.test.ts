@@ -1,5 +1,5 @@
-// Golden fixtures + cross-dialect parity test: the corpus and the single test
-// that prove root acceptance J5 "golden diff 0 across five dialects", independent of the CLI.
+// Golden fixtures + cross-dialect parity test: the corpus and the single test that prove
+// "golden diff 0 across five dialects", independent of the CLI.
 // Six hand-authored OTLP/JSON fixtures (fixtures/otlp/) each carry the same two-turn conversation
 // (system + user + assistant tool call + tool response + final assistant answer, 120/45 usage
 // tokens) encoded in one dialect's own attribute convention, over the same span topology
@@ -7,9 +7,8 @@
 // test deep-equals against.
 //
 // This corpus's shared conversation uses only `text` MessageParts, never `tool_call`/
-// `tool_call_response` — genAiLegacyDialect,
-// openinference and vercel could not yet map their native tool-call attributes to those parts.
-// That gap is closed by a second corpus below (TOOLCALL_DIALECT_FILES) carries the same
+// `tool_call_response`, because not every dialect maps its native tool-call attributes to
+// those parts identically. A second corpus below (TOOLCALL_DIALECT_FILES) carries the same
 // conversation with a real tool_call/tool_call_response round trip, proving that parity too.
 
 import { readFile } from 'node:fs/promises';
@@ -105,8 +104,8 @@ function unwrap<T>(result: ParseResult<T>): T {
   return result.value;
 }
 
-// Golden output shape (bead design): NormalizedTrace projected to {messages, spans:[{name,kind}],
-// tokens} -- traceId and every span/message id are excluded (acceptance criteria "ids excluded").
+// Golden output shape: NormalizedTrace projected to {messages, spans:[{name,kind}],
+// tokens} -- traceId and every span/message id are excluded.
 function project(trace: NormalizedTrace): Projected {
   return {
     messages: trace.messages,
@@ -200,18 +199,18 @@ async function assertCrossDialectParity(
   }
 }
 
-describe('golden fixtures: cross-dialect parity (root acceptance J5)', () => {
+describe('golden fixtures: cross-dialect parity', () => {
   test('all five dialect fixtures normalize to identical messages and tokens, and match their own golden spans/kinds', async () => {
     await assertCrossDialectParity(DIALECT_FILES, 'cases.jsonl', 'tokens.json');
   });
 });
 
 // the same parity property, proven on a conversation that actually exercises tool_call /
-// tool_call_response parts (the text-only corpus above never does — see its DEVIATION note,
-// since resolved). Ids are each dialect's own native id (e.g. "call_1"), normalised by
+// tool_call_response parts (the text-only corpus above never does).
+// Ids are each dialect's own native id (e.g. "call_1"), normalised by
 // normalizeTrace to tool_call_1 identically for all five, so the golden messages below use that
 // normalised id, not any dialect's native one.
-describe('golden fixtures: cross-dialect parity for a tool-call conversation (root acceptance J5)', () => {
+describe('golden fixtures: cross-dialect parity for a tool-call conversation', () => {
   test('all five dialect fixtures normalize a tool_call/tool_call_response round trip identically', async () => {
     await assertCrossDialectParity(TOOLCALL_DIALECT_FILES, 'cases-toolcall.jsonl', 'tokens.json');
   });

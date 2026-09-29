@@ -1,4 +1,4 @@
-// Langfuse sink: one POST <baseUrl>/api/public/scores per verdict (docs/sinks.md "langfuse").
+// Langfuse sink: one POST <baseUrl>/api/public/scores per verdict.
 // Raw fetch, no langfuse package. Rejection reasons carry only a code and an HTTP status, never
 // headers, bodies or keys. Retries belong to the outbox; scores are not idempotent.
 

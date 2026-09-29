@@ -1,7 +1,7 @@
 // OpenInference dialect: the one DialectV1 (packages/source-otlp/src/normalize/
 // dialect.ts) that maps the OpenInference semantic conventions. Detection order, token
 // single-counting and completeness flags are cascade concerns owned by the normalize cascade — this
-// module only ever reads its own attribute keys off one span (root ledger DECISION: no
+// module only ever reads its own attribute keys off one span (no
 // cross-dialect fallbacks inside a dialect).
 //
 // Attribute names pinned to SPEC_COMMIT below:
@@ -21,7 +21,7 @@ import type { AnyValue, OtlpResource, OtlpSpan } from '../../reader/index.ts';
 import type { SpanTree } from '../../reader/tree.ts';
 import type { DialectV1 } from '../../normalize/dialect.ts';
 
-// RISK (bead notes): the conventions are unreleased (manifest gen-ai-dev/1.42.0-dev) and renames
+// RISK: the conventions are unreleased (manifest gen-ai-dev/1.42.0-dev) and renames
 // are queued in changelog.d. This pins the attribute table to one commit of
 // spec/semantic_conventions.md so drift is a diff against a known revision, not a guess.
 const SPEC_COMMIT = '7feb0c4ba2fd77cb76036712e21d06ff15a2be22';
@@ -93,10 +93,8 @@ const MESSAGE_LIST_SCHEMA: JsonSchema = {
   },
 };
 
-// Unknown roles map to 'user' (Approach: "unknown roles map to 'user' with a diag warning
-// event"). DialectV1.extractMessages has no diag output channel — only detectDialect's
-// mixed_dialects warning does — so this mapping is silent here; a
-// diag channel for per-message warnings is out of this bead's scope.
+// Unknown roles map to 'user'. DialectV1.extractMessages has no diag output channel — only
+// detectDialect's mixed_dialects warning does — so this mapping is silent.
 function isRole(value: string): value is Message['role'] {
   return (VALID_ROLES as readonly string[]).includes(value);
 }
@@ -185,9 +183,9 @@ function indexedMessages(attrs: Record<string, AnyValue>, prefix: string): Messa
 
 // Parses `raw` as a message list per MESSAGE_LIST_SCHEMA. `raw` is either the JSON-string form
 // (safeParseJson's normal chokepoint use) or an already-structured AnyValue (arrived via
-// kvlistValue/arrayValue flattening rather than a JSON string) — the Approach note "structured
-// (non-string) attribute values are accepted as-is after schema validation" — validated directly
-// through validateJson instead.
+// (safeParseJson's normal chokepoint use) or an already-structured AnyValue (arrived via
+// kvlistValue/arrayValue flattening rather than a JSON string), which is accepted as-is after
+// schema validation — validated directly through validateJson instead.
 function parseMessageList(raw: AnyValue): ReturnType<typeof safeParseJson<Message[]>> {
   return typeof raw === 'string'
     ? safeParseJson<Message[]>(raw, MESSAGE_LIST_SCHEMA)
@@ -195,10 +193,10 @@ function parseMessageList(raw: AnyValue): ReturnType<typeof safeParseJson<Messag
 }
 
 // input.value/output.value fallback, used only when the indexed llm.<input|output>_messages.*
-// attributes are absent for that direction (Scope: no cross-dialect fallback, but input.value and
+// attributes are absent for that direction (no cross-dialect fallback, but input.value and
 // output.value are this dialect's own keys). text/plain (or no mime_type) becomes one message;
 // application/json is parsed as a message list when it validates, else falls back to one text
-// part — except JSON that fails to even parse, which becomes a parse_error part (Edge cases).
+// part — except JSON that fails to even parse, which becomes a parse_error part.
 function fallbackMessages(
   attrs: Record<string, AnyValue>,
   valueKey: string,
@@ -273,10 +271,10 @@ function extractUsage(span: OtlpSpan): { inputTokens?: number; outputTokens?: nu
 }
 
 // Spans whose mapped content attributes are entirely absent report 'not_captured', never an empty
-// list masquerading as captured (acceptance criteria) — extractMessages already returns [] for
+// list masquerading as captured — extractMessages already returns [] for
 // exactly that case, for both LLM and TOOL spans, so contentState reuses it rather than
 // duplicating the presence check. A malformed-JSON parse_error part still counts as captured
-// content (Edge cases: "contentState 'captured' but the message list carries a parse_error part").
+// content (contentState 'captured' but the message list carries a parse_error part).
 function contentState(span: OtlpSpan): 'captured' | 'not_captured' | 'redacted' {
   return messagesFor(span).length > 0 ? 'captured' : 'not_captured';
 }

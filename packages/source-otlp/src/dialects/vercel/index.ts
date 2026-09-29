@@ -9,7 +9,7 @@
 // kind 'other'; only its inner `.doGenerate`/`.doStream` provider span is an LLM span, so a
 // duplicate ai.usage.* attribute copy on the outer span is never summed.
 //
-// RISK (bead notes): the GenAI semconv conventions this maps against are unreleased
+// RISK: the GenAI semconv conventions this maps against are unreleased
 // (gen-ai-dev/1.42.0-dev) and renames are queued in changelog.d; SPEC_COMMIT pins the doc
 // revision this module was written against and is surfaced as NormalizedTrace.dialectVersion.
 
@@ -31,7 +31,7 @@ const INNER_OPERATION_IDS = new Set<string>([
 
 // Vercel's own wire shape for ai.prompt.messages: {role, content} where content is a plain
 // string or an array of content parts (only `{type:'text', text}` parts are read; other part
-// types are out of scope for this bead). Distinct from @vetkit/spec's Message/MessagePart.
+// types are not read). Distinct from @vetkit/spec's Message/MessagePart.
 const promptMessagesSchema: JsonSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   type: 'array',
@@ -85,7 +85,7 @@ function toRole(raw: unknown): Message['role'] {
 }
 
 // A content-parts array entry's text, when it is a `{type:'text', text}` part; other Vercel
-// content part types (image, file, ...) are out of scope for this bead and are skipped.
+// content part types (image, file, ...) are not read and are skipped.
 function textPartText(item: unknown): string | undefined {
   if (item === null || typeof item !== 'object') return undefined;
   if (!('type' in item) || !('text' in item)) return undefined;

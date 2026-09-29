@@ -1,5 +1,5 @@
-// OpenLLMetry (traceloop) dialect tests. Spans are built inline — shared
-// cross-dialect fixtures belong to the golden corpus, and this dialect never reads another dialect's keys, so
+// OpenLLMetry (traceloop) dialect tests. Spans are built inline — shared cross-dialect
+// fixtures belong to the golden corpus, and this dialect never reads another dialect's keys, so
 // there is nothing here to share.
 
 import { describe, expect, test } from 'vitest';

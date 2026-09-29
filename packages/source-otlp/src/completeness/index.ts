@@ -1,8 +1,8 @@
-// assessCompleteness: pure judgement of whether a trace's LLM content was
-// actually captured intact -- never scores truncated or not-captured content as if it were
-// complete (root acceptance J5). `reasons` is diagnostic only; a
-// length-equals-limit match is a heuristic and false positives are acceptable (a truncated mark
-// excludes a case from content-dependent criteria, it never fails one).
+// assessCompleteness: pure judgement of whether a trace's LLM content was actually captured
+// intact -- never scores truncated or not-captured content as if it were complete. `reasons`
+// is diagnostic only; a length-equals-limit match is a heuristic and false positives are
+// acceptable (a truncated mark excludes a case from content-dependent criteria, it never
+// fails one).
 
 import type { OtlpSpan } from '../reader/index.ts';
 import type { SpanTree } from '../reader/tree.ts';

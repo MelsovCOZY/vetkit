@@ -1,4 +1,4 @@
-// Tests for createLangfuseSource, written from the acceptance criteria:
+// Tests for createLangfuseSource:
 // - `createLangfuseSource(...).doRead()` yields one NormalizedTrace per Langfuse trace, with
 //   messages assembled from GENERATION observations in start-time order, provenance
 //   ('langfuse.trace.id' / 'langfuse.observation.id' of the last generation) recorded as
@@ -7,9 +7,8 @@
 // - Pagination over 2 pages via a fake fetch (case 'pagination').
 // - Auth failure (401/403) yields a VetError code SOURCE_AUTH thrown at first read, not a
 //   silent empty iterator (case 'auth').
-// Plus two edge cases from the bead's "Edge cases" section, testing the SOURCE_UNREACHABLE
-// code this bead adds: a 429 exhausted after 3 retries, and a trace with zero GENERATION
-// observations.
+// - Two edge cases: SOURCE_UNREACHABLE after a 429 exhausted after 3 retries, and a trace with
+//   zero GENERATION observations.
 //
 // fetch is injected (options.fetch); no live Langfuse calls. Credentials are read from env var
 // NAMES via process.env, never literals.
