@@ -23,6 +23,8 @@ interface ScorerMetadata {
   readonly status: string;
   readonly probability?: number;
   readonly threshold?: number;
+  /** False for a real judge request, true for a verdict cache hit (mol-aq4.18: CEV_TRACE_HTTP). */
+  readonly cacheHit: boolean;
 }
 
 interface ScorerResult {
@@ -84,6 +86,7 @@ export function createScorer(overrides: ScorerOverrides = {}): {
           status,
           ...(answer.probability === undefined ? {} : { probability: answer.probability }),
           threshold: THRESHOLD,
+          cacheHit: verdict.cacheHit,
         },
       };
     },
