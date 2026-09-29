@@ -971,6 +971,17 @@ describe('gate refusal before any judge call (q4q.11)', () => {
     expect(out.gateReasons.join('\n')).toContain('GATE_UNPINNED');
   });
 
+  test('--gate with no lock refuses: summary passed/failed are 0, matching empty results', async () => {
+    const paths = await suite([BOOL_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
+    const { judge, doJudge } = scriptedJudge({ S1: { 'answers-question': yes(0.9) } });
+    const out = await runEvals({ config: { ...paths, judge, gate: true } });
+
+    expect(doJudge).toHaveBeenCalledTimes(0);
+    expect(out.results).toEqual([]);
+    expect(out.summary).toMatchObject({ passed: 0, failed: 0 });
+    expect(out.gateReasons.join('\n')).toContain('criteria.lock.json');
+  });
+
   test('--ci --allow-unpinned on a floating lock judges and exits by results', async () => {
     const paths = await suite([BOOL_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
     const { judge, doJudge } = scriptedJudge(

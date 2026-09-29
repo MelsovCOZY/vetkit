@@ -95,7 +95,11 @@ describe('vet run', () => {
       fixtureEnv('pass'),
     );
     expect(result.status).toBe(2);
-    expect(parseJson(result.stdout)).toMatchObject({ exitCode: 2 });
+    expect(parseJson(result.stdout)).toMatchObject({
+      exitCode: 2,
+      results: [],
+      summary: { passed: 0, failed: 0 },
+    });
   });
 
   test('--config loads a config from another directory, rooted there', () => {
