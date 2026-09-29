@@ -13,7 +13,7 @@ const REFERENCE_NOTE =
 // expected.value is any JSON (case.schema.json): strings pass through, scalars use String(),
 // null/arrays/objects render as JSON text so the judge and the exact/normalized checks never see
 // "[object Object]" or an array's comma join.
-function valueText(value: unknown): string {
+export function valueText(value: unknown): string {
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
     return String(value);
@@ -45,7 +45,7 @@ const CITATION_MARKER_RE = /\[\d+\]/g;
 const PUNCTUATION_RE = /\p{P}/gu;
 const WHITESPACE_RE = /\s+/g;
 
-function normalizeText(value: string): string {
+export function normalizeText(value: string): string {
   return value
     .normalize('NFKC')
     .toLocaleLowerCase('und')

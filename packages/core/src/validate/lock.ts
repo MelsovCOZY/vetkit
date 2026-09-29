@@ -119,6 +119,8 @@ export interface LockCriterionInput {
   readonly gauntletDetail?: {
     /** `MasterKeyResult.failedInputs`: fixed entry ids and `truncation:<caseId>`. */
     readonly masterKeyFailedInputs?: readonly string[];
+    /** `MasterKeyResult.reason` when master_key did not fail on an input (no escape option). */
+    readonly masterKeyReason?: 'no_escape';
     readonly injectionFamilies?: Families;
   };
 }
@@ -156,8 +158,11 @@ function gauntletDetailOf(
 ): GauntletDetail | undefined {
   const masterKeyFailed = masterKeyFailures(detail?.masterKeyFailedInputs ?? []);
   const injectionFlips = flippedFamilies(detail?.injectionFamilies);
-  if (masterKeyFailed.length === 0 && injectionFlips.length === 0) return undefined;
+  const masterKeyReason = detail?.masterKeyReason;
+  if (masterKeyFailed.length === 0 && injectionFlips.length === 0 && masterKeyReason === undefined)
+    return undefined;
   return {
+    ...(masterKeyReason === undefined ? {} : { masterKeyReason }),
     ...(masterKeyFailed.length === 0 ? {} : { masterKeyFailed }),
     ...(injectionFlips.length === 0 ? {} : { injectionFlips }),
   };

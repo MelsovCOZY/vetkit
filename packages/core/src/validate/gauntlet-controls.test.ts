@@ -298,6 +298,13 @@ const oneSentence = (id: string, answer: string): Case => ({
   tags: [],
 });
 
+const withReference = (id: string, answer: string, value: string): Case => ({
+  ...oneSentence(id, answer),
+  expected: { value, source: 'user' },
+});
+const probeStates = (judge: { states: string[] }): string[] =>
+  judge.states.filter((s) => s.includes('assistant:'));
+
 describe('gauntletMasterKey', () => {
   const knownPass = [makeCase(0), makeCase(2)];
 
@@ -403,13 +410,6 @@ describe('gauntletMasterKey', () => {
 
   describe('reference-bearing truncation probes', () => {
     const REFERENCE_CRITERION: Criterion = { ...CRITERION, grader: { kind: 'reference' } };
-    const withReference = (id: string, answer: string, value: string): Case => ({
-      ...oneSentence(id, answer),
-      expected: { value, source: 'user' },
-    });
-    const probeStates = (judge: { states: string[] }): string[] =>
-      judge.states.filter((s) => s.includes('assistant:'));
-
     it('cuts a probe before the first occurrence of the reference, using the reference normaliser', async () => {
       const cases = [
         withReference('r1', 'The first train leaves at 05:40 from the old station [1]', '05:40'),
