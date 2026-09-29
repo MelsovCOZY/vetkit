@@ -2,6 +2,7 @@
 # agent tooling: local only
 .beads/
 graphify-out/
+.codex/
 .dolt/
 *.db
 .beads-credential-key
