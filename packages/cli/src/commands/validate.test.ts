@@ -760,11 +760,10 @@ describe('vet run gate with a lock file (spawned)', () => {
 // non-retryable JUDGE_UNAVAILABLE, so the criterion is scored on a small subset.
 function flakyJudge(rows: readonly Row[], answering: ReadonlySet<string>): JudgeV1 {
   const base = countingJudge(rows, createEvents()).judge;
-  const idOf = (state: string): string => state.replace(/^S-/, '');
   return {
     ...base,
     doJudge: (req) =>
-      answering.has(idOf(req.state))
+      answering.has(req.state.replace(/^S-/, ''))
         ? base.doJudge(req)
         : Promise.reject(new VetError(CEV_ERROR_CODES.JUDGE_UNAVAILABLE, 'down')),
   };
