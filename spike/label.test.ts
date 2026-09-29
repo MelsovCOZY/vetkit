@@ -599,16 +599,19 @@ describe('resolveMode: model labels', () => {
 });
 
 describe('reference placeholder rendering for labellers', () => {
-  const realCriteria = JSON.parse(
+  const realCriteria: Criterion[] = JSON.parse(
     readFileSync(fileURLToPath(new URL('./data/criteria.json', import.meta.url)), 'utf8'),
-  ) as Criterion[];
-  const c1 = realCriteria.find((c) => c.id === 'c1') as Criterion;
+  );
+  const c1 = criterion({
+    id: 'c1',
+    instructions: realCriteria.find((c) => c.id === 'c1')?.instructions ?? '',
+  });
   const traces = [trace({ traceId: 'a', reference: 'REF-42' })];
 
   test('renderInstructions substitutes the reference, falling back to not available', () => {
-    expect(renderInstructions(c1, traces[0] as Trace)).toContain('REF-42');
+    expect(renderInstructions(c1, traces[0] ?? trace({}))).toContain('REF-42');
     expect(renderInstructions(c1, trace({ reference: null }))).toContain('not available');
-    expect(renderInstructions(c1, traces[0] as Trace)).not.toContain('{{');
+    expect(renderInstructions(c1, traces[0] ?? trace({}))).not.toContain('{{');
   });
 
   test('TTY display and exported items never contain a raw placeholder', async () => {
@@ -624,7 +627,7 @@ describe('reference placeholder rendering for labellers', () => {
     expect(printed.join('\n')).toContain('REF-42');
     expect(printed.join('\n')).not.toContain('{{');
 
-    const items = buildPendingItems(traces, realCriteria, [], []);
+    const items = buildPendingItems(traces, realCriteria, [auto('a', 'review')], []);
     expect(items.some((i) => i.criterionId === 'c1')).toBe(true);
     expect(JSON.stringify(items)).not.toContain('{{');
   });

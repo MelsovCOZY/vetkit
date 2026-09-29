@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import * as clack from '@clack/prompts';
 import type { Trace } from './corpus.ts';
 import type { Criterion } from './propose.ts';
-import { readJsonl } from './lib/index.ts';
+import { readJsonl, renderInstructions } from './lib/index.ts';
 
 export type Label = 'yes' | 'no' | 'review';
 export type Source = 'auto' | 'human' | 'baseline' | 'model';
@@ -338,7 +338,7 @@ export function buildPendingItems(
       question: t.question,
       answer: t.answer,
       contexts: t.contexts.map((ctx) => ({ docId: ctx.docId, text: ctx.text })),
-      criterion: { name: c.name, instructions: c.instructions, escape: c.escape },
+      criterion: { name: c.name, instructions: renderInstructions(c, t), escape: c.escape },
       labels: [...ALLOWED_LABELS],
     });
   }
@@ -435,7 +435,7 @@ export async function runInteractiveLoop(opts: {
       lastTraceId = t.traceId;
     }
 
-    opts.print(`${c.name}: ${c.instructions} (escape: ${c.escape}) [y/n/u/q]`);
+    opts.print(`${c.name}: ${renderInstructions(c, t)} (escape: ${c.escape}) [y/n/u/q]`);
     const raw = (await opts.ask('> ')).trim().toLowerCase();
     if (raw === 'q') return { answered, quit: true };
 

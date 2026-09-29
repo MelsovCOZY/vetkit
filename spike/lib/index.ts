@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
+import type { Trace } from '../corpus.ts';
+import type { Criterion } from '../propose.ts';
 
 /** Reads a required environment variable, throwing a clear error (never the value) if unset. */
 export function loadEnv(name: string): string {
@@ -80,4 +82,12 @@ export async function withConcurrency<T, R>(
 
   await Promise.all(Array.from({ length: Math.max(1, Math.min(n, items.length)) }, worker));
   return results;
+}
+
+/** Criterion instructions with the golden reference substituted for `{{reference}}`; shared by the judge and the labellers. */
+export function renderInstructions(
+  criterion: Pick<Criterion, 'instructions'>,
+  trace: Pick<Trace, 'reference'>,
+): string {
+  return criterion.instructions.replaceAll('{{reference}}', trace.reference ?? 'not available');
 }
