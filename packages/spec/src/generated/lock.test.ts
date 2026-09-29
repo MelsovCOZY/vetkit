@@ -76,6 +76,19 @@ describe('lockSchema', () => {
     expect(parse(lock({ criteria: { c: criterion({ gauntletDetail: extra }) } })).ok).toBe(false);
   });
 
+  test.each(['raw', 'fenced-v1'])('accepts requestFormat %s', (requestFormat) => {
+    expect(parse(lock({ requestFormat })).ok).toBe(true);
+  });
+
+  test('accepts a lock without requestFormat', () => {
+    expect('requestFormat' in lock()).toBe(false);
+    expect(parse(lock()).ok).toBe(true);
+  });
+
+  test.each(['fenced', 'RAW', '', 1])('rejects requestFormat %s', (requestFormat) => {
+    expect(parse(lock({ requestFormat })).ok).toBe(false);
+  });
+
   test('rejects lockVersion 2', () => {
     expect(parse(lock({ lockVersion: 2 })).ok).toBe(false);
   });
