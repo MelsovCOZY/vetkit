@@ -4,7 +4,7 @@
 // (https://github.com/Arize-ai/openinference/blob/main/spec/annotations.md).
 import { randomBytes } from 'node:crypto';
 import type { Verdict } from '@vetkit/spec';
-import { verdictToLogRecord, type OtlpAttribute } from './encode.ts';
+import { errorType, verdictToLogRecord, type OtlpAttribute } from './encode.ts';
 
 // RISK: `evaluations.<i>.evaluation.*` taken from the annotations spec read 2026-09-25.
 const EV = 'evaluations.0.evaluation';
@@ -36,7 +36,11 @@ function causeText(verdict: Verdict): string {
 // carriers never disagree on the mapping.
 function evaluationAttributes(verdict: Verdict): OtlpAttribute[] {
   if (verdict.status !== 'ok') {
-    return [str(`${EV}.label`, verdict.status), str(`${EV}.explanation`, causeText(verdict))];
+    return [
+      str('error.type', errorType(verdict)),
+      str(`${EV}.label`, verdict.status),
+      str(`${EV}.explanation`, causeText(verdict)),
+    ];
   }
   const out: OtlpAttribute[] = [];
   for (const { key, value } of verdictToLogRecord(verdict).attributes) {
