@@ -62,18 +62,30 @@ function fakeExporter(id: string, files: string[] = ['fake.evals.test.ts']): Exp
   };
 }
 
-// Records every outDir doExport was called with, in call order.
-function recordingExporter(id: string): { exporter: ExporterV1; outDirs: string[] } {
+// Records every outDir and sourceFile doExport was called with, in call order.
+function recordingExporter(id: string): {
+  exporter: ExporterV1;
+  outDirs: string[];
+  sourceFiles: (string | undefined)[];
+} {
   const outDirs: string[] = [];
+  const sourceFiles: (string | undefined)[] = [];
   const exporter: ExporterV1 = {
     specVersion: 'v1',
     id,
-    doExport: (input: { criteria: Criterion[]; cases: Case[]; lock: unknown; outDir: string }) => {
+    doExport: (input: {
+      criteria: Criterion[];
+      cases: Case[];
+      lock: unknown;
+      outDir: string;
+      sourceFile?: string;
+    }) => {
       outDirs.push(input.outDir);
+      sourceFiles.push(input.sourceFile);
       return Promise.resolve({ files: [join(input.outDir, 'out.evals.test.ts')] });
     },
   };
-  return { exporter, outDirs };
+  return { exporter, outDirs, sourceFiles };
 }
 
 let stdout: string[] = [];
@@ -182,5 +194,36 @@ describe('vet export', () => {
       join(root, 'evals/vitest', 'criteria'),
       join(root, 'evals/vitest', 'other'),
     ]);
+  });
+
+  test('passes the criteria file basename as sourceFile, including a non-default name', async () => {
+    const root = await project();
+    await writeFile(join(root, 'evals', 'support.yaml'), CRITERIA_YAML);
+    const { exporter, sourceFiles } = recordingExporter('fake-source-file');
+    registerExporter('fake-source-file', exporter);
+    await vet(
+      ['export', '--to', 'fake-source-file', '--criteria', 'evals/support.yaml'],
+      depsFor(root),
+    );
+    expect(sourceFiles).toEqual(['support.yaml']);
+  });
+
+  test('passes each --criteria file its own basename as sourceFile', async () => {
+    const root = await project();
+    await writeFile(join(root, 'evals', 'other.yaml'), CRITERIA_YAML);
+    const { exporter, sourceFiles } = recordingExporter('fake-source-files');
+    registerExporter('fake-source-files', exporter);
+    await vet(
+      [
+        'export',
+        '--to',
+        'fake-source-files',
+        '--criteria',
+        'evals/criteria.yaml',
+        'evals/other.yaml',
+      ],
+      depsFor(root),
+    );
+    expect(sourceFiles).toEqual(['criteria.yaml', 'other.yaml']);
   });
 });

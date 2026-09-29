@@ -1,7 +1,5 @@
 // `vet export --to <id>` Resolves a registered ExporterV1
-// by id and calls doExport once per --criteria file (Criterion carries no
-// source-file field, so "one describe per criteria file" is a CLI-side grouping concern, not the
-// port's). The registry is a local Map, mirroring sources.ts's registerSourcePrefix: 'vitest' is
+// by id and calls doExport once per --criteria file, passing that file's basename as sourceFile. The registry is a local Map, mirroring sources.ts's registerSourcePrefix: 'vitest' is
 // registered by a module-scope call at import time.
 import { basename, extname, join, relative, resolve } from 'node:path';
 import { loadCases, loadCriteria, LOCK_FILE, readLockOrNull } from '@vetkit/core';
@@ -101,11 +99,9 @@ async function exportCommand(options: ExportOptions, deps: ExportDeps): Promise<
         `cannot load ${criteriaPath}: ${criteria.issues.map((i) => i.message).join('; ')}`,
       );
     }
-    // ExporterV1's doExport carries no source-file field, so with more
-    // than one --criteria file each call gets its own outDir subdir named after that file's
-    // basename (without extension) — the only way left to keep multiple files' output apart.
-    // A single file keeps outDir unchanged. The describe block inside the emitted test file
-    // still can't be named after the real criteria file: doExport has no way to learn it.
+    // With more than one --criteria file each call gets its own outDir subdir named after that
+    // file's basename (without extension) so multiple files' output stays apart. A single file
+    // keeps outDir unchanged.
     const groupOutDir =
       criteriaFiles.length > 1
         ? join(outDir, basename(criteriaFile, extname(criteriaFile)))
@@ -115,6 +111,7 @@ async function exportCommand(options: ExportOptions, deps: ExportDeps): Promise<
       cases: cases.cases,
       lock,
       outDir: groupOutDir,
+      sourceFile: basename(criteriaFile),
     });
     files.push(...result.files);
   }

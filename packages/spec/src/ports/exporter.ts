@@ -14,6 +14,8 @@ export interface ExporterV1 {
     cases: Case[];
     lock: Lock | null;
     outDir: string;
+    /** Basename of the criteria file these criteria came from, e.g. 'support.yaml'. */
+    sourceFile?: string;
   }): Promise<{ files: string[] }>;
 }
 
