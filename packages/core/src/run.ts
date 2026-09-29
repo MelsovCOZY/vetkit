@@ -184,7 +184,7 @@ function badResponseResult(): DecideVerdictResult {
  * non-code-graded) verdict — boolean, choice and score, incl. pass_when_false and the
  * EPSILON-banded borderline. No Case/Lock args: decide() resolves those into threshold/
  * tolerance before calling this. Exported so emitted scorer modules (export-vitest) call the
- * same math instead of duplicating it (root ledger DECISION, mol-aq4.11).
+ * same math instead of duplicating it (root ledger DECISION).
  */
 export function decideVerdict(
   verdict: Verdict,
@@ -217,7 +217,7 @@ export function decideVerdict(
     if (answer?.type !== 'choice') return badResponseResult();
     // choice answers resolve the escape label through escapeKey(criterion) (criterion.escape,
     // falling back to 'escape'); see the boolean-answered-as-choice branch below for the
-    // asymmetric case (contract aq4.11 point 2 — do not unify these).
+    // asymmetric case.
     const key = escapeKey(criterion);
     if (answer.choice === key || (answer.probabilities[key] ?? 0) >= escapeThreshold) {
       return { status: 'not_applicable', cause: 'escape' };
@@ -241,7 +241,7 @@ export function decideVerdict(
   } else if (answer?.type === 'choice') {
     // Boolean criteria answered choice-shaped (escape) always test the literal ESCAPE_KEY
     // constant, ignoring criterion.escape even though boolean criteria have an escape field
-    // (contract aq4.11 point 2 — this asymmetry with the choice branch above is intentional,
+    // (this asymmetry with the choice branch above is intentional,
     // not a bug; do not unify it).
     if ((answer.probabilities[ESCAPE_KEY] ?? 0) >= escapeThreshold) {
       return { status: 'not_applicable', cause: 'escape' };
@@ -299,14 +299,14 @@ function pacingDiag(events: Events): (event: PacingEvent) => void {
 }
 
 /** HTTP-like status for judge:response: 200 when answered (live or cached), else the error's real
- * HTTP status (bead mol-0nw.28: httpStatusOf reads it off err.cause.status / the message text,
+ * HTTP status (httpStatusOf reads it off err.cause.status / the message text,
  * never the body), or 0 when neither is present. */
 function statusOf(err: unknown): number {
   return httpStatusOf(err) ?? 0;
 }
 
 /** The safe subset of a verdict's cause that may ride the 'verdict' event: status and errorType
- * only, never the VetError code, a body or a key (bead mol-0nw.28). */
+ * only, never the VetError code, a body or a key. */
 function verdictCause(cause: unknown): EventMap['verdict']['cause'] {
   if (typeof cause !== 'object' || cause === null) return undefined;
   const status = (cause as { status?: unknown }).status;
@@ -578,7 +578,7 @@ export async function runEvals(input: RunEvalsInput): Promise<RunEvalsResult> {
     events.diag('warn', 'NO_GATEABLE_CRITERIA', 'no boolean or choice criterion can gate');
   }
 
-  // The gate refuses before any judge call (q4q.11): no lock, an unpinned lock under --ci, or a
+  // The gate refuses before any judge call: no lock, an unpinned lock under --ci, or a
   // referenced boolean/choice criterion that is not gateable in the lock.
   const refusal = preJudgeRefusal(config, lock, active);
   if (refusal !== undefined) {

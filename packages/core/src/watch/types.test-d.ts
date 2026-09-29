@@ -1,5 +1,5 @@
 // Asserts the exact shapes fixed by docs/contracts/j7.md "Ports and types" (bead
-// classified-evals-mol-zde, admin repair: zde owns types.ts + this test).
+// admin repair: zde owns types.ts + this test).
 import { expectTypeOf, test } from 'vitest';
 import type { Case } from '@vetkit/spec';
 import type { InclusionRecord, PromotedCase, WatchOptions } from './types.ts';

@@ -420,7 +420,7 @@ describe('createOutbox', () => {
     await expect(readFile(join(dir, '.lock'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
-  describe('skipped acks and per-item targets (mol-yxn.23)', () => {
+  describe('skipped acks and per-item targets', () => {
     test('a skipped: rejection is a terminal ack, never dead-lettered', async () => {
       const outbox = createOutbox(opts());
       await outbox.enqueue(verdicts(2));

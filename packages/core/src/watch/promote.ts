@@ -1,7 +1,7 @@
-// docs/contracts/j7.md "Promotion"; bead classified-evals-mol-dh8.3.
+// docs/contracts/j7.md "Promotion".
 //
 // promoteFailure is called directly as loop.ts's `onVerdict` (RunWatchInput.onVerdict:
-// `(verdict: Verdict, evalCase: Case) => boolean | void`, dh8.2/dh8.5) — synchronous, one
+// `(verdict: Verdict, evalCase: Case) => boolean | void`) — synchronous, one
 // verdict at a time. That is why this module writes with sync fs calls
 // (appendFileSync/readFileSync, same pattern as sampler.ts's inclusion log) rather than the
 // outbox's async files.ts helper (appendLines/scanLines): an async promoteFailure could not
@@ -10,7 +10,7 @@
 //
 // `evalCase` (the bead's acceptance-criteria text calls this second parameter `trace`) is the
 // Case the failing verdict was judged against, carrying the `traceId` this module needs.
-// `verdict.id` is exactly the id `outbox.enqueue` assigned that verdict (dh8.5 fixed loop.ts
+// `verdict.id` is exactly the id `outbox.enqueue` assigned that verdict (fixed loop.ts
 // to thread it through onVerdict): a verdict with no id is never promoted here — synthesizing
 // one would silently mismatch whatever the outbox actually wrote for it.
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';

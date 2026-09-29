@@ -359,7 +359,7 @@ describe('repeat tolerance and band cases', () => {
     expect(values.get('a')?.[0]).toBeCloseTo(1.5, 10);
   });
 
-  // mol-q4q.13: boolean criteria reach Jev as a {yes, no, escape} choice; P(pass) is P(yes), the
+  // boolean criteria reach Jev as a {yes, no, escape} choice; P(pass) is P(yes), the
   // same rule run.ts decide uses.
   test('repeatValues takes P(yes) for a boolean criterion answered as a yes/no/escape choice', () => {
     const response = judged({
@@ -378,7 +378,7 @@ describe('repeat tolerance and band cases', () => {
     expect(values.get('a')?.[0]).toBeCloseTo(0.35, 10);
   });
 
-  // mol-q4q.17: a choice answer with empty probabilities falls back to the argmax label, the same
+  // a choice answer with empty probabilities falls back to the argmax label, the same
   // rule run.ts decide uses (Number(passWhen.has(choice)), or 1 − v for pass_when_false).
   test('repeatValues falls back to Number(passWhen.has(choice)) for a choice answer with empty probabilities', () => {
     const passResponse: JudgeResponse = {

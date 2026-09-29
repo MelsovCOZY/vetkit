@@ -1,4 +1,4 @@
-// `vet export` (bead mol-aq4.3). Exercises the CLI plumbing only (target resolution, config/
+// `vet export`. Exercises the CLI plumbing only (target resolution, config/
 // criteria/cases loading, --require-lock, --json output) against a fake exporter registered
 // through registerExporter — never the real @vetkit/export-vitest exporter, which is covered
 // directly by packages/export-vitest/src/emit-test.test.ts.

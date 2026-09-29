@@ -1,5 +1,5 @@
-// OpenLLMetry (traceloop) dialect tests (bead mol-pij.5). Spans are built inline — shared
-// cross-dialect fixtures belong to pij.9, and this dialect never reads another dialect's keys, so
+// OpenLLMetry (traceloop) dialect tests. Spans are built inline — shared
+// cross-dialect fixtures belong to the golden corpus, and this dialect never reads another dialect's keys, so
 // there is nothing here to share.
 
 import { describe, expect, test } from 'vitest';
@@ -254,7 +254,7 @@ describe('extractUsage', () => {
   });
 });
 
-// pij.13: normalizeTrace uses spanKind() only for spans the dialect's own isLlmSpan already
+// normalizeTrace uses spanKind() only for spans the dialect's own isLlmSpan already
 // excludes (traceloop.span.kind 'llm' always routes through isLlmSpan instead), so this hook
 // only needs to answer for tool/workflow/task/agent.
 describe('spanKind', () => {

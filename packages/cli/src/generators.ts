@@ -1,4 +1,4 @@
-// GeneratorV1 from a declarative GeneratorEndpoint (bead mol-76a.9). The key is read by env
+// GeneratorV1 from a declarative GeneratorEndpoint. The key is read by env
 // var name only; the structured default ('json_schema') lives here, so core's ResolvedConfig
 // stays an exact echo of the user's config.
 import { readEnvName } from '@vetkit/core';

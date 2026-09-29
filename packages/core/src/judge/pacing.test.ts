@@ -350,11 +350,11 @@ describe('createLimiter retry and AIMD', () => {
     expect(messageOf(r.error)).toBe('judge transport error (HTTP 429) (after 3 attempts)');
   });
 
-  // mol-0nw.30: a connection-level failure (details.hint set — ECONNREFUSED, DNS, reset) is
+  // a connection-level failure (details.hint set — ECONNREFUSED, DNS, reset) is
   // not merely asking for patience like a 429/5xx, so it gets a short, fixed retry budget
   // instead of the default maxRetries — here exhausting after 3 calls, not 7 — but the error
   // it exhausts with must stay JUDGE_UNAVAILABLE with its hint intact (never JUDGE_TIMEOUT,
-  // which stays reserved for a real deadline; bug 0nw.29's AC).
+  // which stays reserved for a real deadline).
   it('a network-unreachable failure exhausts on a short fixed budget, keeping JUDGE_UNAVAILABLE and the hint', async () => {
     const clock = virtualClock();
     const limiter = createLimiter({ now: clock.now, sleep: clock.sleep });
@@ -557,7 +557,7 @@ describe('createLimiter events and timers', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  // mol-0nw.30 regression: defaultSleep's retry-wait `setTimeout` must stay ref'd. An unref'd
+  // regression: defaultSleep's retry-wait `setTimeout` must stay ref'd. An unref'd
   // one is invisible to Node's "any work left?" check; if it is the only pending handle (a real
   // CLI process retrying a refused connection, nothing else running), Node exits(0) as soon as
   // it decides there is nothing to wait for — before the timer ever fires — abandoning the
@@ -580,7 +580,7 @@ describe('createLimiter events and timers', () => {
     setTimeoutSpy.mockRestore();
   });
 
-  // mol-0nw.31: Bun prints TimeoutNegativeWarning when a computed delay goes below zero.
+  // Bun prints TimeoutNegativeWarning when a computed delay goes below zero.
   it('never passes a negative delay to setTimeout for a Retry-After in the past', async () => {
     const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
     const events: PacingEvent[] = [];

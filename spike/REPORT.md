@@ -1,4 +1,4 @@
-# Spike report: Jev vs ground truth, Jev vs the Gemini judge (mol-vv7.5)
+# Spike report: Jev vs ground truth, Jev vs the Gemini judge
 
 ## (a) Per-criterion table (human/auto labels as truth)
 
@@ -15,7 +15,7 @@
 | c9 | 456 | n/a | n/a | n/a | n/a | n/a | 0.0% | 0.0% | pending |
 | c10 | 456 | n/a | n/a | n/a | n/a | n/a | 0.0% | 0.0% | pending |
 
-c3's truth is the Gemini baseline, not a human/auto label, so it has no row-fitted stats here and is reported separately in block (c); c4-c10 have no truth yet (pending classified-evals-mol-vv7.7). c2's auto label is a *correctness* judgment (abstained-when-it-should, or didn't-when-it-shouldn't), which flips sign between answerable and unanswerable rows, so its raw P(yes)-vs-label kappa above is not directly comparable to c1's; see block (b) for the c2 accuracy computed only on the unambiguous (golden-unanswerable) subset.
+c3's truth is the Gemini baseline, not a human/auto label, so it has no row-fitted stats here and is reported separately in block (c); c4-c10 have no truth yet (pending). c2's auto label is a *correctness* judgment (abstained-when-it-should, or didn't-when-it-shouldn't), which flips sign between answerable and unanswerable rows, so its raw P(yes)-vs-label kappa above is not directly comparable to c1's; see block (b) for the c2 accuracy computed only on the unambiguous (golden-unanswerable) subset.
 
 ## (b) Ground-truth block
 
@@ -56,7 +56,7 @@ The c4-c10 generator was openai/gpt-5-mini (free-tier gateway, 4 calls); its usa
 
 Contexts are whole source documents (55-344 words) rebuilt offline from corpus/*.pdf|docx, not the 120-word chunks the pipeline actually retrieved by; the local Langfuse instance runs in v4 events-only mode and /api/public/traces returned 404 (probed 2026-09-25), so the judged unit is whole-document context, not the retrieved chunk.
 
-Human labels: this run has 0 human-labelled rows (labelled traces filed as classified-evals-mol-vv7.7, still pending). With a single labeller once that lands, Krippendorff alpha reduces to plain agreement between the human and the judge; a second labeller is out of scope of this spike.
+Human labels: this run has 0 human-labelled rows (labelled traces still pending). With a single labeller once that lands, Krippendorff alpha reduces to plain agreement between the human and the judge; a second labeller is out of scope of this spike.
 
 Jev is reached only through the gateway alias typesafe-ai/jev (TypeSafe registration is closed); the served model id recorded on every verdict is that alias, release_date 2026-09-15 per docs/research/fixtures/2026-09-25-gateway-models.json; `pinned: false`.
 

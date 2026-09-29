@@ -1,4 +1,4 @@
-// `vet run --sink <names>` (mol-yxn.7, J6): after the run, every verdict (partial on SIGINT)
+// `vet run --sink <names>` (J6): after the run, every verdict (partial on SIGINT)
 // is enqueued in the durable outbox under <cacheDir>/outbox, drained to the named sinks and
 // reconciled. The counts merge into the run's result: `sinks.<name> = {accepted, rejected}`
 // for this drain and `outbox = {produced, acknowledged, dead}` as outbox-file totals, which

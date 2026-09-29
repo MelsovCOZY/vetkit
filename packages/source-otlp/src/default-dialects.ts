@@ -1,4 +1,4 @@
-// DEFAULT_DIALECT_ORDER (bead mol-pij.11): the five merged dialect modules (pij.3-6), imported by
+// DEFAULT_DIALECT_ORDER: the five merged dialect modules, imported by
 // fixed path in the Langfuse cascade order — gen_ai (latest), gen_ai legacy, OpenInference,
 // OpenLLMetry, Vercel. otlpSource() (src/index.ts) falls back to this list only when
 // opts.dialects is undefined; an explicit [] still means "detect nothing".

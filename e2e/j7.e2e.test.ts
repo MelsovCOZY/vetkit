@@ -1,4 +1,4 @@
-// J7 journey (bd classified-evals-mol-529), shell form: runs scripts/smoke-j7.sh, which builds,
+// J7 journey, shell form: runs scripts/smoke-j7.sh, which builds,
 // starts a real OpenTelemetry Collector in docker, runs `vet watch` against the real Jev judge
 // with traffic from scripts/replay-otlp.ts, and checks every acceptance-criterion verify command.
 // Final cold gate only: skipped unless CEV_E2E=1 (key from AI_GATEWAY_API_KEY or the repo .env).

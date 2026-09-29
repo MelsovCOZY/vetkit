@@ -1,12 +1,12 @@
 // Response normaliser: turns a raw /v1/systemone-dialect Jev wire response (already
 // parsed from JSON by the caller — transport.ts's `await response.json()`, or
-// mol-0nw.4's Cloudflare envelope unwrap) into the IR `JudgeResponse`, so
+// the Cloudflare envelope unwrap) into the IR `JudgeResponse`, so
 // `packages/core` never sees a raw wire shape (docs/contracts/j1.md "Ports"; root
 // ledger DECISION: access layer). One normaliser feeds every transport.
 //
 // Scope (bead payload "Scope"): normalisation, confidence lift, legend fill,
 // provider selection, pinned flag, usage snake->camel, raw passthrough. Fetching is
-// transport.ts's job (mol-0nw.2); Cloudflare envelope unwrapping is mol-0nw.4's job.
+// transport.ts's job; Cloudflare envelope unwrapping is a separate concern.
 import {
   validateJson,
   VetError,

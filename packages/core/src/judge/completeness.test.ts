@@ -1,4 +1,4 @@
-// statusForTrace / partitionCases tests (bead mol-pij.7): 3 non-ok statuses, priority order, and
+// statusForTrace / partitionCases tests: 3 non-ok statuses, priority order, and
 // a contentDependent:false criterion still judged on an excluded case.
 
 import { describe, expect, test } from 'vitest';

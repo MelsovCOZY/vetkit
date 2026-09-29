@@ -1,7 +1,7 @@
-// `vet validate` (bead mol-q4q.6; docs/contracts/j3.md). validate judges every labelled case
+// `vet validate` (docs/contracts/j3.md). validate judges every labelled case
 // `--repeats` times (min 3) with the cache bypassed, tops the band cases up to 15 repeats,
 // calibrates, runs the eight gauntlets on the held-out cases and writes criteria.lock.json
-// atomically. `vet check` lives in check.ts (mol-p4a.2) and reuses loadProject.
+// atomically. `vet check` lives in check.ts and reuses loadProject.
 import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import {
@@ -253,7 +253,7 @@ async function readCorpus<T>(
   return undefined;
 }
 
-// `--gauntlet` omitted: the shipped corpora (packages/core/src/validate/corpora.ts, mol-q4q.12)
+// `--gauntlet` omitted: the shipped corpora (packages/core/src/validate/corpora.ts)
 // rather than an evals/gauntlet directory, so a fresh project gets real gauntlets out of the box.
 async function loadCorpora(dir: string | undefined, events: Events): Promise<Corpora> {
   if (dir === undefined) {
@@ -483,7 +483,7 @@ async function validate(
   const project = await loadProject(options, deps, true);
   const { loaded, criteria, cases } = project;
   const { judge, rootDir } = loaded;
-  // `enabled: false` (vet criteria disable, mol-e3g): never judged or calibrated; the
+  // `enabled: false` (vet criteria disable): never judged or calibrated; the
   // lock carries no entry for it (mirrors runEvals' active/disabled split in run.ts).
   const active = criteria.filter((c) => c.enabled !== false);
   const disabled = criteria.filter((c) => c.enabled === false);

@@ -2,7 +2,7 @@ name: Action selftest
 
 # Runs the composite action at the repo root (action.yml) against fixtures/cli/run, whose
 # judge is in-process and fake: no key, no network. Installs vetkit from the packed tarballs
-# until a published version exists (mol-fou.11).
+# until a published version exists.
 on:
   pull_request:
 

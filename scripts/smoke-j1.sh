@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# J1 slice-gate smoke (bd classified-evals-mol-n5w): judge one case with `vet run` against the
+# J1 slice-gate smoke: judge one case with `vet run` against the
 # REAL Jev judge through the vercel preset, and check every acceptance-criterion verify command.
 #
 # Sequence: build the workspace -> write a scratch project (one boolean criterion with an

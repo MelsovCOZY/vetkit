@@ -1,4 +1,4 @@
-# Criteria planted to fail validation, for the J3 gate (bd classified-evals-mol-lts).
+# Criteria planted to fail validation, for the J3 gate.
 # Labels: fixtures/labels/thin-class.csv and fixtures/gauntlet-fail/labels/. Cases: ./cases (no `expected`).
 criteria:
   # <30 fails in the held-out split -> class_too_small.

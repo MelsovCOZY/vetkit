@@ -170,7 +170,7 @@ describe('loadVetConfig', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  test('CEV_JUDGE_BASE_URL overrides the configured baseURL for that process (bug F3/F4)', async () => {
+  test('CEV_JUDGE_BASE_URL overrides the configured baseURL for that process', async () => {
     const fetchSpy = vi.fn(
       async (_url: string, _init?: RequestInit) => new Response('{}', { status: 500 }),
     );
@@ -235,7 +235,7 @@ const REQUEST = {
   questions: { q: { type: 'boolean', instructions: 'is it?' } },
 } as const;
 
-describe('loadVetConfig CEV_DIAG judge counter (mol-0nw.24)', () => {
+describe('loadVetConfig CEV_DIAG judge counter', () => {
   test('with CEV_DIAG=1 every doJudge call on the loaded judge is counted', async () => {
     const cwd = await project({ 'vetkit.config.ts': ANSWERING_CONFIG });
     const loaded = await loadVetConfig({ cwd, env: { CEV_DIAG: '1' } });

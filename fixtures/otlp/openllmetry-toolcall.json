@@ -1,5 +1,5 @@
 {
-  "_source": "traceloop/openllmetry semconv manifest gen-ai-dev/1.42.0-dev (github.com/traceloop/openllmetry issue #3515) -- llm.prompts/completions.{n}.content as a JSON-encoded MessagePart[] carrying tool_call/tool_call_response (mol-pij.14; dialect module itself not owned by this bead)",
+  "_source": "traceloop/openllmetry semconv manifest gen-ai-dev/1.42.0-dev (github.com/traceloop/openllmetry issue #3515) -- llm.prompts/completions.{n}.content as a JSON-encoded MessagePart[] carrying tool_call/tool_call_response (dialect module itself not owned by this bead)",
   "resourceSpans": [
     {
       "resource": {

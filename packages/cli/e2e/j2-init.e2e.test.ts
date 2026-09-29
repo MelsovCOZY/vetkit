@@ -1,4 +1,4 @@
-// J2 journey (bd classified-evals-mol-hzv): `vet init --source fixtures/traces/` generates
+// J2 journey: `vet init --source fixtures/traces/` generates
 // criteria and cases with the REAL generator and REAL Jev judge, lint accepts the generated file
 // and rejects every fixtures/lint-bad file, and `vet run` loads the generated set. Runs
 // scripts/smoke-j2.sh, which checks every acceptance-criterion verify command.

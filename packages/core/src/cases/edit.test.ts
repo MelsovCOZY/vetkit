@@ -1,4 +1,4 @@
-// mol-p4a.1: dedupe/quarantine/review/promote helpers behind `vet cases`. Reuses J7's
+// dedupe/quarantine/review/promote helpers behind `vet cases`. Reuses J7's
 // promoteFailure id/provenance shape for promoteVerdict (duplicated, not imported: promote.ts
 // hardcodes its dayFile under <dir>/pending/, but this manual path targets <dir>/ directly —
 // see promoteVerdict's own comment).
@@ -244,7 +244,7 @@ describe('promoteVerdict', () => {
     expect(written[0]).toMatchObject({ id: 'promoted-trace-abc-k-1' });
   });
 
-  test("dh8.7: keeps the case's existing provenance fields (traceId, spanId, traceIds) alongside promotedFrom", async () => {
+  test("keeps the case's existing provenance fields (traceId, spanId, traceIds) alongside promotedFrom", async () => {
     const withProvenance = evalCase({
       provenance: { traceId: 'trace-abc', spanId: 'span-1', traceIds: ['trace-abc'] },
     });

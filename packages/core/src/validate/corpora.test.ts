@@ -1,4 +1,4 @@
-// Drift guard (mol-q4q.12): the shipped TS corpora under ./corpora/ must stay byte-identical to
+// Drift guard: the shipped TS corpora under ./corpora/ must stay byte-identical to
 // their fixtures/gauntlet/*.json source of truth (still read directly by gauntlet-controls.test.ts
 // and gauntlet-bias.test.ts), so a fixture edit that forgets the TS copy fails loudly here.
 import { readFileSync } from 'node:fs';

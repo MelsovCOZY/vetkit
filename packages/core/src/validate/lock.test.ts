@@ -419,7 +419,7 @@ describe('writeLockAtomic / readLock', () => {
     expect('error' in r3 && r3.error.message).toContain('missing.json');
   });
 
-  test('readLockOrNull: missing → null, invalid → throws, valid → lock (q4q.11)', async () => {
+  test('readLockOrNull: missing → null, invalid → throws, valid → lock', async () => {
     const dir = await tmp();
     expect(await readLockOrNull(join(dir, 'criteria.lock.json'))).toBeNull();
     const junk = join(dir, 'junk.json');

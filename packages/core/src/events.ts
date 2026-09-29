@@ -54,7 +54,7 @@ export interface EventMap {
     readonly status: string;
     readonly pass?: boolean;
     /** Only on an unscored verdict from a transport HTTP error: the status and the provider's
-     * error type. Never the VetError code, never a body or key (bead mol-0nw.28). */
+     * error type. Never the VetError code, never a body or key. */
     readonly cause?: { readonly status?: number; readonly errorType?: string };
   };
   readonly 'sink:write': { readonly sink: string; readonly records: number };

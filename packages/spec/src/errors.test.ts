@@ -143,14 +143,14 @@ describe('VetError', () => {
     }
   });
 
-  test('accepts RUN_NOT_FOUND (missing run record, mol-p4a.3 `vet rerun`)', () => {
+  test('accepts RUN_NOT_FOUND (missing run record, `vet rerun`)', () => {
     expect(CEV_ERROR_CODES.RUN_NOT_FOUND).toBe('RUN_NOT_FOUND');
     const err = new VetError('RUN_NOT_FOUND', 'no run record at .vet/runs/latest.json');
     expect(VetError.isInstance(err)).toBe(true);
     expect(err.code).toBe('RUN_NOT_FOUND');
   });
 
-  test('accepts SOURCE_AUTH and SOURCE_UNREACHABLE (mol-yxn.5 Langfuse source)', () => {
+  test('accepts SOURCE_AUTH and SOURCE_UNREACHABLE (Langfuse source)', () => {
     const langfuseCodes = ['SOURCE_AUTH', 'SOURCE_UNREACHABLE'] as const;
 
     for (const code of langfuseCodes) {
@@ -172,7 +172,7 @@ describe('VetError', () => {
     }
   });
 
-  test('accepts EXPORT_TARGET_UNKNOWN and EXPORT_NO_LOCK (mol-aq4.3 `vet export`)', () => {
+  test('accepts EXPORT_TARGET_UNKNOWN and EXPORT_NO_LOCK (`vet export`)', () => {
     const exportCodes = ['EXPORT_TARGET_UNKNOWN', 'EXPORT_NO_LOCK'] as const;
 
     for (const code of exportCodes) {

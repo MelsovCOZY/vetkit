@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 // before any test worker starts, and never again while tests run. tsdown cleans dist/
 // before writing it, and other tests plant files in packages/*/src mid-run (making src
 // look newer than dist), so a mid-run rebuild deleted packages/core/dist under the bins
-// other workers were spawning (mol-p4a.10). globalSetup marks the run as built through
+// other workers were spawning. globalSetup marks the run as built through
 // DIST_READY_ENV, which the forked workers inherit; ensureCliBuilt() then only builds
 // when called outside that setup.
 

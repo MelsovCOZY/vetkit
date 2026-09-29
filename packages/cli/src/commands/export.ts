@@ -1,5 +1,5 @@
-// `vet export --to <id>` (bead mol-aq4.3; root acceptance J4). Resolves a registered ExporterV1
-// by id and calls doExport once per --criteria file (aq4.1 review NOTE: Criterion carries no
+// `vet export --to <id>` (root acceptance J4). Resolves a registered ExporterV1
+// by id and calls doExport once per --criteria file (review NOTE: Criterion carries no
 // source-file field, so "one describe per criteria file" is a CLI-side grouping concern, not the
 // port's). The registry is a local Map, mirroring sources.ts's registerSourcePrefix: 'vitest' is
 // registered by a module-scope call at import time.
@@ -101,7 +101,7 @@ async function exportCommand(options: ExportOptions, deps: ExportDeps): Promise<
         `cannot load ${criteriaPath}: ${criteria.issues.map((i) => i.message).join('; ')}`,
       );
     }
-    // ExporterV1's doExport carries no source-file field (aq4.1 review NOTE), so with more
+    // ExporterV1's doExport carries no source-file field (review NOTE), so with more
     // than one --criteria file each call gets its own outDir subdir named after that file's
     // basename (without extension) — the only way left to keep multiple files' output apart.
     // A single file keeps outDir unchanged. The describe block inside the emitted test file

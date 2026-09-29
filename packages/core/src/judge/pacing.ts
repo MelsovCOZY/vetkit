@@ -7,7 +7,7 @@
 // successes grow the ceiling by one up to `maxInFlight`. The retry budget is per run() call,
 // measured from its first attempt. JUDGE_TIMEOUT carries no details, so it is not retried.
 // One wake timer exists only while something is both paused and queued; it stays ref'd
-// (mol-0nw.30) because it is the sole thing a real CLI process is waiting on during a
+// because it is the sole thing a real CLI process is waiting on during a
 // backoff — an unref'd timer lets Node see no remaining work and exit(0) mid-retry,
 // before the timer ever fires, abandoning the run with no output.
 
@@ -80,9 +80,9 @@ function limiterError(last: VetError, attempts: number, extra?: string): VetErro
 // HTTP 429/5xx, which carries retryAfterMs/no hint) means the endpoint itself is unreachable,
 // not merely asking for patience; retrying it on the full AIMD backoff (up to maxBackoffMs,
 // maxRetries) can run for minutes for something that will not resolve in that window
-// (mol-0nw.30). It gets a short, fixed retry budget instead, but still exhausts as
+//. It gets a short, fixed retry budget instead, but still exhausts as
 // JUDGE_UNAVAILABLE with its hint intact via limiterError, same as any other retryable
-// failure — bug 0nw.29's AC ("refused connection gives JUDGE_UNAVAILABLE"); JUDGE_TIMEOUT
+// failure (a refused connection gives JUDGE_UNAVAILABLE); JUDGE_TIMEOUT
 // stays reserved for a real deadline.
 const NETWORK_UNREACHABLE_MAX_RETRIES = 2;
 const NETWORK_UNREACHABLE_MAX_BACKOFF_MS = 2_000;
@@ -117,7 +117,7 @@ export function createLimiter(opts: LimiterOptions = {}): Limiter {
 
   function pump(): void {
     // One clock read per pump: a second read could pass the pause between the check and the
-    // sleep, giving a negative delay (mol-0nw.31) or a wake timer that is never armed.
+    // sleep, giving a negative delay or a wake timer that is never armed.
     let t = now();
     while (queue.length > 0 && inFlight < ceiling && t >= pausedUntil) {
       const waiter = queue.shift();

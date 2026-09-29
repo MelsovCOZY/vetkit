@@ -1,4 +1,4 @@
-// Shipped gauntlet corpora (mol-q4q.12, from the q4q.6 review): bundled TS copies of
+// Shipped gauntlet corpora: bundled TS copies of
 // fixtures/gauntlet/*.json so a user project has real corpora out of the box, even though
 // packages/core/package.json ships only 'dist' (fixtures/ is repo-only, never published).
 // `vet validate --gauntlet` with no directory defaults to these (packages/cli/src/commands/validate.ts).

@@ -15,7 +15,7 @@ export type { EmitScorerOptions, EmitScorerResult } from './emit-scorer.ts';
 export { emitTestFile } from './emit-test.ts';
 export type { EmitTestFileOptions, EmitTestFileResult } from './emit-test.ts';
 
-// ExporterV1's input carries no source-file field (aq4.1 review NOTE: Criterion has none
+// ExporterV1's input carries no source-file field (review NOTE: Criterion has none
 // either), so this default name stands in for "the criteria" on a single doExport call; the
 // CLI (packages/cli/src/commands/export.ts) is what groups multiple --criteria files and calls
 // doExport once per file.

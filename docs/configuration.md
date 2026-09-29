@@ -20,6 +20,6 @@ environment currently selects (the first present, in the order above), and warns
 if more than one is set.
 
 Generator and sink credentials are named by `vetkit.config.ts`, whose schema and
-resolver are not implemented yet (`classified-evals-mol-p15.1`/`.2`). Until that
+resolver are not implemented yet. Until that
 lands, `vet doctor` reports those two rows as a non-fatal warning rather than
 naming specific variables.

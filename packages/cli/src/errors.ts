@@ -2,7 +2,7 @@ import { CommanderError } from 'commander';
 import { VetError } from '@vetkit/spec';
 import { redact } from './redact.ts';
 
-// Exit codes are local to the CLI until the app-shell leaf (classified-evals-mol-uu0)
+// Exit codes are local to the CLI until the app-shell leaf
 // centralizes them. EX_SOFTWARE (70) is the BSD sysexits fallback for "internal error".
 export const EXIT_OK = 0;
 export const EXIT_USAGE = 2;
@@ -62,9 +62,9 @@ const INPUT_EXIT_CODES = new Set([
   // falling through to the SOURCE_* warning rule below, and OTLP_PARSE exits 2 rather than 70.
   'SOURCE_EMPTY',
   'OTLP_PARSE',
-  // mol-p4a.3: `vet rerun` with no persisted run record (a missing input, like CASE_INVALID).
+  // `vet rerun` with no persisted run record (a missing input, like CASE_INVALID).
   'RUN_NOT_FOUND',
-  // J7 (docs/contracts/j7.md "Error codes", mol-zde): exact entries so `vet watch`'s
+  // J7 (docs/contracts/j7.md "Error codes"): exact entries so `vet watch`'s
   // RECEIVER_BIND (port already in use) and WATCH_CONFIG (--sample outside 0..1) exit 2
   // rather than falling through to the unknown-code INTERNAL (70) fallback below.
   'RECEIVER_BIND',
@@ -96,7 +96,7 @@ function resolveExit(code: string, strict: boolean): Resolved {
     unprefixed === 'NOT_INTERACTIVE' ||
     unprefixed.startsWith('CONFIG') ||
     unprefixed.startsWith('GATE_') ||
-    // mol-aq4.3: `vet export`'s EXPORT_TARGET_UNKNOWN / EXPORT_NO_LOCK.
+    // `vet export`'s EXPORT_TARGET_UNKNOWN / EXPORT_NO_LOCK.
     unprefixed.startsWith('EXPORT_')
   ) {
     return { category: 'config', exitCode: EXIT_USAGE, warn: false };
@@ -112,7 +112,7 @@ function resolveExit(code: string, strict: boolean): Resolved {
   return { category: 'internal', exitCode: EXIT_INTERNAL, warn: false };
 }
 
-// Additive escape hatch (root ledger contract 76a.7 #2): forces the exit code (and
+// Additive escape hatch: forces the exit code (and
 // error-severity rendering) for one VetError instance, bypassing resolveExit's class-based
 // rules. SOURCE_UNREADABLE is lenient by class (the SOURCE_* prefix rule above) for the
 // runtime degradation `run`/`run-sinks` rely on, but `vet init --source`'s one pre-flight

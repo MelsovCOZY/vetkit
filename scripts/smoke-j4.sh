@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# J4 slice-gate smoke (bd classified-evals-mol-3ts): `vet export --to vitest` on the J4 seed,
+# J4 slice-gate smoke: `vet export --to vitest` on the J4 seed,
 # vitest runs the emitted files unchanged, parity with `vet run --json`, and a cached rerun with
 # zero judge requests. REAL Jev judge through the vercel preset.
 #

@@ -1,6 +1,6 @@
-// Unit tests for the OTLP/HTTP receiver (bead mol-pij.8, root acceptance J5). Every test binds
+// Unit tests for the OTLP/HTTP receiver (root acceptance J5). Every test binds
 // port 0 (ephemeral) and talks to the server over real loopback fetch; port 4318 is never bound
-// here. Cross-request traceId dedupe is not this module's job (contract pij.8 revision 3: it
+// here. Cross-request traceId dedupe is not this module's job (it
 // lives in the CLI's otlpSourceFromArg, tested in packages/cli/src/commands/init-otlp.test.ts).
 import { gzipSync } from 'node:zlib';
 import type { NormalizedTrace } from '@vetkit/spec';

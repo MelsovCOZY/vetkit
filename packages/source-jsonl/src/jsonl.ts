@@ -1,4 +1,4 @@
-// Line parsing and mapping for the two accepted JSONL shapes (bead mol-76a.2):
+// Line parsing and mapping for the two accepted JSONL shapes:
 // - own export: {traceId, messages: Message[], spans?} validated against trace.schema.json with
 //   only traceId + messages required;
 // - OpenAI-style: {id?, messages: [{role, content, tool_calls?, tool_call_id?}]}.

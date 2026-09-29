@@ -13,6 +13,6 @@ export default defineConfig({
   fixedExtension: false,
   // emit-scorer.ts loads scorer.ts.tmpl via a URL relative to its own (built) module
   // location, so the template must land next to it at dist/templates/scorer.ts.tmpl —
-  // otherwise the built CLI's `vet export --to vitest` throws ENOENT (mol-aq4.14).
+  // otherwise the built CLI's `vet export --to vitest` throws ENOENT.
   copy: [{ from: 'src/templates/scorer.ts.tmpl', to: 'dist/templates' }],
 });

@@ -173,7 +173,7 @@ function readLines(file: string): Record<string, unknown>[] {
   return existsSync(file) ? lines(readFileSync(file, 'utf8')).map(parseJson) : [];
 }
 
-describe('vet run --sink (mol-yxn.7)', () => {
+describe('vet run --sink', () => {
   test('two sinks ok', () => {
     const project = freshProject();
     const plain = runVet(['run', '--json'], freshProject(), envFor(freshProject()));
@@ -259,7 +259,7 @@ describe('vet run --sink (mol-yxn.7)', () => {
     });
   }, 60_000);
 
-  test('judge failure: --sink exits 0 (unscored-only), without --sink stays 1 (bug F3/F4)', () => {
+  test('judge failure: --sink exits 0 (unscored-only), without --sink stays 1', () => {
     const project = freshProject();
     const plain = runVet(
       ['run', '--json'],
@@ -274,7 +274,7 @@ describe('vet run --sink (mol-yxn.7)', () => {
     );
     expect(result.status).toBe(0);
     expect(parseJson(result.stdout)).toMatchObject({ exitCode: 0 });
-    // mol-yxn.21: the pretty "run done" line must show the --sink-downgraded exit code
+    // the pretty "run done" line must show the --sink-downgraded exit code
     // (0), not the pre-override code core decided (1), on stderr.
     expect(result.stderr).toMatch(/run done: 2 verdicts, exit 0/);
     expect(result.stderr).not.toMatch(/run done:.*exit 1/);
@@ -379,7 +379,7 @@ export default {
 };
 `;
 
-describe('vet run CEV_JUDGE_BASE_URL forced judge failure (bug F3/F4, gate 7lg AC3)', () => {
+describe('vet run CEV_JUDGE_BASE_URL forced judge failure', () => {
   test('CEV_JUDGE_BASE_URL=http://127.0.0.1:9 forces unscored verdicts; --sink exits 0 and the record carries no score', () => {
     const dir = mkdtempSync(join(tmpdir(), 'vetkit-run-baseurl-'));
     cpSync(fixtureEvals, join(dir, 'evals'), { recursive: true });
@@ -398,14 +398,14 @@ describe('vet run CEV_JUDGE_BASE_URL forced judge failure (bug F3/F4, gate 7lg A
     });
     expect(result.status).toBe(0);
     expect(parseJson(result.stdout)).toMatchObject({ exitCode: 0 });
-    // mol-yxn.21 repro: the run-done line must report the real (downgraded) exit code too.
+    // repro: the run-done line must report the real (downgraded) exit code too.
     expect(result.stderr).toMatch(/run done: 1 verdict, exit 0/);
     // fixtureEvals (shared with run.test.ts) has exactly one case and one criterion.
     const received = readLines(otelOut);
     expect(received).toHaveLength(1);
     for (const v of received) {
       expect(v['status']).toBe('unscored');
-      // mol-0nw.29 AC (root DECISION, supersedes the old JUDGE_TIMEOUT assertion): a refused
+      // AC (root DECISION, supersedes the old JUDGE_TIMEOUT assertion): a refused
       // connection is JUDGE_UNAVAILABLE, retried on a short fixed budget, never JUDGE_TIMEOUT
       // (reserved for a real deadline).
       expect(v['cause']).toMatchObject({ code: 'JUDGE_UNAVAILABLE' });

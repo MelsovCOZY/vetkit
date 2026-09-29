@@ -1,8 +1,8 @@
-// gen_ai dialect tests (bead mol-pij.3): two DialectV1 objects for the OTel GenAI semantic
+// gen_ai dialect tests: two DialectV1 objects for the OTel GenAI semantic
 // conventions — genAiDialect (latest gen_ai.input.messages/output.messages/system_instructions)
 // and genAiLegacyDialect (legacy indexed gen_ai.prompt.{n}/completion.{n} attributes and the
 // gen_ai.content.prompt/completion span events). Cascade, detection order and completeness
-// flags are owned elsewhere (pij.2, pij.7, pij.11); this file only exercises the two dialects
+// flags are owned elsewhere; this file only exercises the two dialects
 // in isolation.
 
 import { describe, expect, test } from 'vitest';
@@ -329,7 +329,7 @@ describe('genAiLegacyDialect.extractMessages: indexed attributes', () => {
   });
 });
 
-// pij.14: gen_ai.{prompt,completion}.{n}.tool_calls.{i}.{id,name,arguments} (an assistant turn
+// gen_ai.{prompt,completion}.{n}.tool_calls.{i}.{id,name,arguments} (an assistant turn
 // calling a tool) and gen_ai.{prompt,completion}.{n}.tool_call_id (a tool turn responding to one)
 // map onto tool_call / tool_call_response parts instead of text.
 describe('genAiLegacyDialect.extractMessages: tool calls (indexed attrs)', () => {

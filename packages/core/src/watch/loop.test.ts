@@ -1,4 +1,4 @@
-// docs/contracts/j7.md "Sampling rule" / "Inclusion log"; bead classified-evals-mol-dh8.2.
+// docs/contracts/j7.md "Sampling rule" / "Inclusion log".
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -119,7 +119,7 @@ function readTraceId(provenance: unknown): string | undefined {
 }
 
 /** Rejects any verdict with no `provenance.traceId`, reason 'no correlation id' — same rule
- * real otel/langfuse sinks apply (docs/sinks.md "Correlation"; bug classified-evals-mol-dh8.6). */
+ * real otel/langfuse sinks apply (docs/sinks.md "Correlation"). */
 function correlationRequiringSink(): SinkV1 {
   return {
     specVersion: 'v1',
@@ -186,7 +186,7 @@ const throwingJudge: JudgeCaseFn = () => {
 
 /** Plays the role a real judge/adapter does: copies the case's own provenance.traceId onto
  * the Verdict it returns, so a correlation-requiring sink can decide whether to accept it
- * (bug classified-evals-mol-dh8.6). */
+ *. */
 const correlatingJudge: JudgeCaseFn = async ({ case: c, criteria }) => {
   const traceId = readTraceId(c.provenance);
   return criteria.map((crit) => ({
@@ -499,7 +499,7 @@ describe('runWatch', () => {
     });
   });
 
-  test('onVerdict gets id and case: verdict.id is exactly what outbox.enqueue returned, evalCase is the judged Case (bug dh8.5)', async () => {
+  test('onVerdict gets id and case: verdict.id is exactly what outbox.enqueue returned, evalCase is the judged Case', async () => {
     const t = trace('trace-onverdict');
     const baseOutbox = createOutbox({ dir: join(dir, 'outbox') });
     const wrappedOutbox: Outbox = {
@@ -533,11 +533,11 @@ describe('runWatch', () => {
     expect(received[0]?.evalCase.traceId).toBe('trace-onverdict');
   });
 
-  // bug classified-evals-mol-dh8.6: OTLP-derived cases carried no provenance.traceId/spanId, so
+  // OTLP-derived cases carried no provenance.traceId/spanId, so
   // a correlation-requiring sink dead-lettered every verdict ('no correlation id'). The judge
   // here plays the role a real judge/adapter does: it copies the case's own provenance.traceId
   // onto the Verdict it returns, so the sink can decide whether to accept it.
-  test('a fake sink requiring provenance.traceId acknowledges every verdict when the case carries traceId (bug dh8.6)', async () => {
+  test('a fake sink requiring provenance.traceId acknowledges every verdict when the case carries traceId', async () => {
     const t = trace('trace-otel');
     const outbox = createOutbox({ dir: join(dir, 'outbox') });
 
@@ -556,10 +556,10 @@ describe('runWatch', () => {
     expect(summary.acknowledged).toBe(summary.produced);
   });
 
-  // bug classified-evals-mol-dh8.7: judgeOne's infra_failure sentinel (built when the judge
+  // judgeOne's infra_failure sentinel (built when the judge
   // itself throws) carried no provenance at all, so a correlation-requiring sink dead-lettered
-  // it just like dh8.6's ordinary verdicts did.
-  test("judge throw: the infra_failure verdict carries the judged case's provenance.traceId, so a correlation-requiring sink acknowledges it (dh8.7)", async () => {
+  // it just like ordinary verdicts do.
+  test("judge throw: the infra_failure verdict carries the judged case's provenance.traceId, so a correlation-requiring sink acknowledges it", async () => {
     const t = trace('trace-throw');
     const outbox = createOutbox({ dir: join(dir, 'outbox') });
 
@@ -574,7 +574,7 @@ describe('runWatch', () => {
       signal: new AbortController().signal,
     });
 
-    // dh8.10: a thrown judge is unscored, not judged (was pinned as judged 1).
+    // a thrown judge is unscored, not judged (was pinned as judged 1).
     expect(summary.judged).toBe(0);
     expect(summary.unscored).toBe(1);
     expect(summary.produced).toBeGreaterThan(0);
@@ -594,7 +594,7 @@ describe('runWatch', () => {
     expect(readTraceId(pending[0]?.verdict.provenance)).toBe('trace-throw');
   });
 
-  test('stop with N accepted traces still queued: all N reach the inclusion log, sampled ones are judged, drain acks them (dh8.8)', async () => {
+  test('stop with N accepted traces still queued: all N reach the inclusion log, sampled ones are judged, drain acks them', async () => {
     const ids = partitionIds(0.5, 10, 10);
     const queue = ids.map((id) => trace(id));
     // A receiver-like source: yields its backlog, then returns once the signal aborts.
@@ -647,7 +647,7 @@ describe('runWatch', () => {
     expect(await inclusionLineCount(inclusionPath)).toBe(20);
   });
 
-  test('stop does not abort an in-flight judge call: it finishes and its verdict is enqueued (dh8.8)', async () => {
+  test('stop does not abort an in-flight judge call: it finishes and its verdict is enqueued', async () => {
     let release: (() => void) | undefined;
     let started = false;
     let sawAbort = false;
@@ -679,7 +679,7 @@ describe('runWatch', () => {
     expect(summary).toMatchObject({ judged: 1, produced: 1, acknowledged: 1 });
   });
 
-  test('the final drain has its own deadline: a never-settling drain does not hang runWatch (dh8.8)', async () => {
+  test('the final drain has its own deadline: a never-settling drain does not hang runWatch', async () => {
     const outbox = createOutbox({ dir: join(dir, 'outbox') });
     const hangingOutbox: Outbox = { ...outbox, drain: () => new Promise(() => {}) };
     const summary = await Promise.race([
@@ -699,7 +699,7 @@ describe('runWatch', () => {
     ]);
     expect(summary.judged).toBe(1);
   });
-  test('unscored verdicts are not counted as judged; the summary names count and cause codes (dh8.9)', async () => {
+  test('unscored verdicts are not counted as judged; the summary names count and cause codes', async () => {
     const traces = Array.from({ length: 12 }, (_, i) => trace(`trace-throttle-${String(i)}`));
     const throttledIds = new Set(traces.slice(0, 3).map((t) => t.traceId));
     const throttlingJudge: JudgeCaseFn = async ({ case: c, criteria }) =>
@@ -729,7 +729,7 @@ describe('runWatch', () => {
     expect(summary.unscoredCauses).toEqual(['JUDGE_THROTTLED']);
   });
 
-  test('an all-ok run reports unscored 0 and no causes (dh8.9)', async () => {
+  test('an all-ok run reports unscored 0 and no causes', async () => {
     const outbox = createOutbox({ dir: join(dir, 'outbox') });
     const summary = await runWatch({
       source: finiteSource([trace('trace-fine')]),
@@ -744,7 +744,7 @@ describe('runWatch', () => {
     expect(summary).toMatchObject({ judged: 1, unscored: 0, unscoredCauses: [] });
   });
 
-  test('3 of 12 sampled throw a CevError JUDGE_UNAVAILABLE: judged 9, unscored 3, causes [JUDGE_UNAVAILABLE], no raw message (dh8.10)', async () => {
+  test('3 of 12 sampled throw a CevError JUDGE_UNAVAILABLE: judged 9, unscored 3, causes [JUDGE_UNAVAILABLE], no raw message', async () => {
     const traces = Array.from({ length: 12 }, (_, i) => trace(`trace-down-${String(i)}`));
     const downIds = new Set(traces.slice(0, 3).map((t) => t.traceId));
     const flakyJudge: JudgeCaseFn = async ({ case: c, criteria }) => {
@@ -774,7 +774,7 @@ describe('runWatch', () => {
     expect(pendingText).not.toContain('secret transport detail');
   });
 
-  test('a thrown CevError keeps its own code as the cause (dh8.10)', async () => {
+  test('a thrown CevError keeps its own code as the cause', async () => {
     const outbox = createOutbox({ dir: join(dir, 'outbox') });
     const summary = await runWatch({
       source: finiteSource([trace('trace-code')]),

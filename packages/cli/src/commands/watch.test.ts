@@ -121,7 +121,7 @@ async function postTrace(port: number, traceId: string): Promise<void> {
   if (!res.ok) throw new Error(`postTrace failed: ${String(res.status)}`);
 }
 
-// dh8.7: patches a freshProject() copy's vetkit.config.ts (the checked-in fixture stays
+// patches a freshProject() copy's vetkit.config.ts (the checked-in fixture stays
 // untouched) to add a `sinks: [{kind:'otel',endpoint}]` descriptor, so `--sink otel` resolves
 // to a real @vetkit/sink-otel adapter pointed at this test's own fake collector.
 function withOtelSink(project: string, endpoint: string): void {
@@ -290,7 +290,7 @@ describe('vet watch', () => {
     expect(result.stderr).toContain('WATCH_CONFIG');
   });
 
-  // dh8.7 bug: judgeFn never set verdict.provenance, so an otel sink (which dead-letters any
+  // bug: judgeFn never set verdict.provenance, so an otel sink (which dead-letters any
   // verdict with no correlation id) rejected every enqueued verdict. Reproduces the cold-gate
   // repro (fixtures/cli/watch + a real otel sink) with a fake collector standing in for the
   // real OTLP endpoint.
@@ -333,7 +333,7 @@ describe('vet watch', () => {
     }
   }, 20_000);
 
-  test('SIGINT right after a burst: every accepted trace is recorded (seen == posted) and the outbox is drained (dh8.8)', async () => {
+  test('SIGINT right after a burst: every accepted trace is recorded (seen == posted) and the outbox is drained', async () => {
     const collector = await fakeOtelCollector();
     try {
       const project = freshProject();
@@ -382,7 +382,7 @@ describe('vet watch', () => {
   }, 30_000);
 });
 
-describe('watch summary text (dh8.9)', () => {
+describe('watch summary text', () => {
   const base = {
     seen: 20,
     sampled: 12,

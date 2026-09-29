@@ -14,9 +14,9 @@ test('Criterion is a narrow object type, not Record<string, unknown>', () => {
   expectTypeOf<Criterion>().not.toEqualTypeOf<Record<string, unknown>>();
 });
 
-// DECISION (turn 9, contract amendment): Criterion.passWhen (choice only, string[])
+// Contract amendment: Criterion.passWhen (choice only, string[])
 // and Criterion.escapeThreshold (number, 0..1 default 0.5), docs/contracts/j1.md.
-// Bug classified-evals-mol-0nw.20: passWhen is required (minItems 1) on choice, so it is
+// passWhen is required (minItems 1) on choice, so it is
 // a non-empty tuple there; boolean/score keep the optional base field (schema forbids it).
 test('Criterion.passWhen is required and non-empty on choice; escapeThreshold is optional', () => {
   type ChoicePassWhen = Extract<Criterion, { type: 'choice' }>['passWhen'];
@@ -29,7 +29,7 @@ test('Criterion.passWhen is required and non-empty on choice; escapeThreshold is
   expectTypeOf<Criterion['escapeThreshold']>().toEqualTypeOf<number | undefined>();
 });
 
-// bead classified-evals-mol-0nw.27: Criterion.contentDependent is optional metadata,
+// Criterion.contentDependent is optional metadata,
 // excluded from wordingHash (docs/contracts/j1.md).
 test('Criterion.contentDependent is an optional boolean', () => {
   expectTypeOf<Criterion['contentDependent']>().toEqualTypeOf<boolean | undefined>();

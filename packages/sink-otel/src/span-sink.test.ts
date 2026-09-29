@@ -217,7 +217,7 @@ describe('createOpenInferenceSink', () => {
     ]);
   });
 
-  test('capabilities.idempotent is false: a resend mints a new carrier span (mol-yxn.11)', async () => {
+  test('capabilities.idempotent is false: a resend mints a new carrier span', async () => {
     const { fetch, calls } = fakeFetch();
     const sink = createOpenInferenceSink({ endpoint: ENDPOINT, fetch });
     expect(sink.capabilities.idempotent).toBe(false);

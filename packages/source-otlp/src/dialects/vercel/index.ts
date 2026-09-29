@@ -1,7 +1,7 @@
-// vercelDialect (bead mol-pij.6): DialectV1 for the Vercel AI SDK's `ai.*` OTLP attribute
+// vercelDialect: DialectV1 for the Vercel AI SDK's `ai.*` OTLP attribute
 // convention. This module only answers per-span DialectV1 questions (detect, isLlmSpan,
 // extractMessages, extractUsage, contentState); detection order, token single-counting and
-// completeness flags are cascade concerns owned by pij.2/pij.7/pij.11.
+// completeness flags are cascade concerns owned by the normalize cascade.
 //
 // Attribute map (AI SDK telemetry docs, span names, attributes, recordInputs/recordOutputs):
 // https://github.com/vercel/ai/blob/main/content/docs/03-ai-sdk-core/60-telemetry.mdx
@@ -93,7 +93,7 @@ function textPartText(item: unknown): string | undefined {
   return type === 'text' && typeof text === 'string' ? text : undefined;
 }
 
-// pij.14: a `{type:'tool-call', toolCallId, toolName, args}` or `{type:'tool-result',
+// a `{type:'tool-call', toolCallId, toolName, args}` or `{type:'tool-result',
 // toolCallId, toolName, result}` content-parts entry — the AI SDK's own wire shape for a prior
 // assistant tool call or its tool response fed back on a later turn's ai.prompt.messages.
 function toolCallContentPart(item: unknown): MessagePart | undefined {

@@ -1,4 +1,4 @@
-// createLangfuseSource: a SourceV1 over the Langfuse public API (bead mol-yxn.5). An async
+// createLangfuseSource: a SourceV1 over the Langfuse public API. An async
 // generator pages GET /api/public/traces (page, limit — Langfuse OpenAPI spec, verified
 // 2026-09-29), then does one GET /api/public/traces/{id} per trace for its observations, mapped
 // by map.ts. Credentials are read from the env var NAMES given in options — never literals — and

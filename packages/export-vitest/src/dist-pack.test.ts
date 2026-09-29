@@ -1,4 +1,4 @@
-// Regression test for mol-aq4.14: `bun run build` did not copy templates/scorer.ts.tmpl into
+// Regression test: `bun run build` did not copy templates/scorer.ts.tmpl into
 // dist, so the built CLI's `vet export --to vitest` crashed with ENOENT reading
 // packages/export-vitest/dist/templates/scorer.ts.tmpl (emit-scorer.ts's TEMPLATE_PATH is
 // resolved relative to its own, built, module location). Unit tests elsewhere in this package
@@ -11,7 +11,7 @@
 // version ran `rm -rf dist; bun run build` in a beforeAll, which raced with the cli project's
 // tests (packages/cli/src/test-support/build-cli.ts) spawning the built CLI against this same
 // dist/ from a parallel vitest worker — dist briefly didn't exist mid-rebuild, and 31 cli
-// tests failed with ERR_MODULE_NOT_FOUND (mol-aq4.15). The root `bun run build` (which every
+// tests failed with ERR_MODULE_NOT_FOUND. The root `bun run build` (which every
 // documented verify command, and CI, runs before `bun run test`) always builds this package's
 // real dist/ first, so it is current here; requireBuilt() fails loudly instead of silently
 // skipping if it somehow isn't.
@@ -55,7 +55,7 @@ interface DistModule {
   emitScorer: (criterion: Criterion, lock: undefined) => { path: string; source: string };
 }
 
-describe('built dist (mol-aq4.14)', () => {
+describe('built dist', () => {
   test('dist/index.js emits a scorer without ENOENT', async () => {
     requireBuilt(DIST_INDEX);
     const mod: unknown = await import(pathToFileURL(DIST_INDEX).href);

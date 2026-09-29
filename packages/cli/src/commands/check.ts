@@ -1,4 +1,4 @@
-// `vet check --lock|--outbox` (bead mol-p4a.2; moved out of validate.ts, q4q.6). --lock recomputes
+// `vet check --lock|--outbox` (moved out of validate.ts). --lock recomputes
 // the lock's content hashes and compares the judge's transport, requested id and release date,
 // listing each stale criterion (wording_changed | model_changed | uncalibrated = absent from the
 // lock); stale exits 1, a missing or pre-v1 lock exits 2. --outbox prints the J6 outbox

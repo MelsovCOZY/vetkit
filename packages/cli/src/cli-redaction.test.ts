@@ -1,4 +1,4 @@
-// Redaction end-to-end (mol-bn4.2): `vet run --verbose` with a known secret in env must
+// Redaction end-to-end: `vet run --verbose` with a known secret in env must
 // never write that value to stdout, stderr or any file it produces under the project
 // (.vet/cache, .vet/runs, .vet/outbox). The judge is the in-process fake from
 // fixtures/cli/run: no network. A second group listens on the core event bus and asserts

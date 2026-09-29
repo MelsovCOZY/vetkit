@@ -1,4 +1,4 @@
-// OTLP AnyValue / KeyValue flattening (bead mol-pij.1). AnyValue nests through arrayValue and
+// OTLP AnyValue / KeyValue flattening. AnyValue nests through arrayValue and
 // kvlistValue, so the flattener recurses and caps depth at MAX_ANYVALUE_DEPTH, replacing anything
 // deeper with null and recording a warning (RISK note on the bead).
 

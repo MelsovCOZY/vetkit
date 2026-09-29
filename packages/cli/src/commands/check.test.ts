@@ -1,5 +1,5 @@
-// `vet check --lock|--outbox` (bead mol-p4a.2). The --lock cases moved here from validate.test.ts
-// (q4q.6) when check left validate.ts; validate itself writes the lock each case starts from.
+// `vet check --lock|--outbox`. The --lock cases moved here from validate.test.ts
+// when check left validate.ts; validate itself writes the lock each case starts from.
 import { appendFile, mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -295,7 +295,7 @@ describe('vet check --lock', () => {
   });
 });
 
-// ---------- per-criterion drift (mol-p4a.2) ----------
+// ---------- per-criterion drift ----------
 
 interface Validated {
   readonly root: string;

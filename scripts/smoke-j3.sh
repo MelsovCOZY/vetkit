@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# J3 slice-gate smoke (bd classified-evals-mol-lts): import labels, calibrate, write
+# J3 slice-gate smoke: import labels, calibrate, write
 # criteria.lock.json and gate on it, against the REAL Jev judge through the vercel preset.
 #
 # Projects (all scratch copies; the repo fixtures are never written to):

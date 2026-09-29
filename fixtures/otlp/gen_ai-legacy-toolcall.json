@@ -1,5 +1,5 @@
 {
-  "_source": "OTel GenAI semconv legacy indexed convention (gen-ai-events.md, gen-ai-dev/1.42.0-dev) -- gen_ai.completion.{n}.tool_calls.{i}.{id,name,arguments} / gen_ai.prompt.{n}.tool_call_id round trip (mol-pij.14)",
+  "_source": "OTel GenAI semconv legacy indexed convention (gen-ai-events.md, gen-ai-dev/1.42.0-dev) -- gen_ai.completion.{n}.tool_calls.{i}.{id,name,arguments} / gen_ai.prompt.{n}.tool_call_id round trip",
   "resourceSpans": [
     {
       "resource": {

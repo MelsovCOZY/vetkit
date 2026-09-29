@@ -232,7 +232,7 @@ describe('generateEvals', () => {
     expect(cases.cases.length).toBeGreaterThanOrEqual(20);
     expect(cases.cases).toEqual(result.cases);
     for (const c of cases.cases) {
-      // Partial match (bug classified-evals-mol-dh8.6): extractCases also sets
+      // Partial match: extractCases also sets
       // provenance.traceId (and, when a span covers the final answer, spanId) — this test
       // only cares that traceIds survives and traceId is a string, not the full shape.
       expect(c.provenance).toEqual(

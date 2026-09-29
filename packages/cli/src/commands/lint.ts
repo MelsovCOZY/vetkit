@@ -1,4 +1,4 @@
-// `vet lint [path] [--json]` (bead mol-76a.7): lints a hand-written criteria.yaml against
+// `vet lint [path] [--json]`: lints a hand-written criteria.yaml against
 // Jev's documented weak spots (core's lintCriteria) without running anything. Exit 1 when
 // any issue is error-severity (those criteria are the ones `vet init --source`'s own lint
 // pass would drop); exit 0 otherwise, including on warn-only issues.

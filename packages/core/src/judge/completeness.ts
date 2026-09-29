@@ -1,4 +1,4 @@
-// statusForTrace / partitionCases (bead mol-pij.7): turns a normalized trace's completeness
+// statusForTrace / partitionCases: turns a normalized trace's completeness
 // flags into a typed non-score status, and excludes non-ok cases from content-dependent criteria
 // while still judging criteria explicitly marked contentDependent:false (e.g. latency) — root
 // acceptance J5, ET brief §4 OTEL-1/3. Never throws: this is data derivation, not validation.
@@ -8,8 +8,8 @@ import type { Case, Criterion, NormalizedTrace } from '@vetkit/spec';
 export type CompletenessStatus = 'ok' | 'content_not_captured' | 'truncated' | 'incomplete_trace';
 export type ExclusionStatus = Exclude<CompletenessStatus, 'ok'>;
 
-// The shape j2-5's casesFromTraces is expected to carry on Case.provenance (contract pij.7
-// revision 6) — j2-5 does not exist yet, so Case.provenance stays `unknown` at the type level and
+// The shape j2-5's casesFromTraces is expected to carry on Case.provenance
+// — j2-5 does not exist yet, so Case.provenance stays `unknown` at the type level and
 // this is read defensively below.
 export type CaseTraceProvenance = {
   trace?: { completeness?: NormalizedTrace['completeness'] };

@@ -1,5 +1,5 @@
 {
-  "_source": "OTel GenAI semconv (Development) gen-ai-spans.md/gen-ai-events.md @ gen-ai-dev/1.42.0-dev, as pinned in packages/source-otlp/src/dialects/gen-ai/index.ts SPEC_COMMIT -- gen_ai.output.messages tool_call/gen_ai.input.messages tool_call_response round trip (mol-pij.14)",
+  "_source": "OTel GenAI semconv (Development) gen-ai-spans.md/gen-ai-events.md @ gen-ai-dev/1.42.0-dev, as pinned in packages/source-otlp/src/dialects/gen-ai/index.ts SPEC_COMMIT -- gen_ai.output.messages tool_call/gen_ai.input.messages tool_call_response round trip",
   "resourceSpans": [
     {
       "resource": {

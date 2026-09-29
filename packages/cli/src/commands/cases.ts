@@ -1,4 +1,4 @@
-// `vet cases dedupe|quarantine|promote|review` (bead classified-evals-mol-p4a.1). All the
+// `vet cases dedupe|quarantine|promote|review`. All the
 // actual file editing lives in @vetkit/core's cases/edit.ts; this file just wires the CLI
 // group, resolves paths and reports the result.
 import { join, resolve } from 'node:path';

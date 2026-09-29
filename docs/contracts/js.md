@@ -1,10 +1,10 @@
 # Contract: JS — spike testing whether generated criteria agree with human labels
 
-Docs-only contract bead (bd `classified-evals-mol-xy5`). This is a reference doc: it records the
+Docs-only contract bead. This is a reference doc: it records the
 acceptance criteria, design decisions, names, shapes, versions and script names later beads build
 against. It does not implement anything; the spike protocol itself is `spike/PROTOCOL.md` (same
 bead, see below). Facts are copied verbatim from the bd payload and the root epic
-`classified-evals-d4m` ledger; no fact is invented.
+ledger; no fact is invented.
 
 ## Why (verbatim)
 
@@ -53,7 +53,7 @@ answer for a week of work before the IR, core and adapters are built (DECISION r
   Verify: `jq -e '.[0] | has("reference") and has("baseline")' <(head -1 spike/data/traces.jsonl | jq -s .)`
   and `grep -c 'accuracy' spike/REPORT.md` ≥ 1.
 
-## Design decisions cited (verbatim, from the root epic `classified-evals-d4m` ledger)
+## Design decisions cited (verbatim, from the root epic ledger)
 
 - DECISION (resolves OPEN-1, user 2026-09-25 "go with defaults"): spike first — a one-week
   throwaway slice (JS) that tests whether generated criteria agree with human labels — then the

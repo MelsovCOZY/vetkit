@@ -1,5 +1,5 @@
 {
-  "_source": "https://github.com/Arize-ai/openinference/blob/7feb0c4ba2fd77cb76036712e21d06ff15a2be22/spec/semantic_conventions.md -- message.tool_calls.{i}.tool_call.{id,function.name,function.arguments} / message.tool_call_id round trip (mol-pij.14)",
+  "_source": "https://github.com/Arize-ai/openinference/blob/7feb0c4ba2fd77cb76036712e21d06ff15a2be22/spec/semantic_conventions.md -- message.tool_calls.{i}.tool_call.{id,function.name,function.arguments} / message.tool_call_id round trip",
   "resourceSpans": [
     {
       "resource": {

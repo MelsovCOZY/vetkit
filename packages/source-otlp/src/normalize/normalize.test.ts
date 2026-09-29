@@ -1,5 +1,5 @@
-// Cascade, token and message-ordering tests (bead mol-pij.2). Two ~20-line fake dialects stand
-// in for the real gen_ai/openinference/etc modules (owned by pij.11), which do not exist yet.
+// Cascade, token and message-ordering tests. Two ~20-line fake dialects stand
+// in for the real gen_ai/openinference/etc modules, which do not exist yet.
 
 import { describe, expect, test, vi } from 'vitest';
 import type { Message } from '@vetkit/spec';
@@ -166,7 +166,7 @@ describe('normalizeTrace', () => {
   });
 });
 
-// pij.13: extractUsage may report a bare totalTokens (no split); sumTokens must fold it into
+// extractUsage may report a bare totalTokens (no split); sumTokens must fold it into
 // tokens.total without a split from the same span also being present. A same-span
 // split+totalTokens double-count guard is not separately asserted here: since the pre-fix
 // sumTokens ignores totalTokens entirely, that specific case already yields the same number
@@ -208,7 +208,7 @@ describe('normalizeTrace: dialect.spanKind honoured for non-LLM spans', () => {
   });
 });
 
-// pij.14: dialects keep emitting their own native tool_call/tool_call_response ids;
+// dialects keep emitting their own native tool_call/tool_call_response ids;
 // normalizeTrace renumbers them afterwards to tool_call_1, tool_call_2... in first-seen call
 // order, the same normaliser regardless of which dialect produced the parts.
 describe('normalizeTrace: tool_call id normalisation', () => {

@@ -146,7 +146,7 @@ describe('vet init --source', () => {
     expect(existsSync(`${out}.tmp-${String(result.pid)}`)).toBe(false);
   });
 
-  // mol-76a.15: `vet init --out <dir>` used to leave <dir> with no vetkit.config.ts, so a
+  // `vet init --out <dir>` used to leave <dir> with no vetkit.config.ts, so a
   // `vet run` there always failed CONFIG_INVALID even though criteria.yaml and cases/ were
   // right there at the top level.
   test('--out writes a vetkit.config.ts that a `vet run` in that directory can load every case with', () => {

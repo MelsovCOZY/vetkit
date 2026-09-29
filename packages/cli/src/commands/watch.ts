@@ -1,6 +1,6 @@
 // `vet watch`: docs/contracts/j7.md, docs/watch.md. Samples a live OTel stream through the J5
-// receiver (packages/source-otlp startReceiver), judges the sample (runWatch, dh8.1/dh8.2),
-// promotes failures into evals/cases/pending/ (promoteFailure, dh8.3/dh8.5) and prints one
+// receiver (packages/source-otlp startReceiver), judges the sample (runWatch),
+// promotes failures into evals/cases/pending/ (promoteFailure) and prints one
 // coverage summary on exit. The one documented exception to the CLI-wide SIGINT->130 rule
 // (docs/contracts/j7.md "Exit behaviour"): first SIGINT drains once and exits 0, second exits
 // 130 immediately. A receiver bind failure is RECEIVER_BIND (exit 2); an out-of-range --sample

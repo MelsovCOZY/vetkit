@@ -28,7 +28,7 @@ const TNR_PASS_BAR = 0.8;
 const FLIP_PASS_BAR = 0.05;
 const MEDIAN_KAPPA_NO_GO_BAR = 0.4;
 const ESCAPE_UNANSWERABLE_BAR = 0.3;
-/** Contract classified-evals-mol-xy5 AC-2 (docs/contracts/js.md), quoted verbatim. */
+/** Contract AC-2 (docs/contracts/js.md), quoted verbatim. */
 export const CONTRACT_RULE_TEXT =
   'GO if ≥7 of 10 criteria reach κ ≥ 0.6 with TPR ≥ 0.8 and TNR ≥ 0.8 on ' +
   'the labelled set and the boolean flip rate at threshold is ≤ 5%; AMEND (criteria need ' +
@@ -191,7 +191,7 @@ export function medianOfDefined(values: (number | null)[]): number | null {
 export type Outcome = 'GO' | 'AMEND' | 'NO-GO' | 'INCONCLUSIVE';
 
 /**
- * Contract classified-evals-mol-xy5's GO/AMEND/NO-GO rule (>=7 of 10 criteria passing -> GO,
+ * Contract GO/AMEND/NO-GO rule (>=7 of 10 criteria passing -> GO,
  * else AMEND), extended per this bead's acceptance criteria with a NO-GO override when c1
  * accuracy < 0.9 or the median kappa across criteria (undefined kappas excluded) is < 0.4, and
  * INCONCLUSIVE when there are not yet enough human labels to trust the pass count (fewer than 30
@@ -630,7 +630,7 @@ function limitationsParagraph(haystackAggregateFaithfulness: number[]): string {
       "120-word chunks the pipeline actually retrieved by; the local Langfuse instance runs in v4 events-only " +
       'mode and /api/public/traces returned 404 (probed 2026-09-25), so the judged unit is whole-document ' +
       'context, not the retrieved chunk.',
-    'Human labels: this run has 0 human-labelled rows (labelled traces filed as classified-evals-mol-vv7.7, ' +
+    'Human labels: this run has 0 human-labelled rows (labelled traces ' +
       'still pending). With a single labeller once that lands, Krippendorff alpha reduces to plain agreement ' +
       'between the human and the judge; a second labeller is out of scope of this spike.',
     `Jev is reached only through the gateway alias ${MODEL} (TypeSafe registration is closed); the served ` +
@@ -710,15 +710,15 @@ async function main(): Promise<void> {
   });
 
   const markdown = [
-    '# Spike report: Jev vs ground truth, Jev vs the Gemini judge (mol-vv7.5)',
+    '# Spike report: Jev vs ground truth, Jev vs the Gemini judge',
     '',
     '## (a) Per-criterion table (human/auto labels as truth)',
     '',
     criterionTableMarkdown(criterionRows),
     '',
     "c3's truth is the Gemini baseline, not a human/auto label, so it has no row-fitted stats here " +
-      "and is reported separately in block (c); c4-c10 have no truth yet (pending classified-evals-" +
-      "mol-vv7.7). c2's auto label is a *correctness* judgment (abstained-when-it-should, or didn't-" +
+      "and is reported separately in block (c); c4-c10 have no truth yet (pending" +
+      "). c2's auto label is a *correctness* judgment (abstained-when-it-should, or didn't-" +
       "when-it-shouldn't), which flips sign between answerable and unanswerable rows, so its raw " +
       "P(yes)-vs-label kappa above is not directly comparable to c1's; see block (b) for the c2 " +
       'accuracy computed only on the unambiguous (golden-unanswerable) subset.',

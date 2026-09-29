@@ -1,6 +1,6 @@
 # Spike protocol — JS: generated criteria vs human labels
 
-One-week throwaway spike (DECISION resolves OPEN-1, root epic `classified-evals-d4m`). Tests
+One-week throwaway spike (DECISION resolves OPEN-1, the root epic). Tests
 whether atomic typed criteria written by a generator LLM and judged by Jev agree with human labels
 well enough to gate CI. Nothing here is reused by `packages/*` (Scope, OUT).
 
@@ -9,7 +9,7 @@ well enough to gate CI. Nothing here is reused by `packages/*` (Scope, OUT).
 The root acceptance criterion for this bead states the corpus as "≥50 synthetic customer-support
 traces." This is **superseded** by DECISION (spike corpus = haystack-hypothesis, user 2026-09-25:
 "we have evals that we can just run in plain mode and compare with jev"), recorded on the root
-epic `classified-evals-d4m` ledger. The corpus described below (haystack-hypothesis) is the one
+the root epic ledger. The corpus described below (haystack-hypothesis) is the one
 this spike runs against; the synthetic-traces line no longer applies.
 
 ## Corpus
@@ -162,7 +162,7 @@ than one labeller.
 
 ## Sources
 
-Root acceptance JS line; root epic `classified-evals-d4m` ledger DECISION/RISK/PREMISE notes
+Root acceptance JS line; the root epic ledger DECISION/RISK/PREMISE notes
 (spike-first, OPEN-1/2/6/9, spike corpus, pre-spike outcome);
 `docs/research/2026-09-25-jev-vs-gemini-haystack-prespike.md`;
 `docs/research/fixtures/jev-haystack/`;

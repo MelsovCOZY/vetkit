@@ -314,7 +314,7 @@ describe('vet validate', () => {
     expect(counting.calibrationCalls.get('S-p0')).toBe(3);
     expect(counting.calibrationCalls.get('S-f0')).toBe(3);
     // No generator: paraphrase and polarity never ran (revision 8). The shipped corpora
-    // (mol-q4q.12) do run by default; only their pass/fail outcome depends on the mock judge.
+    // do run by default; only their pass/fail outcome depends on the mock judge.
     const g = (await lockAt(root)).criteria['tone']?.gauntlet;
     expect(g).toMatchObject({
       paraphrase: 'skipped',
@@ -381,7 +381,7 @@ describe('vet validate', () => {
     expect((await lockAt(root)).criteria['tone']?.gauntlet.injection).toBe('skipped');
   });
 
-  test('no --gauntlet flag defaults to the shipped corpora (mol-q4q.12)', async () => {
+  test('no --gauntlet flag defaults to the shipped corpora', async () => {
     const rows = standardRows();
     const root = await project(rows);
     const events = createEvents();
@@ -524,7 +524,7 @@ describe('vet validate', () => {
     expect('error' in r).toBe(false);
   });
 
-  test('a criterion with enabled: false is never judged and gets no lock entry (mol-e3g.1)', async () => {
+  test('a criterion with enabled: false is never judged and gets no lock entry', async () => {
     const rows = standardRows();
     const root = await project(rows);
     await writeFile(
@@ -558,7 +558,7 @@ describe('vet validate', () => {
     expect(lock.criteria['tone']?.labelCount).toBe(200);
   });
 
-  test('a pre-existing lock entry for a disabled criterion survives validate unchanged (mol-e3g.1)', async () => {
+  test('a pre-existing lock entry for a disabled criterion survives validate unchanged', async () => {
     const rows = standardRows();
     const root = await project(rows);
     await writeFile(
@@ -639,7 +639,7 @@ describe('gate module with a validate-written lock', () => {
   });
 });
 
-// ---------- spawned bin: vet run reads the lock (q4q.11) and vet validate smoke ----------
+// ---------- spawned bin: vet run reads the lock and vet validate smoke ----------
 
 interface Spawned {
   readonly stdout: string;
@@ -700,13 +700,13 @@ describe('vet run gate with a lock file (spawned)', () => {
     await ensureCliBuilt();
   }, 180_000);
 
-  test('--gate with no lock names criteria.lock.json on stderr (q4q.11)', () => {
+  test('--gate with no lock names criteria.lock.json on stderr', () => {
     const result = runVet(['run', '--json', '--gate'], runProject());
     expect(result.status).toBe(2);
     expect(result.stderr).toContain('criteria.lock.json');
   });
 
-  test('--gate --allow-unpinned reads criteria.lock.json and accepts a floating entry (q4q.11)', () => {
+  test('--gate --allow-unpinned reads criteria.lock.json and accepts a floating entry', () => {
     const result = runVet(['run', '--json', '--gate', '--allow-unpinned'], runProject('floating'));
     expect(result.stderr).not.toContain('gate refused');
     expect(result.status).toBe(0);
@@ -754,7 +754,7 @@ describe('vet run gate with a lock file (spawned)', () => {
   });
 });
 
-// ---------- judge outage (mol-q4q.21) ----------
+// ---------- judge outage ----------
 
 // The judge answers only for cases whose id is in `answering`; every other call fails with a
 // non-retryable JUDGE_UNAVAILABLE, so the criterion is scored on a small subset.

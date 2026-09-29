@@ -1,5 +1,5 @@
 // Test tool (not product code): replays one OTLP/JSON ExportTraceServiceRequest fixture N times
-// into a running OTLP/HTTP receiver, each copy carrying a distinct trace id (bead mol-529, J7).
+// into a running OTLP/HTTP receiver, each copy carrying a distinct trace id (J7).
 // Usage: bun run scripts/replay-otlp.ts <fixture.json> --count 100 --port 4318
 //          [--inject-failure 1] [--sample-rate 0.1] [--seed replay] [--concurrency 8]
 // Trace ids are deterministic: sha256(`<seed>-<i>`) first 16 bytes as hex, so reruns are stable

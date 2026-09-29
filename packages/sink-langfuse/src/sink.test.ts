@@ -224,7 +224,7 @@ describe('createLangfuseSink doWrite', () => {
     expect(s.capabilities).toEqual({ batch: 50, idempotent: false });
   });
 
-  describe('deterministic score id (mol-yxn.23)', () => {
+  describe('deterministic score id', () => {
     it('the same verdict under a different verdict id yields the same score id', async () => {
       const a = await idOf(verdict({ id: 'run-1' }));
       const b = await idOf(verdict({ id: 'run-2' }));

@@ -46,7 +46,7 @@ const packageProjects = readdirSync('packages', { withFileTypes: true })
     test: {
       name: entry.name,
       // The cli tests spawn packages/cli/dist/bin.js; build its workspace chain once per
-      // run here, before any worker starts, instead of from inside the tests (mol-p4a.10).
+      // run here, before any worker starts, instead of from inside the tests.
       globalSetup: entry.name === 'cli' ? [cliGlobalSetup] : [],
       // The named verify command for generated type tests (e.g. generated.test-d.ts)
       // needs this enabled per-package, or vitest reports "No test files found" and

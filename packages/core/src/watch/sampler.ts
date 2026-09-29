@@ -1,4 +1,4 @@
-// docs/contracts/j7.md "Sampling rule" / "Inclusion log" (bead classified-evals-mol-dh8.1).
+// docs/contracts/j7.md "Sampling rule" / "Inclusion log".
 // Pure hashToUnit + a small factory (DECISION: code conventions, no class).
 //
 // The inclusion record is appended with fs.appendFileSync (one small JSONL line per decide()

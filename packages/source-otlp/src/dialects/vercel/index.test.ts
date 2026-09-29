@@ -1,5 +1,5 @@
-// vercelDialect tests (bead mol-pij.6). Spans are built inline; shared cross-dialect fixtures
-// belong to pij.9. The outer+inner cascade test exercises the real (unmodified) normalizeTrace
+// vercelDialect tests. Spans are built inline; shared cross-dialect fixtures
+// belong to the golden corpus. The outer+inner cascade test exercises the real (unmodified) normalizeTrace
 // from ../../normalize/index.ts to prove isLlmSpan alone prevents double counting.
 
 import { describe, expect, test } from 'vitest';
@@ -150,7 +150,7 @@ describe('vercelDialect.extractMessages', () => {
     expect(messages).toEqual([{ role: 'assistant', parts: [{ type: 'text', content: 'Paris' }] }]);
   });
 
-  // pij.14: ai.prompt.messages content-parts arrays carry the AI SDK's own tool-call/tool-result
+  // ai.prompt.messages content-parts arrays carry the AI SDK's own tool-call/tool-result
   // shapes ({type:'tool-call', toolCallId, toolName, args} / {type:'tool-result', toolCallId,
   // toolName, result}) alongside {type:'text', text} — the wire shape a prior assistant tool call
   // or its tool response is fed back as, on a later turn's prompt.

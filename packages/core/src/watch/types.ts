@@ -1,6 +1,6 @@
-// Fixed verbatim by docs/contracts/j7.md "Ports and types" (bead classified-evals-mol-zde).
-// Not re-exported from packages/core/src/index.ts: the implementation leaves (dh8.1 sampler.ts,
-// dh8.2 loop.ts, dh8.3 promote.ts / commands/watch.ts) import this module by path, same as the
+// Fixed verbatim by docs/contracts/j7.md "Ports and types".
+// Not re-exported from packages/core/src/index.ts: the implementation leaves (sampler.ts,
+// loop.ts, promote.ts / commands/watch.ts) import this module by path, same as the
 // spec ports (docs/contracts/j0.md "core seams") are imported directly rather than re-barreled.
 import type { Case } from '@vetkit/spec';
 

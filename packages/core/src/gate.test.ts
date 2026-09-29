@@ -39,7 +39,7 @@ function verdict(pass: boolean, pinned: boolean): Verdict {
   };
 }
 
-describe('evaluateGate (q4q.11)', () => {
+describe('evaluateGate', () => {
   test('a floating lock passes under allowUnpinned and exits by results', () => {
     const policy = { requireCalibrated: true, allowUnpinned: true };
     const ok = evaluateGate({

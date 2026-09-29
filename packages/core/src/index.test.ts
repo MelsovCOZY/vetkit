@@ -347,7 +347,7 @@ import {
   writeLockAtomic,
 } from './index.ts';
 
-describe('@vetkit/core lock exports (q4q.6)', () => {
+describe('@vetkit/core lock exports', () => {
   it('re-exports the lock functions', () => {
     for (const fn of [
       assertLockGates,
@@ -369,7 +369,7 @@ describe('@vetkit/core lock exports (q4q.6)', () => {
 
 import { readRunRecord, writeRunRecord, type RunRecord } from './index.ts';
 
-describe('@vetkit/core run-record exports (mol-p4a.16)', () => {
+describe('@vetkit/core run-record exports', () => {
   it('re-exports readRunRecord and writeRunRecord as functions', () => {
     expect(typeof readRunRecord).toBe('function');
     expect(typeof writeRunRecord).toBe('function');
@@ -393,7 +393,7 @@ import {
   setEnabled,
 } from './index.ts';
 
-describe('@vetkit/core criteria edit exports (mol-e3g)', () => {
+describe('@vetkit/core criteria edit exports', () => {
   it('re-exports the criteria edit functions', () => {
     for (const fn of [
       formatCriteriaDocument,
@@ -410,7 +410,7 @@ describe('@vetkit/core criteria edit exports (mol-e3g)', () => {
 
 import { DEFAULT_GAUNTLET_CORPORA, type DefaultCorpora } from './index.ts';
 
-describe('@vetkit/core shipped gauntlet corpora exports (mol-q4q.12)', () => {
+describe('@vetkit/core shipped gauntlet corpora exports', () => {
   it('re-exports DEFAULT_GAUNTLET_CORPORA with non-empty injections, masterKeys, constants and paddings', () => {
     expect(DEFAULT_GAUNTLET_CORPORA.injections.length).toBeGreaterThan(0);
     expect(DEFAULT_GAUNTLET_CORPORA.masterKeys.length).toBeGreaterThan(0);

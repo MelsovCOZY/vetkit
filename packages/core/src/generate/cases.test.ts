@@ -143,10 +143,10 @@ describe('extractCases', () => {
   });
 });
 
-// mol-pij.15 (J5 gate): extractCases must classify excluded traces by statusForTrace's
+// J5 gate: extractCases must classify excluded traces by statusForTrace's
 // completeness status, at the same priority (content_not_captured > truncated >
 // incomplete_trace), instead of only ever reporting content_not_captured/no_conversation.
-describe('extractCases: completeness-status exclusion (mol-pij.15)', () => {
+describe('extractCases: completeness-status exclusion', () => {
   test('a completeness.truncated trace with real conversation is excluded, reason truncated', () => {
     const t = trace('t-truncated', {
       completeness: { contentCaptured: true, truncated: true, missingParents: false },
@@ -223,11 +223,11 @@ describe('extractCases: completeness-status exclusion (mol-pij.15)', () => {
   });
 });
 
-// bead classified-evals-mol-dh8.4: includeIncomplete lets a watch-loop caller still build a
+// includeIncomplete lets a watch-loop caller still build a
 // Case for a non-ok trace that has a real conversation, so judge/completeness.ts's
 // partitionCases can select the still-judgeable (contentDependent: false) criteria for it,
 // instead of the whole trace being silently dropped.
-describe('extractCases: includeIncomplete (mol-dh8.4)', () => {
+describe('extractCases: includeIncomplete', () => {
   test('default (includeIncomplete omitted): a truncated trace with a real conversation still builds no case', () => {
     const t = trace('t-trunc', {
       completeness: { contentCaptured: true, truncated: true, missingParents: false },
@@ -296,12 +296,12 @@ describe('extractCases: includeIncomplete (mol-dh8.4)', () => {
   });
 });
 
-// bead classified-evals-mol-dh8.6: sinks correlate verdicts on Verdict.provenance.traceId/spanId
+// sinks correlate verdicts on Verdict.provenance.traceId/spanId
 // (docs/sinks.md "Correlation"), copied from Case.provenance by the caller. extractCases must set
 // both whenever the NormalizedTrace has them: traceId unconditionally (every NormalizedTrace has
 // one), spanId only for the llm-kind span whose messageRange covers the final assistant message
 // (the span the conversation/LLM output came from) — never a non-llm span covering the same range.
-describe('extractCases: correlation ids (mol-dh8.6)', () => {
+describe('extractCases: correlation ids', () => {
   test('provenance.traceId is set to the trace id even with no spans', () => {
     const { cases } = extractCases({ traces: [trace('t-corr')], criteria: [] });
 

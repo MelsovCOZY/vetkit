@@ -1,4 +1,4 @@
-// OTLP/JSON reader (bead mol-pij.1): parses an ExportTraceServiceRequest through the
+// OTLP/JSON reader: parses an ExportTraceServiceRequest through the
 // safeParseJson chokepoint against otlp.schema.json, normalises ids to hex (base64 accepted, the
 // encoding recorded per span), 64-bit nanos to decimal strings and AnyValue attributes to plain
 // JSON. Plain JSON only, no OTel SDK dependency (docs/contracts/j5.md "Input contract").

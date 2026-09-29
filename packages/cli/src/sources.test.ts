@@ -1,4 +1,4 @@
-// Unit tests for the `--source` string registry (bead mol-76a.7): a bare path or `jsonl:<dir>`
+// Unit tests for the `--source` string registry: a bare path or `jsonl:<dir>`
 // both resolve through source-jsonl; other prefixes register via registerSourcePrefix without
 // touching resolveSource's callers (J5 `otlp:`, J6 `langfuse:`), so these tests never assert a
 // closed set of registered prefixes.
@@ -73,24 +73,24 @@ describe('resolveSource', () => {
     );
   });
 
-  // Contract pij.8 revision 1/2: registerSourcePrefix's validate hook is optional, and
+  // registerSourcePrefix's validate hook is optional, and
   // resolveSource only runs it when the matched prefix registered one; a prefix with no
   // validate hook (e.g. J5's `otlp`) gets its rest passed straight to its factory, even when
   // rest is not a directory (a port fragment like ':4318', not a filesystem path at all).
   test('a prefix with no validate hook passes a non-directory rest straight to its factory', () => {
     let seenRest: string | undefined;
-    registerSourcePrefix('mol-pij8-fake', (rest) => {
+    registerSourcePrefix('fake-prefix', (rest) => {
       seenRest = rest;
       const fake: SourceV1 = {
         specVersion: 'v1',
-        id: 'mol-pij8-fake/traces',
+        id: 'fake-prefix/traces',
         capabilities: { streaming: false, content: 'captured' },
         doRead: emptyDoRead,
       };
       return fake;
     });
-    const source = resolveSource('mol-pij8-fake::4318');
-    expect(source.id).toBe('mol-pij8-fake/traces');
+    const source = resolveSource('fake-prefix::4318');
+    expect(source.id).toBe('fake-prefix/traces');
     expect(seenRest).toBe(':4318');
   });
 });

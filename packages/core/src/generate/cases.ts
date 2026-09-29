@@ -25,7 +25,7 @@ export interface ExtractCasesInput {
   readonly traces: readonly NormalizedTrace[];
   /** The criteria the cases are generated for (not used by rendering). */
   readonly criteria: readonly Criterion[];
-  /** bead classified-evals-mol-dh8.4: when true, also builds a Case for a non-ok trace that
+  /** when true, also builds a Case for a non-ok trace that
    * still has a real conversation, with provenance `{traceIds, trace:{completeness}}` (the
    * `CaseTraceProvenance` shape judge/completeness.ts's `partitionCases` reads), so a caller
    * like the watch loop can still judge that trace's content-independent criteria. Default
@@ -70,7 +70,7 @@ function finalAnswer(messages: readonly Message[]): string | undefined {
   return text === '' ? undefined : text;
 }
 
-// bead classified-evals-mol-dh8.6: the span the conversation/LLM output came from, per
+// the span the conversation/LLM output came from, per
 // docs/sinks.md "Correlation" — the llm-kind span whose messageRange covers the final
 // assistant message. Undefined when no such span exists (e.g. no spans at all).
 function answerSpanId(trace: NormalizedTrace): string | undefined {

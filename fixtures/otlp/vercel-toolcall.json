@@ -1,5 +1,5 @@
 {
-  "_source": "Vercel AI SDK telemetry docs, content/docs/03-ai-sdk-core/60-telemetry.mdx @ 2026-09-25 (github.com/vercel/ai) -- ai.response.toolCalls / ai.prompt.messages {type:\"tool-result\"} content-part round trip (mol-pij.14)",
+  "_source": "Vercel AI SDK telemetry docs, content/docs/03-ai-sdk-core/60-telemetry.mdx @ 2026-09-25 (github.com/vercel/ai) -- ai.response.toolCalls / ai.prompt.messages {type:\"tool-result\"} content-part round trip",
   "resourceSpans": [
     {
       "resource": {
