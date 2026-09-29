@@ -432,6 +432,38 @@ describe('gauntletMasterKey', () => {
       expect(out.result).toBe('skipped');
     });
 
+    it('cuts before a partial reference token left at the end of a half-word cut (Cyrillic)', async () => {
+      const cases = [
+        withReference(
+          'r4',
+          'Бұл шатқал теңіз деңгейінен 1800 метр биіктікте орналасқан жатыр',
+          '1800 метр',
+        ),
+      ];
+      const judge = fakeJudge(() => ESCAPE);
+      await gauntletMasterKey(REFERENCE_CRITERION, judge, cases, { inputs: [] });
+      const probes = probeStates(judge);
+      expect(probes.length).toBeGreaterThan(0);
+      for (const probe of probes) expect(probe).not.toContain('1800');
+      expect(probes[0]).toContain('деңгейінен');
+    });
+
+    it('cuts before a partial reference token left at the end of a half-word cut (Latin)', async () => {
+      const cases = [
+        withReference(
+          'r5',
+          'Ships anchor near the old Zanzibar Town harbour every single spring',
+          'Zanzibar Town',
+        ),
+      ];
+      const judge = fakeJudge(() => ESCAPE);
+      await gauntletMasterKey(REFERENCE_CRITERION, judge, cases, { inputs: [] });
+      const probes = probeStates(judge);
+      expect(probes.length).toBeGreaterThan(0);
+      for (const probe of probes) expect(probe).not.toContain('Zanzibar');
+      expect(probes[0]).toContain('Ships anchor near the old');
+    });
+
     it('keeps the current truncation for a non-reference criterion', async () => {
       const cases = [
         withReference('r3', 'The first train leaves at 05:40 from the old station [1]', '05:40'),
