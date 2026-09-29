@@ -82,7 +82,12 @@ interface Counting {
 function countingJudge(
   rows: readonly Row[],
   events: Events,
-  opts: { pinned?: boolean; transport?: string; releaseDate?: string } = {},
+  opts: {
+    pinned?: boolean;
+    transport?: string;
+    releaseDate?: string;
+    requestFormat?: 'raw' | 'fenced-v1';
+  } = {},
 ): Counting {
   const pByState = new Map(rows.map((r) => [`S-${r.id}`, r.p]));
   let phase = 'none';
@@ -105,6 +110,7 @@ function countingJudge(
         pinned,
         transport,
         model: 'fake/jev',
+        ...(opts.requestFormat === undefined ? {} : { requestFormat: opts.requestFormat }),
       },
       doJudge: (req) => {
         counting.total += 1;
@@ -397,6 +403,22 @@ describe('vet check --lock per criterion', () => {
     expect(report()).toMatchObject({
       staleCriteria: [{ id: 'tone', reasons: ['model_changed'] }],
     });
+  });
+
+  test('requestFormat drift is reported and marks every criterion model_changed', async () => {
+    const { root, events, judge } = await validated();
+    const fenced = {
+      ...judge,
+      capabilities: { ...judge.capabilities, requestFormat: 'fenced-v1' as const },
+    };
+    await vet(['check', '--lock'], depsFor(root, fenced, events));
+
+    expect(report()).toMatchObject({
+      stale: true,
+      reasons: ['requestFormat'],
+      staleCriteria: [{ id: 'tone', reasons: ['model_changed'] }],
+    });
+    expect(process.exitCode).toBe(1);
   });
 
   test('a criterion absent from the lock → exit 1 with uncalibrated', async () => {

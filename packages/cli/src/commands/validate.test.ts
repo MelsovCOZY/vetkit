@@ -94,7 +94,12 @@ interface Counting {
 function countingJudge(
   rows: readonly Row[],
   events: Events,
-  opts: { pinned?: boolean; transport?: string; releaseDate?: string } = {},
+  opts: {
+    pinned?: boolean;
+    transport?: string;
+    releaseDate?: string;
+    requestFormat?: 'raw' | 'fenced-v1';
+  } = {},
 ): Counting {
   const pByState = new Map(rows.map((r) => [`S-${r.id}`, r.p]));
   let phase = 'none';
@@ -117,6 +122,7 @@ function countingJudge(
         pinned,
         transport,
         model: 'fake/jev',
+        ...(opts.requestFormat === undefined ? {} : { requestFormat: opts.requestFormat }),
       },
       doJudge: (req) => {
         counting.total += 1;
@@ -239,6 +245,24 @@ async function lockAt(root: string): Promise<Lock> {
 }
 
 describe('vet validate', () => {
+  test('writes requestFormat into the lock when the judge capability is fenced-v1', async () => {
+    const rows = standardRows();
+    const root = await project(rows);
+    const events = createEvents();
+    const { judge } = countingJudge(rows, events, { requestFormat: 'fenced-v1' });
+    await vet(['validate'], depsFor(root, judge, events));
+    expect((await lockAt(root)).requestFormat).toBe('fenced-v1');
+  });
+
+  test('omits requestFormat from the lock for a raw judge', async () => {
+    const rows = standardRows();
+    const root = await project(rows);
+    const events = createEvents();
+    const { judge } = countingJudge(rows, events, { requestFormat: 'raw' });
+    await vet(['validate'], depsFor(root, judge, events));
+    expect((await lockAt(root)).requestFormat).toBeUndefined();
+  });
+
   test('validate --json writes criteria.lock.json and stdout parses (model, datasetHash)', async () => {
     const rows = standardRows();
     const root = await project(rows);

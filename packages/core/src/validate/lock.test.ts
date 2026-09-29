@@ -139,6 +139,13 @@ function entryOf(lock: Lock, id = 'answers-question'): LockCriterion {
 // ---------- buildLock status matrix ----------
 
 describe('buildLock', () => {
+  test('writes requestFormat only for fenced-v1, so raw locks stay byte-identical', () => {
+    const plain = JSON.stringify(buildLock(inputs()));
+    expect(JSON.stringify(buildLock(inputs({ requestFormat: 'raw' })))).toBe(plain);
+    expect(buildLock(inputs({ requestFormat: 'fenced-v1' })).requestFormat).toBe('fenced-v1');
+    expect('requestFormat' in buildLock(inputs({ requestFormat: 'raw' }))).toBe(false);
+  });
+
   test('records normalizedWordingHash, equal across in-sentence whitespace edits', () => {
     const e = entryOf(buildLock(inputs()));
     const c = criterion();
@@ -565,6 +572,29 @@ describe('checkLock', () => {
       stale: true,
       reasons: ['transport'],
     });
+  });
+
+  test('a lock without requestFormat is not stale under raw', () => {
+    const lock = buildLock(inputs());
+    expect(checkLock(lock, current({ requestFormat: 'raw' })).stale).toBe(false);
+    expect(checkLock(lock, current()).stale).toBe(false);
+  });
+
+  test('a raw lock is stale under fenced-v1, reason requestFormat', () => {
+    const lock = buildLock(inputs());
+    expect(checkLock(lock, current({ requestFormat: 'fenced-v1' }))).toMatchObject({
+      stale: true,
+      reasons: ['requestFormat'],
+    });
+  });
+
+  test('a fenced-v1 lock is stale under raw, reason requestFormat', () => {
+    const lock = buildLock(inputs({ requestFormat: 'fenced-v1' }));
+    expect(checkLock(lock, current({ requestFormat: 'raw' }))).toMatchObject({
+      stale: true,
+      reasons: ['requestFormat'],
+    });
+    expect(checkLock(lock, current({ requestFormat: 'fenced-v1' })).stale).toBe(false);
   });
 
   test('a criterion added after the lock makes the wording stale', () => {
