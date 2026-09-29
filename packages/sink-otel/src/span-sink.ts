@@ -11,10 +11,10 @@ import {
 } from '@vetkit/spec';
 import { byteLength, correlationProblem, MAX_BODY_BYTES } from './encode.ts';
 import { encodeTracesBody, verdictToSpan } from './encode-span.ts';
+import { mergeAcks, rejectAll, resolveUrl, statusToAck, type Entry } from './sink-shared.ts';
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 const TRACES_PATH = '/v1/traces';
-const RETRYABLE_STATUS = new Set([429, 502, 503, 504]);
 
 export interface CreateOpenInferenceSinkOptions {
   readonly endpoint: string;
@@ -40,22 +40,6 @@ const RESPONSE_SCHEMA: JsonSchema = {
   },
 };
 
-type Entry = { id: string; verdict: Verdict };
-
-function resolveUrl(endpoint: string): string {
-  const url = new URL(endpoint);
-  if (url.pathname === '/' || url.pathname === '') url.pathname = TRACES_PATH;
-  return url.toString();
-}
-
-function rejectAll(entries: Entry[], reason: string, retryable: boolean): SinkAck {
-  return { accepted: [], rejected: entries.map(({ id }) => ({ id, reason, retryable })) };
-}
-
-function mergeAcks(a: SinkAck, b: SinkAck): SinkAck {
-  return { accepted: [...a.accepted, ...b.accepted], rejected: [...a.rejected, ...b.rejected] };
-}
-
 function rejectedCount(text: string): number {
   if (text.trim() === '') return 0;
   const parsed = safeParseJson<ExportTraceResponse>(text, RESPONSE_SCHEMA);
@@ -72,7 +56,7 @@ function linkProblem(verdict: Verdict): string | undefined {
 }
 
 export function createOpenInferenceSink(opts: CreateOpenInferenceSinkOptions): SinkV1 {
-  const url = resolveUrl(opts.endpoint);
+  const url = resolveUrl(opts.endpoint, TRACES_PATH);
   const fetchImpl = opts.fetch ?? globalThis.fetch;
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
@@ -101,10 +85,8 @@ export function createOpenInferenceSink(opts: CreateOpenInferenceSinkOptions): S
     }
 
     const { status } = response;
-    if (status === 401 || status === 403) return rejectAll(entries, 'SINK_AUTH', false);
-    if (RETRYABLE_STATUS.has(status)) return rejectAll(entries, `SINK_UNREACHABLE:${status}`, true);
-    if (status === 413) return rejectAll(entries, 'SINK_PAYLOAD_TOO_LARGE', true);
-    if (status < 200 || status >= 300) return rejectAll(entries, `SINK_REJECTED:${status}`, false);
+    const failure = statusToAck(status, entries);
+    if (failure !== undefined) return failure;
 
     // OTLP does not say which spans were rejected; the last N are reported retryable. The
     // sink is NOT idempotent: verdictToSpan mints a fresh carrier traceId/spanId
