@@ -217,6 +217,65 @@ describe('deadline', () => {
   });
 });
 
+describe('network failure vs timeout', () => {
+  test('a fetch rejection carrying a system error code maps to JUDGE_UNAVAILABLE with that code as the hint', async () => {
+    const fetchStub: typeof fetch = vi.fn(async () => {
+      const cause = Object.assign(
+        new TypeError('Unable to connect. Is the computer able to access the url?'),
+        { code: 'ConnectionRefused' },
+      );
+      throw cause;
+    });
+
+    const judge = createJevJudge({ preset: 'vercel', apiKey: 'fake-jev-key', fetch: fetchStub });
+
+    const err = await catchVetError(
+      judge.doJudge({ state: 's', questions: { ok: { type: 'boolean', instructions: 'q' } } }),
+    );
+
+    expect(err.code).toBe('JUDGE_UNAVAILABLE');
+    expect(err.details?.hint).toBe('ConnectionRefused');
+  });
+
+  test('a fetch rejection with no error code falls back to the error class name as the hint', async () => {
+    const fetchStub: typeof fetch = vi.fn(async () => {
+      throw new TypeError('fetch failed');
+    });
+
+    const judge = createJevJudge({ preset: 'vercel', apiKey: 'fake-jev-key', fetch: fetchStub });
+
+    const err = await catchVetError(
+      judge.doJudge({ state: 's', questions: { ok: { type: 'boolean', instructions: 'q' } } }),
+    );
+
+    expect(err.code).toBe('JUDGE_UNAVAILABLE');
+    expect(err.details?.hint).toBe('TypeError');
+  });
+
+  test('a real deadline timeout still maps to JUDGE_TIMEOUT, never JUDGE_UNAVAILABLE', async () => {
+    const fetchStub: typeof fetch = vi.fn(
+      () =>
+        new Promise<Response>(() => {
+          // never resolves — only the deadline settles this call.
+        }),
+    );
+
+    const judge = createJevJudge({
+      preset: 'vercel',
+      apiKey: 'fake-jev-key',
+      fetch: fetchStub,
+      deadlineMs: 20,
+    });
+
+    const err = await catchVetError(
+      judge.doJudge({ state: 's', questions: { ok: { type: 'boolean', instructions: 'q' } } }),
+    );
+
+    expect(err.code).toBe('JUDGE_TIMEOUT');
+    expect(err.code).not.toBe('JUDGE_UNAVAILABLE');
+  });
+});
+
 describe('key redaction', () => {
   test('the API key never appears in the serialized error, including the cause chain', async () => {
     const apiKey = 'fake-jev-key-should-never-leak';
