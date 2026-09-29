@@ -362,13 +362,13 @@ describe('gauntletMasterKey', () => {
       expect(a.states).toEqual(b.states);
     });
 
-    it('skips a probe that cannot remove content and counts it as neither pass nor fail', async () => {
+    it('skips a probe that cannot remove content and reports skipped, never pass, when every probe was skipped', async () => {
       const cases = [oneSentence('w1', 'GOOD')];
       const judge = fakeJudge(() => YES);
       const out = await gauntletMasterKey(CRITERION, judge, cases, { inputs: [] });
       expect(judge.states).toEqual([]);
       expect(out.failedInputs).toEqual([]);
-      expect(out.result).toBe('pass');
+      expect(out.result).toBe('skipped');
     });
 
     it('skips a fixed master-key input equal to a known-pass case state', async () => {

@@ -317,7 +317,7 @@ describe('vet validate', () => {
       paraphrase: 'skipped',
       polarity: 'skipped',
       injection: 'pass',
-      master_key: 'fail',
+      master_key: 'pass',
       constant_output: 'pass',
       length: 'pass',
     });
