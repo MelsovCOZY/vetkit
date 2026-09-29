@@ -216,16 +216,55 @@ export function decideOutcome(input: {
   return 'AMEND';
 }
 
-export type LabelCheck = { humanTraces: number; totalRows: number; ok: boolean };
+export type LabelCheck = {
+  humanTraces: number;
+  modelTraces: number;
+  /** Distinct traces with a human or model label; this is what the INCONCLUSIVE bar counts. */
+  labelledTraces: number;
+  humanRows: number;
+  modelRows: number;
+  totalRows: number;
+  ok: boolean;
+};
 
-/** `--check-labels`: distinct human-labelled traces vs total label rows, against the same bars as decideOutcome. */
+/** `--check-labels`: distinct human+model-labelled traces vs total label rows, against the same bars as decideOutcome. */
 export function checkLabels(rows: LabelRow[]): LabelCheck {
-  const humanTraceIds = new Set(rows.filter((r) => r.source === 'human').map((r) => r.traceId));
+  const tracesOf = (source: LabelRow['source']): Set<string> =>
+    new Set(rows.filter((r) => r.source === source).map((r) => r.traceId));
+  const human = tracesOf('human');
+  const model = tracesOf('model');
+  const labelled = new Set([...human, ...model]);
   return {
-    humanTraces: humanTraceIds.size,
+    humanTraces: human.size,
+    modelTraces: model.size,
+    labelledTraces: labelled.size,
+    humanRows: rows.filter((r) => r.source === 'human').length,
+    modelRows: rows.filter((r) => r.source === 'model').length,
     totalRows: rows.length,
-    ok: humanTraceIds.size >= MIN_HUMAN_TRACES && rows.length >= MIN_TOTAL_LABEL_ROWS,
+    ok: labelled.size >= MIN_HUMAN_TRACES && rows.length >= MIN_TOTAL_LABEL_ROWS,
   };
+}
+
+const TRUTH_RANK: Partial<Record<LabelRow['source'], number>> = { auto: 1, model: 2, human: 3 };
+
+/** Truth per `traceId|criterionId`: human beats model beats auto; baseline rows are not truth. */
+export function resolveTruth(rows: LabelRow[]): Map<string, LabelRow> {
+  const truth = new Map<string, LabelRow>();
+  for (const row of rows) {
+    const rank = TRUTH_RANK[row.source];
+    if (rank === undefined) continue;
+    const key = `${row.traceId}|${row.criterionId}`;
+    const current = truth.get(key);
+    if (!current || rank >= (TRUTH_RANK[current.source] ?? 0)) truth.set(key, row);
+  }
+  return truth;
+}
+
+export const PROVISIONAL_NOTE = 'PROVISIONAL (model-labelled)';
+
+/** True when any resolved truth row is model-labelled, so the report is provisional. */
+export function usesModelLabels(truth: Map<string, LabelRow>): boolean {
+  return [...truth.values()].some((r) => r.source === 'model');
 }
 
 // ---------------------------------------------------------------------------
@@ -644,7 +683,12 @@ async function main(): Promise<void> {
 
   if (process.argv.includes('--check-labels')) {
     const check = checkLabels(labelRows);
-    console.log(`labels: ${check.humanTraces} traces (human), ${check.totalRows} rows`);
+    console.log(
+      `labels: ${check.labelledTraces} traces (human+model), ${check.totalRows} rows; ` +
+        `human ${check.humanTraces} traces / ${check.humanRows} rows, ` +
+        `model ${check.modelTraces} traces / ${check.modelRows} rows`,
+    );
+    if (check.modelRows > 0) console.log(PROVISIONAL_NOTE);
     if (!check.ok) process.exitCode = 1;
     return;
   }
@@ -655,11 +699,11 @@ async function main(): Promise<void> {
   const criteria: Criterion[] = JSON.parse(await readFile(CRITERIA_PATH, 'utf8'));
   const corpus = await loadCorpus(traces, criteria);
 
-  const truthByKey = new Map<string, LabelRow>();
+  const truthByKey = resolveTruth(labelRows);
+  const provisional = usesModelLabels(truthByKey);
   const baselineByKey = new Map<string, LabelRow>();
   for (const row of labelRows) {
     if (row.source === 'baseline') baselineByKey.set(`${row.traceId}|${row.criterionId}`, row);
-    else truthByKey.set(`${row.traceId}|${row.criterionId}`, row);
   }
 
   const criterionRows = criteria.map((c) => computeCriterionRow(c.id, traces, truthByKey, corpus));
@@ -700,7 +744,7 @@ async function main(): Promise<void> {
   const passCount = criterionRows.filter((r) => r.verdict === 'pass').length;
   const medianKappa = medianOfDefined(criterionRows.map((r) => r.kappa));
   const decision = decideOutcome({
-    humanTraces: check.humanTraces,
+    humanTraces: check.labelledTraces,
     totalLabelRows: check.totalRows,
     c1Accuracy,
     passCount,
@@ -710,6 +754,7 @@ async function main(): Promise<void> {
   const markdown = [
     '# Spike report: Jev vs ground truth, Jev vs the Gemini judge',
     '',
+    ...(provisional ? [PROVISIONAL_NOTE, ''] : []),
     '## (a) Per-criterion table (human/auto labels as truth)',
     '',
     criterionTableMarkdown(criterionRows),
@@ -747,7 +792,7 @@ async function main(): Promise<void> {
       'then c1 accuracy < 0.9 -> NO-GO; then median kappa < 0.4 -> NO-GO; then >=7 criteria passing ' +
       '-> GO; otherwise AMEND.',
     '',
-    `Decision: ${decision}`,
+    `Decision: ${decision}${provisional ? ` ${PROVISIONAL_NOTE}` : ''}`,
     '',
   ].join('\n');
 
