@@ -58,7 +58,7 @@ function defaultSleep(ms: number, signal?: AbortSignal): Promise<void> {
     const timer = setTimeout(() => {
       signal?.removeEventListener('abort', onAbort);
       resolve();
-    }, ms);
+    }, Math.max(0, ms));
     signal?.addEventListener('abort', onAbort, { once: true });
   });
 }
@@ -113,21 +113,25 @@ export function createLimiter(opts: LimiterOptions = {}): Limiter {
   }
 
   function pump(): void {
-    while (queue.length > 0 && inFlight < ceiling && now() >= pausedUntil) {
+    // One clock read per pump: a second read could pass the pause between the check and the
+    // sleep, giving a negative delay (mol-0nw.31) or a wake timer that is never armed.
+    let t = now();
+    while (queue.length > 0 && inFlight < ceiling && t >= pausedUntil) {
       const waiter = queue.shift();
       if (waiter === undefined) break;
       waiter.detach();
       inFlight += 1;
       waiter.grant();
+      t = now();
     }
     if (queue.length === 0) {
       cancelWake();
       return;
     }
-    if (wake === undefined && now() < pausedUntil) {
+    if (wake === undefined && t < pausedUntil) {
       const controller = new AbortController();
       wake = controller;
-      sleep(pausedUntil - now(), controller.signal).then(
+      sleep(Math.max(0, pausedUntil - t), controller.signal).then(
         () => {
           if (wake === controller) wake = undefined;
           pump();
@@ -209,9 +213,12 @@ export function createLimiter(opts: LimiterOptions = {}): Limiter {
       const effectiveMaxBackoffMs = networkUnreachable
         ? Math.min(maxBackoffMs, NETWORK_UNREACHABLE_MAX_BACKOFF_MS)
         : maxBackoffMs;
-      const wait =
+      // A Retry-After in the past arrives negative: clamp so no negative delay is emitted or slept.
+      const wait = Math.max(
+        0,
         error.details.retryAfterMs ??
-        random() * Math.min(effectiveMaxBackoffMs, 1000 * 2 ** attempts);
+          random() * Math.min(effectiveMaxBackoffMs, 1000 * 2 ** attempts),
+      );
       const remaining = totalBudgetMs - (now() - start);
       if (wait > remaining) {
         release();

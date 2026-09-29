@@ -58,6 +58,10 @@ function virtualClock(): {
 
 function noop(): void {}
 
+function delaysOf(spy: { mock: { calls: readonly (readonly unknown[])[] } }): number[] {
+  return spy.mock.calls.map((c) => Number(c[1] ?? 0));
+}
+
 function messageOf(e: unknown): string {
   return e instanceof Error ? e.message : '';
 }
@@ -573,6 +577,56 @@ describe('createLimiter events and timers', () => {
       throw new Error('expected setTimeout to return a Timeout with hasRef()');
     }
     expect(returned.hasRef()).toBe(true);
+    setTimeoutSpy.mockRestore();
+  });
+
+  // mol-0nw.31: Bun prints TimeoutNegativeWarning when a computed delay goes below zero.
+  it('never passes a negative delay to setTimeout for a Retry-After in the past', async () => {
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+    const events: PacingEvent[] = [];
+    const limiter = createLimiter({ maxRetries: 1, emit: (e) => events.push(e) });
+    await limiter.run(failThen([retryable(-5000)]).fn);
+    expect(delaysOf(setTimeoutSpy).every((d) => d >= 0)).toBe(true);
+    for (const e of events) {
+      if (e.type === 'judge.throttled') expect(e.retryAfterMs).toBeGreaterThanOrEqual(0);
+    }
+    setTimeoutSpy.mockRestore();
+  });
+
+  it('never passes a negative delay to setTimeout when the clock advances past the pause', async () => {
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+    let t = 0;
+    const limiter = createLimiter({
+      maxRetries: 1,
+      now: () => {
+        t += 7;
+        return t;
+      },
+    });
+    const outcome = await Promise.race([
+      limiter.run(failThen([retryable(10)]).fn),
+      new Promise<string>((r) => {
+        setTimeout(() => r('stalled'), 300);
+      }),
+    ]);
+    expect(outcome).toBe('ok');
+    expect(delaysOf(setTimeoutSpy).every((d) => d >= 0)).toBe(true);
+    setTimeoutSpy.mockRestore();
+  });
+
+  it('clamps the sleep to zero when the deadline has already expired', async () => {
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+    let t = 0;
+    const limiter = createLimiter({
+      maxRetries: 3,
+      totalBudgetMs: 0,
+      now: () => {
+        t += 7;
+        return t;
+      },
+    });
+    await limiter.run(failThen([retryable(-1)]).fn).catch(() => {});
+    expect(delaysOf(setTimeoutSpy).every((d) => d >= 0)).toBe(true);
     setTimeoutSpy.mockRestore();
   });
 });
