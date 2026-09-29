@@ -225,7 +225,6 @@ describe('createLangfuseSink doWrite', () => {
   });
 
   describe('deterministic score id (mol-yxn.23)', () => {
-
     it('the same verdict under a different verdict id yields the same score id', async () => {
       const a = await idOf(verdict({ id: 'run-1' }));
       const b = await idOf(verdict({ id: 'run-2' }));

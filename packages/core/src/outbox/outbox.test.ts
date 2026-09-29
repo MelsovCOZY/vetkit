@@ -421,7 +421,6 @@ describe('createOutbox', () => {
   });
 
   describe('skipped acks and per-item targets (mol-yxn.23)', () => {
-
     test('a skipped: rejection is a terminal ack, never dead-lettered', async () => {
       const outbox = createOutbox(opts());
       await outbox.enqueue(verdicts(2));
