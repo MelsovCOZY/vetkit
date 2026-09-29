@@ -87,7 +87,8 @@ export function sampleTraces(traces: Trace[], n: number = SAMPLE_SIZE): Trace[] 
   const step = traces.length / n;
   const picked: Trace[] = [];
   for (let i = 0; i < n; i++) {
-    picked.push(traces[Math.floor(i * step)]);
+    const trace = traces[Math.floor(i * step)];
+    if (trace !== undefined) picked.push(trace);
   }
   return picked;
 }
@@ -276,11 +277,13 @@ function regeneratePrompt(candidate: CandidateCriterion, reason: string): ChatMe
 }
 
 export class ShortfallError extends Error {
-  constructor(
-    public readonly survivorCount: number,
-    public readonly needed: number,
-  ) {
+  readonly survivorCount: number;
+  readonly needed: number;
+
+  constructor(survivorCount: number, needed: number) {
     super(`propose.ts: only ${survivorCount} generated criteria survived lint, need ${needed}`);
+    this.survivorCount = survivorCount;
+    this.needed = needed;
     this.name = 'ShortfallError';
   }
 }

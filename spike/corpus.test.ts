@@ -65,8 +65,8 @@ describe('buildTraces (unit, fixtures only)', () => {
 
     const [trace] = buildTraces(golden, reports, corpusText);
 
-    expect(trace.unanswerable).toBe(true);
-    expect(trace.reference).toBeNull();
+    expect(trace?.unanswerable).toBe(true);
+    expect(trace?.reference).toBeNull();
   });
 
   test('builds an answerable trace with resolved contexts, baseline scores and camelCased ids', () => {
@@ -184,7 +184,7 @@ describe('generated spike/data/corpus-text.json (integration, produced by extrac
     expect(keys).toHaveLength(48);
 
     for (const key of keys) {
-      expect(wordCount(corpusText[key])).toBeGreaterThanOrEqual(50);
+      expect(wordCount(corpusText[key] ?? '')).toBeGreaterThanOrEqual(50);
     }
   });
 });

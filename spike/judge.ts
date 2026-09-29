@@ -204,7 +204,12 @@ export async function judgeOne(
       questions,
       providerOptions: { gateway: { only: ['typesafe-ai'], zeroDataRetention: true } },
     };
-    const result = await callSystemOne(opts.base, opts.apiKey, body, { sleep: opts.sleep });
+    const result = await callSystemOne(
+      opts.base,
+      opts.apiKey,
+      body,
+      opts.sleep ? { sleep: opts.sleep } : {},
+    );
     if (result.ok) {
       response = result.response;
       await mkdir(cacheDir, { recursive: true });

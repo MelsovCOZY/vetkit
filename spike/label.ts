@@ -232,7 +232,9 @@ export function seededShuffle<T>(items: readonly T[], seed: number): T[] {
   const rand = mulberry32(seed);
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(rand() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
+    // Swap via splice: arr[i] and arr[j] read as T | undefined under noUncheckedIndexedAccess.
+    const moved = arr.splice(j, 1, ...arr.slice(i, i + 1));
+    arr.splice(i, 1, ...moved);
   }
   return arr;
 }

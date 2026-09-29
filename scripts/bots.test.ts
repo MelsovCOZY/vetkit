@@ -26,7 +26,7 @@ describe('pr-title.yml conventional-commit regex', () => {
   if (!match) {
     throw new Error("pr-title.yml must define regex='...' for the test to read");
   }
-  const titleRegex = new RegExp(match[1]);
+  const titleRegex = new RegExp(match[1] ?? '');
 
   it.each([
     'feat: add pkg-pr-new preview workflow',
@@ -47,7 +47,9 @@ describe('pr-title.yml conventional-commit regex', () => {
 
 describe('pkg-pr-new.yml step order', () => {
   const doc = parseYaml(readFileSync(join(WORKFLOWS_DIR, 'pkg-pr-new.yml'), 'utf8'));
-  const steps = Object.values(doc.jobs).flatMap((job) => job.steps ?? []);
+  const steps = Object.values<{ steps?: { run?: unknown }[] }>(doc.jobs).flatMap(
+    (job) => job.steps ?? [],
+  );
   const runs = steps
     .map((step) => step.run)
     .filter((run): run is string => typeof run === 'string');
@@ -65,9 +67,18 @@ describe('pkg-pr-new.yml step order', () => {
   });
 });
 
+interface RenovateRule {
+  groupName?: string;
+  matchDepTypes?: string[];
+  matchPackageNames?: string[];
+  matchPackagePatterns?: string[];
+  rangeStrategy?: string;
+  dependencyDashboardApproval?: boolean;
+}
+
 describe('renovate.json', () => {
   const renovate = JSON.parse(readFileSync(join(ROOT, 'renovate.json'), 'utf8'));
-  const rules = renovate.packageRules ?? [];
+  const rules: RenovateRule[] = renovate.packageRules ?? [];
 
   it('groups oxlint and oxfmt into one PR', () => {
     const rule = rules.find(
@@ -77,7 +88,7 @@ describe('renovate.json', () => {
         r.matchPackageNames.includes('oxfmt'),
     );
     expect(rule).toBeDefined();
-    expect(typeof rule.groupName).toBe('string');
+    expect(typeof rule?.groupName).toBe('string');
   });
 
   it('groups all @opentelemetry/* packages into one PR', () => {

@@ -107,7 +107,7 @@ describe('readJsonl / writeJsonl', () => {
       const raw = await readFile(path, 'utf8');
       expect(raw).toContain('3,2 миллиона тонн');
       const back = await readJsonl<{ text: string }>(path);
-      expect(back[0].text).toBe('3,2 миллиона тонн');
+      expect(back[0]?.text).toBe('3,2 миллиона тонн');
     } finally {
       await rm(path, { force: true });
     }

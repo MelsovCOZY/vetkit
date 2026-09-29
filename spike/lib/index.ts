@@ -70,12 +70,11 @@ export async function withConcurrency<T, R>(
   fn: (item: T) => Promise<R>,
 ): Promise<R[]> {
   const results: R[] = Array.from({ length: items.length });
-  let index = 0;
+  const pending = items.entries();
 
   async function worker(): Promise<void> {
-    while (index < items.length) {
-      const current = index++;
-      results[current] = await fn(items[current]);
+    for (const [current, item] of pending) {
+      results[current] = await fn(item);
     }
   }
 

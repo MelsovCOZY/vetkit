@@ -326,7 +326,10 @@ describe('lint and format ignore lists', () => {
   it.each(['.oxlintrc.json', '.oxfmtrc.json'])(
     '%s does not exempt the formerly ignored sources',
     (name) => {
-      const config: { ignorePatterns?: string[] } = readJson(join(ROOT, name)) ?? {};
+      const path = join(ROOT, name);
+      const config: { ignorePatterns?: string[] } = existsSync(path)
+        ? JSON.parse(readFileSync(path, 'utf8'))
+        : {};
       for (const pattern of exempted) {
         expect(config.ignorePatterns ?? []).not.toContain(pattern);
       }

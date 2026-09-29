@@ -78,7 +78,10 @@ function stubResponse(
   body: unknown,
   init: { status?: number; headers?: Record<string, string> } = {},
 ): Response {
-  return new Response(JSON.stringify(body), { status: init.status ?? 200, headers: init.headers });
+  return new Response(JSON.stringify(body), {
+    status: init.status ?? 200,
+    ...(init.headers ? { headers: init.headers } : {}),
+  });
 }
 
 describe('buildState (unit)', () => {
@@ -87,7 +90,7 @@ describe('buildState (unit)', () => {
     const state = buildState(t);
 
     expect(state).toContain(t.question);
-    expect(state).toContain(t.contexts[0].text);
+    expect(state).toContain(t.contexts[0]?.text ?? '');
     expect(state).toContain(t.answer);
     expect(t.reference).toBeTruthy();
     expect(state).not.toContain(t.reference ?? '');
@@ -101,18 +104,18 @@ describe('buildQuestions (unit)', () => {
     const questions = buildQuestions(CRITERIA, t);
 
     expect(t.reference).toBeTruthy();
-    expect(questions.c1.instructions).toContain(t.reference ?? '');
-    expect(questions.c1.instructions).not.toContain('{{reference}}');
-    expect(questions.c2.instructions).toBe(CRITERIA[1].instructions);
+    expect(questions.c1?.instructions).toContain(t.reference ?? '');
+    expect(questions.c1?.instructions).not.toContain('{{reference}}');
+    expect(questions.c2?.instructions).toBe(CRITERIA[1]?.instructions);
   });
 
   test('sends every criterion as a 3-way choice with the criterion escape label as the third option', () => {
     const t = trace();
     const questions = buildQuestions(CRITERIA, t);
 
-    expect(questions.c2.type).toBe('choice');
-    expect(Object.keys(questions.c2.criteria)).toEqual(['yes', 'no', 'escape']);
-    expect(questions.c2.criteria.escape).toBe('unclear');
+    expect(questions.c2?.type).toBe('choice');
+    expect(Object.keys(questions.c2?.criteria ?? {})).toEqual(['yes', 'no', 'escape']);
+    expect(questions.c2?.criteria.escape).toBe('unclear');
   });
 
   test('request body matches the gateway fixture field names (instructions, type, criteria)', () => {
@@ -449,7 +452,7 @@ describe('runJudge (integration, fetch stubbed, real second-run cache proof)', (
     expect(allOutput).not.toContain('super-secret-key');
     expect(allOutput).not.toContain('Authorization');
     expect(allOutput).not.toContain(t.question);
-    expect(allOutput).not.toContain(t.contexts[0].text);
+    expect(allOutput).not.toContain(t.contexts[0]?.text ?? '');
 
     logSpy.mockRestore();
     errSpy.mockRestore();
