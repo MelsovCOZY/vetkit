@@ -55,10 +55,13 @@ function defaultSleep(ms: number, signal?: AbortSignal): Promise<void> {
       clearTimeout(timer);
       reject(signal?.reason);
     };
-    const timer = setTimeout(() => {
-      signal?.removeEventListener('abort', onAbort);
-      resolve();
-    }, Math.max(0, ms));
+    const timer = setTimeout(
+      () => {
+        signal?.removeEventListener('abort', onAbort);
+        resolve();
+      },
+      Math.max(0, ms),
+    );
     signal?.addEventListener('abort', onAbort, { once: true });
   });
 }
