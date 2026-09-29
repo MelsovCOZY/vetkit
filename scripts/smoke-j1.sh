@@ -108,10 +108,11 @@ jq -e '.results[0].cacheHit == true and .results[0].status == "ok"' out2.json >/
 hit=$?
 result "AC2a: CEV_DIAG=1 vet run --json -> .results[0].cacheHit == true" 0 "$code" "$hit" \
   "cacheHit=$(jq -c '.results[0].cacheHit' out2.json 2>/dev/null)"
-grep -Eq 'judge\.requests"?[[:space:]]*[:=][[:space:]]*0([^0-9]|$)' err2.txt out2.json
+# The diag channel is one JSON line on stderr: {"diag":{"judge":{"requests":N}}}.
+grep '^{"diag"' err2.txt | jq -e -s 'length == 1 and .[0].diag.judge.requests == 0' >/dev/null
 diag=$?
 result "AC2b: CEV_DIAG=1 diag channel reports judge.requests == 0" 0 "$code" "$diag" \
-  "$(grep -c 'judge.requests' err2.txt out2.json | tr '\n' ' ')"
+  "$(grep '^{"diag"' err2.txt | head -1)"
 # Supplementary zero-network check: with a bogus key any real request would fail with 401,
 # so an ok cached verdict proves the second run did not reach the judge.
 AI_GATEWAY_API_KEY=vetkit-smoke-invalid-key bun "$BIN" run --json >out2b.json 2>/dev/null
