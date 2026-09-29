@@ -19,23 +19,26 @@ function tail(output: string, lines = 60): string {
   return output.split('\n').slice(-lines).join('\n');
 }
 
-describe.skipIf(process.env['CEV_E2E'] !== '1')('J2: vet init from JSONL traces, real generator and judge', () => {
-  it('generates >=5 criteria and >=20 cases, lints clean, and runs', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'vetkit-e2e-j2-'));
-    try {
-      const result = spawnSync('bash', [SCRIPT], {
-        cwd: ROOT,
-        encoding: 'utf8',
-        env: { ...process.env, VETKIT_SMOKE_DIR: join(dir, 'work') },
-        timeout: 14 * 60 * 1000,
-      });
-      const diagnostics = `smoke-j2.sh exited ${String(result.status)}\n--- stdout ---\n${tail(result.stdout)}\n--- stderr ---\n${tail(result.stderr)}`;
-      // The run is the gate's single real pass: always surface the per-AC lines.
-      console.log(diagnostics);
-      expect(result.status, diagnostics).toBe(0);
-      expect(result.stdout, diagnostics).toContain('smoke-j2: ok');
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-});
+describe.skipIf(process.env['CEV_E2E'] !== '1')(
+  'J2: vet init from JSONL traces, real generator and judge',
+  () => {
+    it('generates >=5 criteria and >=20 cases, lints clean, and runs', () => {
+      const dir = mkdtempSync(join(tmpdir(), 'vetkit-e2e-j2-'));
+      try {
+        const result = spawnSync('bash', [SCRIPT], {
+          cwd: ROOT,
+          encoding: 'utf8',
+          env: { ...process.env, VETKIT_SMOKE_DIR: join(dir, 'work') },
+          timeout: 14 * 60 * 1000,
+        });
+        const diagnostics = `smoke-j2.sh exited ${String(result.status)}\n--- stdout ---\n${tail(result.stdout)}\n--- stderr ---\n${tail(result.stderr)}`;
+        // The run is the gate's single real pass: always surface the per-AC lines.
+        console.log(diagnostics);
+        expect(result.status, diagnostics).toBe(0);
+        expect(result.stdout, diagnostics).toContain('smoke-j2: ok');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  },
+);
