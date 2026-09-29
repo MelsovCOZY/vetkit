@@ -2,6 +2,7 @@
 // Under --json stdout carries exactly one JSON document (the runEvals result as-is); warnings
 // and errors go to stderr. SIGINT aborts the run: partial results are still printed, with
 // summary.aborted true, and the exit code is 130 (root DECISION C5).
+import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
   createEvents,
@@ -120,6 +121,15 @@ function render(result: RunEvalsResult): string {
 // "Promotion"), so a case sitting there is otherwise invisible until `vet cases review`
 // (mol-p4a.1) moves it up a level. A missing pending/ directory (the common case before any
 // promotion has happened) counts as 0, not an error.
+// mol-76a.15: `vet init --out <dir>` writes criteria.yaml and cases/ at the top level of
+// <dir>, with no evals/ subdirectory. evals/ is still the first choice when it exists (the
+// scaffold `vet init` writes with no --source uses it); only its absence falls back to
+// <rootDir> itself.
+function defaultDataDir(rootDir: string): string {
+  const evalsDir = resolve(rootDir, 'evals');
+  return existsSync(evalsDir) ? evalsDir : rootDir;
+}
+
 async function countPendingCases(casesPath: string): Promise<number> {
   const result = await loadCases(join(casesPath, 'pending'));
   return result.ok ? result.cases.length : 0;
@@ -152,8 +162,9 @@ async function runCommand(options: RunOptions & Readonly<Record<string, unknown>
   // Progress renders on stderr (render-events.ts); stdout stays the result document.
   const events = createEvents();
   const stopRendering = renderEvents(events, { options });
-  const criteriaPath = resolve(options.criteria ?? resolve(rootDir, 'evals/criteria.yaml'));
-  const casesPath = resolve(options.cases ?? resolve(rootDir, 'evals/cases'));
+  const defaultDir = defaultDataDir(rootDir);
+  const criteriaPath = resolve(options.criteria ?? resolve(defaultDir, 'criteria.yaml'));
+  const casesPath = resolve(options.cases ?? resolve(defaultDir, 'cases'));
   const pendingCount = await countPendingCases(casesPath);
   log.info(
     `${String(pendingCount)} promoted case(s) pending review in ${join(casesPath, 'pending')} (run \`vet cases review\`)`,

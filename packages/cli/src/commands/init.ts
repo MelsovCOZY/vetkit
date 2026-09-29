@@ -10,7 +10,7 @@
 // (or replacing --out, under --force) — closing the SIGINT partial-write gap.
 import { constants, existsSync } from 'node:fs';
 import { access, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   generateEvals,
@@ -122,6 +122,23 @@ async function confirmOverwrite(existing: readonly string[]): Promise<void> {
     message: `${list} already exists. Overwrite? (y/N)`,
   });
   if (!/^y(es)?$/i.test(answer.trim())) throw invalid(message);
+}
+
+// mol-76a.15 AC1: `vet init --out <dir>` left <dir> with criteria.yaml and cases/ but no
+// vetkit.config.ts, so `vet run` there always failed CONFIG_INVALID. Re-exporting the config
+// `vet init` itself just resolved (by relative import) makes <dir> runnable without inlining
+// its generator/judge (an in-process adapter object can't be serialized) or any credential:
+// keys still come from the env vars the original config names.
+function reexportConfig(configFile: string, out: string): string {
+  const rel = relative(out, configFile).split('\\').join('/');
+  const specifier = rel.startsWith('.') ? rel : `./${rel}`;
+  return [
+    '// vetkit.config.ts, written by `vet init --source` (bead mol-76a.15): re-exports the',
+    '// config `vet init` itself resolved, so `vet run` here uses the same generator and',
+    '// judge, with no credential or config duplicated.',
+    `export { default } from '${specifier}';`,
+    '',
+  ].join('\n');
 }
 
 async function writeAtomic(file: string, content: string): Promise<void> {
@@ -263,6 +280,8 @@ async function generateCommand(options: InitOptions & { source: string }): Promi
   } finally {
     process.off('SIGINT', onSigint);
   }
+
+  await writeAtomic(join(out, 'vetkit.config.ts'), reexportConfig(loaded.configFile, out));
 
   // Additive: only an `otlp:`-sourced run carries a summary (source.id 'otlp/file' or
   // 'otlp/receiver'); every other --source keeps emit()'s existing {criteria, cases, report}

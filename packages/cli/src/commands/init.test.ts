@@ -127,4 +127,22 @@ describe('vet init --source', () => {
     // The CLI process's own pid names its temp dir; the spawned child's pid is `result.pid`.
     expect(existsSync(`${out}.tmp-${String(result.pid)}`)).toBe(false);
   });
+
+  // mol-76a.15: `vet init --out <dir>` used to leave <dir> with no vetkit.config.ts, so a
+  // `vet run` there always failed CONFIG_INVALID even though criteria.yaml and cases/ were
+  // right there at the top level.
+  test('--out writes a vetkit.config.ts that a `vet run` in that directory can load every case with', () => {
+    const project = freshProject();
+    const out = join(project, 'evals-out');
+    const initResult = runVet(['init', '--source', 'traces', '--out', out, '--json'], project);
+    expect(initResult.status).toBe(0);
+    const initDoc = parseJson<GenerateDoc>(initResult.stdout);
+    expect(existsSync(join(out, 'vetkit.config.ts'))).toBe(true);
+
+    const runResult = runVet(['run', '--json'], out);
+    expect(runResult.stderr).not.toContain('CONFIG_INVALID');
+    expect(runResult.status).not.toBe(2);
+    const runDoc = parseJson<{ summary: { total: number } }>(runResult.stdout);
+    expect(runDoc.summary.total).toBe(initDoc.cases.length);
+  });
 });

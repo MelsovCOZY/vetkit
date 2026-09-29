@@ -1,5 +1,13 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -280,6 +288,44 @@ describe('vet run persists .vet/runs/latest.json (mol-p4a.16)', () => {
       exitCode: 130,
     });
   }, 60_000);
+});
+
+describe('vet run default criteria/cases paths (mol-76a.15)', () => {
+  // `vet init --out <dir>` writes criteria.yaml and cases/ at the top level of <dir>, with no
+  // evals/ subdirectory; `vet run`'s defaults used to look only under evals/, so a run there
+  // always failed to find any cases.
+  test('falls back to <configDir>/criteria.yaml and <configDir>/cases when evals/ is absent', () => {
+    const project = freshProject();
+    cpSync(join(project, 'evals', 'criteria.yaml'), join(project, 'criteria.yaml'));
+    cpSync(join(project, 'evals', 'cases'), join(project, 'cases'), { recursive: true });
+    rmSync(join(project, 'evals'), { recursive: true, force: true });
+    const result = runVet(['run', '--json'], project, fixtureEnv('pass'));
+    expect(result.status).toBe(0);
+    expect(parseJson(result.stdout)).toMatchObject({ summary: { total: 1, passed: 1 } });
+  });
+
+  test('evals/ still wins over a top-level layout when both exist', () => {
+    const project = freshProject();
+    writeFileSync(
+      join(project, 'criteria.yaml'),
+      readFileSync(join(project, 'evals', 'criteria.yaml'), 'utf8'),
+    );
+    mkdirSync(join(project, 'cases'), { recursive: true });
+    writeFileSync(
+      join(project, 'cases', 'extra.jsonl'),
+      [
+        { id: 'extra-1', input: { state: 'User: hi' }, provenance: null, tags: [] },
+        { id: 'extra-2', input: { state: 'User: hi' }, provenance: null, tags: [] },
+      ]
+        .map((c) => JSON.stringify(c))
+        .join('\n') + '\n',
+    );
+    // Both layouts pass under fixtureEnv('pass'); only their case counts differ (1 vs 2), so
+    // evals/'s count winning proves it was chosen over the top-level one.
+    const result = runVet(['run', '--json'], project, fixtureEnv('pass'));
+    expect(result.status).toBe(0);
+    expect(parseJson(result.stdout)).toMatchObject({ summary: { total: 1, passed: 1 } });
+  });
 });
 
 describe('vet run and evals/cases/pending/ (dh8.3, root DECISION UX brief C11)', () => {
