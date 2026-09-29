@@ -225,7 +225,9 @@ describe('every workflow', () => {
     '%s uses the latest major of every actions/* action, cache/restore and cache/save included',
     (file) => {
       const text = readFileSync(join(ROOT, file), 'utf8');
-      const uses = [...text.matchAll(/uses:\s*(actions\/[\w-]+)(?:\/[\w-]+)?@v(\d+)/g)];
+      const uses = [
+        ...text.matchAll(/uses:\s*(actions\/[\w-]+)(?:\/[\w-]+)?@[0-9a-f]{40}\s+#\s*v(\d+)\./g),
+      ];
       for (const m of uses) {
         const min = MIN_NODE24_MAJOR[m[1] ?? ''];
         expect(min, `unknown action ${m[1]}`).toBeDefined();

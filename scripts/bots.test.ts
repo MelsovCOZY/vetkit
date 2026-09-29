@@ -55,7 +55,7 @@ describe('pkg-pr-new.yml step order', () => {
     .filter((run): run is string => typeof run === 'string');
 
   const packIndex = runs.findIndex((run) => run.includes('bun run pack'));
-  const publishIndex = runs.findIndex((run) => run.includes('pkg-pr-new publish'));
+  const publishIndex = runs.findIndex((run) => /pkg-pr-new(@\S+)? publish/.test(run));
 
   it('runs pack before publishing previews', () => {
     expect(packIndex).toBeGreaterThanOrEqual(0);
