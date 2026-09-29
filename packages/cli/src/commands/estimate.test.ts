@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -27,6 +27,20 @@ interface Result {
 function freshProject(): string {
   const dir = mkdtempSync(join(tmpdir(), 'vetkit-estimate-'));
   cpSync(fixtureDir, dir, { recursive: true });
+  return dir;
+}
+
+// The fake-judge project with capabilities.requestFormat set to 'fenced-v1'.
+function fencedProject(): string {
+  const dir = freshProject();
+  const file = join(dir, 'vetkit.config.ts');
+  writeFileSync(
+    file,
+    readFileSync(file, 'utf8').replace(
+      'pinned: false,\n    transport',
+      "pinned: false,\n    requestFormat: 'fenced-v1' as const,\n    transport",
+    ),
+  );
   return dir;
 }
 
@@ -95,6 +109,26 @@ describe('vet estimate', () => {
     expect(doc['inputTokens']).toEqual(expect.any(Number));
     expect(doc['minutes']).toBeCloseTo(1 / 25);
   });
+
+  test.each(['run', 'validate'])(
+    'estimate --for %s counts the fenced-v1 wrapper tokens when the judge is fenced',
+    (target) => {
+      const raw = parseJson(runVet(['estimate', '--for', target, '--json'], freshProject()).stdout);
+      const fenced = parseJson(
+        runVet(['estimate', '--for', target, '--json'], fencedProject()).stdout,
+      );
+      const tokens = (doc: Record<string, unknown>): number => {
+        const holder = target === 'run' ? doc : doc['base'];
+        const value =
+          typeof holder === 'object' && holder !== null && 'inputTokens' in holder
+            ? holder.inputTokens
+            : undefined;
+        if (typeof value !== 'number') throw new Error('no inputTokens in estimate output');
+        return value;
+      };
+      expect(tokens(fenced)).toBeGreaterThan(tokens(raw));
+    },
+  );
 
   test('a priced transport gets a USD cost with its source and asOf; still no fetch', () => {
     const { dir, pricing } = pricedProject();

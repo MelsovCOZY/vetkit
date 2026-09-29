@@ -12,10 +12,15 @@
     "tsBuildInfoFile": "${configDir}/../.tsbuild/scripts.tsbuildinfo",
     "paths": {
       "@vetkit/core": ["../packages/core/src/index.ts"],
+      "@vetkit/judge-jev": ["../packages/judge-jev/src/index.ts"],
       "@vetkit/spec": ["../packages/spec/src/index.ts"]
     }
   },
   "include": ["**/*.ts", "../spike/**/*.ts", "../vitest.config.ts"],
   "exclude": ["fixtures", "../spike/data"],
-  "references": [{ "path": "../packages/core" }, { "path": "../packages/spec" }]
+  "references": [
+    { "path": "../packages/core" },
+    { "path": "../packages/judge-jev" },
+    { "path": "../packages/spec" }
+  ]
 }

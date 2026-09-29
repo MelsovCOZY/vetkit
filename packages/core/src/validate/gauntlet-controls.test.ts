@@ -10,6 +10,7 @@ import {
   type JsonSchema,
   type JudgeV1,
 } from '@vetkit/spec';
+import { FENCED_V1_PREAMBLE } from '../judge/format.ts';
 import type { CalibrationLabel } from './calibrate.ts';
 import {
   gauntletConstantOutput,
@@ -201,6 +202,17 @@ describe('gauntletInjection', () => {
     const first = CASES[0]?.input.state ?? '';
     const imperative = INJECTIONS.find((e) => e.kind === 'imperative')?.text ?? '';
     expect(judge.states).toContain(`${first}\n\n${imperative}`);
+  });
+
+  it('delivers injected states fenced under fenced-v1, with the injection text inside the JSON body', async () => {
+    const judge = fakeJudge(honest);
+    judge.capabilities.requestFormat = 'fenced-v1';
+    await gauntletInjection(CRITERION, CASES, judge, { injections: INJECTIONS });
+    const imperative = INJECTIONS.find((e) => e.kind === 'imperative')?.text ?? '';
+    const body = JSON.stringify(imperative).slice(1, -1).replaceAll('<', '\\u003c');
+    expect(judge.states.length).toBeGreaterThan(CASES.length);
+    for (const s of judge.states) expect(s.startsWith(FENCED_V1_PREAMBLE)).toBe(true);
+    expect(judge.states.some((s) => s.split('\n')[2]?.includes(body))).toBe(true);
   });
 
   it('fails when a scripted flip in one family turns a known-fail into a pass', async () => {

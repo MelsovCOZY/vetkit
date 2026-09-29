@@ -1,13 +1,20 @@
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { CEV_ERROR_CODES, validateJson, verdictSchema, VetError } from '@vetkit/spec';
+import { FENCED_V1_PREAMBLE, renderState } from '@vetkit/core';
+import {
+  CEV_ERROR_CODES,
+  safeParseJson,
+  validateJson,
+  verdictSchema,
+  VetError,
+} from '@vetkit/spec';
 import { describe, expect, test } from 'vitest';
 import { judgeOne } from './index.ts';
 
 // A temp project whose vetkit.config.ts holds an in-process fake judge: no network. Each
 // doJudge call appends one line to calls.log, so the test counts real judge requests.
-function fakeJudgeConfig(callsFile: string): string {
+function fakeJudgeConfig(callsFile: string, requestFormat?: 'fenced-v1'): string {
   return `import { appendFileSync } from 'node:fs';
 export default {
   judge: {
@@ -18,10 +25,11 @@ export default {
       maxStateTokens: 32000,
       pinned: false,
       transport: 'fake',
-      model: 'fake-jev',
+      model: 'fake-jev',${requestFormat === undefined ? '' : `\n      requestFormat: '${requestFormat}',`}
     },
     async doJudge(req) {
       appendFileSync(${JSON.stringify(callsFile)}, 'call\\n');
+      appendFileSync(${JSON.stringify(callsFile + '.states')}, JSON.stringify(req.state) + '\\n');
       const answers = {};
       for (const key of Object.keys(req.questions)) {
         answers[key] = {
@@ -54,10 +62,10 @@ const criterion = {
 
 const state = 'User: hi\nAssistant: Hello! How can I help?';
 
-async function project(): Promise<{ root: string; callsFile: string }> {
+async function project(requestFormat?: 'fenced-v1'): Promise<{ root: string; callsFile: string }> {
   const root = await mkdtemp(join(tmpdir(), 'vetkit-judge-one-'));
   const callsFile = join(root, 'calls.log');
-  await writeFile(join(root, 'vetkit.config.ts'), fakeJudgeConfig(callsFile));
+  await writeFile(join(root, 'vetkit.config.ts'), fakeJudgeConfig(callsFile, requestFormat));
   return { root, callsFile };
 }
 
@@ -96,6 +104,17 @@ describe('judgeOne', () => {
     expect(verdict.model.resolved).toBe('fake-jev-resolved');
     expect(verdict.model.pinned).toBe(false);
     expect(await callCount(callsFile)).toBe(1);
+  });
+
+  test('sends a fenced state when the configured judge is fenced-v1', async () => {
+    const { root, callsFile } = await project('fenced-v1');
+    await judgeOne({ criterion, state }, { configPath: join(root, 'vetkit.config.ts'), env: {} });
+    const [line] = (await readFile(`${callsFile}.states`, 'utf8')).split('\n');
+    const parsed = safeParseJson<string>(line ?? '""', { type: 'string' });
+    if (!parsed.ok) throw parsed.error;
+    const sent = parsed.value;
+    expect(sent.startsWith(FENCED_V1_PREAMBLE)).toBe(true);
+    expect(sent).toBe(renderState(state, 'fenced-v1'));
   });
 
   test('a second identical call is served from the cache with 0 judge requests', async () => {
