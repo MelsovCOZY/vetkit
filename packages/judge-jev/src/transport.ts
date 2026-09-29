@@ -207,6 +207,18 @@ function fieldOf(value: unknown, key: string): unknown {
   return isRecord(value) ? value[key] : undefined;
 }
 
+// fetchWithAbort's rejection is either the deadline/caller AbortSignal firing or
+// fetchImpl itself failing (DNS, ECONNREFUSED, socket reset) before any signal
+// fired; the caller tells these apart via `signal.aborted` and only reaches this
+// helper for the latter. It classifies the failure with the underlying error's
+// own `code` (Node/Bun system errors) or else its class name — never the raw
+// message — so no URL or response body ever reaches VetErrorDetails.hint.
+function networkErrorHint(cause: unknown): string {
+  const code = fieldOf(cause, 'code');
+  if (typeof code === 'string' && code !== '') return code;
+  return cause instanceof Error ? cause.name : 'unknown';
+}
+
 const ERROR_TYPE_HINT_PATTERN = /^[a-z_]{1,64}$/;
 
 // Vercel AI Gateway's 403 body nests the classified error type at `error.type`
@@ -353,8 +365,15 @@ export function createJevJudge(opts: CreateJevJudgeOptions): JudgeV1 {
           signal,
         );
       } catch (cause) {
-        throw new VetError('JUDGE_TIMEOUT', 'judge request timed out or the network failed', {
+        if (signal.aborted) {
+          throw new VetError('JUDGE_TIMEOUT', 'judge request timed out', {
+            cause: redactDeep(cause, apiKey),
+          });
+        }
+        const hint = networkErrorHint(cause);
+        throw new VetError('JUDGE_UNAVAILABLE', `judge is unreachable (${hint})`, {
           cause: redactDeep(cause, apiKey),
+          details: { retryable: true, hint },
         });
       }
 
