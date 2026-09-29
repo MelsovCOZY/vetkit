@@ -107,6 +107,15 @@ describe('backoffDelay', () => {
   });
 });
 
+const skipAll: Handler = (batch) => ({
+  accepted: [],
+  rejected: batch.map((v) => ({
+    id: v.id ?? '',
+    reason: 'skipped:unscored:infra_failure',
+    retryable: false,
+  })),
+});
+
 describe('createOutbox', () => {
   test('happy path', async () => {
     const outbox = createOutbox(opts());
@@ -409,5 +418,67 @@ describe('createOutbox', () => {
     await outbox.enqueue(verdicts(1));
     await outbox.drain([fakeSink(acceptAll)]);
     await expect(readFile(join(dir, '.lock'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  describe('skipped acks and per-item targets (mol-yxn.23)', () => {
+
+    test('a skipped: rejection is a terminal ack, never dead-lettered', async () => {
+      const outbox = createOutbox(opts());
+      await outbox.enqueue(verdicts(2));
+      const [result] = await outbox.drain([fakeSink(skipAll)]);
+      expect(result?.dead).toBe(0);
+      expect(await lines('dead.jsonl')).toEqual([]);
+      expect(await lines('acked.jsonl')).toHaveLength(2);
+      expect(await outbox.reconcile()).toEqual({ produced: 2, acknowledged: 2, dead: 0 });
+      // Terminal: a second drain does not resend it.
+      const again = fakeSink(skipAll);
+      await outbox.drain([again]);
+      expect(again.calls).toHaveLength(0);
+    });
+
+    test('skipped by one sink and accepted by another reconciles as acknowledged', async () => {
+      const outbox = createOutbox(opts());
+      await outbox.enqueue(verdicts(2));
+      await outbox.drain([fakeSink(acceptAll, { id: 'a' }), fakeSink(skipAll, { id: 'b' })]);
+      expect(await outbox.reconcile({ sinks: ['a', 'b'] })).toEqual({
+        produced: 2,
+        acknowledged: 2,
+        dead: 0,
+      });
+    });
+
+    test('separate runs targeting different sinks both reconcile', async () => {
+      const outbox = createOutbox(opts());
+      await outbox.enqueue([verdict(0, 'x0')], { targets: ['a'] });
+      await outbox.drain([fakeSink(acceptAll, { id: 'a' })]);
+      await outbox.enqueue([verdict(1, 'x1')], { targets: ['b'] });
+      const b = fakeSink(acceptAll, { id: 'b' });
+      await outbox.drain([b]);
+      expect(await outbox.reconcile({ sinks: ['b'] })).toEqual({
+        produced: 2,
+        acknowledged: 2,
+        dead: 0,
+      });
+      expect(await outbox.reconcile()).toEqual({ produced: 2, acknowledged: 2, dead: 0 });
+    });
+
+    test('drain does not send an item to a sink outside its targets', async () => {
+      const outbox = createOutbox(opts());
+      await outbox.enqueue([verdict(0, 'x0')], { targets: ['a'] });
+      const b = fakeSink(acceptAll, { id: 'b' });
+      await outbox.drain([b]);
+      expect(b.calls).toHaveLength(0);
+    });
+
+    test('an item with no targets still reconciles against every configured sink', async () => {
+      const outbox = createOutbox(opts());
+      await outbox.enqueue([verdict(0, 'old')]);
+      await outbox.drain([fakeSink(acceptAll, { id: 'a' })]);
+      expect(await outbox.reconcile({ sinks: ['a', 'b'] })).toEqual({
+        produced: 1,
+        acknowledged: 0,
+        dead: 0,
+      });
+    });
   });
 });
