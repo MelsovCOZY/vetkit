@@ -2,7 +2,7 @@
 // user's vetkit.config.* through the shared loader (the judge is built here in the CLI, never in
 // core), then runs core judgeCase with the same file cache `vet run` uses (config cacheDir).
 import { resolve } from 'node:path';
-import { computeWordingHash, createFileCache, judgeCase } from '@vetkit/core';
+import { computeWordingHash, createFileCache, judgeCase, wordingOf } from '@vetkit/core';
 import {
   CEV_ERROR_CODES,
   criterionSchema,
@@ -60,13 +60,7 @@ function toCriterion(input: JudgeOneCriterion): Criterion {
   );
   if (!result.ok) throw invalid(`invalid criterion: ${result.error.message}`);
   const v = result.value;
-  // Same wording subset as loadCriteria's hash (and lock.ts wordingOf), so cache keys match.
-  const wordingHash = computeWordingHash({
-    type: v.type,
-    instructions: v.instructions,
-    ...(v.criteria === undefined ? {} : { criteria: v.criteria }),
-    ...(v.escape === undefined ? {} : { escape: v.escape }),
-  });
+  const wordingHash = computeWordingHash(wordingOf(v));
   const criterion: Criterion = { ...v, wordingHash };
   if (criterion.type === 'choice') {
     const missing = criterion.passWhen.filter((value) => !Object.hasOwn(criterion.criteria, value));

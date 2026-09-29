@@ -25,7 +25,8 @@ import {
   type LockModel,
   type LockReason,
 } from '@vetkit/spec';
-import { computeWordingHash, type WordingFields } from '../criteria/load.ts';
+import { computeWordingHash } from '../criteria/load.ts';
+import { wordingOf } from '../criteria/wording.ts';
 import type { Events } from '../events.ts';
 import type { GatePolicy } from '../gate.ts';
 import { referenceRequirement } from '../judge/reference.ts';
@@ -301,15 +302,6 @@ export interface StaleReport {
   /** Criterion ids whose wording differs from, or is missing in, the lock. */
   readonly criteria: string[];
   readonly releaseDate: 'match' | 'differs' | 'unknown';
-}
-
-function wordingOf(c: Criterion): WordingFields {
-  return {
-    type: c.type,
-    instructions: c.instructions,
-    ...(c.criteria === undefined ? {} : { criteria: c.criteria }),
-    ...(c.escape === undefined ? {} : { escape: c.escape }),
-  };
 }
 
 export function checkLock(lock: Lock, current: CheckLockCurrent): StaleReport {
