@@ -18,6 +18,10 @@ import { dirname, join } from 'node:path';
 import { safeParseJson, type Case, type JsonSchema, type Verdict } from '@vetkit/spec';
 import type { PromotedCase } from './types.ts';
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 export interface PromoteFailureOptions {
   /** Defaults to `new Date()`. Lets a caller/test pin the day file and `at` timestamp. */
   readonly now?: Date;
@@ -77,6 +81,7 @@ export function promoteFailure(
     ...evalCase,
     id,
     provenance: {
+      ...(isRecord(evalCase.provenance) ? evalCase.provenance : {}),
       promotedFrom: {
         traceId: evalCase.traceId,
         criterionId: verdict.criterionId,
