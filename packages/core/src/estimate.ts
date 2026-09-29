@@ -6,6 +6,7 @@ import { readdir } from 'node:fs/promises';
 import type { Case, Criterion } from '@vetkit/spec';
 import { buildRequest, cacheKey } from './judge/request.ts';
 import { CALIBRATION_MIN_REPEATS } from './validate/calibrate.ts';
+import { POSITION_SWAP_MAX_ORDERS } from './validate/gauntlet-bias.ts';
 
 /** The measured gateway pace: about 25 judge calls per minute. */
 export const DEFAULT_CALLS_PER_MINUTE = 25;
@@ -52,11 +53,13 @@ export interface RunEstimate {
 export type Unknowable = number | 'unknown';
 
 export interface EstimatePart {
-  readonly name: 'calibration' | 'gauntlet-bias' | 'gauntlet-controls';
+  readonly name: 'calibration' | 'gauntlet-position-swap' | 'gauntlet-bias' | 'gauntlet-controls';
   readonly calls: Unknowable;
   readonly inputTokens: Unknowable;
   readonly cost: CostEstimate;
   readonly minutes: Unknowable;
+  /** Why the numbers are 'unknown'. */
+  readonly reason?: string;
 }
 
 export interface EstimateValidateInput extends EstimateRunInput {
@@ -135,7 +138,14 @@ function scaled(
   pricing: EstimatePricing | undefined,
 ): EstimatePart {
   if (factor === undefined) {
-    return { name, calls: 'unknown', inputTokens: 'unknown', cost: 'unknown', minutes: 'unknown' };
+    return {
+      name,
+      calls: 'unknown',
+      inputTokens: 'unknown',
+      cost: 'unknown',
+      minutes: 'unknown',
+      reason: `${name} needs its pack size, which the config does not carry`,
+    };
   }
   const inputTokens = base.inputTokens * factor;
   return {
@@ -147,17 +157,68 @@ function scaled(
   };
 }
 
+// Options as the position-swap gauntlet sends them: boolean is yes/no/escape; a choice is its
+// keys plus an escape key unless one of the keys already is the escape. Score has no swap.
+function optionCount(criterion: Criterion): number {
+  if (criterion.type === 'boolean') return 3;
+  if (criterion.type !== 'choice') return 0;
+  const keys = Object.keys(criterion.criteria);
+  return keys.includes(String(criterion.escape)) ? keys.length : keys.length + 1;
+}
+
+function factorial(n: number): number {
+  return n <= 1 ? 1 : n * factorial(n - 1);
+}
+
+// The gauntlet bypasses the verdict cache, so every case counts. One call judges one
+// criterion in one option order, so tokens are the single-criterion request size per order.
+function positionSwapPart(input: EstimateValidateInput, callsPerMinute: number): EstimatePart {
+  let calls = 0;
+  let inputTokens = 0;
+  for (const criterion of input.criteria) {
+    const n = optionCount(criterion);
+    if (n === 0) continue;
+    const orders = Math.min(factorial(n), POSITION_SWAP_MAX_ORDERS);
+    for (const evalCase of input.cases) {
+      calls += orders;
+      inputTokens += orders * caseTokens(evalCase, [criterion]);
+    }
+  }
+  return {
+    name: 'gauntlet-position-swap',
+    calls,
+    inputTokens,
+    cost: priced(inputTokens, input.pricing),
+    minutes: calls / callsPerMinute,
+  };
+}
+
 export async function estimateValidate(input: EstimateValidateInput): Promise<ValidateEstimate> {
   const base = await estimateRun(input);
   const packs = input.gauntletPackSizes ?? {};
   const repeats = input.repeats ?? CALIBRATION_MIN_REPEATS;
+  const swap = positionSwapPart(input, base.callsPerMinute);
   const parts = [
     scaled('calibration', base, repeats, input.pricing),
+    swap,
     scaled('gauntlet-bias', base, packs.bias, input.pricing),
     scaled('gauntlet-controls', base, packs.controls, input.pricing),
   ];
   const known = parts.every((p) => p.calls !== 'unknown');
   const factor = known ? repeats + (packs.bias ?? 0) + (packs.controls ?? 0) : undefined;
-  const { name: _name, ...total } = scaled('calibration', base, factor, input.pricing);
+  const { name: _name, reason: _reason, ...scaledTotal } = scaled('calibration', base, factor, input.pricing);
+  const total =
+    scaledTotal.calls === 'unknown'
+      ? scaledTotal
+      : (() => {
+          const calls = scaledTotal.calls + Number(swap.calls);
+          const inputTokens = Number(scaledTotal.inputTokens) + Number(swap.inputTokens);
+          return {
+            calls,
+            inputTokens,
+            cost: priced(inputTokens, input.pricing),
+            minutes: calls / base.callsPerMinute,
+          };
+        })();
   return { for: 'validate', base, parts, total, warnings: base.warnings };
 }

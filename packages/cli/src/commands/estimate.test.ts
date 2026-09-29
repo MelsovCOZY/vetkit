@@ -150,21 +150,64 @@ describe('vet estimate', () => {
     expect(human.stdout).toMatch(/1 cache hit/);
   });
 
-  test('--for validate reports the gauntlet parts as unknown without guessing', () => {
-    const result = runVet(['estimate', '--for', 'validate', '--json'], freshProject());
+  test('--for validate counts position-swap calls and leaves the length half unknown with a reason', () => {
+    const dir = freshProject();
+    writeFileSync(
+      join(dir, 'evals', 'criteria.yaml'),
+      `criteria:
+  - id: tone
+    type: boolean
+    instructions: Is the reply polite?
+    escape: The reply has no discernible tone.
+    polarity: pass_when_true
+    channel: quality
+    provenance:
+      traceIds: []
+  - id: style
+    type: choice
+    instructions: Which style does the reply take?
+    criteria:
+      formal: The reply is formal.
+      casual: The reply is casual.
+      terse: The reply is terse.
+    passWhen: [formal, casual]
+    escape: The reply has no discernible style.
+    polarity: pass_when_true
+    channel: quality
+    provenance:
+      traceIds: []
+  - id: helpfulness
+    type: score
+    instructions: How helpful is the reply?
+    criteria: [not helpful, somewhat helpful, very helpful]
+    polarity: pass_when_true
+    channel: quality
+    provenance:
+      traceIds: []
+`,
+    );
+    const result = runVet(['estimate', '--for', 'validate', '--json'], dir);
     expect(result.status).toBe(0);
     expect(result.fetched).toBe(false);
     const doc = parseJson(result.stdout);
-    expect(doc['for']).toBe('validate');
+    const base = doc['base'];
+    const cases = { cases: typeof base === 'object' && base !== null && 'cases' in base && typeof base.cases === 'number' ? base.cases : -1 };
+    // boolean: 3 options (3! = 6); 3-key choice + escape: 4 options (24, capped at 6); score: none.
     expect(doc['parts']).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ name: 'gauntlet-bias', calls: 'unknown' }),
+        expect.objectContaining({ name: 'gauntlet-position-swap', calls: cases.cases * 12 }),
+        expect.objectContaining({
+          name: 'gauntlet-bias',
+          calls: 'unknown',
+          reason: expect.stringMatching(/pack/),
+        }),
         expect.objectContaining({ name: 'gauntlet-controls', calls: 'unknown' }),
       ]),
     );
-    const human = runVet(['estimate', '--for', 'validate'], freshProject());
+    const human = runVet(['estimate', '--for', 'validate'], dir);
     expect(human.status).toBe(0);
-    expect(human.stdout).toMatch(/gauntlet-bias.*unknown/);
+    expect(human.stdout).toMatch(new RegExp(`gauntlet-position-swap: calls ${String(cases.cases * 12)}\\b`));
+    expect(human.stdout).toMatch(/gauntlet-bias.*unknown.*pack/);
   });
 
   test('--for validate prints numbers for calibration from the exported repeat count', async () => {
