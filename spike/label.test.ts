@@ -6,10 +6,12 @@ import type { Trace } from './corpus.ts';
 import type { Criterion } from './propose.ts';
 import {
   CSV_HEADER,
+  buildPendingItems,
   buildQueue,
   compareAnswerToReference,
   computeC2Label,
   computeC3Baseline,
+  importModelRows,
   isAbstention,
   mergeImport,
   parseCsv,
@@ -466,5 +468,131 @@ describe('CLI non-TTY exit (subprocess, no network)', () => {
         status = err.status;
     }
     expect(status).toBe(2);
+  });
+});
+
+const auto = (traceId: string, label: 'review' | 'yes'): LabelRow => ({
+  traceId,
+  criterionId: 'c1',
+  label,
+  source: 'auto',
+  labelledAt: 't',
+  baseline: 'SECRET-BASELINE',
+});
+
+describe('model labels: blind export', () => {
+  const traces = [
+    trace({ traceId: 'a', lang: 'ru', reference: 'SECRET-REF' }),
+    trace({ traceId: 'b', lang: 'kk' }),
+  ];
+  const criteria = [
+    criterion({ id: 'c1', name: 'Answer correct', instructions: 'ok?' }),
+    criterion({ id: 'c4', name: 'Hallucination', instructions: 'halluc?', escape: 'none' }),
+  ];
+  test('items match the loop queue and carry only what a human sees', () => {
+    const existing = [auto('a', 'review'), auto('b', 'yes')];
+    const queue = buildQueue(traces, criteria, existing, ['b']);
+    const items = buildPendingItems(traces, criteria, existing, ['b']);
+    expect(items.map((i) => i.id)).toEqual(queue.map((q) => `${q.traceId}:${q.criterionId}`));
+    expect(items[0]).toEqual({
+      id: 'a:c1',
+      traceId: 'a',
+      criterionId: 'c1',
+      question: 'Q?',
+      answer: 'A.',
+      contexts: [{ docId: 'd1.pdf', text: 'context text' }],
+      criterion: { name: 'Answer correct', instructions: 'ok?', escape: 'No factual assertions' },
+      labels: ['yes', 'no', 'review'],
+    });
+    const text = JSON.stringify(items);
+    expect(text).not.toContain('SECRET');
+    expect(text).not.toContain('baseline');
+  });
+
+  test('items already labelled by model are not re-exported', () => {
+    const existing: LabelRow[] = [
+      auto('a', 'review'),
+      { ...auto('a', 'review'), source: 'model', label: 'yes', baseline: '' },
+    ];
+    expect(buildPendingItems(traces, criteria, existing, []).map((i) => i.id)).toEqual([]);
+  });
+});
+
+const now = () => '2026-09-29T00:00:00.000Z';
+const line = (o: object) => JSON.stringify(o);
+
+describe('model labels: import', () => {
+  const pending = new Set(['a:c1', 'b:c4']);
+  test('appends valid rows as source model with current labelledAt', () => {
+    const text = line({ id: 'a:c1', label: 'yes' }) + '\n' + line({ id: 'b:c4', label: 'review' });
+    const r = importModelRows(text, pending, [], now);
+    expect(r.toAppend).toEqual([
+      {
+        traceId: 'a',
+        criterionId: 'c1',
+        label: 'yes',
+        source: 'model',
+        labelledAt: now(),
+        baseline: '',
+      },
+      {
+        traceId: 'b',
+        criterionId: 'c4',
+        label: 'review',
+        source: 'model',
+        labelledAt: now(),
+        baseline: '',
+      },
+    ]);
+    expect(r.rejected).toBe(0);
+  });
+
+  test('rejects unknown ids, unknown labels, source human, bad json', () => {
+    const text = [
+      line({ id: 'zzz:c1', label: 'yes' }),
+      line({ id: 'a:c1', label: 'maybe' }),
+      line({ id: 'a:c1', label: 'yes', source: 'human' }),
+      '{not json',
+    ].join('\n');
+    const r = importModelRows(text, pending, [], now);
+    expect(r.toAppend).toEqual([]);
+    expect(r.rejected).toBe(4);
+  });
+
+  test('idempotent: ids already labelled by model are skipped, not rejected', () => {
+    const existing: LabelRow[] = [
+      {
+        traceId: 'a',
+        criterionId: 'c1',
+        label: 'no',
+        source: 'model',
+        labelledAt: 't',
+        baseline: '',
+      },
+    ];
+    const r = importModelRows(line({ id: 'a:c1', label: 'yes' }), pending, existing, now);
+    expect(r.toAppend).toEqual([]);
+    expect(r.skipped).toBe(1);
+    expect(r.rejected).toBe(0);
+  });
+});
+
+describe('resolveMode: model labels', () => {
+  test('--export-pending <file>', () => {
+    expect(resolveMode(['--export-pending', 'p.jsonl'], false)).toEqual({
+      mode: 'export-pending',
+      path: 'p.jsonl',
+    });
+    expect(resolveMode(['--export-pending'], false)).toEqual({ mode: 'exit2' });
+  });
+
+  test('--import <file> --source model routes to model import; other sources exit 2', () => {
+    expect(resolveMode(['--import', 'm.jsonl', '--source', 'model'], false)).toEqual({
+      mode: 'import-model',
+      path: 'm.jsonl',
+    });
+    expect(resolveMode(['--import', 'm.jsonl', '--source', 'human'], false)).toEqual({
+      mode: 'exit2',
+    });
   });
 });

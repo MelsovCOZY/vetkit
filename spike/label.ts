@@ -14,7 +14,7 @@ import type { Criterion } from './propose.ts';
 import { readJsonl } from './lib/index.ts';
 
 export type Label = 'yes' | 'no' | 'review';
-export type Source = 'auto' | 'human' | 'baseline';
+export type Source = 'auto' | 'human' | 'baseline' | 'model';
 
 export type LabelRow = {
   traceId: string;
@@ -110,7 +110,7 @@ function isLabel(value: string | undefined): value is Label {
 }
 
 function isSource(value: string | undefined): value is Source {
-  return value === 'auto' || value === 'human' || value === 'baseline';
+  return value === 'auto' || value === 'human' || value === 'baseline' || value === 'model';
 }
 
 export function serializeRow(row: LabelRow): string {
@@ -290,6 +290,116 @@ export function buildQueue(
   return queue;
 }
 
+export type PendingItem = {
+  id: string;
+  traceId: string;
+  criterionId: string;
+  question: string;
+  answer: string;
+  contexts: { docId: string; text: string }[];
+  criterion: { name: string; instructions: string; escape: string };
+  labels: Label[];
+};
+
+const ALLOWED_LABELS: Label[] = ['yes', 'no', 'review'];
+
+/**
+ * The blind items a model labeller is asked, from the loop's own `buildQueue`. Carries exactly
+ * what the TTY loop prints (question, contexts, answer, criterion wording): never a judge
+ * verdict, baseline, auto label or reference. Model rows are ignored when selecting so the set
+ * stays stable across imports; items already model-labelled are then dropped from the export.
+ */
+export function buildPendingItems(
+  traces: Trace[],
+  criteria: Criterion[],
+  existing: LabelRow[],
+  sampleTraceIds: string[],
+): PendingItem[] {
+  const traceById = new Map(traces.map((t) => [t.traceId, t]));
+  const criterionById = new Map(criteria.map((c) => [c.id, c]));
+  const modelKeys = new Set(
+    existing.filter((r) => r.source === 'model').map((r) => `${r.traceId}\u0000${r.criterionId}`),
+  );
+  const queue = buildQueue(
+    traces,
+    criteria,
+    existing.filter((r) => r.source !== 'model'),
+    sampleTraceIds,
+  );
+  const items: PendingItem[] = [];
+  for (const { traceId, criterionId } of queue) {
+    const t = traceById.get(traceId);
+    const c = criterionById.get(criterionId);
+    if (!t || !c || modelKeys.has(`${traceId}\u0000${criterionId}`)) continue;
+    items.push({
+      id: `${traceId}:${criterionId}`,
+      traceId,
+      criterionId,
+      question: t.question,
+      answer: t.answer,
+      contexts: t.contexts.map((ctx) => ({ docId: ctx.docId, text: ctx.text })),
+      criterion: { name: c.name, instructions: c.instructions, escape: c.escape },
+      labels: [...ALLOWED_LABELS],
+    });
+  }
+  return items;
+}
+
+/**
+ * Validates a JSONL of `{id, label}` model answers against the pending ids. Unknown ids, labels
+ * outside yes/no/review, malformed lines and any explicit source other than 'model' are rejected;
+ * ids already labelled by a model are skipped, so re-importing is a no-op.
+ */
+export function importModelRows(
+  text: string,
+  pendingIds: Set<string>,
+  existing: LabelRow[],
+  now: () => string = () => new Date().toISOString(),
+): { toAppend: LabelRow[]; skipped: number; rejected: number } {
+  const done = new Set(
+    existing.filter((r) => r.source === 'model').map((r) => `${r.traceId}:${r.criterionId}`),
+  );
+  const toAppend: LabelRow[] = [];
+  let skipped = 0;
+  let rejected = 0;
+  for (const line of text.split('\n')) {
+    if (line.trim() === '') continue;
+    let parsed: { id?: unknown; label?: unknown; source?: unknown };
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      rejected += 1;
+      continue;
+    }
+    const { id, label, source } = parsed ?? {};
+    if (
+      typeof id !== 'string' ||
+      !pendingIds.has(id) ||
+      typeof label !== 'string' ||
+      !isLabel(label) ||
+      (source !== undefined && source !== 'model')
+    ) {
+      rejected += 1;
+      continue;
+    }
+    if (done.has(id)) {
+      skipped += 1;
+      continue;
+    }
+    done.add(id);
+    const sep = id.lastIndexOf(':');
+    toAppend.push({
+      traceId: id.slice(0, sep),
+      criterionId: id.slice(sep + 1),
+      label,
+      source: 'model',
+      labelledAt: now(),
+      baseline: '',
+    });
+  }
+  return { toAppend, skipped, rejected };
+}
+
 export type AskFn = (message: string) => Promise<string>;
 export type PrintFn = (message: string) => void;
 
@@ -391,15 +501,25 @@ export function mergeImport(
 export type Mode =
   | { mode: 'auto' }
   | { mode: 'import'; path: string }
+  | { mode: 'import-model'; path: string }
+  | { mode: 'export-pending'; path: string }
   | { mode: 'interactive' }
   | { mode: 'exit2' };
 
 export function resolveMode(argv: string[], isTTY: boolean): Mode {
   if (argv.includes('--auto')) return { mode: 'auto' };
+  const exportIdx = argv.indexOf('--export-pending');
+  if (exportIdx !== -1) {
+    const path = argv[exportIdx + 1];
+    return path ? { mode: 'export-pending', path } : { mode: 'exit2' };
+  }
   const importIdx = argv.indexOf('--import');
   if (importIdx !== -1) {
     const path = argv[importIdx + 1];
-    return path ? { mode: 'import', path } : { mode: 'exit2' };
+    if (!path) return { mode: 'exit2' };
+    const sourceIdx = argv.indexOf('--source');
+    if (sourceIdx === -1) return { mode: 'import', path };
+    return argv[sourceIdx + 1] === 'model' ? { mode: 'import-model', path } : { mode: 'exit2' };
   }
   return isTTY ? { mode: 'interactive' } : { mode: 'exit2' };
 }
@@ -433,6 +553,51 @@ async function main(): Promise<void> {
     console.log(`c1: yes=${counts.c1.yes} no=${counts.c1.no} review=${counts.c1.review}`);
     console.log(`c2: yes=${counts.c2.yes} no=${counts.c2.no}`);
     console.log(`c3: baseline rows=${counts.c3}`);
+    return;
+  }
+
+  if (mode.mode === 'export-pending' || mode.mode === 'import-model') {
+    const criteria = await loadCriteria();
+    const existing = loadExistingRows(LABELS_PATH);
+    const items = buildPendingItems(
+      traces,
+      criteria,
+      existing,
+      selectSample(traces, SAMPLE_SEED, SAMPLE_MIN_SIZE),
+    );
+    if (mode.mode === 'export-pending') {
+      writeFileSync(mode.path, items.map((i) => JSON.stringify(i)).join('\n') + '\n');
+      const langOf = new Map(traces.map((t) => [t.traceId, t.lang]));
+      const tally = (keyOf: (i: PendingItem) => string | undefined): string => {
+        const counts = new Map<string, number>();
+        for (const i of items) counts.set(keyOf(i) ?? '?', (counts.get(keyOf(i) ?? '?') ?? 0) + 1);
+        return [...counts]
+          .toSorted(([a], [b]) => a.localeCompare(b))
+          .map(([k, n]) => `${k}=${n}`)
+          .join(' ');
+      };
+      console.log(`exported: ${items.length}`);
+      console.log(`by criterion: ${tally((i) => i.criterionId)}`);
+      console.log(`by lang: ${tally((i) => langOf.get(i.traceId))}`);
+      return;
+    }
+    // Pending ids include already model-labelled items (stable set) so re-imports skip, not reject.
+    const pendingIds = new Set(
+      buildPendingItems(
+        traces,
+        criteria,
+        existing.filter((r) => r.source !== 'model'),
+        selectSample(traces, SAMPLE_SEED, SAMPLE_MIN_SIZE),
+      ).map((i) => i.id),
+    );
+    const { toAppend, skipped, rejected } = importModelRows(
+      readFileSync(mode.path, 'utf8'),
+      pendingIds,
+      existing,
+    );
+    appendRows(LABELS_PATH, toAppend);
+    console.log(`imported: ${toAppend.length}, skipped: ${skipped}, rejected: ${rejected}`);
+    if (rejected > 0) process.exitCode = 1;
     return;
   }
 

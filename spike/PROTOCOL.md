@@ -88,6 +88,18 @@ against the judge — documented in `REPORT.md`, not corrected in this spike; mo
 one labeller is out of scope). The label loop must be resumable and take < 1 s per item, or the spike stalls on
 the human (the labelling is the user's time).
 
+### Model labels
+
+The remaining labels come from an independent blind model labeller, stored as source `model`
+(never `human`). `bun spike/label.ts --export-pending <file>` writes the items the TTY loop would
+ask (same selection function) as JSONL: `id` (`traceId:criterionId`), question, answer, contexts,
+the criterion wording and the allowed labels; never Jev answers, baseline, auto labels or the
+reference. `--import <file> --source model` takes JSONL `{id, label}` lines, rejects unknown ids
+and labels, and skips ids already model-labelled. Where both exist for a trace and criterion, the
+human row wins over the model row. `report.ts --check-labels` counts human plus model traces and
+prints the breakdown, and the report is marked PROVISIONAL (model-labelled) whenever a model row is
+used as truth.
+
 ## Metrics
 
 Per criterion, at the fitted threshold:

@@ -8,6 +8,8 @@ import {
   flipRate,
   krippendorffAlphaNominal,
   medianOfDefined,
+  resolveTruth,
+  usesModelLabels,
   rates,
 } from './report.ts';
 import type { LabelRow } from './label.ts';
@@ -271,5 +273,59 @@ describe('checkLabels', () => {
     expect(result.humanTraces).toBe(1);
     expect(result.totalRows).toBe(3);
     expect(result.ok).toBe(false); // 1 human trace < 30
+  });
+});
+
+describe('checkLabels with model rows', () => {
+  test('counts human+model traces and reports the breakdown', () => {
+    const rows: LabelRow[] = [
+      row({ traceId: 't1', source: 'human' }),
+      row({ traceId: 't2', source: 'model' }),
+      row({ traceId: 't2', criterionId: 'c2', source: 'model' }),
+      row({ traceId: 't3', source: 'auto' }),
+    ];
+    const r = checkLabels(rows);
+    expect(r).toMatchObject({
+      humanTraces: 1,
+      modelTraces: 1,
+      humanRows: 1,
+      modelRows: 2,
+      totalRows: 4,
+    });
+    expect(r.labelledTraces).toBe(2);
+  });
+
+  test('ok when human+model traces reach the bar', () => {
+    const rows: LabelRow[] = [];
+    for (let i = 0; i < 30; i++) {
+      rows.push(row({ traceId: `t${i}`, source: i < 10 ? 'human' : 'model' }));
+    }
+    for (let i = 0; i < 280; i++) rows.push(row({ traceId: `x${i}`, source: 'auto' }));
+    expect(checkLabels(rows).ok).toBe(true);
+  });
+});
+
+describe('resolveTruth', () => {
+  test('human wins over model for the same trace+criterion, either file order', () => {
+    const h = row({ traceId: 't', source: 'human', label: 'no' });
+    const m = row({ traceId: 't', source: 'model', label: 'yes' });
+    expect(resolveTruth([h, m]).get('t|c1')?.label).toBe('no');
+    expect(resolveTruth([m, h]).get('t|c1')?.label).toBe('no');
+  });
+
+  test('model overrides auto review; baseline rows are excluded', () => {
+    const a = row({ traceId: 't', source: 'auto', label: 'review' });
+    const m = row({ traceId: 't', source: 'model', label: 'yes' });
+    const b = row({ traceId: 'u', source: 'baseline' });
+    const truth = resolveTruth([a, m, b]);
+    expect(truth.get('t|c1')?.source).toBe('model');
+    expect(truth.has('u|c1')).toBe(false);
+  });
+
+  test('usesModelLabels only when a model row is the resolved truth', () => {
+    const h = row({ traceId: 't', source: 'human' });
+    const m = row({ traceId: 't', source: 'model' });
+    expect(usesModelLabels(resolveTruth([h, m]))).toBe(false);
+    expect(usesModelLabels(resolveTruth([m]))).toBe(true);
   });
 });
