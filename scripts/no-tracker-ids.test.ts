@@ -18,13 +18,12 @@ const TRACKER_ID_PATTERNS: readonly RegExp[] = [
   /\b(DECISION|CLAIM)\b[^\n]{0,20}\bturn\s+[0-9]+/,
 ];
 
-// Instruction files, the tracker's own export, dated research briefs, the knowledge-graph
+// Instruction files, the tracker's own export, the knowledge-graph
 // output and agent settings are the only places allowed to name tracker ids.
 const ALLOWLIST: readonly RegExp[] = [
   /^CLAUDE\.md$/,
   /^AGENTS\.md$/,
   /^\.beads\//,
-  /^docs\/research\//,
   /^graphify-out\//,
   /^\.claude\//,
   /^bun\.lock$/,
@@ -114,7 +113,7 @@ describe('tracker ids in shipped files', () => {
 
   it('skips allowlisted paths', () => {
     const text = ['mol', 'abc.1'].join('-');
-    const files = ['CLAUDE.md', '.beads/issues.jsonl', 'docs/research/brief.md'].map((path) => ({
+    const files = ['CLAUDE.md', '.beads/issues.jsonl', 'AGENTS.md'].map((path) => ({
       path,
       text,
     }));

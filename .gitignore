@@ -24,3 +24,11 @@ dist-tarballs/
 coverage/
 *.tsbuildinfo
 .tsbuild/
+
+# docs/: only the product docs are tracked
+docs/*
+!docs/.gitkeep
+!docs/configuration.md
+!docs/sinks.md
+!docs/watch.md
+!docs/contracts/
