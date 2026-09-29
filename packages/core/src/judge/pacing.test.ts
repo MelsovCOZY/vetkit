@@ -111,6 +111,14 @@ function retryable(retryAfterMs?: number): VetError {
   });
 }
 
+// A connection-level failure (transport.ts's networkErrorHint branch): retryable, but with a
+// `hint` and no `retryAfterMs` — unlike a 429/5xx, which never carries a hint.
+function networkUnreachable(hint = 'ECONNREFUSED'): VetError {
+  return new VetError('JUDGE_UNAVAILABLE', `judge is unreachable (${hint})`, {
+    details: { retryable: true, hint },
+  });
+}
+
 // fn that fails with the given errors in order, then resolves.
 function failThen(errors: unknown[]): { fn: () => Promise<string>; calls: () => number } {
   let calls = 0;
@@ -338,6 +346,35 @@ describe('createLimiter retry and AIMD', () => {
     expect(messageOf(r.error)).toBe('judge transport error (HTTP 429) (after 3 attempts)');
   });
 
+  // mol-0nw.30: a connection-level failure (details.hint set — ECONNREFUSED, DNS, reset) is
+  // not merely asking for patience like a 429/5xx, so it gets a short, fixed retry budget
+  // instead of the default maxRetries — here exhausting after 3 calls, not 7 — but the error
+  // it exhausts with must stay JUDGE_UNAVAILABLE with its hint intact (never JUDGE_TIMEOUT,
+  // which stays reserved for a real deadline; bug 0nw.29's AC).
+  it('a network-unreachable failure exhausts on a short fixed budget, keeping JUDGE_UNAVAILABLE and the hint', async () => {
+    const clock = virtualClock();
+    const limiter = createLimiter({ now: clock.now, sleep: clock.sleep });
+    const errors = [
+      networkUnreachable(),
+      networkUnreachable(),
+      networkUnreachable(),
+      networkUnreachable(),
+    ];
+    const f = failThen(errors);
+    const a = settle(limiter.run(f.fn));
+    await clock.advance(10_000);
+    const r = await a;
+    expect(f.calls()).toBe(3);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(VetError.isInstance(r.error)).toBe(true);
+    expect(r.error).toMatchObject({
+      code: 'JUDGE_UNAVAILABLE',
+      details: { retryable: true, hint: 'ECONNREFUSED' },
+    });
+    expect(causeOf(r.error)).toEqual({ error: errors[2], attempts: 3 });
+  });
+
   it('budget exhausted', async () => {
     const clock = virtualClock();
     const limiter = createLimiter({ now: clock.now, sleep: clock.sleep });
@@ -514,5 +551,28 @@ describe('createLimiter events and timers', () => {
     await expect(b).resolves.toBe('b');
     expect(f.calls()).toBe(2);
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  // mol-0nw.30 regression: defaultSleep's retry-wait `setTimeout` must stay ref'd. An unref'd
+  // one is invisible to Node's "any work left?" check; if it is the only pending handle (a real
+  // CLI process retrying a refused connection, nothing else running), Node exits(0) as soon as
+  // it decides there is nothing to wait for — before the timer ever fires — abandoning the
+  // retry with no output. Real (non-fake) timers only: a fake timer is never actually armed
+  // against the event loop, so it can't demonstrate ref/unref either way.
+  it("defaultSleep's retry-wait timer stays ref'd, not unref'd", async () => {
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+    const limiter = createLimiter({ maxRetries: 1 });
+    await limiter.run(failThen([retryable(5)]).fn);
+    const returned: unknown = setTimeoutSpy.mock.results.at(-1)?.value;
+    if (
+      typeof returned !== 'object' ||
+      returned === null ||
+      !('hasRef' in returned) ||
+      typeof returned.hasRef !== 'function'
+    ) {
+      throw new Error('expected setTimeout to return a Timeout with hasRef()');
+    }
+    expect(returned.hasRef()).toBe(true);
+    setTimeoutSpy.mockRestore();
   });
 });

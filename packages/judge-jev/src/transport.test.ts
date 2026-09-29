@@ -252,6 +252,28 @@ describe('network failure vs timeout', () => {
     expect(err.details?.hint).toBe('TypeError');
   });
 
+  // Node/undici's real fetch failure shape (mol-0nw.30): a TypeError('fetch failed') whose
+  // own `.code` is unset, wrapping the real system error (with the useful `.code`) one level
+  // down at `.cause`. Without unwrapping that nested cause, the hint was the useless
+  // 'TypeError' class name instead of 'ECONNREFUSED'.
+  test('a fetch rejection that is a TypeError wrapping the real system error reads the nested cause.code as the hint', async () => {
+    const fetchStub: typeof fetch = vi.fn(async () => {
+      const systemError = Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:9'), {
+        code: 'ECONNREFUSED',
+      });
+      throw new TypeError('fetch failed', { cause: systemError });
+    });
+
+    const judge = createJevJudge({ preset: 'vercel', apiKey: 'fake-jev-key', fetch: fetchStub });
+
+    const err = await catchVetError(
+      judge.doJudge({ state: 's', questions: { ok: { type: 'boolean', instructions: 'q' } } }),
+    );
+
+    expect(err.code).toBe('JUDGE_UNAVAILABLE');
+    expect(err.details?.hint).toBe('ECONNREFUSED');
+  });
+
   test('a real deadline timeout still maps to JUDGE_TIMEOUT, never JUDGE_UNAVAILABLE', async () => {
     const fetchStub: typeof fetch = vi.fn(
       () =>
