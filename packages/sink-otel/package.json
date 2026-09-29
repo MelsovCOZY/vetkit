@@ -20,13 +20,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@opentelemetry/api-logs": "0.222.0",
-    "@opentelemetry/exporter-logs-otlp-http": "0.222.0",
-    "@opentelemetry/sdk-trace-base": "2.11.0",
     "@vetkit/spec": "workspace:^"
-  },
-  "peerDependencies": {
-    "@opentelemetry/api": "^1.9.1"
   },
   "scripts": {
     "build": "tsdown"
