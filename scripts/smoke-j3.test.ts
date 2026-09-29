@@ -44,4 +44,30 @@ describe('scripts/smoke-j3.sh transport selection', () => {
     expect(block).not.toContain('head -1 passcases/pass.jsonl >onecase');
     expect(block).toMatch(/uncached/);
   });
+
+  test('quick mode: --quick and CEV_SMOKE_QUICK=1 are parsed and the P2 blocks are guarded', () => {
+    expect(src).toContain('CEV_SMOKE_QUICK:-}" = 1');
+    expect(src).toContain('[ "$arg" = --quick ] && QUICK=1');
+    expect(src).toContain('quick mode: skipped');
+    const start = src.indexOf('if [ "$QUICK" -eq 0 ]; then');
+    const end = src.indexOf(
+      '# ---------------------------------------------------------------- P3',
+    );
+    expect(start).toBeGreaterThan(-1);
+    const block = src.slice(start, end);
+    for (const label of [
+      'P2 setup',
+      'P2: vet validate',
+      'AC-reasons',
+      'AC2-lock',
+      'AC2:',
+      'AC2-full',
+    ]) {
+      expect(block).toContain(label);
+    }
+    for (const label of ['AC1a', 'AC6', 'AC5', 'AC3a', 'AC-check-b']) {
+      expect(src.indexOf(label)).toBeLessThan(start);
+    }
+    expect(src.slice(end)).not.toContain('P2 setup');
+  });
 });
