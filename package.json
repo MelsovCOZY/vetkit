@@ -19,7 +19,7 @@
     "version": "changeset version && bun install --no-frozen-lockfile",
     "check": "bun run typecheck && bun run lint && bun run fmt && bun run test",
     "codegen": "bun packages/spec/scripts/codegen.ts",
-    "hooks:install": "lefthook install"
+    "hooks:install": "bun scripts/install-hooks.ts"
   },
   "catalog": {
     "typescript": "7.0.2",

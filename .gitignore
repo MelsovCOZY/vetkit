@@ -1,18 +1,15 @@
 
-# Beads / Dolt files (added by bd init)
+# agent tooling: local only
+.beads/
+graphify-out/
 .dolt/
 *.db
 .beads-credential-key
-.beads/proxieddb/
 
 # secrets
 .env
 .env.*
 !.env.example
-
-# graphify scratch (graph.json + report are committed)
-graphify-out/cache/
-graphify-out/.graphify_*
 
 # backups
 *.bak
