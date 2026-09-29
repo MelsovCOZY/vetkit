@@ -320,3 +320,17 @@ describe('bun.lock', () => {
     }
   });
 });
+
+describe('lint and format ignore lists', () => {
+  const exempted = ['scripts/manifests.test.ts', 'scripts/tsconfig.test.ts', 'spike/**'];
+
+  it.each(['.oxlintrc.json', '.oxfmtrc.json'])(
+    '%s does not exempt the formerly ignored sources',
+    (name) => {
+      const config: { ignorePatterns?: string[] } = readJson(join(ROOT, name)) ?? {};
+      for (const pattern of exempted) {
+        expect(config.ignorePatterns ?? []).not.toContain(pattern);
+      }
+    },
+  );
+});
