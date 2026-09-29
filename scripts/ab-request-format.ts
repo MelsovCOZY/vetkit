@@ -1,6 +1,7 @@
 // A/B experiment: does the fenced-v1 judge request format change how a judge handles injected
 // case states? Runs the raw and fenced-v1 arms against the same cases on OpenRouter and prints
-// flips/n per injection family (95% Wilson CI), known-pass agreement and known-fail accuracy.
+// gauntlet-failed trials per injection family (95% Wilson CI), label flips, |dP|, known-pass agreement
+// and known-fail accuracy. The per-trial rule is core's judgeInjectionTrial, shared with the validate gauntlet.
 // Live runs bill the judge key; not part of the fast suite (nothing imports this file).
 //
 //   bun scripts/ab-request-format.ts --dry-run
@@ -13,13 +14,20 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { DEFAULT_GAUNTLET_CORPORA, judgeCase, loadCases, loadCriteria } from '@vetkit/core';
+import {
+  DEFAULT_GAUNTLET_CORPORA,
+  INJECTION_DEFAULT_MAX_DELTA,
+  judgeCase,
+  loadCases,
+  loadCriteria,
+} from '@vetkit/core';
 import { createJevJudgeFromEndpoint } from '@vetkit/judge-jev';
 import type { Case, Criterion, RequestFormat } from '@vetkit/spec';
 import {
   FAMILIES,
   classifyVerdict,
   tally,
+  withPass,
   type ArmReport,
   type Job,
   type Outcome,
@@ -75,30 +83,31 @@ function buildJobs(passes: readonly Case[], fails: readonly Case[], repeats: num
     (FAMILIES as readonly string[]).includes(i.kind),
   );
   const repeatIdx = Array.from({ length: repeats }, (_, i) => i);
+  const withInjections = (
+    arm: RequestFormat,
+    repeat: number,
+    kind: Job['kind'],
+    c: Case,
+  ): Job[] => [
+    { arm, kind, repeat, baseId: c.id, evalCase: c },
+    // The gauntlet injects every held-out case, known-pass and known-fail alike.
+    ...injections.map((inj): Job => ({
+      arm,
+      kind: 'injected',
+      repeat,
+      family: inj.kind,
+      baseId: c.id,
+      evalCase: {
+        ...c,
+        id: `${c.id}#injection:${inj.id}`,
+        input: { ...c.input, state: `${c.input.state}${INJECTION_SEPARATOR}${inj.text}` },
+      },
+    })),
+  ];
   return ARMS.flatMap((arm) =>
     repeatIdx.flatMap((repeat) => [
-      ...passes.map((c): Job => ({
-        arm,
-        kind: 'pass-original',
-        repeat,
-        baseId: c.id,
-        evalCase: c,
-      })),
-      ...fails.flatMap((c): Job[] => [
-        { arm, kind: 'fail-original', repeat, baseId: c.id, evalCase: c },
-        ...injections.map((inj): Job => ({
-          arm,
-          kind: 'injected',
-          repeat,
-          family: inj.kind,
-          baseId: c.id,
-          evalCase: {
-            ...c,
-            id: `${c.id}#injection:${inj.id}`,
-            input: { ...c.input, state: `${c.input.state}${INJECTION_SEPARATOR}${inj.text}` },
-          },
-        })),
-      ]),
+      ...passes.flatMap((c) => withInjections(arm, repeat, 'pass-original', c)),
+      ...fails.flatMap((c) => withInjections(arm, repeat, 'fail-original', c)),
     ]),
   );
 }
@@ -119,7 +128,12 @@ async function runJobs(
         case: job.evalCase,
         criteria: [criterion],
       });
-      out.push({ job, ...classifyVerdict(verdict, criterion) });
+      const judged = verdict === undefined ? undefined : withPass(verdict, criterion);
+      out.push({
+        job,
+        ...classifyVerdict(judged, criterion),
+        ...(judged === undefined ? {} : { verdict: judged }),
+      });
     }
   };
   await Promise.all(Array.from({ length: CONCURRENCY }, worker));
@@ -134,8 +148,10 @@ function printTable(reports: readonly ArmReport[]): void {
     ...reports.flatMap((r) => [
       ...Object.entries(r.families).map(([family, s]) => [
         r.arm,
-        `flips ${family}`,
-        `${String(s.flips)}/${String(s.n)} CI [${pct(s.ci[0])}, ${pct(s.ci[1])}]`,
+        `gauntlet-failed ${family}`,
+        `${String(s.failed)}/${String(s.trials)} CI [${pct(s.ci[0])}, ${pct(s.ci[1])}]; broken ${String(s.broken)}; ` +
+          `label flips ${String(s.flips)}; |dP| mean ${s.meanDelta.toFixed(3)} max ${s.maxDelta.toFixed(3)}; ` +
+          `over ${String(INJECTION_DEFAULT_MAX_DELTA)}: ${String(s.overMax)}`,
       ]),
       [
         r.arm,
@@ -188,7 +204,7 @@ async function main(): Promise<number> {
   console.log(
     `plan: ${String(jobs.length)} calls = ${String(ARMS.length)} arms (${ARMS.join(', ')}) x ` +
       `${String(repeats)} repeats x (${String(passes.length)} known-pass + ${String(fails.length)} known-fail originals + ` +
-      `${String(perArm - passes.length - fails.length)} injected known-fail); criterion ${CRITERION_ID}; ` +
+      `${String(perArm - passes.length - fails.length)} injected, into known-pass and known-fail alike); criterion ${CRITERION_ID}; ` +
       `families ${FAMILIES.join(', ')}; no cache, ${String(repeats)} repeat(s); cap ${String(maxCalls)}`,
   );
   if (jobs.length > maxCalls) {
@@ -213,7 +229,7 @@ async function main(): Promise<number> {
     raw: make('raw'),
     'fenced-v1': make('fenced-v1'),
   });
-  const reports = ARMS.map((arm) => tally(arm, outcomes));
+  const reports = ARMS.map((arm) => tally(arm, outcomes, criterion));
   printTable(reports);
   const outPath = values.out ?? join(tmpdir(), `ab-request-format-${String(Date.now())}.json`);
   writeFileSync(outPath, `${JSON.stringify({ calls: jobs.length, reports }, null, 2)}\n`);
