@@ -304,7 +304,7 @@ interface Detail {
   readonly paraphrase: { readonly agreement: number | null; readonly spread: number | null };
   readonly injection: {
     readonly families: Record<string, unknown>;
-    readonly flipped: { family: string; flips: number; trials: number }[];
+    readonly flipped: { family: string; flips: number; labelFlips: number; trials: number }[];
   };
   readonly master_key: {
     readonly failedInputs: { kind: string; caseId: string }[];

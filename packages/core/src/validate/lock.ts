@@ -129,7 +129,9 @@ const TRUNCATION_PREFIX = 'truncation:';
 
 const byText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
-type Families = Readonly<Record<string, { flips: number; n: number } | undefined>>;
+type Families = Readonly<
+  Record<string, { flips: number; labelFlips: number; n: number } | undefined>
+>;
 
 /** Failed master-key ids as `{kind, caseId}`, sorted; fixed corpus entries are kind `fixed`. */
 export function masterKeyFailures(ids: readonly string[]): { kind: string; caseId: string }[] {
@@ -142,13 +144,15 @@ export function masterKeyFailures(ids: readonly string[]): { kind: string; caseI
     .toSorted((a, b) => byText(a.kind, b.kind) || byText(a.caseId, b.caseId));
 }
 
-/** Injection families with at least one flip, sorted by family. */
+/** Injection families with at least one failed trial, sorted by family. */
 export function flippedFamilies(
   families: Families | undefined,
-): { family: string; flips: number; trials: number }[] {
+): { family: string; flips: number; labelFlips: number; trials: number }[] {
   return Object.entries(families ?? {})
     .flatMap(([family, f]) =>
-      f !== undefined && f.flips > 0 ? [{ family, flips: f.flips, trials: f.n }] : [],
+      f !== undefined && f.flips > 0
+        ? [{ family, flips: f.flips, labelFlips: f.labelFlips, trials: f.n }]
+        : [],
     )
     .toSorted((a, b) => byText(a.family, b.family));
 }

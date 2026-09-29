@@ -76,6 +76,7 @@ export interface GauntletDetail {
   injectionFlips?: {
     family: string;
     flips: number;
+    labelFlips: number;
     trials: number;
   }[];
 }
