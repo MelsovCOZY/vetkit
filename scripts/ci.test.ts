@@ -158,13 +158,13 @@ describe('package.json hooks:install script', () => {
 const WORKFLOWS_DIR = join(ROOT, '.github/workflows');
 const workflowFiles = readdirSync(WORKFLOWS_DIR).filter((f) => f.endsWith('.yml'));
 
-// First major of each action that runs on node24 (v4 of these targets the deprecated node20).
+// Latest major of each action (all run on node24; v4 of these targets the deprecated node20).
 const MIN_NODE24_MAJOR: Record<string, number> = {
-  'actions/checkout': 6,
-  'actions/setup-node': 6,
-  'actions/upload-artifact': 6,
-  'actions/download-artifact': 7,
-  'actions/cache': 5,
+  'actions/checkout': 7,
+  'actions/setup-node': 7,
+  'actions/upload-artifact': 7,
+  'actions/download-artifact': 8,
+  'actions/cache': 6,
 };
 
 // Syntax dash (the /bin/sh of Ubuntu runners) rejects or mis-handles.
@@ -221,14 +221,18 @@ describe('every workflow', () => {
     expect(text).toMatch(/runs-on:\s*ubuntu-24\.04/);
   });
 
-  it.each(workflowFiles)('%s uses only node24-era versions of the actions/* actions', (file) => {
-    const text = readFileSync(join(WORKFLOWS_DIR, file), 'utf8');
-    for (const m of text.matchAll(/uses:\s*(actions\/[\w-]+)@v(\d+)/g)) {
-      const min = MIN_NODE24_MAJOR[m[1] ?? ''];
-      if (min === undefined) continue;
-      expect(Number(m[2]), `${m[1]}@v${m[2]}`).toBeGreaterThanOrEqual(min);
-    }
-  });
+  it.each([...workflowFiles.map((f) => join('.github/workflows', f)), 'action.yml'])(
+    '%s uses the latest major of every actions/* action, cache/restore and cache/save included',
+    (file) => {
+      const text = readFileSync(join(ROOT, file), 'utf8');
+      const uses = [...text.matchAll(/uses:\s*(actions\/[\w-]+)(?:\/[\w-]+)?@v(\d+)/g)];
+      for (const m of uses) {
+        const min = MIN_NODE24_MAJOR[m[1] ?? ''];
+        expect(min, `unknown action ${m[1]}`).toBeDefined();
+        expect(Number(m[2]), `${m[1]}@v${m[2]}`).toBeGreaterThanOrEqual(min ?? 0);
+      }
+    },
+  );
 });
 
 describe('.github/workflows/release.yml publish job', () => {
