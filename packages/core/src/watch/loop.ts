@@ -283,7 +283,6 @@ export async function runWatch(input: RunWatchInput): Promise<CoverageSummary> {
       if (!isSampled) continue;
       sampled += 1;
 
-      // oxlint-disable-next-line no-await-in-loop
       await acquireSlot();
       // includeIncomplete: true — a truncated/incomplete trace with a real conversation
       // still becomes a Case (with completeness-carrying provenance), so partitionCases below

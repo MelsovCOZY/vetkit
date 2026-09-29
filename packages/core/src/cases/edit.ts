@@ -99,7 +99,6 @@ interface Located {
 
 async function locateInFiles(files: readonly string[], id: string): Promise<Located | undefined> {
   for (const file of files) {
-    // oxlint-disable-next-line no-await-in-loop
     const lines = await readJsonlLines(file);
     const index = lines.findIndex((raw) => parseId(raw) === id);
     if (index !== -1) return { file, lines, index };
@@ -152,13 +151,11 @@ export async function removeCases(dir: string, ids: readonly string[]): Promise<
   if (remove.size === 0) return;
   const files = await listTopLevelJsonl(dir, new Set([QUARANTINE_FILE]));
   for (const file of files) {
-    // oxlint-disable-next-line no-await-in-loop
     const lines = await readJsonlLines(file);
     const kept = lines.filter((raw) => {
       const id = parseId(raw);
       return id === undefined || !remove.has(id);
     });
-    // oxlint-disable-next-line no-await-in-loop
     if (kept.length !== lines.length) await writeJsonlAtomic(file, kept);
   }
 }
@@ -208,7 +205,6 @@ export async function listPendingCases(dir: string): Promise<PendingCase[]> {
   const files = await listTopLevelJsonl(join(dir, 'pending'));
   const out: PendingCase[] = [];
   for (const file of files) {
-    // oxlint-disable-next-line no-await-in-loop
     for (const raw of await readJsonlLines(file)) {
       const parsed = safeParseJson<Case>(raw, caseSchema);
       if (parsed.ok) out.push({ file, case: parsed.value });

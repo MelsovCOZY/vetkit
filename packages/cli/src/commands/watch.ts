@@ -61,7 +61,6 @@ function queuedReceiverSource(): {
           continue;
         }
         if (signal?.aborted === true) return;
-        // oxlint-disable-next-line no-await-in-loop
         await new Promise<void>((resolvePromise) => {
           const onAbort = (): void => resolvePromise();
           signal?.addEventListener('abort', onAbort, { once: true });
