@@ -15,6 +15,7 @@ import {
   type Question,
 } from '@vetkit/spec';
 import { createFileCache, type VerdictCache } from './cache.ts';
+import { renderState } from './format.ts';
 import { buildRequest, cacheKey, judgeCase } from './request.ts';
 
 const SENTINEL = 'SENTINEL-OUTPUT-7f3a';
@@ -471,5 +472,54 @@ describe('createFileCache', () => {
     const cache = createFileCache(dir);
     const err: unknown = await cache.get('../escape').catch((e: unknown) => e);
     expect(VetError.isInstance(err) && err.code).toBe('CACHE_IO');
+  });
+});
+
+describe('requestFormat', () => {
+  // Constants captured from the code before the request format existed.
+  const fixedCase: Case = {
+    id: 'c',
+    input: { state: 'hello <b>\n"x"' },
+    provenance: {},
+    tags: [],
+  };
+  const fixedCriteria: Criterion[] = [
+    {
+      id: 'q',
+      type: 'boolean',
+      instructions: 'Ok?',
+      escape: 'none',
+      polarity: 'pass_when_true',
+      channel: 'outcome',
+      provenance: { traceIds: [] },
+      wordingHash: 'h1',
+    },
+  ];
+  const RAW_KEY = 'f5f284dc0b6a2fd50fb743b90164bf7fb2c47fb89d4bc272988924cba3321535';
+  const RAW_REQUEST =
+    '{"state":"hello <b>\\n\\"x\\"","questions":{"q":{"type":"choice","instructions":"Ok? Answer \\"escape\\" when: none","criteria":{"yes":"Yes.","no":"No.","escape":"none"}}}}';
+
+  test('raw request and cache key equal the pre-change values', () => {
+    expect(JSON.stringify(buildRequest(fixedCase, fixedCriteria))).toBe(RAW_REQUEST);
+    expect(cacheKey(fixedCase, fixedCriteria, 'm')).toBe(RAW_KEY);
+    expect(cacheKey(fixedCase, fixedCriteria, 'm', { requestFormat: 'raw' })).toBe(RAW_KEY);
+  });
+
+  test('fenced-v1 sends the rendered state and keys differently from raw', () => {
+    const fenced = buildRequest(fixedCase, fixedCriteria, { requestFormat: 'fenced-v1' });
+    expect(fenced.state).toBe(renderState(fixedCase.input.state, 'fenced-v1'));
+    expect(cacheKey(fixedCase, fixedCriteria, 'm', { requestFormat: 'fenced-v1' })).not.toBe(
+      RAW_KEY,
+    );
+  });
+
+  test('judgeCase fills the format from the judge capabilities', async () => {
+    const { judge, doJudge } = fakeJudge();
+    const fencedJudge: JudgeV1 = {
+      ...judge,
+      capabilities: { ...judge.capabilities, requestFormat: 'fenced-v1' },
+    };
+    await judgeCase({ judge: fencedJudge, case: evalCase, criteria: [booleanCriterion] });
+    expect(doJudge.mock.calls[0]?.[0].state).toBe(renderState(evalCase.input.state, 'fenced-v1'));
   });
 });

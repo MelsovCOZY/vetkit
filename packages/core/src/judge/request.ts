@@ -16,9 +16,11 @@ import {
   type JudgeResponse,
   type JudgeV1,
   type Question,
+  type RequestFormat,
   type Verdict,
 } from '@vetkit/spec';
 import type { CachedJudgment, VerdictCache } from './cache.ts';
+import { renderState } from './format.ts';
 import { renderReference } from './reference.ts';
 
 /** Option key the escape wording is sent under (boolean and choice questions). */
@@ -32,6 +34,8 @@ export interface JudgeRequest {
 export interface BuildRequestOptions {
   /** Per-criterion option order (Gauntlet C position swap); keys are never changed. */
   readonly optionOrder?: Readonly<Record<string, readonly string[]>>;
+  /** How the case state is rendered into the request; absent is raw. */
+  readonly requestFormat?: RequestFormat | undefined;
 }
 
 function orderOptions(
@@ -91,7 +95,10 @@ export function buildRequest(
   for (const criterion of criteria) {
     questions[criterion.id] = toQuestion(criterion, evalCase, options.optionOrder?.[criterion.id]);
   }
-  return { state: evalCase.input.state, questions };
+  return {
+    state: renderState(evalCase.input.state, options.requestFormat ?? 'raw'),
+    questions,
+  };
 }
 
 /**
@@ -114,7 +121,12 @@ export function cacheKey(
     references: sorted.map((c) => [c.id, renderReference(c, evalCase)]),
     optionOrder: sorted.map((c) => [c.id, options.optionOrder?.[c.id] ?? null]),
   };
-  return createHash('sha256').update(JSON.stringify(material)).digest('hex');
+  // Only a non-raw format enters the material, so raw keys stay identical to before it existed.
+  const keyed =
+    options.requestFormat === undefined || options.requestFormat === 'raw'
+      ? material
+      : { ...material, requestFormat: options.requestFormat };
+  return createHash('sha256').update(JSON.stringify(keyed)).digest('hex');
 }
 
 export interface JudgeCaseInput extends BuildRequestOptions {
@@ -215,11 +227,15 @@ function toVerdicts(input: JudgeCaseInput, judged: CachedJudgment, cacheHit: boo
 export async function judgeCase(input: JudgeCaseInput): Promise<Verdict[]> {
   if (input.signal?.aborted === true) return unscored(input, CEV_ERROR_CODES.JUDGE_TIMEOUT);
 
-  const key = cacheKey(input.case, input.criteria, input.judge.capabilities.model, input);
+  const options: BuildRequestOptions = {
+    ...input,
+    requestFormat: input.judge.capabilities.requestFormat ?? 'raw',
+  };
+  const key = cacheKey(input.case, input.criteria, input.judge.capabilities.model, options);
   const cached = await input.cache?.get(key);
   if (cached !== undefined) return toVerdicts(input, cached, true);
 
-  const request = buildRequest(input.case, input.criteria, input);
+  const request = buildRequest(input.case, input.criteria, options);
   let response: JudgeResponse;
   try {
     response = await input.judge.doJudge(

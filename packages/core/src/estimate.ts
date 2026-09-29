@@ -3,7 +3,7 @@
 // transport's price row from its adapter); core holds no vendor price. The only I/O is a
 // listing of the verdict cache directory, so cached cases count as 0 calls.
 import { readdir } from 'node:fs/promises';
-import type { Case, Criterion } from '@vetkit/spec';
+import type { Case, Criterion, RequestFormat } from '@vetkit/spec';
 import { buildRequest, cacheKey } from './judge/request.ts';
 import { CALIBRATION_MIN_REPEATS } from './validate/calibrate.ts';
 import { POSITION_SWAP_MAX_ORDERS } from './validate/gauntlet-bias.ts';
@@ -35,6 +35,8 @@ export interface EstimateRunInput {
   /** Absent for a transport without a known price: cost is 'unknown'. */
   readonly pricing?: EstimatePricing;
   readonly callsPerMinute?: number;
+  /** The judge's request format (capabilities.requestFormat); state size is measured after rendering. */
+  readonly requestFormat?: RequestFormat;
 }
 
 export interface RunEstimate {
@@ -87,8 +89,12 @@ function priced(inputTokens: number, pricing: EstimatePricing | undefined): Cost
   };
 }
 
-function caseTokens(evalCase: Case, criteria: readonly Criterion[]): number {
-  const req = buildRequest(evalCase, criteria);
+function caseTokens(
+  evalCase: Case,
+  criteria: readonly Criterion[],
+  requestFormat?: RequestFormat,
+): number {
+  const req = buildRequest(evalCase, criteria, { requestFormat });
   return Math.ceil((req.state.length + JSON.stringify(req.questions).length) / CHARS_PER_TOKEN);
 }
 
@@ -113,8 +119,13 @@ export async function estimateRun(input: EstimateRunInput): Promise<RunEstimate>
   let cacheHits = 0;
   let inputTokens = 0;
   for (const evalCase of cases) {
-    if (cached.has(`${cacheKey(evalCase, criteria, model)}.json`)) cacheHits += 1;
-    else inputTokens += caseTokens(evalCase, criteria);
+    if (
+      cached.has(
+        `${cacheKey(evalCase, criteria, model, { requestFormat: input.requestFormat })}.json`,
+      )
+    )
+      cacheHits += 1;
+    else inputTokens += caseTokens(evalCase, criteria, input.requestFormat);
   }
   const calls = cases.length - cacheHits;
   return {
@@ -181,7 +192,7 @@ function positionSwapPart(input: EstimateValidateInput, callsPerMinute: number):
     const orders = Math.min(factorial(n), POSITION_SWAP_MAX_ORDERS);
     for (const evalCase of input.cases) {
       calls += orders;
-      inputTokens += orders * caseTokens(evalCase, [criterion]);
+      inputTokens += orders * caseTokens(evalCase, [criterion], input.requestFormat);
     }
   }
   return {

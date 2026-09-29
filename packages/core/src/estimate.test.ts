@@ -56,6 +56,12 @@ describe('estimateRun', () => {
     expect(est.inputTokens).toBe(cases.reduce((sum, c) => sum + expectedTokens(c), 0));
   });
 
+  it('measures state size after fenced-v1 rendering', async () => {
+    const raw = await estimateRun({ criteria, cases, model: MODEL });
+    const fenced = await estimateRun({ criteria, cases, model: MODEL, requestFormat: 'fenced-v1' });
+    expect(fenced.inputTokens).toBeGreaterThan(raw.inputTokens);
+  });
+
   it('prices input tokens from the given pricing row and carries its source and asOf', async () => {
     const est = await estimateRun({ criteria, cases, model: MODEL, pricing });
     expect(est.cost).toEqual({
