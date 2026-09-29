@@ -753,3 +753,57 @@ describe('vet run gate with a lock file (spawned)', () => {
     });
   });
 });
+
+// ---------- judge outage (mol-q4q.21) ----------
+
+// The judge answers only for cases whose id is in `answering`; every other call fails with a
+// non-retryable JUDGE_UNAVAILABLE, so the criterion is scored on a small subset.
+function flakyJudge(rows: readonly Row[], answering: ReadonlySet<string>): JudgeV1 {
+  const base = countingJudge(rows, createEvents()).judge;
+  return {
+    ...base,
+    doJudge: (req) =>
+      answering.has(req.state.replace(/^S-/, ''))
+        ? base.doJudge(req)
+        : Promise.reject(new VetError(CEV_ERROR_CODES.JUDGE_UNAVAILABLE, 'down')),
+  };
+}
+
+function toneEntry(): Record<string, unknown> {
+  const list = report()['criteria'];
+  const first: unknown = Array.isArray(list) ? list[0] : undefined;
+  if (!isRecord(first)) throw new Error('no criterion in report');
+  return first;
+}
+
+describe('vet validate judge outage', () => {
+  test('90% of judge calls failing: report names judge_unavailable with unscored count and cause codes', async () => {
+    const rows = standardRows();
+    const root = await project(rows);
+    const events = createEvents();
+    const answering = new Set([...rows.slice(0, 10), ...rows.slice(100, 110)].map((r) => r.id));
+    await vet(['validate'], depsFor(root, flakyJudge(rows, answering), events));
+
+    const tone = toneEntry();
+    expect(tone['reasons']).toContain('judge_unavailable');
+    expect(tone['reasons']).not.toContain('single_class');
+    expect(tone['reasons']).not.toContain('class_too_small');
+    expect(tone['unscored']).toMatchObject({
+      count: 540,
+      total: 600,
+      causes: [CEV_ERROR_CODES.JUDGE_UNAVAILABLE],
+    });
+  });
+
+  test('every judged case scored: unscored is zero and judge_unavailable is absent', async () => {
+    const rows = standardRows();
+    const root = await project(rows);
+    const events = createEvents();
+    const { judge } = countingJudge(rows, events);
+    await vet(['validate'], depsFor(root, judge, events));
+
+    const tone = toneEntry();
+    expect(tone['reasons']).not.toContain('judge_unavailable');
+    expect(tone['unscored']).toMatchObject({ count: 0, causes: [] });
+  });
+});
