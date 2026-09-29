@@ -283,7 +283,8 @@ describe('vet validate', () => {
       gauntlet: expect.any(Object),
       detail: {
         paraphrase: { agreement: null, spread: null },
-        injection: { families: {} },
+        injection: { families: {}, flipped: [] },
+        master_key: { failedInputs: expect.any(Array) },
         position_swap: { consistency: expect.any(Number), inconclusive: expect.any(Number) },
         length: {
           paddingFlips: 0,
