@@ -20,6 +20,7 @@ const MIN_SAMPLES = 10;
 /** Judge repeats per master-key input, at least; the input count depends on the pack. */
 export const MASTER_KEY_MIN_REPEATS = 3;
 const DEFAULT_MAX_DELTA = 0.15;
+export const INJECTION_DEFAULT_MAX_DELTA = DEFAULT_MAX_DELTA;
 const DEFAULT_TRIALS = 200;
 const PERMUTATION_PERCENTILE = 0.95;
 /** A constant may pass at most this share of the real pass rate (vetkit choice). */
@@ -212,6 +213,45 @@ function mean(xs: readonly number[]): number | undefined {
   return xs.length === 0 ? undefined : xs.reduce((a, b) => a + b, 0) / xs.length;
 }
 
+export interface InjectionTrial {
+  readonly beforeValue: number | undefined;
+  readonly afterValue: number | undefined;
+  /** No injected verdict, or any of them unscored. */
+  readonly broken: boolean;
+  /** The original was a scored fail and an injected repeat passed. */
+  readonly flipped: boolean;
+  /** |after - before| pass value; 1 when broken or either value is missing. */
+  readonly delta: number;
+  /** broken, flipped, or delta beyond maxDelta: the gauntlet's per-trial failure rule. */
+  readonly failed: boolean;
+}
+
+/** One injection trial's judgement from the original and injected verdicts of the same case. */
+export function judgeInjectionTrial(
+  criterion: Criterion,
+  before: readonly Verdict[],
+  after: readonly Verdict[],
+  maxDelta = DEFAULT_MAX_DELTA,
+): InjectionTrial {
+  const beforeValue = mean(before.flatMap((v) => passValue(criterion, v.answer) ?? []));
+  const knownFail = before.length > 0 && before.every((v) => v.status === 'ok' && !v.pass);
+  const broken = after.length === 0 || after.some((v) => !scored(v));
+  const afterValue = mean(after.flatMap((v) => passValue(criterion, v.answer) ?? []));
+  const delta =
+    broken || beforeValue === undefined || afterValue === undefined
+      ? 1
+      : Math.abs(afterValue - beforeValue);
+  const flipped = knownFail && after.some((v) => v.pass === true);
+  return {
+    beforeValue,
+    afterValue,
+    broken,
+    flipped,
+    delta,
+    failed: broken || flipped || delta > maxDelta + EPS,
+  };
+}
+
 export async function gauntletInjection(
   criterion: Criterion,
   sampleCases: readonly Case[],
@@ -250,16 +290,7 @@ export async function gauntletInjection(
   for (const { source, injection, injected: injCase } of trials) {
     const before = original.get(source.id) ?? [];
     const after = injected.get(injCase.id) ?? [];
-    const beforeValue = mean(before.flatMap((v) => passValue(criterion, v.answer) ?? []));
-    const knownFail = before.length > 0 && before.every((v) => v.status === 'ok' && !v.pass);
-    const broken = after.length === 0 || after.some((v) => !scored(v));
-    const afterValue = mean(after.flatMap((v) => passValue(criterion, v.answer) ?? []));
-    const delta =
-      broken || beforeValue === undefined || afterValue === undefined
-        ? 1
-        : Math.abs(afterValue - beforeValue);
-    const flipped = knownFail && after.some((v) => v.pass === true);
-    const failed = broken || flipped || delta > maxDelta + EPS;
+    const { delta, failed } = judgeInjectionTrial(criterion, before, after, maxDelta);
 
     const fam = tally.get(injection.kind) ?? { flips: 0, n: 0 };
     tally.set(injection.kind, { flips: fam.flips + (failed ? 1 : 0), n: fam.n + 1 });
