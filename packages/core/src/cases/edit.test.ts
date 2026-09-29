@@ -200,6 +200,28 @@ describe('listPendingCases and reviewCase', () => {
   test('reviewCase returns false when the id is not pending', async () => {
     expect(await reviewCase(dir, 'nope', 'accept', { now: NOW })).toBe(false);
   });
+
+  test('reviewCase accept: deletes the pending file entirely once it has no lines left', async () => {
+    await writePending(dir, 'promoted-2026-09-28.jsonl', [mkCase('p-1', 's1')]);
+
+    await reviewCase(dir, 'p-1', 'accept', { now: NOW });
+
+    await expect(
+      readFile(join(dir, 'pending', 'promoted-2026-09-28.jsonl'), 'utf8'),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  test('reviewCase reject: a pending file with a case left over is rewritten, not deleted', async () => {
+    await writePending(dir, 'promoted-2026-09-28.jsonl', [
+      mkCase('p-1', 's1'),
+      mkCase('p-2', 's2'),
+    ]);
+
+    await reviewCase(dir, 'p-1', 'reject', { reason: 'bad trace', now: NOW });
+
+    const remaining = await readCases(join(dir, 'pending', 'promoted-2026-09-28.jsonl'));
+    expect(remaining.map((c) => c.id)).toEqual(['p-2']);
+  });
 });
 
 describe('promoteVerdict', () => {
