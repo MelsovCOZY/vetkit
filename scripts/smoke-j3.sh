@@ -29,8 +29,18 @@
 # judge> replaces the project configs and skips the preflight; the CEV_JUDGE_BASE_URL edge then
 # reports FAIL, as that env var only reaches real transports.
 #
-# Usage: bash scripts/smoke-j3.sh        (exit 0 only when every AC step passed)
+# Quick mode: `--quick` or CEV_SMOKE_QUICK=1 skips the P2 project blocks (P2 setup, P2 validate,
+# AC-reasons, AC2-lock, AC2, AC2-full) and runs everything else; the final PASS/FAIL covers only
+# what ran.
+#
+# Usage: bash scripts/smoke-j3.sh [--quick]   (exit 0 only when every step that ran passed)
 set -u
+
+QUICK=0
+[ "${CEV_SMOKE_QUICK:-}" = 1 ] && QUICK=1
+for arg in "$@"; do
+  [ "$arg" = --quick ] && QUICK=1
+done
 
 ROOT="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
 WORK="${VETKIT_SMOKE_DIR:-${TMPDIR:-/tmp}/vetkit-smoke-j3}"
@@ -51,6 +61,10 @@ result() { # <label> <expected> <observed-exit> <ok 0|1> [detail]
   if [ "$4" -ne 0 ]; then status=FAIL; FAILED=1; fi
   say "$status $1 (exit $3, expected $2)${5:+ — $5}"
 }
+
+if [ "$QUICK" -eq 1 ]; then
+  say "quick mode: skipped P2 setup, P2 validate, AC-reasons, AC2-lock, AC2, AC2-full"
+fi
 
 ENV_ARGS=()
 if [ -z "${!KEY_ENV:-}" ]; then
@@ -215,41 +229,43 @@ result "AC-check-b: after editing one instruction, vet check --lock --json -> {s
   "$([ "$code" -eq 1 ] && echo "$shape" || echo 1)" "$(jq -c '{stale, reasons}' k2.out 2>/dev/null)"
 
 # ---------------------------------------------------------------- P2: planted failures
-cp "${VETKIT_SMOKE_CONFIG:-$FIX/gauntlet-fail/vetkit.config.ts}" "$WORK/p2/vetkit.config.ts"
-mkdir -p "$WORK/p2/evals"
-cp "$FIX/gauntlet-fail/criteria.yaml" "$WORK/p2/evals/criteria.yaml"
-cp -r "$FIX/gauntlet-fail/cases" "$WORK/p2/evals/cases"
-cd "$WORK/p2" || exit 1
-say "P2 $WORK/p2"
-vet l2a label --from "$FIX/labels/thin-class.csv"
-c1=$?
-vet l2b label --from "$FIX/gauntlet-fail/labels/"
-c2=$?
-result "P2 setup: vet label --from thin-class.csv and gauntlet-fail/labels/" 0 "$((c1 | c2))" "$((c1 | c2))"
-vet v2 validate --json --repeats 3 --gauntlet "$FIX/gauntlet-fail/corpora"
-code=$?
-result "P2: vet validate --json" 0 "$code" "$code" "$(jq -c '[.criteria[] | {id, status, reasons}]' v2.out 2>/dev/null)"
-say "reasons (jq -r '.criteria[] | select(.status==\"uncalibrated\") | .reasons[]'): $(jq -r '.criteria[] | select(.status=="uncalibrated") | .reasons[]' criteria.lock.json 2>/dev/null | sort | uniq -c | tr '\n' ' ')"
-for pair in thin_class:class_too_small persuasive_constant:constant_output needs_reference:reference_missing; do
-  id="${pair%%:*}"
-  reason="${pair##*:}"
-  jq -e --arg id "$id" --arg r "$reason" '.criteria[$id] | .status == "uncalibrated" and (.reasons | index($r) != null)' criteria.lock.json >/dev/null
-  result "AC-reasons: $id is uncalibrated with reason $reason" 0 0 "$?" "$(jq -c --arg id "$id" '.criteria[$id] | {status, reasons}' criteria.lock.json 2>/dev/null)"
-done
-jq -e '.criteria.polarity_flip.status == "uncalibrated"' criteria.lock.json >/dev/null
-result "AC2-lock: planted polarity_flip is uncalibrated" 0 0 "$?" "$(jq -c '.criteria.polarity_flip | {status, reasons, gauntlet}' criteria.lock.json 2>/dev/null)"
+if [ "$QUICK" -eq 0 ]; then
+  cp "${VETKIT_SMOKE_CONFIG:-$FIX/gauntlet-fail/vetkit.config.ts}" "$WORK/p2/vetkit.config.ts"
+  mkdir -p "$WORK/p2/evals"
+  cp "$FIX/gauntlet-fail/criteria.yaml" "$WORK/p2/evals/criteria.yaml"
+  cp -r "$FIX/gauntlet-fail/cases" "$WORK/p2/evals/cases"
+  cd "$WORK/p2" || exit 1
+  say "P2 $WORK/p2"
+  vet l2a label --from "$FIX/labels/thin-class.csv"
+  c1=$?
+  vet l2b label --from "$FIX/gauntlet-fail/labels/"
+  c2=$?
+  result "P2 setup: vet label --from thin-class.csv and gauntlet-fail/labels/" 0 "$((c1 | c2))" "$((c1 | c2))"
+  vet v2 validate --json --repeats 3 --gauntlet "$FIX/gauntlet-fail/corpora"
+  code=$?
+  result "P2: vet validate --json" 0 "$code" "$code" "$(jq -c '[.criteria[] | {id, status, reasons}]' v2.out 2>/dev/null)"
+  say "reasons (jq -r '.criteria[] | select(.status==\"uncalibrated\") | .reasons[]'): $(jq -r '.criteria[] | select(.status=="uncalibrated") | .reasons[]' criteria.lock.json 2>/dev/null | sort | uniq -c | tr '\n' ' ')"
+  for pair in thin_class:class_too_small persuasive_constant:constant_output needs_reference:reference_missing; do
+    id="${pair%%:*}"
+    reason="${pair##*:}"
+    jq -e --arg id "$id" --arg r "$reason" '.criteria[$id] | .status == "uncalibrated" and (.reasons | index($r) != null)' criteria.lock.json >/dev/null
+    result "AC-reasons: $id is uncalibrated with reason $reason" 0 0 "$?" "$(jq -c --arg id "$id" '.criteria[$id] | {status, reasons}' criteria.lock.json 2>/dev/null)"
+  done
+  jq -e '.criteria.polarity_flip.status == "uncalibrated"' criteria.lock.json >/dev/null
+  result "AC2-lock: planted polarity_flip is uncalibrated" 0 0 "$?" "$(jq -c '.criteria.polarity_flip | {status, reasons, gauntlet}' criteria.lock.json 2>/dev/null)"
 
-# AC2: the gate refuses and names the planted criterion (its own criteria file, since the
-# refusal names the first uncalibrated id in sorted order).
-vet g2 run --gate --allow-unpinned --criteria "$FIX/gauntlet-fail/polarity-flip.criteria.yaml"
-code=$?
-grep -q polarity_flip g2.err
-named=$?
-result "AC2: vet run --gate (polarity_flip suite) -> exit 2, stderr names polarity_flip" 2 "$code" \
-  "$([ "$code" -eq 2 ] && echo "$named" || echo 1)" "$(grep -m1 'gate refused' g2.err)"
-vet g3 run --gate --allow-unpinned
-code=$?
-result "AC2-full: vet run --gate (all P2 criteria) -> exit 2" 2 "$code" "$([ "$code" -eq 2 ] && echo 0 || echo 1)" "$(grep -m1 'gate refused' g3.err)"
+  # AC2: the gate refuses and names the planted criterion (its own criteria file, since the
+  # refusal names the first uncalibrated id in sorted order).
+  vet g2 run --gate --allow-unpinned --criteria "$FIX/gauntlet-fail/polarity-flip.criteria.yaml"
+  code=$?
+  grep -q polarity_flip g2.err
+  named=$?
+  result "AC2: vet run --gate (polarity_flip suite) -> exit 2, stderr names polarity_flip" 2 "$code" \
+    "$([ "$code" -eq 2 ] && echo "$named" || echo 1)" "$(grep -m1 'gate refused' g2.err)"
+  vet g3 run --gate --allow-unpinned
+  code=$?
+  result "AC2-full: vet run --gate (all P2 criteria) -> exit 2" 2 "$code" "$([ "$code" -eq 2 ] && echo 0 || echo 1)" "$(grep -m1 'gate refused' g3.err)"
+fi
 
 # ---------------------------------------------------------------- P3: judge unavailable
 # A refused connection (CEV_JUDGE_BASE_URL=http://127.0.0.1:9) is retried with backoff, so a
@@ -279,4 +295,8 @@ if [ "$FAILED" -ne 0 ]; then
   say "FAILED"
   exit 1
 fi
-say "ok"
+if [ "$QUICK" -eq 1 ]; then
+  say "ok (quick mode: P2 blocks not run)"
+else
+  say "ok"
+fi
