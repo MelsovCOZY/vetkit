@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'vitest';
 import {
   checkLabels,
+  computeCriterionRow,
+  limitationsParagraph,
+  modelLabelKappaRow,
+  criterionTableNote,
   cohenKappa,
   criterionPasses,
   decideOutcome,
@@ -13,6 +17,7 @@ import {
   rates,
 } from './report.ts';
 import type { LabelRow } from './label.ts';
+import type { Trace } from './corpus.ts';
 
 describe('cohenKappa', () => {
   test('perfect agreement -> 1', () => {
@@ -327,5 +332,79 @@ describe('resolveTruth', () => {
     const m = row({ traceId: 't', source: 'model' });
     expect(usesModelLabels(resolveTruth([h, m]))).toBe(false);
     expect(usesModelLabels(resolveTruth([m]))).toBe(true);
+  });
+});
+
+const FIXTURE_TRACE: Trace = {
+  traceId: '',
+  variant: 'bm25',
+  goldenId: 'g',
+  lang: 'en',
+  hops: 1,
+  unanswerable: false,
+  question: 'q',
+  answer: 'a',
+  contexts: [],
+  reference: null,
+  baseline: { faithfulness: 1, context_relevance: 1, judgeModel: 'm' },
+  retrievedIds: [],
+  langfuseTraceId: '',
+};
+const repeatsOf = (pYes: number) => [{ pYes, escaped: false }];
+
+describe('model labels as truth for c4-c10', () => {
+  const traces = ['a', 'b', 'c', 'd', 'e'].map((traceId) => ({ ...FIXTURE_TRACE, traceId }));
+  const corpus = {
+    byTraceCriterion: new Map([
+      ['a|c4', repeatsOf(0.9)],
+      ['b|c4', repeatsOf(0.8)],
+      ['c|c4', repeatsOf(0.1)],
+      ['d|c4', repeatsOf(0.2)],
+      ['e|c4', repeatsOf(0.5)],
+    ]),
+    logicalCalls: 0,
+    uniqueCalls: 0,
+    uniqueCallInputTokens: 0,
+    logicalCallInputTokens: 0,
+  };
+  const modelRows: LabelRow[] = [
+    row({ traceId: 'a', criterionId: 'c4', source: 'model', label: 'yes' }),
+    row({ traceId: 'b', criterionId: 'c4', source: 'model', label: 'yes' }),
+    row({ traceId: 'c', criterionId: 'c4', source: 'model', label: 'no' }),
+    row({ traceId: 'd', criterionId: 'c4', source: 'model', label: 'no' }),
+  ];
+
+  test('n is the labelled count and unlabelled traces are excluded', () => {
+    const r = computeCriterionRow('c4', traces, resolveTruth(modelRows), corpus);
+    expect(r.n).toBe(4);
+    expect(r.kappa).toBe(1);
+    expect(r.tpr).toBe(1);
+    expect(r.tnr).toBe(1);
+    expect(r.verdict).toBe('pass');
+  });
+
+  test('no labels at all stays pending with n = 0', () => {
+    const r = computeCriterionRow('c4', traces, new Map(), corpus);
+    expect(r.n).toBe(0);
+    expect(r.verdict).toBe('pending');
+  });
+
+  test('c3 gets a Jev-vs-model-labels row', () => {
+    const c3Corpus = { ...corpus, byTraceCriterion: new Map(corpus.byTraceCriterion) };
+    for (const [k, v] of corpus.byTraceCriterion)
+      c3Corpus.byTraceCriterion.set(k.replace('c4', 'c3'), v);
+    const truth = resolveTruth(modelRows.map((r) => ({ ...r, criterionId: 'c3' })));
+    expect(modelLabelKappaRow(traces, truth, c3Corpus, 0.5)).toBe('| model labels | 4 | 1.000 |');
+  });
+
+  test('notes and limitations state the model-labelled counts, not stale "pending"', () => {
+    const check = checkLabels(modelRows);
+    const note = criterionTableNote(check);
+    expect(note).not.toContain('pending');
+    expect(note).toContain('4 model-labelled rows');
+    const lim = limitationsParagraph([0.9], check);
+    expect(lim).toContain('4 model-labelled traces');
+    expect(lim).toContain('4 rows');
+    expect(lim).not.toContain('0 human-labelled rows');
   });
 });
