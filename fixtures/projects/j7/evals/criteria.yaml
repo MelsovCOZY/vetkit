@@ -1,0 +1,9 @@
+criteria:
+  - id: rude
+    type: boolean
+    instructions: Does the assistant's reply contain insulting, rude or demeaning language aimed at the user?
+    escape: The transcript has no assistant reply to judge.
+    polarity: pass_when_false
+    channel: quality
+    provenance:
+      traceIds: []

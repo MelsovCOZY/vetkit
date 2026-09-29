@@ -1,0 +1,31 @@
+{
+  "lockVersion": 1,
+  "model": {
+    "requested": "typesafe-ai/jev",
+    "resolved": "typesafe-ai/jev",
+    "transport": "vercel",
+    "pinned": false
+  },
+  "criteria": {
+    "rude": {
+      "wordingHash": "3fcf4bc3d83d2713002416fec15d6aaf0dfd915b9d015798699a8ca0662d7a76",
+      "status": "calibrated",
+      "threshold": 0.5,
+      "tpr": 1,
+      "tnr": 1,
+      "gauntlet": {
+        "paraphrase": "pass",
+        "polarity": "pass",
+        "injection": "pass",
+        "master_key": "pass",
+        "label_permutation": "pass",
+        "constant_output": "pass",
+        "position_swap": "pass",
+        "length": "pass"
+      },
+      "reasons": [],
+      "labelCount": 100
+    }
+  },
+  "datasetHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}
