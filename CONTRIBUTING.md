@@ -58,7 +58,10 @@ correctness — CI runs the same checks (plus typecheck and tests) regardless.
 In a checkout that also uses the beads tracker (a `.beads/` directory with `core.hooksPath`
 set by `bd`), `hooks:install` does not run `lefthook install`, which would displace bd's
 hooks. It appends a marked lefthook block to bd's `pre-commit` and `commit-msg` hook files, so
-both run. Rerunning it is a no-op, and `bd hooks install` keeps the block because it only
+both run. These hooks are advisory: lefthook runs and prints its output, but its exit code
+never fails the commit (CI is the gate), and a missing `bun` only warns. Any older
+hand-written advisory tail is replaced by the managed block, so lefthook runs once. Rerunning
+it is a no-op, and `bd hooks install` keeps the block because it only
 rewrites its own marked section. If bd's hook files are ever deleted outright, rerun
 `bun run hooks:install`.
 
