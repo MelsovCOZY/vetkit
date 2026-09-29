@@ -1,11 +1,11 @@
 // Gauntlet C: option-order (position swap) consistency and length padding/truncation checks for
-// one criterion (eval-quality brief §4 items 5-6; arXiv 2406.07791, 2306.05685, 2404.04475).
+// one criterion (arXiv 2406.07791, 2306.05685, 2404.04475).
 // Judges through judgeCase with the cache bypassed; the only side effect is the injected `emit`.
 // Results feed the lock keys `gauntlet.position_swap` and `gauntlet.length`.
 import type { Answer, Case, Criterion, GauntletOutcome, JudgeV1 } from '@vetkit/spec';
 import { judgeCase } from '../judge/request.ts';
 
-/** Position consistency floor (vetkit choice, brief §5.3; re-tune after the JS spike). */
+/** Position consistency floor (vetkit choice; re-tune after the JS spike). */
 const DEFAULT_MIN_CONSISTENCY = 0.9;
 const MIN_SAMPLES = 10;
 /**

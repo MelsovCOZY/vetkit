@@ -1,6 +1,6 @@
 // Per-trace normaliser: cascades through `dialects` in the order given, picks
 // the first whose detect() matches any span, then walks the tree causally (parent before child,
-// then SpanTree's existing start-time sibling order, ET brief §2 "Precedence cascade") to
+// then SpanTree's existing start-time sibling order) to
 // concatenate LLM-span messages and sum tokens once per qualifying span — a nested LLM span is
 // never rolled into an ancestor's total (root acceptance J5, "tokens not double-counted").
 // Dialect modules (gen_ai, gen_ai_legacy, openinference, openllmetry, vercel) and the default

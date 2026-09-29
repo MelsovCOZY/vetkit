@@ -1,4 +1,4 @@
-// Gauntlet B controls (JEV brief §4 items 1-3, 10, 16; eval-quality brief §5.2 items 6-7):
+// Gauntlet B controls:
 // injection pack with per-family OWASP scores, master-key inputs, label permutation and the
 // constant-output cheat (arXiv 2410.07137). Every judge call goes through runJudge. The packs are
 // versioned fixtures (fixtures/gauntlet/*.json) the caller loads and passes in, so a model swap
@@ -22,7 +22,7 @@ export const MASTER_KEY_MIN_REPEATS = 3;
 const DEFAULT_MAX_DELTA = 0.15;
 const DEFAULT_TRIALS = 200;
 const PERMUTATION_PERCENTILE = 0.95;
-/** A constant may pass at most this share of the real pass rate (vetkit choice, brief §5.3). */
+/** A constant may pass at most this share of the real pass rate (vetkit choice). */
 const CONSTANT_REAL_SHARE = 0.25;
 const RUBRIC_PLACEHOLDER = '{{rubric}}';
 const INJECTION_SEPARATOR = '\n\n';

@@ -1,6 +1,6 @@
 // assessCompleteness: pure judgement of whether a trace's LLM content was
 // actually captured intact -- never scores truncated or not-captured content as if it were
-// complete (ET brief §4 OTEL-1, OTEL-3; root acceptance J5). `reasons` is diagnostic only; a
+// complete (root acceptance J5). `reasons` is diagnostic only; a
 // length-equals-limit match is a heuristic and false positives are acceptable (a truncated mark
 // excludes a case from content-dependent criteria, it never fails one).
 

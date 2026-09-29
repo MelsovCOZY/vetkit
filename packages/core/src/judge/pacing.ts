@@ -1,5 +1,5 @@
-// Judge pacing: one shared, adaptive (AIMD) in-flight limiter for run, validate and watch
-// (root ledger DECISION, UX brief C1). The transport never sleeps; it surfaces
+// Judge pacing: one shared, adaptive (AIMD) in-flight limiter for run, validate and watch.
+// The transport never sleeps; it surfaces
 // `details.retryable` / `details.retryAfterMs` on VetError and this limiter owns every wait.
 //
 // A retryable failure sets a shared `pausedUntil` that gates ALL acquisitions, halves the

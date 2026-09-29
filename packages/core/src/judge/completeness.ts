@@ -1,7 +1,7 @@
 // statusForTrace / partitionCases: turns a normalized trace's completeness
 // flags into a typed non-score status, and excludes non-ok cases from content-dependent criteria
 // while still judging criteria explicitly marked contentDependent:false (e.g. latency) — root
-// acceptance J5, ET brief §4 OTEL-1/3. Never throws: this is data derivation, not validation.
+// acceptance J5. Never throws: this is data derivation, not validation.
 
 import type { Case, Criterion, NormalizedTrace } from '@vetkit/spec';
 

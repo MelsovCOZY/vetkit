@@ -1,6 +1,6 @@
 // Braintrust/autoevals `Score` and Evalite `createScorer` both accept a scoring function
 // returning a number-or-null-ish shape; null is the sanctioned "skip this" signal for both
-// (UX brief §2.5 DECISION) — never 0, which would read as a real fail.
+// — never 0, which would read as a real fail.
 import type { VerdictCache } from '@vetkit/core';
 import type { Criterion, JudgeV1 } from '@vetkit/spec';
 import { confidenceOf, judgeOne, probabilityOf, resolveState } from './judge-one.ts';

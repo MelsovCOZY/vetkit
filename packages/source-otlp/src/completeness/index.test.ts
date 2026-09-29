@@ -1,5 +1,4 @@
-// assessCompleteness tests: one case per truncation/capture rule (ET brief §4
-// OTEL-1, OTEL-3). Fake dialect stands in for the real gen_ai/openinference/etc modules.
+// assessCompleteness tests: one case per truncation/capture rule. Fake dialect stands in for the real gen_ai/openinference/etc modules.
 
 import { describe, expect, test } from 'vitest';
 import type { AnyValue, OtlpSpan } from '../reader/index.ts';
