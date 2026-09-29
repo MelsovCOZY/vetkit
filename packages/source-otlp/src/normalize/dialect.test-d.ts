@@ -25,7 +25,7 @@ test('DialectV1.isLlmSpan takes a span and returns boolean', () => {
 
 test('DialectV1.extractMessages takes (span, tree, optional onDiag) and returns Message[]', () => {
   expectTypeOf<DialectV1['extractMessages']>().parameters.toEqualTypeOf<
-    [OtlpSpan, SpanTree, ((d: OtlpDiag) => void)?]
+    [OtlpSpan, SpanTree, (((d: OtlpDiag) => void) | undefined)?]
   >();
 });
 
