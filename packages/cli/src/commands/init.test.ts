@@ -40,6 +40,7 @@ interface GenerateDoc {
   readonly criteria: readonly unknown[];
   readonly cases: readonly unknown[];
   readonly report: { readonly status: string };
+  readonly reason?: string;
 }
 
 // oxlint-disable-next-line typescript/no-unnecessary-type-parameters
@@ -73,6 +74,23 @@ describe('vet init --source', () => {
     const doc = parseJson<GenerateDoc>(result.stdout);
     expect(doc.report.status).toBe('ok');
     expect(doc.criteria.length).toBeLessThan(5);
+  });
+
+  // bug (cold gate run 4): exit 1 alone gave no reason on stderr or in --json for why so few
+  // criteria survived; this named the count, the minimum, and the dropped/repaired counts.
+  test('exits 1 with a stderr reason naming the count, the minimum and the dropped/repaired counts', () => {
+    const project = freshProject();
+    const out = join(project, 'evals-out');
+    const result = runVet(['init', '--source', 'traces', '--out', out, '--json'], project, {
+      ...process.env,
+      VETKIT_FIXTURE_MODE: 'few',
+    });
+    expect(result.status).toBe(1);
+    const doc = parseJson<GenerateDoc>(result.stdout);
+    expect(doc.reason).toBe(
+      'only 2 criteria survived generation, need at least 5 (dropped 0, repaired 0)',
+    );
+    expect(result.stderr).toContain(doc.reason);
   });
 
   test('a jsonl: prefix resolves the same traces directory as a bare path', () => {
