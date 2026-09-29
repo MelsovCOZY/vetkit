@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/MelsovCOZY/vetkit/master/assets/logo.png" alt="vetkit logo" width="192" height="192">
+</p>
+
 # @vetkit/scorers
 
 Judge-only adapters for teams with an existing eval runner: a Braintrust/autoevals/Evalite

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" alt="vetkit logo" width="192" height="192">
+</p>
+
 # Contributing to vetkit
 
 vetkit is a library + CLI with no service component: there is no Dockerfile, no compose
