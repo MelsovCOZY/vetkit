@@ -308,7 +308,7 @@ async function loadCachedCall(
 
 type TraceCriterionRepeats = { pYes: number; escaped: boolean }[];
 
-type Corpus = {
+export type Corpus = {
   /** `${traceId}|${criterionId}` -> that trace's repeats' P(yes)/escaped, in repeat order. */
   byTraceCriterion: Map<string, TraceCriterionRepeats>;
   logicalCalls: number;
@@ -356,8 +356,8 @@ async function loadCorpus(traces: Trace[], criteria: Criterion[]): Promise<Corpu
 }
 
 // ---------------------------------------------------------------------------
-// Per-criterion table: truth = human/auto labels only (baseline-sourced c3 truth is
-// reported separately in the baseline block).
+// Per-criterion table: truth = human > model > auto labels (Gemini baseline rows are never truth;
+// they are reported separately in the baseline block).
 // ---------------------------------------------------------------------------
 
 export type CriterionRow = {
@@ -373,13 +373,15 @@ export type CriterionRow = {
   verdict: 'pass' | 'fail' | 'unanswerable' | 'pending' | 'n/a';
 };
 
-function computeCriterionRow(
+export function computeCriterionRow(
   criterionId: string,
   traces: Trace[],
   truthByKey: Map<string, LabelRow>,
   corpus: Corpus,
 ): CriterionRow {
-  const n = traces.length;
+  // n counts traces that have a truth label for this criterion (human > model > auto); unlabelled
+  // traces are excluded from every statistic and from n.
+  let n = 0;
   // Two different reasons a trace contributes nothing to the fit, tracked separately: no truth
   // label exists at all for this criterion (c3's baseline-sourced truth and c4-c10's not-yet-
   // human-labelled truth both land here, reported as 'pending', not as an escape), vs a truth
@@ -399,6 +401,7 @@ function computeCriterionRow(
     const allEscaped = repeats.length > 0 && nonEscaped.length === 0;
 
     if (!labelRow) continue; // no truth for this trace at all (reported as 'pending', not an escape)
+    n++;
     if (labelRow.label === 'review' || allEscaped || meanPYes === null) {
       reviewOrEscaped++;
       continue;
@@ -580,6 +583,29 @@ function baselineKappaRow(
   return `| ${label} | ${predicted.length} | ${fmt(kappa)} |`;
 }
 
+/** Jev c3 (thresholded at `threshold`) vs the model-labelled c3 truth, as a `| slice | n | κ |` row. */
+export function modelLabelKappaRow(
+  traces: Trace[],
+  truthByKey: Map<string, LabelRow>,
+  corpus: Corpus,
+  threshold: number,
+): string {
+  const predicted: boolean[] = [];
+  const truth: boolean[] = [];
+  for (const trace of traces) {
+    const labelRow = truthByKey.get(`${trace.traceId}|c3`);
+    if (labelRow?.source !== 'model' || labelRow.label === 'review') continue;
+    const repeats = (corpus.byTraceCriterion.get(`${trace.traceId}|c3`) ?? []).filter(
+      (r) => !r.escaped,
+    );
+    if (repeats.length === 0) continue;
+    predicted.push(repeats.reduce((s, r) => s + r.pYes, 0) / repeats.length >= threshold);
+    truth.push(labelRow.label === 'yes');
+  }
+  if (predicted.length === 0) return '| model labels | 0 | n/a |';
+  return `| model labels | ${predicted.length} | ${fmt(cohenKappa(predicted, truth))} |`;
+}
+
 function baselineBlock(
   traces: Trace[],
   baselineByKey: Map<string, LabelRow>,
@@ -658,16 +684,35 @@ function costBlock(corpus: Corpus, haystack: HaystackCost): string {
   ].join('\n\n');
 }
 
-function limitationsParagraph(haystackAggregateFaithfulness: number[]): string {
+/** Note under table (a): what truth each criterion uses and how much of it is model-labelled. */
+export function criterionTableNote(check: LabelCheck): string {
+  return (
+    'Truth is human > model > auto; n is the number of labelled traces per criterion. This run has ' +
+    `${check.modelRows} model-labelled rows over ${check.modelTraces} traces and ${check.humanRows} human-labelled rows, ` +
+    'so c3-c10 rows rest on model labels. For c4-c10 a yes label means the problem is present. Gemini ' +
+    'baseline scores are not truth and are reported in block (c). ' +
+    "c2's auto label is a *correctness* judgment (abstained-when-it-should, or didn't-" +
+    "when-it-shouldn't), which flips sign between answerable and unanswerable rows, so its raw " +
+    "P(yes)-vs-label kappa above is not directly comparable to c1's; see block (b) for the c2 " +
+    'accuracy computed only on the unambiguous (golden-unanswerable) subset.'
+  );
+}
+
+export function limitationsParagraph(
+  haystackAggregateFaithfulness: number[],
+  check: LabelCheck,
+): string {
   const nearCeiling = haystackAggregateFaithfulness.map((f) => f.toFixed(3)).join(', ');
   return [
     'Contexts are whole source documents (55-344 words) rebuilt offline from corpus/*.pdf|docx, not the ' +
       '120-word chunks the pipeline actually retrieved by; the local Langfuse instance runs in v4 events-only ' +
       'mode and /api/public/traces returned 404 (probed 2026-09-25), so the judged unit is whole-document ' +
       'context, not the retrieved chunk.',
-    'Human labels: this run has 0 human-labelled rows (labelled traces ' +
-      'still pending). With a single labeller once that lands, Krippendorff alpha reduces to plain agreement ' +
-      'between the human and the judge; a second labeller is out of scope of this spike.',
+    `Labels: this run has ${check.humanTraces} human-labelled traces (${check.humanRows} rows) and ` +
+      `${check.modelTraces} model-labelled traces (${check.modelRows} rows); truth precedence is human, ` +
+      'then model, then auto. Model labels stand in for a human labeller, so any decision drawn from ' +
+      'them is provisional. With a single labeller, Krippendorff alpha reduces to plain agreement ' +
+      'between the labeller and the judge; a second labeller is out of scope of this spike.',
     `Jev is reached only through the gateway alias ${MODEL} (TypeSafe registration is closed); the served ` +
       `model id recorded on every verdict is that alias, release_date ${JEV_RELEASE_DATE} per ` +
       `${JEV_RELEASE_DATE_SOURCE}; \`pinned: false\`.`,
@@ -699,6 +744,7 @@ async function main(): Promise<void> {
   const criteria: Criterion[] = JSON.parse(await readFile(CRITERIA_PATH, 'utf8'));
   const corpus = await loadCorpus(traces, criteria);
 
+  const check = checkLabels(labelRows);
   const truthByKey = resolveTruth(labelRows);
   const provisional = usesModelLabels(truthByKey);
   const baselineByKey = new Map<string, LabelRow>();
@@ -724,7 +770,18 @@ async function main(): Promise<void> {
   );
 
   const c3Threshold = fitC3ThresholdAgainstBaseline(traces, baselineByKey, corpus);
-  const baselineMarkdown = baselineBlock(traces, baselineByKey, corpus, c3Threshold);
+  const c3ModelThreshold = requireRow('c3').threshold;
+  const baselineMarkdown = [
+    baselineBlock(traces, baselineByKey, corpus, c3Threshold),
+    '',
+    'Jev c3 vs the model-labelled c3 truth (thresholded at the c3 threshold fitted in table (a)):',
+    '',
+    '| slice | n | κ |',
+    '|---|---|---|',
+    c3ModelThreshold === null
+      ? '| model labels | 0 | n/a |'
+      : modelLabelKappaRow(traces, truthByKey, corpus, c3ModelThreshold),
+  ].join('\n');
 
   const haystackCost = await readHaystackCost(haystackDir);
   const costMarkdown = costBlock(corpus, haystackCost);
@@ -738,9 +795,8 @@ async function main(): Promise<void> {
       haystackAggregates.push(summary.aggregate.scores.faithfulness);
     }
   }
-  const limitationsMarkdown = limitationsParagraph(haystackAggregates);
+  const limitationsMarkdown = limitationsParagraph(haystackAggregates, check);
 
-  const check = checkLabels(labelRows);
   const passCount = criterionRows.filter((r) => r.verdict === 'pass').length;
   const medianKappa = medianOfDefined(criterionRows.map((r) => r.kappa));
   const decision = decideOutcome({
@@ -755,22 +811,17 @@ async function main(): Promise<void> {
     '# Spike report: Jev vs ground truth, Jev vs the Gemini judge',
     '',
     ...(provisional ? [PROVISIONAL_NOTE, ''] : []),
-    '## (a) Per-criterion table (human/auto labels as truth)',
+    '## (a) Per-criterion table (human > model > auto labels as truth)',
     '',
     criterionTableMarkdown(criterionRows),
     '',
-    "c3's truth is the Gemini baseline, not a human/auto label, so it has no row-fitted stats here " +
-      'and is reported separately in block (c); c4-c10 have no truth yet (pending' +
-      "). c2's auto label is a *correctness* judgment (abstained-when-it-should, or didn't-" +
-      "when-it-shouldn't), which flips sign between answerable and unanswerable rows, so its raw " +
-      "P(yes)-vs-label kappa above is not directly comparable to c1's; see block (b) for the c2 " +
-      'accuracy computed only on the unambiguous (golden-unanswerable) subset.',
+    criterionTableNote(check),
     '',
     '## (b) Ground-truth block',
     '',
     groundTruthMarkdown,
     '',
-    '## (c) Baseline block (Jev c3 vs the Gemini judge, binarised at 0.5)',
+    '## (c) Baseline block (Jev c3 vs the Gemini judge, binarised at 0.5; plus vs model labels)',
     '',
     baselineMarkdown,
     '',
