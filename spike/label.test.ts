@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import type { Trace } from './corpus.ts';
+import { renderInstructions } from './lib/index.ts';
 import type { Criterion } from './propose.ts';
 import {
   CSV_HEADER,
@@ -594,5 +595,37 @@ describe('resolveMode: model labels', () => {
     expect(resolveMode(['--import', 'm.jsonl', '--source', 'human'], false)).toEqual({
       mode: 'exit2',
     });
+  });
+});
+
+describe('reference placeholder rendering for labellers', () => {
+  const realCriteria = JSON.parse(
+    readFileSync(fileURLToPath(new URL('./data/criteria.json', import.meta.url)), 'utf8'),
+  ) as Criterion[];
+  const c1 = realCriteria.find((c) => c.id === 'c1') as Criterion;
+  const traces = [trace({ traceId: 'a', reference: 'REF-42' })];
+
+  test('renderInstructions substitutes the reference, falling back to not available', () => {
+    expect(renderInstructions(c1, traces[0] as Trace)).toContain('REF-42');
+    expect(renderInstructions(c1, trace({ reference: null }))).toContain('not available');
+    expect(renderInstructions(c1, traces[0] as Trace)).not.toContain('{{');
+  });
+
+  test('TTY display and exported items never contain a raw placeholder', async () => {
+    const printed: string[] = [];
+    await runInteractiveLoop({
+      queue: [{ traceId: 'a', criterionId: 'c1' }],
+      traces,
+      criteria: realCriteria,
+      ask: async () => 'q',
+      print: (m) => printed.push(m),
+      onRow: () => {},
+    });
+    expect(printed.join('\n')).toContain('REF-42');
+    expect(printed.join('\n')).not.toContain('{{');
+
+    const items = buildPendingItems(traces, realCriteria, [], []);
+    expect(items.some((i) => i.criterionId === 'c1')).toBe(true);
+    expect(JSON.stringify(items)).not.toContain('{{');
   });
 });
