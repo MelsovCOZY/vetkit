@@ -179,7 +179,7 @@ describe('proposeCriteria (unit, fetch stubbed)', () => {
         },
         { timeoutMs: 30_000 },
       );
-      const content = res.choices[0].message.content;
+      const content = res.choices[0]?.message.content ?? '';
       return JSON.parse(content);
     };
   }
@@ -188,7 +188,7 @@ describe('proposeCriteria (unit, fetch stubbed)', () => {
     const failureModes = Array.from({ length: 10 }, (_, i) => ({
       name: `mode_${i}`,
       description: `failure mode ${i}`,
-      exampleTraceIds: [realTraceIds[i % realTraceIds.length]],
+      exampleTraceIds: realTraceIds.slice(i % realTraceIds.length, (i % realTraceIds.length) + 1),
     }));
     const candidates = failureModes
       .slice(0, 7)
@@ -203,8 +203,8 @@ describe('proposeCriteria (unit, fetch stubbed)', () => {
     const survivors = await proposeCriteria(realTraces, call);
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    const firstBody = JSON.parse(String(fetchMock.mock.calls[0][1].body));
-    const secondBody = JSON.parse(String(fetchMock.mock.calls[1][1].body));
+    const firstBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1].body));
+    const secondBody = JSON.parse(String(fetchMock.mock.calls[1]?.[1].body));
     expect(firstBody.response_format.json_schema.name).toBe(FAILURE_MODES_SCHEMA.name);
     expect(secondBody.response_format.json_schema.name).toBe(CRITERIA_SCHEMA.name);
 
@@ -222,7 +222,7 @@ describe('proposeCriteria (unit, fetch stubbed)', () => {
     const failureModes = Array.from({ length: 10 }, (_, i) => ({
       name: `mode_${i}`,
       description: `failure mode ${i}`,
-      exampleTraceIds: [realTraceIds[i % realTraceIds.length]],
+      exampleTraceIds: realTraceIds.slice(i % realTraceIds.length, (i % realTraceIds.length) + 1),
     }));
     const candidates = failureModes.map((fm, i) =>
       i === 0
@@ -247,7 +247,7 @@ describe('proposeCriteria (unit, fetch stubbed)', () => {
     const failureModes = Array.from({ length: 10 }, (_, i) => ({
       name: `mode_${i}`,
       description: `failure mode ${i}`,
-      exampleTraceIds: [realTraceIds[i % realTraceIds.length]],
+      exampleTraceIds: realTraceIds.slice(i % realTraceIds.length, (i % realTraceIds.length) + 1),
     }));
     const candidates = failureModes.map((fm, i) =>
       i === 0
@@ -263,7 +263,7 @@ describe('proposeCriteria (unit, fetch stubbed)', () => {
       name: 'mode_0',
       instructions: 'Is it not the case that the answer does not mention a source at all?',
       escape: 'unclear',
-      provenanceTraceIds: failureModes[0].exampleTraceIds,
+      provenanceTraceIds: failureModes[0]?.exampleTraceIds ?? [],
     };
 
     const fetchMock = stubFetchSequence([
@@ -284,7 +284,7 @@ describe('proposeCriteria (unit, fetch stubbed)', () => {
     const failureModes = Array.from({ length: 10 }, (_, i) => ({
       name: `mode_${i}`,
       description: `failure mode ${i}`,
-      exampleTraceIds: [realTraceIds[i % realTraceIds.length]],
+      exampleTraceIds: realTraceIds.slice(i % realTraceIds.length, (i % realTraceIds.length) + 1),
     }));
     const candidates = failureModes.map((fm, i) =>
       i === 0
@@ -300,7 +300,7 @@ describe('proposeCriteria (unit, fetch stubbed)', () => {
       name: 'mode_0',
       instructions: 'Does the answer cite a source marker?',
       escape: 'unclear',
-      provenanceTraceIds: failureModes[0].exampleTraceIds,
+      provenanceTraceIds: failureModes[0]?.exampleTraceIds ?? [],
     };
 
     const fetchMock = stubFetchSequence([
@@ -323,7 +323,7 @@ describe('proposeCriteria (unit, fetch stubbed)', () => {
     const failureModes = Array.from({ length: 10 }, (_, i) => ({
       name: `mode_${i}`,
       description: `failure mode ${i}`,
-      exampleTraceIds: [realTraceIds[i % realTraceIds.length]],
+      exampleTraceIds: realTraceIds.slice(i % realTraceIds.length, (i % realTraceIds.length) + 1),
     }));
     // Only 5 candidates offered at all, all lint-clean: cannot reach 7 survivors.
     const candidates = failureModes
@@ -345,12 +345,15 @@ describe('proposeCriteria (unit, fetch stubbed)', () => {
     const firstBatch = Array.from({ length: 6 }, (_, i) => ({
       name: `mode_${i}`,
       description: `failure mode ${i}`,
-      exampleTraceIds: [realTraceIds[i % realTraceIds.length]],
+      exampleTraceIds: realTraceIds.slice(i % realTraceIds.length, (i % realTraceIds.length) + 1),
     }));
     const secondBatch = Array.from({ length: 5 }, (_, i) => ({
       name: `extra_mode_${i}`,
       description: `additional failure mode ${i}`,
-      exampleTraceIds: [realTraceIds[(i + 6) % realTraceIds.length]],
+      exampleTraceIds: realTraceIds.slice(
+        (i + 6) % realTraceIds.length,
+        ((i + 6) % realTraceIds.length) + 1,
+      ),
     }));
     const allModes = [...firstBatch, ...secondBatch];
     const candidates = allModes.slice(0, 7).map((fm) => goodCriterion(fm.name, fm.exampleTraceIds));

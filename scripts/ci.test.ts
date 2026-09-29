@@ -137,10 +137,10 @@ describe('lefthook.yml', () => {
     expect(doc['pre-commit']?.parallel).toBe(true);
 
     const commands = doc['pre-commit']?.commands;
-    expect(commands?.oxlint.run).toContain('oxlint');
-    expect(commands?.oxlint.run).toContain('{staged_files}');
-    expect(commands?.oxfmt.run).toContain('oxfmt --check');
-    expect(commands?.oxfmt.run).toContain('{staged_files}');
+    expect(commands?.oxlint?.run).toContain('oxlint');
+    expect(commands?.oxlint?.run).toContain('{staged_files}');
+    expect(commands?.oxfmt?.run).toContain('oxfmt --check');
+    expect(commands?.oxfmt?.run).toContain('{staged_files}');
   });
 
   it('has no commit-msg hook', () => {

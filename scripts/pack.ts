@@ -36,7 +36,7 @@ export function checkVersionSync(
   if (!match) return undefined;
 
   const lockVersion = match[1];
-  if (lockVersion === pkg.version) return undefined;
+  if (lockVersion === undefined || lockVersion === pkg.version) return undefined;
 
   return {
     packageName: pkg.name,

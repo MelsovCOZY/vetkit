@@ -9,7 +9,7 @@
     "node": ">=22.12"
   },
   "scripts": {
-    "typecheck": "tsc -b tsconfig.json",
+    "typecheck": "tsc -b tsconfig.json scripts/tsconfig.json",
     "lint": "oxlint --type-aware . && sh scripts/ban-raw-json-parse.sh",
     "fmt": "oxfmt --check .",
     "fmt:write": "oxfmt .",

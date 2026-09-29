@@ -76,6 +76,7 @@ export function krippendorffAlphaNominal(rows: (boolean | null)[][]): number | n
       for (let j = i + 1; j < m; j++) {
         const c = values[i];
         const k = values[j];
+        if (c === undefined || k === undefined) continue;
         categories.add(c);
         categories.add(k);
         coincidence.set(`${c}|${k}`, (coincidence.get(`${c}|${k}`) ?? 0) + weight);
@@ -112,8 +113,8 @@ export function rates(scores: number[], labels: boolean[], t: number): Rates {
   let fn = 0;
   let tn = 0;
   let fp = 0;
-  for (let i = 0; i < scores.length; i++) {
-    const predicted = scores[i] >= t;
+  for (const [i, score] of scores.entries()) {
+    const predicted = score >= t;
     const actual = labels[i];
     if (actual && predicted) tp++;
     else if (actual && !predicted) fn++;
@@ -136,6 +137,7 @@ export function fitThreshold(scores: number[], labels: boolean[]): number {
   }
   const candidates = Array.from(new Set(scores)).toSorted((a, b) => a - b);
   let best = candidates[0];
+  if (best === undefined) throw new Error('fitThreshold: need at least one score/label pair');
   let bestJ = -Infinity;
   for (const t of candidates) {
     const { tpr, tnr } = rates(scores, labels, t);
@@ -181,7 +183,11 @@ export function medianOfDefined(values: (number | null)[]): number | null {
   const n = defined.length;
   if (n === 0) return null;
   const mid = Math.floor(n / 2);
-  return n % 2 === 0 ? (defined[mid - 1] + defined[mid]) / 2 : defined[mid];
+  const upper = defined[mid];
+  if (upper === undefined) return null;
+  if (n % 2 !== 0) return upper;
+  const lower = defined[mid - 1];
+  return lower === undefined ? null : (lower + upper) / 2;
 }
 
 export type Outcome = 'GO' | 'AMEND' | 'NO-GO' | 'INCONCLUSIVE';
@@ -385,7 +391,7 @@ function computeCriterionRow(
   const { tpr, tnr } = rates(scoresForFit, labelsForFit, threshold);
   const predictions = scoresForFit.map((s) => s >= threshold);
   const kappa = cohenKappa(predictions, labelsForFit);
-  const alpha = krippendorffAlphaNominal(predictions.map((p, i) => [p, labelsForFit[i]]));
+  const alpha = krippendorffAlphaNominal(predictions.map((p, i) => [p, labelsForFit[i] ?? null]));
   const flipPct = flipRate(repeatsForFlip, threshold);
 
   const verdict: CriterionRow['verdict'] =

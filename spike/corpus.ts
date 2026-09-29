@@ -59,6 +59,7 @@ export function buildTraces(
 
   for (const variant of Object.keys(reports)) {
     const report = reports[variant];
+    if (!report) continue; // variant comes from Object.keys(reports), so this never skips
     for (const row of report.per_question) {
       const goldenRow = goldenById.get(row.id);
       if (!goldenRow) {
