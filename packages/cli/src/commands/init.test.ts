@@ -1,5 +1,12 @@
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -161,5 +168,125 @@ describe('vet init --source', () => {
     expect(runResult.status).not.toBe(2);
     const runDoc = parseJson<{ summary: { total: number } }>(runResult.stdout);
     expect(runDoc.summary.total).toBe(initDoc.cases.length);
+  });
+});
+
+interface GeneratorTotals {
+  readonly calls: number;
+  readonly inputTokens: number | null;
+  readonly outputTokens: number | null;
+  readonly estimatedUsd: number | null;
+}
+
+interface MeteredDoc {
+  readonly generator: GeneratorTotals;
+}
+
+const PRICE_IN = 'CEV_GENERATOR_PRICE_INPUT_PER_MTOK';
+const PRICE_OUT = 'CEV_GENERATOR_PRICE_OUTPUT_PER_MTOK';
+const REPORTED_RETURN = "return { value, resolvedModelId: 'fake-generator-resolved' };";
+
+// The fixture generator reports no usage; a private config copy can make it report a fixed one.
+function projectWithGeneratorUsage(usage: boolean): string {
+  const project = freshProject();
+  if (usage) {
+    const file = join(project, 'vetkit.config.ts');
+    const text = readFileSync(file, 'utf8');
+    expect(text).toContain(REPORTED_RETURN);
+    writeFileSync(
+      file,
+      text.replace(
+        REPORTED_RETURN,
+        "return { value, resolvedModelId: 'fake-generator-resolved', usage: { inputTokens: 10, outputTokens: 4 } };",
+      ),
+    );
+  }
+  return project;
+}
+
+function metered(project: string, env: NodeJS.ProcessEnv): Result {
+  const out = join(project, 'evals-out');
+  return runVet(['init', '--source', 'traces', '--out', out, '--json'], project, {
+    ...process.env,
+    CEV_DIAG: undefined,
+    CEV_TRACE_HTTP: undefined,
+    [PRICE_IN]: undefined,
+    [PRICE_OUT]: undefined,
+    ...env,
+  });
+}
+
+function diagGenerator(stderr: string): GeneratorTotals | undefined {
+  for (const line of stderr.split('\n')) {
+    if (!line.startsWith('{"diag"')) continue;
+    const parsed = parseJson<{ diag: { generator?: GeneratorTotals } }>(line);
+    if (parsed.diag.generator !== undefined) return parsed.diag.generator;
+  }
+  return undefined;
+}
+
+describe('vet init --source generator usage', () => {
+  test('usage from every generator call is summed into --json generator totals', () => {
+    const result = metered(projectWithGeneratorUsage(true), {});
+    expect(result.status).toBe(0);
+    const { generator } = parseJson<MeteredDoc>(result.stdout);
+    expect(generator.calls).toBeGreaterThanOrEqual(2);
+    expect(generator.inputTokens).toBe(generator.calls * 10);
+    expect(generator.outputTokens).toBe(generator.calls * 4);
+    expect(generator.estimatedUsd).toBeNull();
+  });
+
+  test('a generator without usage still counts calls and reports null tokens', () => {
+    const result = metered(projectWithGeneratorUsage(false), {});
+    expect(result.status).toBe(0);
+    const { generator } = parseJson<MeteredDoc>(result.stdout);
+    expect(generator.calls).toBeGreaterThanOrEqual(2);
+    expect(generator.inputTokens).toBeNull();
+    expect(generator.outputTokens).toBeNull();
+    expect(generator.estimatedUsd).toBeNull();
+  });
+
+  test('estimatedUsd prices the totals when both per-million-token env prices are set', () => {
+    const result = metered(projectWithGeneratorUsage(true), { [PRICE_IN]: '2', [PRICE_OUT]: '8' });
+    const { generator } = parseJson<MeteredDoc>(result.stdout);
+    const expected = ((generator.calls * 10 * 2) + (generator.calls * 4 * 8)) / 1_000_000;
+    expect(generator.estimatedUsd).toBeCloseTo(expected, 12);
+  });
+
+  test('estimatedUsd stays null when only one price is set', () => {
+    const result = metered(projectWithGeneratorUsage(true), { [PRICE_IN]: '2' });
+    const { generator } = parseJson<MeteredDoc>(result.stdout);
+    expect(generator.estimatedUsd).toBeNull();
+  });
+
+  test('a negative or non-numeric price is ignored with a warning naming the variable, never its value', () => {
+    const result = metered(projectWithGeneratorUsage(true), {
+      [PRICE_IN]: 'abc-secret',
+      [PRICE_OUT]: '-31337',
+    });
+    expect(result.status).toBe(0);
+    const { generator } = parseJson<MeteredDoc>(result.stdout);
+    expect(generator.estimatedUsd).toBeNull();
+    expect(result.stderr).toContain(PRICE_IN);
+    expect(result.stderr).toContain(PRICE_OUT);
+    expect(result.stderr).not.toContain('abc-secret');
+    expect(result.stderr).not.toContain('-31337');
+  });
+
+  test('CEV_DIAG=1 writes the same generator totals as a stderr diag line; without it no such line', () => {
+    const project = projectWithGeneratorUsage(true);
+    const withDiag = metered(project, { CEV_DIAG: '1' });
+    const { generator } = parseJson<MeteredDoc>(withDiag.stdout);
+    expect(generator.calls).toBeGreaterThanOrEqual(2);
+    expect(diagGenerator(withDiag.stderr)).toEqual(generator);
+
+    const without = metered(projectWithGeneratorUsage(true), {});
+    expect(diagGenerator(without.stderr)).toBeUndefined();
+  });
+
+  test('init --help mentions the two price env vars', () => {
+    const result = runVet(['init', '--help'], freshProject());
+    expect(result.stdout).toContain(PRICE_IN);
+    expect(result.stdout).toContain(PRICE_OUT);
   });
 });
