@@ -4,7 +4,8 @@
 //   ('langfuse.trace.id' / 'langfuse.observation.id' of the last generation) recorded as
 //   attributes on that generation's span, dialect 'langfuse', completeness.contentCaptured=false
 //   when input/output are null (case 'redacted content').
-// - Pagination over 2 pages via a fake fetch (case 'pagination').
+// - Cursor pagination over 2 pages via a fake fetch (case 'pagination'), an empty page, and a
+//   trace whose observations straddle two pages.
 // - Auth failure (401/403) yields a VetError code SOURCE_AUTH thrown at first read, not a
 //   silent empty iterator (case 'auth').
 // - Two edge cases: SOURCE_UNREACHABLE after a 429 exhausted after 3 retries, and a trace with
@@ -62,18 +63,12 @@ describe('createLangfuseSource', () => {
   });
 
   test('case: full trace — messages in start-time order, provenance on the last generation span', async () => {
-    const fetch = vi.fn(async (url: string) => {
-      if (url.includes('/api/public/traces?')) {
-        return jsonResponse(200, {
-          data: [{ id: 'trace-1' }],
-          meta: { page: 1, limit: 50, totalItems: 1, totalPages: 1 },
-        });
-      }
-      return jsonResponse(200, {
-        id: 'trace-1',
-        observations: [
+    const fetch = vi.fn(async () =>
+      jsonResponse(200, {
+        data: [
           {
             id: 'obs-2',
+            traceId: 'trace-1',
             type: 'GENERATION',
             input: 'second question',
             output: 'second answer',
@@ -81,14 +76,16 @@ describe('createLangfuseSource', () => {
           },
           {
             id: 'obs-1',
+            traceId: 'trace-1',
             type: 'GENERATION',
             input: 'first question',
             output: 'first answer',
             startTime: '2026-01-01T00:00:00.000Z',
           },
         ],
-      });
-    });
+        meta: {},
+      }),
+    );
 
     const source = createLangfuseSource({
       baseUrlEnv: BASE_URL_ENV,
@@ -123,26 +120,21 @@ describe('createLangfuseSource', () => {
   });
 
   test('case: redacted content — null input/output mark completeness.contentCaptured=false', async () => {
-    const fetch = vi.fn(async (url: string) => {
-      if (url.includes('/api/public/traces?')) {
-        return jsonResponse(200, {
-          data: [{ id: 'trace-redacted' }],
-          meta: { page: 1, limit: 50, totalItems: 1, totalPages: 1 },
-        });
-      }
-      return jsonResponse(200, {
-        id: 'trace-redacted',
-        observations: [
+    const fetch = vi.fn(async () =>
+      jsonResponse(200, {
+        data: [
           {
             id: 'obs-1',
+            traceId: 'trace-redacted',
             type: 'GENERATION',
             input: null,
             output: null,
             startTime: '2026-01-01T00:00:00.000Z',
           },
         ],
-      });
-    });
+        meta: {},
+      }),
+    );
 
     const source = createLangfuseSource({
       baseUrlEnv: BASE_URL_ENV,
@@ -159,25 +151,37 @@ describe('createLangfuseSource', () => {
     expect(traces[0]?.completeness.contentCaptured).toBe(false);
   });
 
-  test('case: pagination — 2 pages via fake fetch', async () => {
+  test('case: pagination — follows meta.cursor across 2 pages via /api/public/v2/observations', async () => {
     const seenUrls: string[] = [];
     const fetch = vi.fn(async (url: string) => {
       seenUrls.push(url);
-      if (url.includes('page=1')) {
+      if (!url.includes('cursor=')) {
         return jsonResponse(200, {
-          data: [{ id: 'trace-a' }],
-          meta: { page: 1, limit: 50, totalItems: 2, totalPages: 2 },
-        });
-      }
-      if (url.includes('page=2')) {
-        return jsonResponse(200, {
-          data: [{ id: 'trace-b' }],
-          meta: { page: 2, limit: 50, totalItems: 2, totalPages: 2 },
+          data: [
+            {
+              id: 'obs-a',
+              traceId: 'trace-a',
+              type: 'GENERATION',
+              input: 'qa',
+              output: 'aa',
+              startTime: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+          meta: { cursor: 'CURSOR-2' },
         });
       }
       return jsonResponse(200, {
-        id: url.includes('trace-a') ? 'trace-a' : 'trace-b',
-        observations: [],
+        data: [
+          {
+            id: 'obs-b',
+            traceId: 'trace-b',
+            type: 'GENERATION',
+            input: 'qb',
+            output: 'ab',
+            startTime: '2026-01-01T00:00:01.000Z',
+          },
+        ],
+        meta: {},
       });
     });
 
@@ -192,12 +196,139 @@ describe('createLangfuseSource', () => {
     const traces = await collect(source.doRead({}));
 
     expect(traces.map((t) => t.traceId)).toEqual(['trace-a', 'trace-b']);
-    expect(seenUrls.some((u) => u.includes('/api/public/traces?') && u.includes('page=1'))).toBe(
-      true,
+    expect(seenUrls).toHaveLength(2);
+    expect(seenUrls[0]).toContain('/api/public/v2/observations?');
+    expect(seenUrls[0]).toContain('limit=50');
+    expect(seenUrls[1]).toContain('cursor=CURSOR-2');
+    expect(seenUrls.some((u) => u.includes('/api/public/traces'))).toBe(false);
+  });
+
+  test('case: empty page — no observations yields no traces and a single request', async () => {
+    const fetch = vi.fn(async (_url: string) => jsonResponse(200, { data: [], meta: {} }));
+
+    const source = createLangfuseSource({
+      baseUrlEnv: BASE_URL_ENV,
+      publicKeyEnv: PUBLIC_KEY_ENV,
+      secretKeyEnv: SECRET_KEY_ENV,
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      fetch: fetch as unknown as typeof globalThis.fetch,
+    });
+
+    const traces = await collect(source.doRead({}));
+
+    expect(traces).toEqual([]);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  test('case: a trace whose observations straddle two pages is yielded once with both', async () => {
+    const fetch = vi.fn(async (url: string) => {
+      if (!url.includes('cursor=')) {
+        return jsonResponse(200, {
+          data: [
+            {
+              id: 'obs-1',
+              traceId: 'trace-x',
+              type: 'GENERATION',
+              input: 'q1',
+              output: 'a1',
+              startTime: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+          meta: { cursor: 'C2' },
+        });
+      }
+      return jsonResponse(200, {
+        data: [
+          {
+            id: 'obs-2',
+            traceId: 'trace-x',
+            type: 'GENERATION',
+            input: 'q2',
+            output: 'a2',
+            startTime: '2026-01-01T00:01:00.000Z',
+          },
+        ],
+        meta: {},
+      });
+    });
+
+    const source = createLangfuseSource({
+      baseUrlEnv: BASE_URL_ENV,
+      publicKeyEnv: PUBLIC_KEY_ENV,
+      secretKeyEnv: SECRET_KEY_ENV,
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      fetch: fetch as unknown as typeof globalThis.fetch,
+    });
+
+    const traces = await collect(source.doRead({}));
+
+    expect(traces).toHaveLength(1);
+    expect(traces[0]?.messages).toHaveLength(4);
+  });
+
+  test('case: v2 returns input as a raw JSON string — a chat-turn array is still split into turns', async () => {
+    const fetch = vi.fn(async () =>
+      jsonResponse(200, {
+        data: [
+          {
+            id: 'obs-1',
+            traceId: 'trace-chat',
+            type: 'GENERATION',
+            input: JSON.stringify([
+              { role: 'system', content: 'be brief' },
+              { role: 'user', content: 'hi' },
+            ]),
+            output: 'hello',
+            startTime: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+        meta: {},
+      }),
     );
-    expect(seenUrls.some((u) => u.includes('/api/public/traces?') && u.includes('page=2'))).toBe(
-      true,
-    );
+
+    const source = createLangfuseSource({
+      baseUrlEnv: BASE_URL_ENV,
+      publicKeyEnv: PUBLIC_KEY_ENV,
+      secretKeyEnv: SECRET_KEY_ENV,
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      fetch: fetch as unknown as typeof globalThis.fetch,
+    });
+
+    const traces = await collect(source.doRead({}));
+
+    expect(traces[0]?.messages.map((m) => m.role)).toEqual(['system', 'user', 'assistant']);
+  });
+
+  test('case: limit above the v2 cap of 1000 is clamped to 1000', async () => {
+    const fetch = vi.fn(async (_url: string) => jsonResponse(200, { data: [], meta: {} }));
+    const source = createLangfuseSource({
+      baseUrlEnv: BASE_URL_ENV,
+      publicKeyEnv: PUBLIC_KEY_ENV,
+      secretKeyEnv: SECRET_KEY_ENV,
+      limit: 5000,
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      fetch: fetch as unknown as typeof globalThis.fetch,
+    });
+
+    await collect(source.doRead({}));
+
+    expect(fetch.mock.calls[0]?.[0]).toContain('limit=1000');
+  });
+
+  test.each([0, -3])('case: limit %i falls back to the default of 50', async (limit) => {
+    const fetch = vi.fn(async (_url: string) => jsonResponse(200, { data: [], meta: {} }));
+    const source = createLangfuseSource({
+      baseUrlEnv: BASE_URL_ENV,
+      publicKeyEnv: PUBLIC_KEY_ENV,
+      secretKeyEnv: SECRET_KEY_ENV,
+      limit,
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      fetch: fetch as unknown as typeof globalThis.fetch,
+    });
+
+    await collect(source.doRead({}));
+
+    expect(fetch.mock.calls[0]?.[0]).toContain('limit=50');
   });
 
   test('case: auth — a 401 yields VetError SOURCE_AUTH thrown at first read, not an empty iterator', async () => {
@@ -250,26 +381,21 @@ describe('createLangfuseSource', () => {
   });
 
   test('edge case: zero GENERATION observations yields messages=[] with contentCaptured=false', async () => {
-    const fetch = vi.fn(async (url: string) => {
-      if (url.includes('/api/public/traces?')) {
-        return jsonResponse(200, {
-          data: [{ id: 'trace-empty' }],
-          meta: { page: 1, limit: 50, totalItems: 1, totalPages: 1 },
-        });
-      }
-      return jsonResponse(200, {
-        id: 'trace-empty',
-        observations: [
+    const fetch = vi.fn(async () =>
+      jsonResponse(200, {
+        data: [
           {
             id: 'span-1',
+            traceId: 'trace-empty',
             type: 'SPAN',
             input: 'x',
             output: 'y',
             startTime: '2026-01-01T00:00:00.000Z',
           },
         ],
-      });
-    });
+        meta: {},
+      }),
+    );
 
     const source = createLangfuseSource({
       baseUrlEnv: BASE_URL_ENV,

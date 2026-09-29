@@ -1,15 +1,21 @@
-// createLangfuseSource: a SourceV1 over the Langfuse public API. An async
-// generator pages GET /api/public/traces (page, limit — Langfuse OpenAPI spec, verified
-// 2026-09-29), then does one GET /api/public/traces/{id} per trace for its observations, mapped
-// by map.ts. Credentials are read from the env var NAMES given in options — never literals — and
-// sent as HTTP Basic auth (Langfuse's publicKey:secretKey convention). A 401/403 response, or a
-// missing credential, fails the read at first pull with SOURCE_AUTH (never a silent empty
-// iterator). A 429 is retried up to 3 times honoring Retry-After (capped at 60s); exhausting
-// those retries, or any other non-OK response, throws SOURCE_UNREACHABLE.
+// createLangfuseSource: a SourceV1 over the Langfuse public API. It follows the cursor of
+// GET /api/public/v2/observations (`limit`, `cursor`, `fields` query params; `meta.cursor` in the
+// response, omitted on the last page — https://langfuse.com/docs/api-and-data-platform/features/query-via-sdk
+// and the OpenAPI spec at
+// https://raw.githubusercontent.com/langfuse/langfuse/main/web/public/generated/api/openapi.yml,
+// verified 2026-09-29), groups observations by traceId, and maps each trace with map.ts. The
+// endpoint replaces the deprecated GET /api/public/traces. Observations of one trace can span
+// pages, so traces are yielded once every page has been read. Credentials are read from the env
+// var NAMES given in options — never literals — and sent as HTTP Basic auth (Langfuse's
+// publicKey:secretKey convention). A 401/403 response, or a missing credential, fails the read at
+// first pull with SOURCE_AUTH (never a silent empty iterator). A 429 is retried up to 3 times
+// honoring Retry-After (capped at 60s); exhausting those retries, or any other non-OK response,
+// throws SOURCE_UNREACHABLE.
 
 import {
   CEV_ERROR_CODES,
   defineSource,
+  safeParseJson,
   VetError,
   type NormalizedTrace,
   type SourceV1,
@@ -23,7 +29,7 @@ export interface CreateLangfuseSourceOptions {
   readonly publicKeyEnv: string;
   /** Env var NAME holding the Langfuse secret key. */
   readonly secretKeyEnv: string;
-  /** Traces requested per page (default 50). */
+  /** Observations requested per page (default 50). */
   readonly limit?: number;
   /** Injected fetch, for tests; defaults to globalThis.fetch. */
   readonly fetch?: typeof globalThis.fetch;
@@ -31,19 +37,23 @@ export interface CreateLangfuseSourceOptions {
   readonly sleep?: (ms: number) => Promise<void>;
 }
 
-interface TracesListResponse {
-  readonly data: ReadonlyArray<{ readonly id: string }>;
-  readonly meta: { readonly totalPages: number };
+interface ObservationsResponse {
+  readonly data: ReadonlyArray<LangfuseObservation & { readonly traceId: string | null }>;
+  readonly meta: { readonly cursor?: string | null };
 }
 
-interface TraceDetailResponse {
-  readonly id: string;
-  readonly observations: readonly LangfuseObservation[];
+// The v2 endpoint always returns input as a raw string, so a chat-turn array arrives
+// JSON-encoded; decode it back so map.ts still splits it into turns.
+function decodeInput(input: unknown): unknown {
+  if (typeof input !== 'string' || !input.startsWith('[')) return input;
+  const parsed = safeParseJson<unknown[]>(input, { type: 'array' });
+  return parsed.ok ? parsed.value : input;
 }
 
 const MAX_RETRIES = 3;
 const MAX_RETRY_AFTER_MS = 60_000;
 const DEFAULT_LIMIT = 50;
+const MAX_LIMIT = 1000; // the v2 endpoint rejects a larger limit
 
 function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -56,7 +66,11 @@ function retryAfterMs(headerValue: string | null): number {
 }
 
 export function createLangfuseSource(options: CreateLangfuseSourceOptions): SourceV1 {
-  const { baseUrlEnv, publicKeyEnv, secretKeyEnv, limit = DEFAULT_LIMIT } = options;
+  const { baseUrlEnv, publicKeyEnv, secretKeyEnv } = options;
+  const limit =
+    options.limit !== undefined && options.limit > 0
+      ? Math.min(options.limit, MAX_LIMIT)
+      : DEFAULT_LIMIT;
   const doFetch = options.fetch ?? globalThis.fetch;
   const sleep = options.sleep ?? defaultSleep;
 
@@ -119,24 +133,31 @@ export function createLangfuseSource(options: CreateLangfuseSourceOptions): Sour
 
   async function* doRead(opts: { signal?: AbortSignal }): AsyncGenerator<NormalizedTrace> {
     const { baseUrl, authHeader } = credentials();
-    let page = 1;
-    for (;;) {
+    // Buffered: one trace's observations can span pages, so no trace is complete until the last page.
+    const byTrace = new Map<string, LangfuseObservation[]>();
+    let cursor: string | null | undefined;
+    do {
       opts.signal?.throwIfAborted();
-      const listUrl = `${baseUrl}/api/public/traces?page=${String(page)}&limit=${String(limit)}`;
+      const params = new URLSearchParams({
+        fields: 'core,io,metadata,usage',
+        limit: String(limit),
+      });
+      if (cursor) params.set('cursor', cursor);
+      const url = `${baseUrl}/api/public/v2/observations?${params.toString()}`;
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      const list = (await requestJson(listUrl, authHeader, opts.signal)) as TracesListResponse;
-      if (list.data.length === 0) return;
-
-      for (const traceRef of list.data) {
-        opts.signal?.throwIfAborted();
-        const traceUrl = `${baseUrl}/api/public/traces/${traceRef.id}`;
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-        const full = (await requestJson(traceUrl, authHeader, opts.signal)) as TraceDetailResponse;
-        yield mapLangfuseTrace({ id: full.id }, full.observations);
+      const page = (await requestJson(url, authHeader, opts.signal)) as ObservationsResponse;
+      for (const { traceId, ...observation } of page.data) {
+        if (traceId === null) continue;
+        const list = byTrace.get(traceId) ?? [];
+        list.push({ ...observation, input: decodeInput(observation.input) });
+        byTrace.set(traceId, list);
       }
+      cursor = page.meta.cursor;
+    } while (cursor);
 
-      if (page >= list.meta.totalPages) return;
-      page += 1;
+    for (const [traceId, observations] of byTrace) {
+      opts.signal?.throwIfAborted();
+      yield mapLangfuseTrace({ id: traceId }, observations);
     }
   }
 
