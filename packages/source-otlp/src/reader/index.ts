@@ -7,7 +7,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import { CEV_ERROR_CODES, safeParseJson } from '@vetkit/spec';
 import { flattenAttributes, type AnyValue, type RawKeyValue } from './anyvalue.ts';
-import { otlpSchema } from './otlp.schema.ts';
+import otlpSchema from './otlp.schema.json' with { type: 'json' };
 
 export type { AnyValue } from './anyvalue.ts';
 
