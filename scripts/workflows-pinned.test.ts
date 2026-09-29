@@ -12,6 +12,11 @@ const actionFiles = ['.github/workflows', '.'].flatMap((dir) =>
     .filter((f) => /^action\.ya?ml$/.test(f))
     .map((f) => join(dir, f)),
 );
+interface WorkflowDoc {
+  permissions?: Record<string, string>;
+  concurrency?: { group?: string; 'cancel-in-progress'?: string };
+}
+
 const allFiles = [...workflowFiles.map((f) => join('.github/workflows', f)), ...actionFiles];
 
 describe('workflow supply-chain hardening', () => {
@@ -29,9 +34,7 @@ describe('workflow supply-chain hardening', () => {
   );
 
   it.each(workflowFiles)('%s declares a top-level permissions block', (file) => {
-    const doc = parse(readFileSync(join(WORKFLOWS_DIR, file), 'utf8')) as {
-      permissions?: Record<string, string>;
-    };
+    const doc: WorkflowDoc = parse(readFileSync(join(WORKFLOWS_DIR, file), 'utf8'));
     expect(doc.permissions).toBeDefined();
     expect(doc.permissions?.['contents']).toBe('read');
   });
@@ -42,9 +45,7 @@ describe('workflow supply-chain hardening', () => {
   });
 
   it('ci.yml cancels superseded pull_request runs only', () => {
-    const doc = parse(readFileSync(join(WORKFLOWS_DIR, 'ci.yml'), 'utf8')) as {
-      concurrency?: { group?: string; 'cancel-in-progress'?: string };
-    };
+    const doc: WorkflowDoc = parse(readFileSync(join(WORKFLOWS_DIR, 'ci.yml'), 'utf8'));
     expect(doc.concurrency?.group).toBe('${{ github.workflow }}-${{ github.ref }}');
     expect(doc.concurrency?.['cancel-in-progress']).toBe(
       "${{ github.event_name == 'pull_request' }}",
