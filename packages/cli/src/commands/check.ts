@@ -80,6 +80,7 @@ async function checkLockFile(options: CheckOptions, deps: ValidateDeps): Promise
       transport: judge.capabilities.transport,
       releaseDate: await describeReleaseDate(judge),
     },
+    requestFormat: judge.capabilities.requestFormat ?? 'raw',
   });
   const reasons: LockCheckReport['reasons'] = [...base.reasons];
   if (lock.model.requested !== judge.capabilities.model) reasons.push('requested');

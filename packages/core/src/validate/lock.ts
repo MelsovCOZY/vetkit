@@ -25,6 +25,7 @@ import {
   type LockCriterion,
   type LockModel,
   type LockReason,
+  type RequestFormat,
 } from '@vetkit/spec';
 import { computeWordingHash } from '../criteria/load.ts';
 import { computeNormalizedWordingHash, wordingOf } from '../criteria/wording.ts';
@@ -167,6 +168,7 @@ export interface LockInputs {
   readonly criteria: readonly Criterion[];
   readonly cases: readonly Case[];
   readonly results: Readonly<Record<string, LockCriterionInput>>;
+  readonly requestFormat?: RequestFormat;
 }
 
 function lockModel(model: JudgeResponse['model']): LockModel {
@@ -246,6 +248,8 @@ export function buildLock(inputs: LockInputs): Lock {
     model: lockModel(inputs.model),
     criteria,
     datasetHash: datasetHash(inputs.cases),
+    // Raw locks omit the field so they stay byte-identical.
+    ...(inputs.requestFormat === 'fenced-v1' ? { requestFormat: 'fenced-v1' as const } : {}),
   };
 }
 
@@ -338,13 +342,19 @@ export async function readLockOrNull(path: string): Promise<Lock | null> {
   return read;
 }
 
-export type StaleReason = 'wordingHash' | 'datasetHash' | 'releaseDate' | 'transport';
+export type StaleReason =
+  | 'wordingHash'
+  | 'datasetHash'
+  | 'releaseDate'
+  | 'transport'
+  | 'requestFormat';
 
 export interface CheckLockCurrent {
   readonly criteria: readonly Criterion[];
   readonly cases: readonly Case[];
   /** The judge in use now; releaseDate null or absent means unknown (never stale). */
   readonly model?: { readonly transport: string; readonly releaseDate?: string | null };
+  readonly requestFormat?: RequestFormat;
 }
 
 export interface StaleReport {
@@ -370,6 +380,9 @@ export function checkLock(lock: Lock, current: CheckLockCurrent): StaleReport {
   if (releaseDate === 'differs') reasons.push('releaseDate');
   if (current.model !== undefined && current.model.transport !== lock.model.transport) {
     reasons.push('transport');
+  }
+  if ((lock.requestFormat ?? 'raw') !== (current.requestFormat ?? 'raw')) {
+    reasons.push('requestFormat');
   }
   return { stale: reasons.length > 0, reasons, criteria: changed, releaseDate };
 }

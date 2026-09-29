@@ -596,7 +596,13 @@ async function validate(
     };
   }
 
-  const lock = buildLock({ model: runModel(verdicts, judge), criteria: active, cases, results });
+  const lock = buildLock({
+    model: runModel(verdicts, judge),
+    criteria: active,
+    cases,
+    results,
+    requestFormat: judge.capabilities.requestFormat ?? 'raw',
+  });
   // buildLock only sees `active`, so a criterion turned off after being calibrated would
   // otherwise lose its lock entry; carry over its existing entry unchanged instead.
   if (disabled.length > 0) {
