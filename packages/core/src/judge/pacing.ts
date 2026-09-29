@@ -6,7 +6,10 @@
 // ceiling (min 1), releases the failing call's slot and re-queues it. Ten consecutive
 // successes grow the ceiling by one up to `maxInFlight`. The retry budget is per run() call,
 // measured from its first attempt. JUDGE_TIMEOUT carries no details, so it is not retried.
-// One unref'd wake timer exists only while something is both paused and queued.
+// One wake timer exists only while something is both paused and queued; it stays ref'd
+// (mol-0nw.30) because it is the sole thing a real CLI process is waiting on during a
+// backoff — an unref'd timer lets Node see no remaining work and exit(0) mid-retry,
+// before the timer ever fires, abandoning the run with no output.
 
 import { VetError } from '@vetkit/spec';
 
@@ -56,7 +59,6 @@ function defaultSleep(ms: number, signal?: AbortSignal): Promise<void> {
       signal?.removeEventListener('abort', onAbort);
       resolve();
     }, ms);
-    timer.unref();
     signal?.addEventListener('abort', onAbort, { once: true });
   });
 }
@@ -69,6 +71,26 @@ function limiterError(last: VetError, attempts: number, extra?: string): VetErro
     `${last.message}${suffix} (after ${attempts} attempts)`,
     last.details === undefined ? options : { ...options, details: last.details },
   );
+}
+
+// A connection-level failure (details.hint set: ECONNREFUSED, DNS, reset — never a plain
+// HTTP 429/5xx, which carries retryAfterMs/no hint) means the endpoint itself is unreachable,
+// not merely asking for patience; retrying it on the full AIMD backoff (up to maxBackoffMs,
+// maxRetries) can run for minutes for something that will not resolve in that window
+// (mol-0nw.30). It gets a short, fixed retry budget instead, and gives up as JUDGE_TIMEOUT
+// (no details, matching the "gave up waiting" signal JUDGE_TIMEOUT already carries elsewhere)
+// rather than staying JUDGE_UNAVAILABLE.
+const NETWORK_UNREACHABLE_MAX_RETRIES = 2;
+const NETWORK_UNREACHABLE_MAX_BACKOFF_MS = 2_000;
+
+function isNetworkUnreachable(error: VetError): boolean {
+  return error.details?.hint !== undefined;
+}
+
+function timeoutError(last: VetError, attempts: number): VetError {
+  return new VetError('JUDGE_TIMEOUT', `${last.message} (after ${attempts} attempts)`, {
+    cause: { error: last, attempts },
+  });
 }
 
 export function createLimiter(opts: LimiterOptions = {}): Limiter {
@@ -181,16 +203,26 @@ export function createLimiter(opts: LimiterOptions = {}): Limiter {
         release();
         throw limiterError(error, attempts);
       }
-      if (attempts > maxRetries) {
+      const networkUnreachable = isNetworkUnreachable(error);
+      const effectiveMaxRetries = networkUnreachable
+        ? Math.min(maxRetries, NETWORK_UNREACHABLE_MAX_RETRIES)
+        : maxRetries;
+      if (attempts > effectiveMaxRetries) {
         release();
-        throw limiterError(error, attempts);
+        throw networkUnreachable ? timeoutError(error, attempts) : limiterError(error, attempts);
       }
+      const effectiveMaxBackoffMs = networkUnreachable
+        ? Math.min(maxBackoffMs, NETWORK_UNREACHABLE_MAX_BACKOFF_MS)
+        : maxBackoffMs;
       const wait =
-        error.details.retryAfterMs ?? random() * Math.min(maxBackoffMs, 1000 * 2 ** attempts);
+        error.details.retryAfterMs ??
+        random() * Math.min(effectiveMaxBackoffMs, 1000 * 2 ** attempts);
       const remaining = totalBudgetMs - (now() - start);
       if (wait > remaining) {
         release();
-        throw limiterError(error, attempts, `retry budget exhausted (suggested wait ${wait}ms)`);
+        throw networkUnreachable
+          ? timeoutError(error, attempts)
+          : limiterError(error, attempts, `retry budget exhausted (suggested wait ${wait}ms)`);
       }
       streak = 0;
       pausedUntil = Math.max(pausedUntil, now() + wait);
