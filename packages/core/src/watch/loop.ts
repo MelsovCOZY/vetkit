@@ -34,6 +34,9 @@ export interface JudgeCaseFn {
 export interface RunWatchOptions extends WatchOptions {
   /** Per judge call. RISK (brief 6): whole-call deadlines are mandatory. Default 30_000. */
   readonly judgeTimeoutMs?: number;
+  /** Deadline for the final outbox drain, independent of any abort signal (bug dh8.8).
+   * Default 30_000. */
+  readonly drainTimeoutMs?: number;
 }
 
 export interface RunWatchInput {
@@ -45,6 +48,10 @@ export interface RunWatchInput {
   readonly sinks: readonly SinkV1[];
   readonly options: RunWatchOptions;
   readonly signal: AbortSignal;
+  /** Graceful stop (first SIGINT, bug dh8.8): the source is told to end, but everything it
+   * had already accepted is still recorded, judged (if sampled) and drained; in-flight judge
+   * calls are NOT aborted. `signal` stays the hard abort. */
+  readonly stop?: AbortSignal;
   /** dh8.3's promotion hook, called once per enqueued verdict with the Case it was judged
    * against. `verdict.id` is exactly the id `outbox.enqueue` assigned it (bug dh8.5: enqueue
    * assigns each verdict's id to a copy it builds internally, so the bare Verdict this loop
@@ -67,6 +74,7 @@ export interface CoverageSummary {
 }
 
 const DEFAULT_JUDGE_TIMEOUT_MS = 30_000;
+const DEFAULT_DRAIN_TIMEOUT_MS = 30_000;
 const DRAIN_INTERVAL_MS = 2000;
 const DRAIN_PENDING_THRESHOLD = 50;
 
@@ -130,7 +138,8 @@ function infraFailureVerdict(
 }
 
 export async function runWatch(input: RunWatchInput): Promise<CoverageSummary> {
-  const { source, sampler, judge, criteria, outbox, sinks, options, signal, onVerdict } = input;
+  const { source, sampler, judge, criteria, outbox, sinks, options, signal, stop, onVerdict } =
+    input;
   const judgeTimeoutMs = options.judgeTimeoutMs ?? DEFAULT_JUDGE_TIMEOUT_MS;
   const limiter = createLimiter({ maxInFlight: options.maxInFlight });
 
@@ -218,12 +227,27 @@ export async function runWatch(input: RunWatchInput): Promise<CoverageSummary> {
     if (pendingSinceDrain >= DRAIN_PENDING_THRESHOLD) void drainOnce();
   }
 
+  // The final drain gets its own deadline (never the aborted signal): a wedged sink cannot
+  // hold the process past it, and reconcile() below then reports what was acknowledged.
+  async function boundedFinalDrain(): Promise<void> {
+    let deadline: NodeJS.Timeout | undefined;
+    const expired = new Promise<void>((resolve) => {
+      deadline = setTimeout(resolve, options.drainTimeoutMs ?? DEFAULT_DRAIN_TIMEOUT_MS);
+    });
+    try {
+      await Promise.race([drainOnce().catch(() => {}), expired]);
+    } finally {
+      clearTimeout(deadline);
+    }
+  }
+
   const timer = setInterval(() => void drainOnce(), DRAIN_INTERVAL_MS);
   timer.unref();
 
   let sourceError: unknown;
   try {
-    for await (const trace of source.doRead({ signal })) {
+    const readSignal = stop === undefined ? signal : AbortSignal.any([signal, stop]);
+    for await (const trace of source.doRead({ signal: readSignal })) {
       if (signal.aborted) break;
       seen += 1;
       const { sampled: isSampled } = sampler.decide(trace);
@@ -263,7 +287,7 @@ export async function runWatch(input: RunWatchInput): Promise<CoverageSummary> {
   await Promise.allSettled(tasks);
   // Edge case: "the FIRST SIGINT drains the outbox once" — the same single drain-once call
   // covers both a natural end and an abort-driven end of the source stream.
-  await drainOnce();
+  await boundedFinalDrain();
 
   if (sourceError !== undefined) throw sourceError;
 

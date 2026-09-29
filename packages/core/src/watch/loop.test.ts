@@ -584,4 +584,110 @@ describe('runWatch', () => {
     expect(pending[0]?.verdict.status).toBe('infra_failure');
     expect(readTraceId(pending[0]?.verdict.provenance)).toBe('trace-throw');
   });
+
+  test('stop with N accepted traces still queued: all N reach the inclusion log, sampled ones are judged, drain acks them (dh8.8)', async () => {
+    const ids = partitionIds(0.5, 10, 10);
+    const queue = ids.map((id) => trace(id));
+    // A receiver-like source: yields its backlog, then returns once the signal aborts.
+    const source: SourceV1 = {
+      specVersion: 'v1',
+      id: 'fake-queued-source',
+      capabilities: { streaming: true, content: 'captured' },
+      async *doRead({ signal }) {
+        for (;;) {
+          const next = queue.shift();
+          if (next !== undefined) {
+            yield next;
+            continue;
+          }
+          if (signal?.aborted === true) return;
+          await new Promise<void>((resolve) => {
+            signal?.addEventListener('abort', () => resolve(), { once: true });
+          });
+        }
+      },
+    };
+    const outbox = createOutbox({ dir: join(dir, 'outbox') });
+    const stop = new AbortController();
+    stop.abort();
+    const inclusionPath = join(dir, 'inclusion.jsonl');
+    const summary = await Promise.race([
+      runWatch({
+        source,
+        sampler: createSampler({ sampleRate: 0.5, inclusionPath }),
+        judge: alwaysOkJudge,
+        criteria: defaultCriteria,
+        outbox,
+        sinks: [fakeSink()],
+        options: watchOptions(),
+        signal: new AbortController().signal,
+        stop: stop.signal,
+      }),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('runWatch did not finish after stop')), 3000);
+      }),
+    ]);
+
+    expect(summary).toMatchObject({
+      seen: 20,
+      sampled: 10,
+      judged: 10,
+      produced: 10,
+      acknowledged: 10,
+    });
+    expect(await inclusionLineCount(inclusionPath)).toBe(20);
+  });
+
+  test('stop does not abort an in-flight judge call: it finishes and its verdict is enqueued (dh8.8)', async () => {
+    let release: (() => void) | undefined;
+    let started = false;
+    let sawAbort = false;
+    const judge: JudgeCaseFn = ({ case: c, criteria, signal }) =>
+      new Promise((resolve) => {
+        started = true;
+        signal.addEventListener('abort', () => (sawAbort = true), { once: true });
+        release = () => resolve(criteria.map((crit) => okVerdict(c.id, crit.id)));
+      });
+    const stop = new AbortController();
+    const runPromise = runWatch({
+      source: blockingSource([trace('trace-inflight')]),
+      sampler: createSampler({ sampleRate: 1, inclusionPath: join(dir, 'inclusion.jsonl') }),
+      judge,
+      criteria: defaultCriteria,
+      outbox: createOutbox({ dir: join(dir, 'outbox') }),
+      sinks: [fakeSink()],
+      options: watchOptions({ sampleRate: 1 }),
+      signal: new AbortController().signal,
+      stop: stop.signal,
+    });
+    await waitUntil(() => started);
+    stop.abort();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    release?.();
+    const summary = await runPromise;
+
+    expect(sawAbort).toBe(false);
+    expect(summary).toMatchObject({ judged: 1, produced: 1, acknowledged: 1 });
+  });
+
+  test('the final drain has its own deadline: a never-settling drain does not hang runWatch (dh8.8)', async () => {
+    const outbox = createOutbox({ dir: join(dir, 'outbox') });
+    const hangingOutbox: Outbox = { ...outbox, drain: () => new Promise(() => {}) };
+    const summary = await Promise.race([
+      runWatch({
+        source: finiteSource([trace('trace-hang')]),
+        sampler: createSampler({ sampleRate: 1, inclusionPath: join(dir, 'inclusion.jsonl') }),
+        judge: alwaysOkJudge,
+        criteria: defaultCriteria,
+        outbox: hangingOutbox,
+        sinks: [fakeSink()],
+        options: watchOptions({ sampleRate: 1, drainTimeoutMs: 100 }),
+        signal: new AbortController().signal,
+      }),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('final drain hung')), 3000);
+      }),
+    ]);
+    expect(summary.judged).toBe(1);
+  });
 });

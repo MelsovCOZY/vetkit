@@ -222,15 +222,18 @@ async function watchCommand(options: WatchOptions): Promise<void> {
         }
       : undefined;
 
+  // First SIGINT stops accepting (receiver.close() waits for requests already being served),
+  // and only once that has settled does the source end, so every trace answered with 200 is
+  // still in the queue the loop drains. The loop's hard-abort `controller` is never fired.
   const controller = new AbortController();
+  const stopController = new AbortController();
   let sigints = 0;
   const onSigint = (): void => {
     sigints += 1;
     // Second SIGINT: exit 130 immediately, the CLI-wide rule (docs/contracts/j7.md "Exit
-    // behaviour"). First SIGINT below just aborts; the loop's own drain-once + this
-    // function's normal return handle the exit-0 path.
+    // behaviour"). The first drains gracefully and the normal return handles the exit-0 path.
     if (sigints >= 2) process.exit(CEV_EXIT.SIGINT);
-    controller.abort();
+    void receiver.close().then(() => stopController.abort());
   };
   process.on('SIGINT', onSigint);
 
@@ -260,6 +263,7 @@ async function watchCommand(options: WatchOptions): Promise<void> {
           : { upstreamSampleRate: config.watch.upstreamSampleRate }),
       },
       signal: controller.signal,
+      stop: stopController.signal,
       ...(onVerdict === undefined ? {} : { onVerdict }),
     });
   } finally {
