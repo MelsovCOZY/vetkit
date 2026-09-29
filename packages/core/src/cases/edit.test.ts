@@ -222,6 +222,22 @@ describe('promoteVerdict', () => {
     expect(written[0]).toMatchObject({ id: 'promoted-trace-abc-k-1' });
   });
 
+  test("dh8.7: keeps the case's existing provenance fields (traceId, spanId, traceIds) alongside promotedFrom", async () => {
+    const withProvenance = evalCase({
+      provenance: { traceId: 'trace-abc', spanId: 'span-1', traceIds: ['trace-abc'] },
+    });
+    const promoted = await promoteVerdict(dir, failingVerdict(), withProvenance, NOW);
+
+    expect(promoted).toMatchObject({
+      provenance: {
+        traceId: 'trace-abc',
+        spanId: 'span-1',
+        traceIds: ['trace-abc'],
+        promotedFrom: { traceId: 'trace-abc', criterionId: 'k-1', verdictId: 'case-orig:k-1' },
+      },
+    });
+  });
+
   test('a passing verdict is never promoted', async () => {
     const promoted = await promoteVerdict(dir, failingVerdict({ pass: true }), evalCase(), NOW);
     expect(promoted).toBeUndefined();
