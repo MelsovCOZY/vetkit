@@ -166,7 +166,9 @@ for pm in npm pnpm yarn bun; do
   yarn)
     # Yarn Berry defaults to PnP, which the file:-tarball dependencies above do not support.
     printf 'nodeLinker: node-modules\n' >.yarnrc.yml
-    run_step "${pm} install" yarn install || true
+    # Yarn turns on immutable installs when CI=true, which forbids creating the
+    # yarn.lock a fresh consumer project starts without.
+    run_step "${pm} install" env YARN_ENABLE_IMMUTABLE_INSTALLS=false yarn install || true
     ;;
   bun)
     run_step "${pm} install" bun install || true
