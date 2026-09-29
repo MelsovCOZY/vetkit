@@ -12,6 +12,7 @@ import {
   type JudgeResponse,
   type JudgeV1,
   type Lock,
+  type SinkV1,
   type Verdict,
 } from '@vetkit/spec';
 import { Command } from 'commander';
@@ -432,6 +433,23 @@ async function seedOutbox(dir: string, dead: boolean): Promise<void> {
   }
 }
 
+  const sink = (id: string, skip: boolean): SinkV1 => ({
+    specVersion: 'v1',
+    id,
+    capabilities: { batch: 10, idempotent: true },
+    doWrite: (batch) =>
+      Promise.resolve({
+        accepted: skip ? [] : batch.map((v) => v.id ?? ''),
+        rejected: skip
+          ? batch.map((v) => ({
+              id: v.id ?? '',
+              reason: 'skipped:unscored:infra_failure',
+              retryable: false,
+            }))
+          : [],
+      }),
+  });
+
 describe('vet check --outbox', () => {
   test('outbox: --outbox --json prints {produced, acknowledged, dead} from <cacheDir>/outbox', async () => {
     const root = await mkdtemp(join(tmpdir(), 'vetkit-check-outbox-'));
@@ -445,6 +463,19 @@ describe('vet check --outbox', () => {
     expect(report()).toEqual({ produced: 3, acknowledged: 1, dead: 1 });
     // A dead-lettered verdict never reached its sink.
     expect(process.exitCode).toBe(1);
+  });
+
+  test('outbox: a sink that skipped an unscored verdict reconciles as acknowledged, dead 0', async () => {
+    const dir = join(await mkdtemp(join(tmpdir(), 'vetkit-check-outbox-')), 'outbox');
+    const outbox = createOutbox({ dir });
+    await outbox.enqueue([verdict(0), verdict(1)], { targets: ['otel', 'langfuse'] });
+    await outbox.drain([sink('otel', false), sink('langfuse', true)]);
+    const events = createEvents();
+    const { judge } = countingJudge([], events);
+    await vet(['check', '--outbox', dir], depsFor(dir, judge, events));
+
+    expect(report()).toEqual({ produced: 2, acknowledged: 2, dead: 0 });
+    expect(process.exitCode ?? 0).toBe(0);
   });
 
   test('outbox: --outbox <dir> with every verdict acknowledged → exit 0', async () => {

@@ -60,6 +60,12 @@ function sink(f: typeof fetch, baseUrl = 'https://lf.example.test') {
   return createLangfuseSink({ baseUrl, publicKey: PK, secretKey: SK, fetch: f });
 }
 
+async function idOf(v: Verdict): Promise<unknown> {
+  const { fetch, calls } = fakeFetch(ok);
+  await sink(fetch).doWrite([v], {});
+  return calls[0]?.body['id'];
+}
+
 describe('createLangfuseSink doWrite', () => {
   it('boolean: posts BOOLEAN 1|0 per threshold with basic auth and observationId', async () => {
     const { fetch, calls } = fakeFetch(ok);
@@ -81,6 +87,7 @@ describe('createLangfuseSink doWrite', () => {
     expect(headers.get('content-type')).toBe('application/json');
     expect(calls[0]?.init.signal).toBeInstanceOf(AbortSignal);
     expect(calls[0]?.body).toEqual({
+      id: expect.any(String),
       traceId: 'trace-abc',
       observationId: 'obs-123',
       name: 'grounded',
@@ -156,7 +163,7 @@ describe('createLangfuseSink doWrite', () => {
     expect(calls).toHaveLength(1);
     expect(ack.accepted).toEqual(['v-1']);
     expect(ack.rejected).toEqual([
-      { id: 'v-bad', reason: 'unscored:infra_failure', retryable: false },
+      { id: 'v-bad', reason: 'skipped:unscored:infra_failure', retryable: false },
     ]);
   });
 
@@ -215,5 +222,22 @@ describe('createLangfuseSink doWrite', () => {
     expect(s.specVersion).toBe('v1');
     expect(s.id).toBe('langfuse/scores');
     expect(s.capabilities).toEqual({ batch: 50, idempotent: false });
+  });
+
+  describe('deterministic score id (mol-yxn.23)', () => {
+
+    it('the same verdict under a different verdict id yields the same score id', async () => {
+      const a = await idOf(verdict({ id: 'run-1' }));
+      const b = await idOf(verdict({ id: 'run-2' }));
+      expect(typeof a).toBe('string');
+      expect(a).toBe(b);
+    });
+
+    it('differs by criterion, case and observation', async () => {
+      const base = await idOf(verdict());
+      expect(await idOf(verdict({ criterionId: 'other' }))).not.toBe(base);
+      expect(await idOf(verdict({ caseId: 'case-2' }))).not.toBe(base);
+      expect(await idOf(verdict({ provenance: { traceId: 'trace-abc' } }))).not.toBe(base);
+    });
   });
 });

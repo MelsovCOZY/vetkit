@@ -22,7 +22,10 @@ function finishFor(ctx: RunHookContext, sinks: readonly ResolvedSink[]): RunHook
   return async (result) => {
     const outboxDir = join(ctx.config.cacheDir, 'outbox');
     const outbox = createOutbox({ dir: resolve(ctx.rootDir, outboxDir) });
-    await outbox.enqueue(result.results);
+    await outbox.enqueue(
+      result.results,
+      { targets: sinks.map((s) => s.sink.id) },
+    );
     const drained = await outbox.drain(sinks.map((s) => s.sink));
     const totals = await outbox.reconcile({ sinks: sinks.map((s) => s.sink.id) });
 

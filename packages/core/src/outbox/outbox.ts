@@ -46,10 +46,13 @@ export interface ReconcileResult {
 }
 
 export interface Outbox {
-  enqueue(verdicts: readonly Verdict[]): Promise<string[]>;
+  // `targets` are the sink ids this run writes to; reconcile counts only those for these items.
+  // Without it (and for items written before targets existed) every configured sink is owed.
+  enqueue(verdicts: readonly Verdict[], opts?: { targets?: readonly string[] }): Promise<string[]>;
   drain(sinks: readonly SinkV1[]): Promise<DrainResult[]>;
-  // An id is acknowledged when every named sink acked it, dead when any named sink
-  // dead-lettered it. Without `sinks`, the sinks seen in acked/dead are used.
+  // An id is acknowledged when every sink it targets acked (or skipped) it, dead when any of
+  // them dead-lettered it. An item without targets uses `sinks`, else the sinks seen in
+  // acked/dead.
   reconcile(opts?: { sinks?: readonly string[] }): Promise<ReconcileResult>;
 }
 
@@ -57,11 +60,13 @@ interface PendingLine {
   id: string;
   verdict: Verdict;
   enqueuedAt: string;
+  targets?: string[];
 }
 interface AckedLine {
   id: string;
   sink: string;
   at: string;
+  skipped?: boolean;
 }
 interface DeadLine {
   id: string;
@@ -76,12 +81,18 @@ const pendingSchema: JsonSchema = {
     id: { type: 'string' },
     verdict: { type: 'object' },
     enqueuedAt: { type: 'string' },
+    targets: { type: 'array', items: { type: 'string' } },
   },
   required: ['id', 'verdict', 'enqueuedAt'],
 };
 const ackedSchema: JsonSchema = {
   type: 'object',
-  properties: { id: { type: 'string' }, sink: { type: 'string' }, at: { type: 'string' } },
+  properties: {
+    id: { type: 'string' },
+    sink: { type: 'string' },
+    at: { type: 'string' },
+    skipped: { type: 'boolean' },
+  },
   required: ['id', 'sink', 'at'],
 };
 const deadSchema: JsonSchema = {
@@ -96,6 +107,9 @@ const deadSchema: JsonSchema = {
 };
 
 const MAX_ATTEMPTS = 3;
+// A sink declines a verdict on purpose by rejecting it, non-retryable, with a reason starting
+// with this prefix (the SinkAck shape has no skipped field). It is a terminal ack, not dead.
+const SKIPPED_PREFIX = 'skipped:';
 
 function checkVerdict(line: PendingLine): VetError | undefined {
   const res = validateJson<Verdict>(line.verdict, verdictSchema);
@@ -116,6 +130,7 @@ function chunk<T>(items: readonly T[], size: number): T[][] {
 
 interface BatchOutcome {
   accepted: string[];
+  skipped: string[];
   dead: Array<{ id: string; reason: string }>;
   retry: PendingLine[];
   sent: number;
@@ -155,6 +170,7 @@ function raceAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
 function thrownOutcome(err: unknown, batch: PendingLine[]): BatchOutcome {
   const all = (reason: string, retryable: boolean): BatchOutcome => ({
     accepted: [],
+    skipped: [],
     dead: retryable ? [] : batch.map((p) => ({ id: p.id, reason })),
     retry: retryable ? batch : [],
     sent: batch.length,
@@ -201,13 +217,14 @@ export function createOutbox(opts: OutboxOptions): Outbox {
     } catch (err) {
       if (VetError.isInstance(err) && err.code === CEV_ERROR_CODES.SINK_PAYLOAD_TOO_LARGE) {
         if (batch.length === 1) {
-          return { accepted: [], dead: deadAll(batch, err), retry: [], sent: 1 };
+          return { accepted: [], skipped: [], dead: deadAll(batch, err), retry: [], sent: 1 };
         }
         const half = Math.ceil(batch.length / 2);
         const a = await sendBatch(sink, batch.slice(0, half));
         const b = await sendBatch(sink, batch.slice(half));
         return {
           accepted: [...a.accepted, ...b.accepted],
+          skipped: [...a.skipped, ...b.skipped],
           dead: [...a.dead, ...b.dead],
           retry: [...a.retry, ...b.retry],
           sent: batch.length + a.sent + b.sent,
@@ -218,7 +235,13 @@ export function createOutbox(opts: OutboxOptions): Outbox {
     const inBatch = new Set(batch.map((p) => p.id));
     const accepted = new Set(ack.accepted.filter((id) => inBatch.has(id)));
     const rejected = new Map(ack.rejected.filter((r) => inBatch.has(r.id)).map((r) => [r.id, r]));
-    const out: BatchOutcome = { accepted: [...accepted], dead: [], retry: [], sent: batch.length };
+    const out: BatchOutcome = {
+      accepted: [...accepted],
+      skipped: [],
+      dead: [],
+      retry: [],
+      sent: batch.length,
+    };
     for (const p of batch) {
       if (accepted.has(p.id)) continue;
       const r = rejected.get(p.id);
@@ -226,6 +249,8 @@ export function createOutbox(opts: OutboxOptions): Outbox {
         // Unlisted: an idempotent sink can take it again; a non-idempotent one never does.
         if (sink.capabilities.idempotent) out.retry.push(p);
         else out.dead.push({ id: p.id, reason: 'unacknowledged by non-idempotent sink' });
+      } else if (!r.retryable && r.reason.startsWith(SKIPPED_PREFIX)) {
+        out.skipped.push(p.id);
       } else if (r.retryable) {
         out.retry.push(p);
       } else {
@@ -252,14 +277,18 @@ export function createOutbox(opts: OutboxOptions): Outbox {
         const at = new Date().toISOString();
         await appendLines(
           ackedFile,
-          outcome.accepted.map((id): AckedLine => ({ id, sink: sink.id, at })),
+          [
+            ...outcome.accepted.map((id): AckedLine => ({ id, sink: sink.id, at })),
+            ...outcome.skipped.map((id): AckedLine => ({ id, sink: sink.id, at, skipped: true })),
+          ],
         );
         await appendLines(
           deadFile,
           outcome.dead.map((d): DeadLine => ({ ...d, sink: sink.id, at })),
         );
         sent += outcome.sent;
-        acknowledged += outcome.accepted.length;
+        // A skipped item is a terminal ack, counted with the accepted ones.
+        acknowledged += outcome.accepted.length + outcome.skipped.length;
         dead += outcome.dead.length;
         next.push(...outcome.retry);
       }
@@ -269,12 +298,17 @@ export function createOutbox(opts: OutboxOptions): Outbox {
   }
 
   return {
-    enqueue(verdicts) {
+    enqueue(verdicts, enqueueOpts) {
       return withLock(dir, async () => {
         const enqueuedAt = new Date().toISOString();
         const lines = verdicts.map((v): PendingLine => {
           const id = v.id ?? randomUUID();
-          return { id, verdict: { ...v, id }, enqueuedAt };
+          return {
+            id,
+            verdict: { ...v, id },
+            enqueuedAt,
+            ...(enqueueOpts?.targets === undefined ? {} : { targets: [...enqueueOpts.targets] }),
+          };
         });
         await appendLines(pendingFile, lines);
         return lines.map((l) => l.id);
@@ -294,7 +328,9 @@ export function createOutbox(opts: OutboxOptions): Outbox {
           results.push(
             await drainSink(
               sink,
-              pending.filter((p) => !done.has(p.id)),
+              pending.filter(
+                (p) => !done.has(p.id) && (p.targets === undefined || p.targets.includes(sink.id)),
+              ),
             ),
           );
         }
@@ -306,12 +342,13 @@ export function createOutbox(opts: OutboxOptions): Outbox {
       const pending = await scanPending();
       const acked = await scanLines<AckedLine>(ackedFile, ackedSchema);
       const deadLines = await scanLines<DeadLine>(deadFile, deadSchema);
-      const sinks = options?.sinks ?? [...new Set([...acked, ...deadLines].map((l) => l.sink))];
+      const configured = options?.sinks ?? [...new Set([...acked, ...deadLines].map((l) => l.sink))];
       const ackedBy = new Set(acked.map((l) => `${l.sink}\u0000${l.id}`));
       const deadBy = new Set(deadLines.map((l) => `${l.sink}\u0000${l.id}`));
       let acknowledged = 0;
       let dead = 0;
-      for (const { id } of pending) {
+      for (const { id, targets } of pending) {
+        const sinks = targets ?? configured;
         if (sinks.some((s) => deadBy.has(`${s}\u0000${id}`))) dead++;
         else if (sinks.length > 0 && sinks.every((s) => ackedBy.has(`${s}\u0000${id}`))) {
           acknowledged++;
