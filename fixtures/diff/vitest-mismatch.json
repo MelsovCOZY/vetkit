@@ -2,8 +2,24 @@
   "testResults": [
     {
       "assertionResults": [
-        { "fullName": "criteria.yaml > c1 · helpful", "status": "passed" },
-        { "fullName": "criteria.yaml > c2 · helpful", "status": "passed" }
+        {
+          "ancestorTitles": ["criteria.yaml"],
+          "fullName": "criteria.yaml c1 · helpful",
+          "status": "passed",
+          "title": "c1 · helpful",
+          "failureMessages": [],
+          "meta": {},
+          "tags": []
+        },
+        {
+          "ancestorTitles": ["criteria.yaml"],
+          "fullName": "criteria.yaml c2 · helpful",
+          "status": "passed",
+          "title": "c2 · helpful",
+          "failureMessages": [],
+          "meta": {},
+          "tags": []
+        }
       ]
     }
   ]
