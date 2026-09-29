@@ -48,6 +48,23 @@ describe('redact', () => {
       `using <redacted:${secret.length} chars> now`,
     );
   });
+
+  test('does not redact a long filesystem path spanning many short segments', () => {
+    const path =
+      '/tmp/claude-1000/-home-yernur-Projects-vetkit/scratchpad/dispatch/vetkit-criteria-Ab3dEf/evals/labels/greets.csv';
+    expect(redact(path, {})).toBe(path);
+  });
+
+  test('does not redact a uuid-shaped (hyphen-free) path segment', () => {
+    const path = '/tmp/43cf950f8a834ea685817196e9a879ef/scratchpad/out.log';
+    expect(redact(path, {})).toBe(path);
+  });
+
+  test('does not redact a 64-hex case id', () => {
+    const caseId = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2';
+    expect(caseId.length).toBe(64);
+    expect(redact(`case ${caseId}`, {})).toBe(`case ${caseId}`);
+  });
 });
 
 describe('createLogger + redact', () => {
