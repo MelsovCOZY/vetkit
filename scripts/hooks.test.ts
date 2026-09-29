@@ -72,6 +72,40 @@ function commitWithFakeBun(dir: string): string {
   return readFileSync(log, 'utf8');
 }
 
+// Commits with a bun stand-in that prints a line and fails, like a lefthook that found problems.
+function commitWithFailingBun(dir: string) {
+  const bin = join(dir, 'fakebin');
+  const log = join(dir, 'hook.log');
+  mkdirSync(bin);
+  writeFileSync(
+    join(bin, 'bun'),
+    '#!/bin/sh\necho "$@" >> "$HOOK_LOG"\necho lefthook-output-visible\nexit 1\n',
+    { mode: 0o755 },
+  );
+  writeFileSync(join(dir, 'f.txt'), 'x');
+  git(dir, 'add', 'f.txt');
+  const r = spawnSync(
+    'git',
+    ['-C', dir, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'msg'],
+    {
+      encoding: 'utf8',
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, HOOK_LOG: log },
+    },
+  );
+  return { status: r.status, output: r.stderr + r.stdout, log: readFileSync(log, 'utf8') };
+}
+
+const OLD_TAIL = `
+# Advisory only (root DECISION resolving OPEN-3): lefthook is never installed via
+# \`lefthook install\`, so it is invoked here via \`bunx\` instead.
+if command -v bun >/dev/null 2>&1; then
+  bun x lefthook run pre-commit --no-auto-install "$@"
+else
+  echo >&2 "beads: bun not found, skipping lefthook run pre-commit (CI is the gate)"
+fi
+exit 0
+`;
+
 function runInstall(cwd: string) {
   return spawnSync('bun', [INSTALL], { cwd, encoding: 'utf8' });
 }
@@ -135,6 +169,35 @@ describe('contributor hooks: lefthook installed directly', () => {
       expect(log).toContain('bd-ran');
       expect(log).toContain('x lefthook run pre-commit');
       expect(log).toContain('x lefthook run commit-msg');
+    });
+  });
+
+  it('never fails the commit on lefthook failure, and shows its output', () => {
+    withRepo((dir) => {
+      bdCheckout(dir);
+      runInstall(dir);
+      const r = commitWithFailingBun(dir);
+      expect(r.status, r.output).toBe(0);
+      expect(r.output).toContain('lefthook-output-visible');
+      expect(r.log).toContain('x lefthook run pre-commit');
+      expect(r.log).toContain('x lefthook run commit-msg');
+    });
+  });
+
+  it('replaces an old hand-written advisory tail so lefthook runs exactly once', () => {
+    withRepo((dir) => {
+      const hooks = bdCheckout(dir);
+      const file = join(hooks, 'pre-commit');
+      writeFileSync(file, readFileSync(file, 'utf8') + OLD_TAIL);
+      const run = runInstall(dir);
+      expect(run.status, run.stderr + run.stdout).toBe(0);
+      const text = readFileSync(file, 'utf8');
+      expect(text.split('bun x lefthook run pre-commit').length - 1).toBe(1);
+      expect(text).not.toContain('Advisory only (root DECISION');
+      expect(text).toContain(BD_MARKER);
+      const r = commitWithFailingBun(dir);
+      expect(r.status, r.output).toBe(0);
+      expect(r.log.split('x lefthook run pre-commit').length - 1).toBe(1);
     });
   });
 
