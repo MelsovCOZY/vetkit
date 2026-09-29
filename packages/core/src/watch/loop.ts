@@ -74,6 +74,34 @@ function causeOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+const PROV_KEYS = [
+  'traceId',
+  'spanId',
+  'responseId',
+  'observationId',
+  'dialect',
+  'schemaUrl',
+] as const;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+// Same shape run.ts's private verdictProvenance() builds for `vet run` (picks the six
+// verdict-provenance schema keys off the case's provenance, case.traceId winning): duplicated
+// here rather than imported, since exporting it would mean touching run.ts/index.ts, which
+// aren't owned by this bead (dh8.7, same duplication as commands/watch.ts's caseProvenance).
+function caseProvenance(evalCase: Case): Verdict['provenance'] | undefined {
+  const source = isRecord(evalCase.provenance) ? evalCase.provenance : {};
+  const out: NonNullable<Verdict['provenance']> = {};
+  for (const key of PROV_KEYS) {
+    const value = source[key];
+    if (typeof value === 'string') out[key] = value;
+  }
+  if (evalCase.traceId !== undefined) out.traceId = evalCase.traceId;
+  return Object.keys(out).length === 0 ? undefined : out;
+}
+
 /** Edge case: "Judge throws → catch, produce a Verdict with status 'infra_failure' and cause,
  * enqueue, continue." One sentinel verdict per failed case: the loop has no criterion ids to
  * attribute the failure to (those live behind the opaque `judge` callable). */
@@ -85,7 +113,11 @@ function withAssignedId(v: Verdict, id: string | undefined): Verdict {
   return { ...v, id };
 }
 
-function infraFailureVerdict(caseId: string, cause: string): Verdict {
+function infraFailureVerdict(
+  caseId: string,
+  cause: string,
+  provenance: Verdict['provenance'],
+): Verdict {
   return {
     caseId,
     criterionId: '*',
@@ -93,6 +125,7 @@ function infraFailureVerdict(caseId: string, cause: string): Verdict {
     model: { requested: 'unknown', resolved: 'unknown', transport: 'unknown', pinned: false },
     cacheHit: false,
     cause,
+    ...(provenance === undefined ? {} : { provenance }),
   };
 }
 
@@ -173,7 +206,7 @@ export async function runWatch(input: RunWatchInput): Promise<CoverageSummary> {
       // Edge case: "Abort during a judge call → the in-flight call is aborted via the signal,
       // its verdict is 'infra_failure:aborted' and NOT enqueued (nothing to write back)."
       if (perCall.aborted) return;
-      verdicts = [infraFailureVerdict(evalCase.id, causeOf(err))];
+      verdicts = [infraFailureVerdict(evalCase.id, causeOf(err), caseProvenance(evalCase))];
     }
     judged += 1;
     const ids = await serializeOutbox(() => outbox.enqueue(verdicts));
