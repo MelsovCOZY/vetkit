@@ -16,6 +16,7 @@ import {
   generateEvals,
   type GenerateEvalsInput,
   type GenerateEvalsResult,
+  type GenerateReport,
   type ResolvedConfig,
 } from '@vetkit/core';
 import { JEV_CREDENTIAL_PRIORITY, JEV_PRESETS, type JevPresetName } from '@vetkit/judge-jev';
@@ -48,6 +49,17 @@ interface InitOptions extends GlobalOptions {
 // A criteria.yaml lint drops error-severity criteria (core's lintCriteria); root design
 // (docs/contracts/j2.md "Generation contract") gates the exit code on how many survive.
 const MIN_SURVIVING_CRITERIA = 5;
+
+// bug (cold gate run 4): exit 1 alone said nothing about why. Names the count, the minimum,
+// and the dropped/repaired counts (generateEvals always sets both), so a `--json` caller and
+// a stderr reader see the same reason.
+function tooFewCriteriaReason(count: number, report: GenerateReport): string {
+  const detail: string[] = [];
+  if (report.dropped !== undefined) detail.push(`dropped ${String(report.dropped)}`);
+  if (report.repaired !== undefined) detail.push(`repaired ${String(report.repaired.length)}`);
+  const suffix = detail.length > 0 ? ` (${detail.join(', ')})` : '';
+  return `only ${String(count)} criteria survived generation, need at least ${String(MIN_SURVIVING_CRITERIA)}${suffix}`;
+}
 
 type Env = Readonly<Record<string, string | undefined>>;
 
@@ -293,13 +305,18 @@ async function generateCommand(options: InitOptions & { source: string }): Promi
   if (summary !== undefined) {
     await writeAtomic(join(out, 'summary.json'), JSON.stringify(summary));
   }
+  const tooFewCriteria = result.criteria.length < MIN_SURVIVING_CRITERIA;
+  const reason = tooFewCriteria
+    ? tooFewCriteriaReason(result.criteria.length, result.report)
+    : undefined;
+  if (reason !== undefined) log.error(reason);
+  const doc = summary === undefined ? { ...result } : { ...result, summary };
   emit(
-    summary === undefined ? result : { ...result, summary },
+    reason === undefined ? doc : { ...doc, reason },
     () =>
       `wrote ${String(result.criteria.length)} criteria and ${String(result.cases.length)} cases to ${out}`,
   );
-  process.exitCode =
-    result.criteria.length >= MIN_SURVIVING_CRITERIA ? CEV_EXIT.OK : CEV_EXIT.FAILED;
+  process.exitCode = tooFewCriteria ? CEV_EXIT.FAILED : CEV_EXIT.OK;
 }
 
 export function registerInit(program: Command): Command {
