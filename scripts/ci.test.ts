@@ -149,8 +149,8 @@ describe('lefthook.yml', () => {
 });
 
 describe('package.json hooks:install script', () => {
-  it('runs `lefthook install`', () => {
+  it('runs the lefthook install script', () => {
     const pkg: PackageJson = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
-    expect(pkg.scripts?.['hooks:install']).toBe('lefthook install');
+    expect(pkg.scripts?.['hooks:install']).toBe('bun scripts/install-hooks.ts');
   });
 });
