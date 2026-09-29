@@ -351,6 +351,9 @@ async function generateCommand(options: InitOptions & { source: string }): Promi
     );
   } finally {
     process.off('SIGINT', onSigint);
+    if (diagEnabled(process.env)) {
+      process.stderr.write(`${JSON.stringify({ diag: { generator: meter.totals() } })}\n`);
+    }
   }
 
   await writeAtomic(join(out, 'vetkit.config.ts'), reexportConfig(loaded.configFile, out));
@@ -371,9 +374,6 @@ async function generateCommand(options: InitOptions & { source: string }): Promi
     : undefined;
   if (reason !== undefined) log.error(reason);
   const usage = meter.totals();
-  if (diagEnabled(process.env)) {
-    process.stderr.write(`${JSON.stringify({ diag: { generator: usage } })}\n`);
-  }
   const doc =
     summary === undefined ? { ...result, generator: usage } : { ...result, generator: usage, summary };
   emit(
