@@ -402,9 +402,58 @@ describe('model labels as truth for c4-c10', () => {
     const note = criterionTableNote(check);
     expect(note).not.toContain('pending');
     expect(note).toContain('4 model-labelled rows');
-    const lim = limitationsParagraph([0.9], check);
+    const lim = limitationsParagraph([0.9], check, []);
     expect(lim).toContain('4 model-labelled traces');
     expect(lim).toContain('4 rows');
     expect(lim).not.toContain('0 human-labelled rows');
+  });
+});
+
+describe('single-class truth', () => {
+  const traces = ['a', 'b', 'c'].map((traceId) => ({ ...FIXTURE_TRACE, traceId }));
+  const corpus = {
+    byTraceCriterion: new Map(
+      traces.flatMap((t, i) => [
+        [`${t.traceId}|c4`, repeatsOf(0.1 + i * 0.2)],
+        [`${t.traceId}|c5`, repeatsOf(0.1 + i * 0.2)],
+      ]),
+    ),
+    logicalCalls: 0,
+    uniqueCalls: 0,
+    uniqueCallInputTokens: 0,
+    logicalCallInputTokens: 0,
+  };
+  const truthOf = (criterionId: string, label: 'yes' | 'no') =>
+    resolveTruth(
+      traces.map((t) => row({ traceId: t.traceId, criterionId, source: 'model', label })),
+    );
+
+  test('all-no and all-yes truth both give kappa n/a and a not-evaluable verdict', () => {
+    for (const [c, label] of [
+      ['c4', 'no'],
+      ['c5', 'yes'],
+    ] as const) {
+      const r = computeCriterionRow(c, traces, truthOf(c, label), corpus);
+      expect(r.kappa).toBeNull();
+      expect(r.alpha).toBeNull();
+      expect(r.n).toBe(3);
+      expect(r.verdict).toBe('not evaluable (single-class truth)');
+    }
+  });
+
+  test('review labels do not make truth two-class', () => {
+    const rows: LabelRow[] = [
+      row({ traceId: 'a', criterionId: 'c4', source: 'model', label: 'no' }),
+      row({ traceId: 'b', criterionId: 'c4', source: 'model', label: 'no' }),
+      row({ traceId: 'c', criterionId: 'c4', source: 'model', label: 'review' }),
+    ];
+    const r = computeCriterionRow('c4', traces, resolveTruth(rows), corpus);
+    expect(r.verdict).toBe('not evaluable (single-class truth)');
+  });
+
+  test('limitations name the not-evaluable criteria and why', () => {
+    const lim = limitationsParagraph([0.9], checkLabels([]), ['c4', 'c6']);
+    expect(lim).toContain('c4, c6');
+    expect(lim).toContain('no positive cases');
   });
 });
