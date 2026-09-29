@@ -379,6 +379,7 @@ export async function gauntletMasterKey(
     return sources.has(normalise(probe.input.state)) ? [] : [{ id, case: probe }];
   });
   const inputs = [...fixed, ...truncations];
+  if (inputs.length === 0) return { result: 'skipped', reasons: [], failedInputs: [] };
   const repeats = Math.max(MASTER_KEY_MIN_REPEATS, options.repeats ?? MASTER_KEY_MIN_REPEATS);
   const byCase = await judgeAll(
     criterion,
