@@ -2,11 +2,10 @@
 
 Unopinionated TypeScript library + CLI that generates, validates and runs LLM evals. TypeSafe AI's Jev
 (System One typed decisions) is the judge; any chat model is the generator. Nothing is hard-coded to one
-model, provider or gateway. No code exists yet: the plan lives in bd, the research in `docs/INDEX.md`.
+model, provider or gateway. No code exists yet: the plan lives in bd. Research briefs are no longer kept in the repo.
 
 ## Where things are
 
-- `docs/INDEX.md` — reading order for the six research briefs and the live gateway fixtures.
 - `bd show classified-evals-d4m` — root epic: design, acceptance criteria, DECISION / RISK / PREMISE ledger.
   Every architectural choice is a note there. Read it before proposing anything structural.
 - Human gates (`bd gate`) are resolved only by the user. Agents never resolve them.
@@ -36,10 +35,10 @@ model, provider or gateway. No code exists yet: the plan lives in bd, the resear
 
 ## Workflow
 
-- New research goes through the `research` workflow (`~/.claude/workflows/research.js`) and lands as a
-  dated brief in `docs/research/`, then gets a row in `docs/INDEX.md` and DECISION/PREMISE notes in bd.
-- Coding conventions are in `docs/research/2026-09-25-typescript-practices-and-boilerplates-brief.md` §5;
-  oxlint and tsconfig enforce most of them, so do not restate them here.
+- New research goes through the `research` workflow (`~/.claude/workflows/research.js`). Briefs are no
+  longer kept in the repo: record the outcome as DECISION/PREMISE notes in bd.
+- Coding conventions are in the "Coding conventions" section of `CONTRIBUTING.md`; oxlint and tsconfig
+  enforce most of them, so do not restate them here.
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:6cd5cc61 -->
 ## Beads Issue Tracker
