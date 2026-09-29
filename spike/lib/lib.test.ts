@@ -31,7 +31,7 @@ describe('loadEnv', () => {
     try {
       loadEnv(KEY);
     } catch (err) {
-      message = (err as Error).message;
+      message = err instanceof Error ? err.message : '';
     }
     expect(message).not.toContain('super-secret-value');
   });
@@ -60,27 +60,29 @@ describe('gatewayFetch', () => {
   });
 
   test('posts JSON to the gateway with an auth header and returns parsed JSON', async () => {
-    fetchSpy.mockResolvedValue(
-      new Response(JSON.stringify({ ok: true }), { status: 200 }),
-    );
+    fetchSpy.mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
 
-    const result = await gatewayFetch('/v1/chat/completions', { hello: 'world' }, { timeoutMs: 5000 });
+    const result = await gatewayFetch(
+      '/v1/chat/completions',
+      { hello: 'world' },
+      { timeoutMs: 5000 },
+    );
 
     expect(result).toEqual({ ok: true });
     expect(fetchSpy).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchSpy.mock.calls[0]!;
+    const [url, init] = fetchSpy.mock.calls[0] ?? [];
     expect(String(url)).toContain('/v1/chat/completions');
     expect(init?.method).toBe('POST');
-    expect(String((init?.headers as Record<string, string>).authorization)).toContain('test-key');
-    expect(JSON.parse(init?.body as string)).toEqual({ hello: 'world' });
+    expect(new Headers(init?.headers).get('authorization')).toContain('test-key');
+    expect(JSON.parse(String(init?.body))).toEqual({ hello: 'world' });
   });
 
   test('throws on a non-ok response without leaking the api key', async () => {
     fetchSpy.mockResolvedValue(new Response('nope', { status: 500, statusText: 'Internal Error' }));
 
-    await expect(
-      gatewayFetch('/v1/chat/completions', {}, { timeoutMs: 5000 }),
-    ).rejects.toThrow(/500/);
+    await expect(gatewayFetch('/v1/chat/completions', {}, { timeoutMs: 5000 })).rejects.toThrow(
+      /500/,
+    );
   });
 });
 
@@ -105,7 +107,7 @@ describe('readJsonl / writeJsonl', () => {
       const raw = await readFile(path, 'utf8');
       expect(raw).toContain('3,2 миллиона тонн');
       const back = await readJsonl<{ text: string }>(path);
-      expect(back[0]!.text).toBe('3,2 миллиона тонн');
+      expect(back[0].text).toBe('3,2 миллиона тонн');
     } finally {
       await rm(path, { force: true });
     }

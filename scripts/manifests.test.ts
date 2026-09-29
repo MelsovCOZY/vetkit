@@ -7,7 +7,28 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PACKAGES_DIR = join(ROOT, 'packages');
 const FORBIDDEN = ['ai', '@types/bun', 'bun-types'];
 
-function readJson(path: string): any {
+interface PkgJson {
+  name?: string;
+  version?: string;
+  type?: string;
+  private?: boolean;
+  workspaces?: string[];
+  packageManager?: string;
+  engines?: { node?: string };
+  catalog?: Record<string, string>;
+  scripts?: Record<string, string>;
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+  peerDependenciesMeta?: Record<string, { optional?: boolean }>;
+  exports?: Record<string, unknown>;
+  files?: string[];
+  sideEffects?: boolean | string[];
+  publishConfig?: Record<string, unknown>;
+  bin?: Record<string, string>;
+}
+
+function readJson(path: string): PkgJson | undefined {
   return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : undefined;
 }
 
@@ -17,22 +38,22 @@ const packageNames = existsSync(PACKAGES_DIR)
   ? readdirSync(PACKAGES_DIR, { withFileTypes: true })
       .filter((d) => d.isDirectory())
       .map((d) => d.name)
-      .sort()
+      .toSorted()
   : [];
 
-function loadPkg(dir: string): any {
+function loadPkg(dir: string): PkgJson | undefined {
   return readJson(join(PACKAGES_DIR, dir, 'package.json'));
 }
 
-function externalDeps(pkg: any): string[] {
+function externalDeps(pkg: PkgJson | undefined): string[] {
   return Object.keys(pkg?.dependencies ?? {}).filter((k) => !k.startsWith('@vetkit/'));
 }
 
-function externalPeers(pkg: any): string[] {
+function externalPeers(pkg: PkgJson | undefined): string[] {
   return Object.keys(pkg?.peerDependencies ?? {}).filter((k) => !k.startsWith('@vetkit/'));
 }
 
-function allDeclaredDeps(pkg: any): Record<string, string> {
+function allDeclaredDeps(pkg: PkgJson | undefined): Record<string, string> {
   return { ...pkg?.dependencies, ...pkg?.devDependencies, ...pkg?.peerDependencies };
 }
 
@@ -59,7 +80,17 @@ describe('root package.json', () => {
   });
 
   it('declares the contract script names', () => {
-    const names = ['typecheck', 'lint', 'fmt', 'fmt:write', 'test', 'build', 'pack', 'check', 'codegen'];
+    const names = [
+      'typecheck',
+      'lint',
+      'fmt',
+      'fmt:write',
+      'test',
+      'build',
+      'pack',
+      'check',
+      'codegen',
+    ];
     for (const name of names) {
       expect(rootPkg?.scripts).toHaveProperty(name);
     }
@@ -130,65 +161,68 @@ it('creates at least the eleven original contract packages (open-world: later be
   expect(packageNames.length).toBeGreaterThanOrEqual(MIN_PACKAGE_NAMES.length);
 });
 
-describe.each(packageNames.length ? packageNames : MIN_PACKAGE_NAMES)('packages/%s/package.json', (dir) => {
-  const pkg = loadPkg(dir);
+describe.each(packageNames.length ? packageNames : MIN_PACKAGE_NAMES)(
+  'packages/%s/package.json',
+  (dir) => {
+    const pkg = loadPkg(dir);
 
-  it('has name @vetkit/<dir> (cli is named "vetkit")', () => {
-    expect(pkg?.name).toBe(dir === 'cli' ? 'vetkit' : `@vetkit/${dir}`);
-  });
+    it('has name @vetkit/<dir> (cli is named "vetkit")', () => {
+      expect(pkg?.name).toBe(dir === 'cli' ? 'vetkit' : `@vetkit/${dir}`);
+    });
 
-  it('is version 0.0.0', () => {
-    expect(pkg?.version).toBe('0.0.0');
-  });
+    it('is version 0.0.0', () => {
+      expect(pkg?.version).toBe('0.0.0');
+    });
 
-  it('is type module', () => {
-    expect(pkg?.type).toBe('module');
-  });
+    it('is type module', () => {
+      expect(pkg?.type).toBe('module');
+    });
 
-  it('declares sideEffects (false, except cli which lists its bin)', () => {
-    if (dir === 'cli') expect(pkg?.sideEffects).toEqual(['./dist/bin.js']);
-    else expect(pkg?.sideEffects).toBe(false);
-  });
+    it('declares sideEffects (false, except cli which lists its bin)', () => {
+      if (dir === 'cli') expect(pkg?.sideEffects).toEqual(['./dist/bin.js']);
+      else expect(pkg?.sideEffects).toBe(false);
+    });
 
-  it('requires node >=22.12', () => {
-    expect(pkg?.engines?.node).toBe('>=22.12');
-  });
+    it('requires node >=22.12', () => {
+      expect(pkg?.engines?.node).toBe('>=22.12');
+    });
 
-  it('publishes only dist (cli also ships templates)', () => {
-    if (dir === 'cli') expect(pkg?.files).toEqual(['dist', 'templates']);
-    else expect(pkg?.files).toEqual(['dist']);
-  });
+    it('publishes only dist (cli also ships templates)', () => {
+      if (dir === 'cli') expect(pkg?.files).toEqual(['dist', 'templates']);
+      else expect(pkg?.files).toEqual(['dist']);
+    });
 
-  it('exports only types+import conditions, plus ./package.json', () => {
-    expect(pkg?.exports?.['./package.json']).toBe('./package.json');
-    for (const [key, value] of Object.entries(pkg?.exports ?? {})) {
-      if (key === './package.json') continue;
-      expect(Object.keys(value as object).sort()).toEqual(['import', 'types']);
-    }
-  });
+    it('exports only types+import conditions, plus ./package.json', () => {
+      expect(pkg?.exports?.['./package.json']).toBe('./package.json');
+      for (const [key, value] of Object.entries(pkg?.exports ?? {})) {
+        if (key === './package.json') continue;
+        expect(Object.keys(Object(value)).toSorted()).toEqual(['import', 'types']);
+      }
+    });
 
-  it('is publishable publicly', () => {
-    expect(pkg?.publishConfig?.access).toBe('public');
-  });
+    it('is publishable publicly', () => {
+      expect(pkg?.publishConfig?.access).toBe('public');
+    });
 
-  it('references sibling @vetkit/* packages only via workspace:^', () => {
-    const all = allDeclaredDeps(pkg);
-    for (const [name, range] of Object.entries(all)) {
-      if (name.startsWith('@vetkit/')) expect(range).toBe('workspace:^');
-    }
-  });
+    it('references sibling @vetkit/* packages only via workspace:^', () => {
+      const all = allDeclaredDeps(pkg);
+      for (const [name, range] of Object.entries(all)) {
+        if (name.startsWith('@vetkit/')) expect(range).toBe('workspace:^');
+      }
+    });
 
-  it('never depends on ai, @types/bun or bun-types', () => {
-    const all = allDeclaredDeps(pkg);
-    for (const forbidden of FORBIDDEN) {
-      expect(all).not.toHaveProperty(forbidden);
-    }
-  });
+    it('never depends on ai, @types/bun or bun-types', () => {
+      const all = allDeclaredDeps(pkg);
+      for (const forbidden of FORBIDDEN) {
+        expect(all).not.toHaveProperty(forbidden);
+      }
+    });
 
-  it('declares scripts.build as tsdown', () => {
-    expect(pkg?.scripts?.build).toBe('tsdown');
-  });
-});
+    it('declares scripts.build as tsdown', () => {
+      expect(pkg?.scripts?.build).toBe('tsdown');
+    });
+  },
+);
 
 describe('dependency budget', () => {
   it('packages/spec has exactly one external runtime dependency: ajv', () => {
@@ -229,8 +263,12 @@ describe('dependency budget', () => {
     const pkg = loadPkg('sink-otel');
     expect(externalPeers(pkg)).toEqual(['@opentelemetry/api']);
     expect(pkg?.peerDependenciesMeta?.['@opentelemetry/api']?.optional).not.toBe(true);
-    expect(externalDeps(pkg).sort()).toEqual(
-      ['@opentelemetry/api-logs', '@opentelemetry/exporter-logs-otlp-http', '@opentelemetry/sdk-trace-base'].sort(),
+    expect(externalDeps(pkg).toSorted()).toEqual(
+      [
+        '@opentelemetry/api-logs',
+        '@opentelemetry/exporter-logs-otlp-http',
+        '@opentelemetry/sdk-trace-base',
+      ].toSorted(),
     );
   });
 
@@ -250,7 +288,9 @@ describe('dependency budget', () => {
   });
 
   it('every adapter package (source-*, sink-*, judge-*, generator-*, export-*) has at most one peer dependency', () => {
-    for (const dir of packageNames.filter((d) => /^(source|sink|judge|generator|export)-/.test(d))) {
+    for (const dir of packageNames.filter((d) =>
+      /^(source|sink|judge|generator|export)-/.test(d),
+    )) {
       expect(externalPeers(loadPkg(dir)).length).toBeLessThanOrEqual(1);
     }
   });
@@ -273,8 +313,24 @@ describe('bun.lock', () => {
     expect(existsSync(lockPath)).toBe(true);
     const lock = readFileSync(lockPath, 'utf8');
     for (const forbidden of ['ai', '@types/bun', 'bun-types']) {
-      const resolvedEntry = new RegExp(`"${forbidden.replace(/[/]/g, '\\/')}":\\s*\\["${forbidden.replace(/[/]/g, '\\/')}@`);
+      const resolvedEntry = new RegExp(
+        `"${forbidden.replace(/[/]/g, '\\/')}":\\s*\\["${forbidden.replace(/[/]/g, '\\/')}@`,
+      );
       expect(resolvedEntry.test(lock)).toBe(false);
     }
   });
+});
+
+describe('lint and format ignore lists', () => {
+  const exempted = ['scripts/manifests.test.ts', 'scripts/tsconfig.test.ts', 'spike/**'];
+
+  it.each(['.oxlintrc.json', '.oxfmtrc.json'])(
+    '%s does not exempt the formerly ignored sources',
+    (name) => {
+      const config: { ignorePatterns?: string[] } = readJson(join(ROOT, name)) ?? {};
+      for (const pattern of exempted) {
+        expect(config.ignorePatterns ?? []).not.toContain(pattern);
+      }
+    },
+  );
 });

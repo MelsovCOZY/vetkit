@@ -13,6 +13,7 @@ It does not use synthetic customer-support traces.
 ## Corpus
 
 Source: `~/Projects/haystack-hypothesis`:
+
 - `golden/golden.jsonl` — 114 questions: 38 en / 38 ru / 38 kk, 19 two-hop, 6 unanswerable
   (`un-*` ids) each with a `reference` answer.
 - `report/eval-{bm25,embedding,hybrid,hybrid-norerank}.json` — `per_question`: `id`, `lang`,
@@ -42,6 +43,7 @@ spike).
 (Jev shows no abstention unless an escape option exists).
 
 **Fixed (ground truth already known, done before the spike):**
+
 - `c1 answer_correct` — truth = normalised `reference` is a substring of the normalised answer,
   human confirms mismatches.
 - `c2 abstains_when_unanswerable` — truth = the golden unanswerable set (`un-*`).
@@ -89,11 +91,13 @@ the human (the labelling is the user's time).
 ## Metrics
 
 Per criterion, at the fitted threshold:
+
 - Cohen's κ and Krippendorff's α (human labels vs Jev).
 - TPR and TNR (human labels vs Jev).
 - Boolean flip rate across the 3 repeats.
 
 Additionally, for the haystack-hypothesis corpus:
+
 - Jev `answer_correct` accuracy against the golden `reference` answers.
 - Jev vs the Gemini plain-mode judge, κ on faithfulness, broken down per language (including Kazakh).
 - Cost: Jev input tokens × $0.042/M vs `judge_prompt_tokens` (757k–850k per variant, recorded in

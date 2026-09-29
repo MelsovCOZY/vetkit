@@ -10,10 +10,9 @@
     "docs/**",
     "AGENTS.md",
     "CLAUDE.md",
-    "spike/**",
+    "spike/data/**",
+    "spike/REPORT.md",
     "**/package.json",
-    "scripts/manifests.test.ts",
-    "scripts/tsconfig.test.ts",
     "scripts/fixtures/tsconfig-bad/**"
   ]
 }

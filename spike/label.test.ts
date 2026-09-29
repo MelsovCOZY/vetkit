@@ -236,8 +236,22 @@ describe('buildQueue (unit)', () => {
 
   test('queues unresolved c1 review rows before sampled c3/generated rows', () => {
     const existing: LabelRow[] = [
-      { traceId: 'a', criterionId: 'c1', label: 'review', source: 'auto', labelledAt: 't', baseline: '' },
-      { traceId: 'b', criterionId: 'c1', label: 'yes', source: 'auto', labelledAt: 't', baseline: '' },
+      {
+        traceId: 'a',
+        criterionId: 'c1',
+        label: 'review',
+        source: 'auto',
+        labelledAt: 't',
+        baseline: '',
+      },
+      {
+        traceId: 'b',
+        criterionId: 'c1',
+        label: 'yes',
+        source: 'auto',
+        labelledAt: 't',
+        baseline: '',
+      },
     ];
     const queue = buildQueue(traces, criteria, existing, ['b']);
     expect(queue).toEqual([
@@ -249,8 +263,22 @@ describe('buildQueue (unit)', () => {
 
   test('excludes pairs that already have a human label', () => {
     const existing: LabelRow[] = [
-      { traceId: 'a', criterionId: 'c1', label: 'review', source: 'auto', labelledAt: 't', baseline: '' },
-      { traceId: 'a', criterionId: 'c1', label: 'no', source: 'human', labelledAt: 't', baseline: '' },
+      {
+        traceId: 'a',
+        criterionId: 'c1',
+        label: 'review',
+        source: 'auto',
+        labelledAt: 't',
+        baseline: '',
+      },
+      {
+        traceId: 'a',
+        criterionId: 'c1',
+        label: 'no',
+        source: 'human',
+        labelledAt: 't',
+        baseline: '',
+      },
     ];
     const queue = buildQueue(traces, criteria, existing, []);
     expect(queue).toEqual([]);
@@ -274,7 +302,7 @@ describe('runInteractiveLoop (unit, scripted answers, no real stdin/TTY)', () =>
       queue,
       traces,
       criteria,
-      ask: async () => answers.shift()!,
+      ask: async () => answers.shift() ?? '',
       print: (m) => printed.push(m),
       onRow: (r) => rows.push(r),
       now: () => 'FIXED_TIME',
@@ -282,7 +310,14 @@ describe('runInteractiveLoop (unit, scripted answers, no real stdin/TTY)', () =>
 
     expect(result).toEqual({ answered: 1, quit: true });
     expect(rows).toEqual([
-      { traceId: 'a', criterionId: 'c4', label: 'yes', source: 'human', labelledAt: 'FIXED_TIME', baseline: '' },
+      {
+        traceId: 'a',
+        criterionId: 'c4',
+        label: 'yes',
+        source: 'human',
+        labelledAt: 'FIXED_TIME',
+        baseline: '',
+      },
     ]);
   });
 
@@ -290,7 +325,12 @@ describe('runInteractiveLoop (unit, scripted answers, no real stdin/TTY)', () =>
     const printed: string[] = [];
     await runInteractiveLoop({
       queue: [{ traceId: 'a', criterionId: 'c4' }],
-      traces: [trace({ traceId: 'a', baseline: { faithfulness: 0.987654, context_relevance: 1, judgeModel: 'x' } })],
+      traces: [
+        trace({
+          traceId: 'a',
+          baseline: { faithfulness: 0.987654, context_relevance: 1, judgeModel: 'x' },
+        }),
+      ],
       criteria,
       ask: async () => 'n',
       print: (m) => printed.push(m),
@@ -310,21 +350,65 @@ describe('mergeImport / validateImportRow (unit)', () => {
   const criterionIds = new Set(['c1', 'c4']);
 
   test('rejects a row with an invalid label', () => {
-    const bad: LabelRow = { traceId: 'a', criterionId: 'c1', label: 'bogus' as never, source: 'human', labelledAt: 't', baseline: '' };
+    const bad: LabelRow = JSON.parse(
+      JSON.stringify({
+        traceId: 'a',
+        criterionId: 'c1',
+        label: 'bogus',
+        source: 'human',
+        labelledAt: 't',
+        baseline: '',
+      }),
+    );
     expect(validateImportRow(bad, traceIds, criterionIds)).toBe(false);
   });
 
   test('rejects a row with an unknown traceId', () => {
-    const bad: LabelRow = { traceId: 'unknown', criterionId: 'c1', label: 'yes', source: 'human', labelledAt: 't', baseline: '' };
+    const bad: LabelRow = {
+      traceId: 'unknown',
+      criterionId: 'c1',
+      label: 'yes',
+      source: 'human',
+      labelledAt: 't',
+      baseline: '',
+    };
     expect(validateImportRow(bad, traceIds, criterionIds)).toBe(false);
   });
 
   test('imports the good rows and counts the one bad row as rejected', () => {
-    const good1: LabelRow = { traceId: 'a', criterionId: 'c1', label: 'yes', source: 'human', labelledAt: 't1', baseline: '' };
-    const good2: LabelRow = { traceId: 'b', criterionId: 'c4', label: 'no', source: 'human', labelledAt: 't2', baseline: '' };
-    const bad: LabelRow = { traceId: 'a', criterionId: 'c1', label: 'maybe' as never, source: 'human', labelledAt: 't3', baseline: '' };
+    const good1: LabelRow = {
+      traceId: 'a',
+      criterionId: 'c1',
+      label: 'yes',
+      source: 'human',
+      labelledAt: 't1',
+      baseline: '',
+    };
+    const good2: LabelRow = {
+      traceId: 'b',
+      criterionId: 'c4',
+      label: 'no',
+      source: 'human',
+      labelledAt: 't2',
+      baseline: '',
+    };
+    const bad: LabelRow = JSON.parse(
+      JSON.stringify({
+        traceId: 'a',
+        criterionId: 'c1',
+        label: 'maybe',
+        source: 'human',
+        labelledAt: 't3',
+        baseline: '',
+      }),
+    );
 
-    const { toAppend, imported, rejected } = mergeImport([good1, bad, good2], [], traceIds, criterionIds);
+    const { toAppend, imported, rejected } = mergeImport(
+      [good1, bad, good2],
+      [],
+      traceIds,
+      criterionIds,
+    );
 
     expect(rejected).toBe(1);
     expect(imported).toBe(2);
@@ -332,7 +416,14 @@ describe('mergeImport / validateImportRow (unit)', () => {
   });
 
   test('does not re-append a triple already present in existing rows', () => {
-    const row: LabelRow = { traceId: 'a', criterionId: 'c1', label: 'yes', source: 'human', labelledAt: 't1', baseline: '' };
+    const row: LabelRow = {
+      traceId: 'a',
+      criterionId: 'c1',
+      label: 'yes',
+      source: 'human',
+      labelledAt: 't1',
+      baseline: '',
+    };
     const { toAppend, imported } = mergeImport([row], [row], traceIds, criterionIds);
     expect(toAppend).toEqual([]);
     expect(imported).toBe(0);
@@ -371,7 +462,8 @@ describe('CLI non-TTY exit (subprocess, no network)', () => {
         timeout: 10_000,
       });
     } catch (err) {
-      status = (err as { status: number }).status;
+      if (err instanceof Error && 'status' in err && typeof err.status === 'number')
+        status = err.status;
     }
     expect(status).toBe(2);
   });

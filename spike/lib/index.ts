@@ -5,7 +5,9 @@ import { readFile, writeFile } from 'node:fs/promises';
 export function loadEnv(name: string): string {
   const value = process.env[name];
   if (!value) {
-    throw new Error(`Missing required environment variable: ${name}. Set it in .env (see .env.example).`);
+    throw new Error(
+      `Missing required environment variable: ${name}. Set it in .env (see .env.example).`,
+    );
   }
   return value;
 }
@@ -13,7 +15,11 @@ export function loadEnv(name: string): string {
 const DEFAULT_GATEWAY_BASE = 'https://ai-gateway.vercel.sh';
 
 /** POSTs JSON to the configured gateway base + path, authorized with AI_GATEWAY_API_KEY. */
-export async function gatewayFetch(path: string, body: unknown, opts: { timeoutMs: number }): Promise<unknown> {
+export async function gatewayFetch<T = unknown>(
+  path: string,
+  body: unknown,
+  opts: { timeoutMs: number },
+): Promise<T> {
   const apiKey = loadEnv('AI_GATEWAY_API_KEY');
   const base = process.env.SPIKE_GATEWAY_BASE ?? DEFAULT_GATEWAY_BASE;
   const controller = new AbortController();
@@ -43,7 +49,7 @@ export async function readJsonl<T = unknown>(path: string): Promise<T[]> {
   return text
     .split('\n')
     .filter((line) => line.trim().length > 0)
-    .map((line) => JSON.parse(line) as T);
+    .map((line): T => JSON.parse(line));
 }
 
 /** Writes rows to a JSONL file, one JSON object per line. */
@@ -63,13 +69,13 @@ export async function withConcurrency<T, R>(
   items: T[],
   fn: (item: T) => Promise<R>,
 ): Promise<R[]> {
-  const results: R[] = new Array(items.length);
+  const results: R[] = Array.from({ length: items.length });
   let index = 0;
 
   async function worker(): Promise<void> {
     while (index < items.length) {
       const current = index++;
-      results[current] = await fn(items[current] as T);
+      results[current] = await fn(items[current]);
     }
   }
 

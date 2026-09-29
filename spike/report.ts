@@ -74,8 +74,8 @@ export function krippendorffAlphaNominal(rows: (boolean | null)[][]): number | n
     const weight = 1 / (m - 1);
     for (let i = 0; i < m; i++) {
       for (let j = i + 1; j < m; j++) {
-        const c = values[i]!;
-        const k = values[j]!;
+        const c = values[i];
+        const k = values[j];
         categories.add(c);
         categories.add(k);
         coincidence.set(`${c}|${k}`, (coincidence.get(`${c}|${k}`) ?? 0) + weight);
@@ -113,8 +113,8 @@ export function rates(scores: number[], labels: boolean[], t: number): Rates {
   let tn = 0;
   let fp = 0;
   for (let i = 0; i < scores.length; i++) {
-    const predicted = scores[i]! >= t;
-    const actual = labels[i]!;
+    const predicted = scores[i] >= t;
+    const actual = labels[i];
     if (actual && predicted) tp++;
     else if (actual && !predicted) fn++;
     else if (!actual && predicted) fp++;
@@ -134,8 +134,8 @@ export function fitThreshold(scores: number[], labels: boolean[]): number {
   if (scores.length !== labels.length || scores.length === 0) {
     throw new Error('fitThreshold: need at least one score/label pair');
   }
-  const candidates = Array.from(new Set(scores)).sort((a, b) => a - b);
-  let best = candidates[0]!;
+  const candidates = Array.from(new Set(scores)).toSorted((a, b) => a - b);
+  let best = candidates[0];
   let bestJ = -Infinity;
   for (const t of candidates) {
     const { tpr, tnr } = rates(scores, labels, t);
@@ -177,11 +177,11 @@ export function criterionPasses(row: {
 
 /** Median over the non-null values; null (undefined/n-a values are excluded, not treated as 0). */
 export function medianOfDefined(values: (number | null)[]): number | null {
-  const defined = values.filter((v): v is number => v !== null).sort((a, b) => a - b);
+  const defined = values.filter((v): v is number => v !== null).toSorted((a, b) => a - b);
   const n = defined.length;
   if (n === 0) return null;
   const mid = Math.floor(n / 2);
-  return n % 2 === 0 ? (defined[mid - 1]! + defined[mid]!) / 2 : defined[mid]!;
+  return n % 2 === 0 ? (defined[mid - 1] + defined[mid]) / 2 : defined[mid];
 }
 
 export type Outcome = 'GO' | 'AMEND' | 'NO-GO' | 'INCONCLUSIVE';
@@ -214,9 +214,7 @@ export type LabelCheck = { humanTraces: number; totalRows: number; ok: boolean }
 
 /** `--check-labels`: distinct human-labelled traces vs total label rows, against the same bars as decideOutcome. */
 export function checkLabels(rows: LabelRow[]): LabelCheck {
-  const humanTraceIds = new Set(
-    rows.filter((r) => r.source === 'human').map((r) => r.traceId),
-  );
+  const humanTraceIds = new Set(rows.filter((r) => r.source === 'human').map((r) => r.traceId));
   return {
     humanTraces: humanTraceIds.size,
     totalRows: rows.length,
@@ -247,10 +245,10 @@ async function loadCachedCall(
   const path = join(CACHE_DIR, `${key}.json`);
   if (!existsSync(path)) return null;
 
-  const raw = JSON.parse(await readFile(path, 'utf8')) as {
+  const raw: {
     answers?: Record<string, { choice?: string; probabilities?: { yes?: number } }>;
     usage?: { input_tokens?: number };
-  };
+  } = JSON.parse(await readFile(path, 'utf8'));
 
   const byCriterion = new Map<string, { pYes: number; escaped: boolean }>();
   for (const c of criteria) {
@@ -387,7 +385,7 @@ function computeCriterionRow(
   const { tpr, tnr } = rates(scoresForFit, labelsForFit, threshold);
   const predictions = scoresForFit.map((s) => s >= threshold);
   const kappa = cohenKappa(predictions, labelsForFit);
-  const alpha = krippendorffAlphaNominal(predictions.map((p, i) => [p, labelsForFit[i]!]));
+  const alpha = krippendorffAlphaNominal(predictions.map((p, i) => [p, labelsForFit[i]]));
   const flipPct = flipRate(repeatsForFlip, threshold);
 
   const verdict: CriterionRow['verdict'] =
@@ -537,7 +535,12 @@ function baselineKappaRow(
   return `| ${label} | ${predicted.length} | ${fmt(kappa)} |`;
 }
 
-function baselineBlock(traces: Trace[], baselineByKey: Map<string, LabelRow>, corpus: Corpus, c3Threshold: number | null): string {
+function baselineBlock(
+  traces: Trace[],
+  baselineByKey: Map<string, LabelRow>,
+  corpus: Corpus,
+  c3Threshold: number | null,
+): string {
   const lines = ['| slice | n | κ |', '|---|---|---|'];
   if (c3Threshold === null) {
     lines.push('| all | 0 | n/a |');
@@ -586,9 +589,8 @@ async function readHaystackCost(haystackDir: string): Promise<HaystackCost> {
   let judgeCompletionTokens = 0;
   for (const variant of VARIANTS) {
     const path = join(haystackDir, 'report', `eval-${variant}.json`);
-    const raw = JSON.parse(await readFile(path, 'utf8')) as {
-      cost?: { judge_prompt_tokens?: number; judge_completion_tokens?: number };
-    };
+    const raw: { cost?: { judge_prompt_tokens?: number; judge_completion_tokens?: number } } =
+      JSON.parse(await readFile(path, 'utf8'));
     judgePromptTokens += raw.cost?.judge_prompt_tokens ?? 0;
     judgeCompletionTokens += raw.cost?.judge_completion_tokens ?? 0;
   }
@@ -615,7 +617,7 @@ function limitationsParagraph(haystackAggregateFaithfulness: number[]): string {
   const nearCeiling = haystackAggregateFaithfulness.map((f) => f.toFixed(3)).join(', ');
   return [
     'Contexts are whole source documents (55-344 words) rebuilt offline from corpus/*.pdf|docx, not the ' +
-      "120-word chunks the pipeline actually retrieved by; the local Langfuse instance runs in v4 events-only " +
+      '120-word chunks the pipeline actually retrieved by; the local Langfuse instance runs in v4 events-only ' +
       'mode and /api/public/traces returned 404 (probed 2026-09-25), so the judged unit is whole-document ' +
       'context, not the retrieved chunk.',
     'Human labels: this run has 0 human-labelled rows (labelled traces ' +
@@ -641,9 +643,10 @@ async function main(): Promise<void> {
     return;
   }
 
-  const haystackDir = process.env.HAYSTACK_HYPOTHESIS_DIR ?? join(homedir(), 'Projects', 'haystack-hypothesis');
+  const haystackDir =
+    process.env.HAYSTACK_HYPOTHESIS_DIR ?? join(homedir(), 'Projects', 'haystack-hypothesis');
   const traces = await readJsonl<Trace>(TRACES_PATH);
-  const criteria = JSON.parse(await readFile(CRITERIA_PATH, 'utf8')) as Criterion[];
+  const criteria: Criterion[] = JSON.parse(await readFile(CRITERIA_PATH, 'utf8'));
   const corpus = await loadCorpus(traces, criteria);
 
   const truthByKey = new Map<string, LabelRow>();
@@ -654,8 +657,13 @@ async function main(): Promise<void> {
   }
 
   const criterionRows = criteria.map((c) => computeCriterionRow(c.id, traces, truthByKey, corpus));
-  const c1Row = criterionRows.find((r) => r.id === 'c1')!;
-  const c2Row = criterionRows.find((r) => r.id === 'c2')!;
+  const requireRow = (id: string): CriterionRow => {
+    const found = criterionRows.find((r) => r.id === id);
+    if (!found) throw new Error(`report.ts: criteria.json has no criterion ${id}`);
+    return found;
+  };
+  const c1Row = requireRow('c1');
+  const c2Row = requireRow('c2');
 
   const { markdown: groundTruthMarkdown, c1Accuracy } = groundTruthBlock(
     traces,
@@ -673,9 +681,9 @@ async function main(): Promise<void> {
 
   const haystackAggregates: number[] = [];
   for (const variant of VARIANTS) {
-    const summary = JSON.parse(
+    const summary: { aggregate?: { scores?: { faithfulness?: number } } } = JSON.parse(
       await readFile(join(haystackDir, 'report', `eval-${variant}.json`), 'utf8'),
-    ) as { aggregate?: { scores?: { faithfulness?: number } } };
+    );
     if (typeof summary.aggregate?.scores?.faithfulness === 'number') {
       haystackAggregates.push(summary.aggregate.scores.faithfulness);
     }
@@ -701,7 +709,7 @@ async function main(): Promise<void> {
     criterionTableMarkdown(criterionRows),
     '',
     "c3's truth is the Gemini baseline, not a human/auto label, so it has no row-fitted stats here " +
-      "and is reported separately in block (c); c4-c10 have no truth yet (pending" +
+      'and is reported separately in block (c); c4-c10 have no truth yet (pending' +
       "). c2's auto label is a *correctness* judgment (abstained-when-it-should, or didn't-" +
       "when-it-shouldn't), which flips sign between answerable and unanswerable rows, so its raw " +
       "P(yes)-vs-label kappa above is not directly comparable to c1's; see block (b) for the c2 " +

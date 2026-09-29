@@ -58,11 +58,16 @@ export function buildState(trace: Trace): string {
  * Builds the questions map for all criteria as 3-way choices (yes / no / the criterion's escape
  * label), substituting the golden reference answer into c1's instructions only.
  */
-export function buildQuestions(criteria: Criterion[], trace: Trace): Record<string, ChoiceQuestion> {
+export function buildQuestions(
+  criteria: Criterion[],
+  trace: Trace,
+): Record<string, ChoiceQuestion> {
   const questions: Record<string, ChoiceQuestion> = {};
   for (const c of criteria) {
     const instructions =
-      c.id === 'c1' ? c.instructions.replace('{{reference}}', trace.reference ?? 'not available') : c.instructions;
+      c.id === 'c1'
+        ? c.instructions.replace('{{reference}}', trace.reference ?? 'not available')
+        : c.instructions;
     questions[c.id] = {
       type: 'choice',
       instructions,
@@ -102,14 +107,20 @@ export type CallResult = { ok: true; response: SystemOneResponse } | { ok: false
 
 type CallOpts = { sleep?: (ms: number) => Promise<void> };
 
-const defaultSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+const defaultSleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * POSTs one systemone request with a 30s AbortSignal.timeout. Retries exactly once, after
  * Retry-After (capped at 60s), on 429 or 5xx. Never throws — failures are returned as a
  * `{ ok: false, cause }` result.
  */
-export async function callSystemOne(base: string, apiKey: string, body: unknown, opts: CallOpts = {}): Promise<CallResult> {
+export async function callSystemOne(
+  base: string,
+  apiKey: string,
+  body: unknown,
+  opts: CallOpts = {},
+): Promise<CallResult> {
   const sleep = opts.sleep ?? defaultSleep;
 
   async function attempt(): Promise<{ res: Response } | { errCause: string }> {
@@ -125,24 +136,36 @@ export async function callSystemOne(base: string, apiKey: string, body: unknown,
       return { res };
     } catch (err) {
       const isAbort = err instanceof Error && err.name === 'AbortError';
-      return { errCause: isAbort ? 'timeout' : `network error: ${err instanceof Error ? err.message : String(err)}` };
+      return {
+        errCause: isAbort
+          ? 'timeout'
+          : `network error: ${err instanceof Error ? err.message : String(err)}`,
+      };
     } finally {
       clearTimeout(timer);
     }
   }
 
   let result = await attempt();
-  if ('res' in result && !result.res.ok && (result.res.status === 429 || result.res.status >= 500)) {
+  if (
+    'res' in result &&
+    !result.res.ok &&
+    (result.res.status === 429 || result.res.status >= 500)
+  ) {
     const retryAfterHeader = result.res.headers.get('retry-after');
     const retryAfterSec = retryAfterHeader ? Number(retryAfterHeader) : 1;
-    const waitMs = Math.min(MAX_RETRY_AFTER_MS, Math.max(0, Number.isFinite(retryAfterSec) ? retryAfterSec : 1) * 1000);
+    const waitMs = Math.min(
+      MAX_RETRY_AFTER_MS,
+      Math.max(0, Number.isFinite(retryAfterSec) ? retryAfterSec : 1) * 1000,
+    );
     await sleep(waitMs);
     result = await attempt();
   }
 
   if ('errCause' in result) return { ok: false, cause: result.errCause };
   if (!result.res.ok) return { ok: false, cause: `http ${result.res.status}` };
-  return { ok: true, response: (await result.res.json()) as SystemOneResponse };
+  const response: SystemOneResponse = await result.res.json();
+  return { ok: true, response };
 }
 
 export type JudgeOutcome = {
@@ -171,7 +194,8 @@ export async function judgeOne(
   let networkCall = false;
 
   if (existsSync(cachePath)) {
-    response = JSON.parse(await readFile(cachePath, 'utf8')) as SystemOneResponse;
+    const cached: SystemOneResponse = JSON.parse(await readFile(cachePath, 'utf8'));
+    response = cached;
   } else {
     networkCall = true;
     const body = {
@@ -196,14 +220,40 @@ export async function judgeOne(
 
   const rows: VerdictRow[] = criteria.map((c) => {
     if (!response) {
-      return { traceId: trace.traceId, criterionId: c.id, repeat, noul: null, model, provider, status: 'unscored', cause: cause ?? 'unknown error' };
+      return {
+        traceId: trace.traceId,
+        criterionId: c.id,
+        repeat,
+        noul: null,
+        model,
+        provider,
+        status: 'unscored',
+        cause: cause ?? 'unknown error',
+      };
     }
     const answer = response.answers?.[c.id];
     if (!answer || typeof answer.choice !== 'string') {
-      return { traceId: trace.traceId, criterionId: c.id, repeat, noul: null, model, provider, status: 'unscored', cause: 'missing answer' };
+      return {
+        traceId: trace.traceId,
+        criterionId: c.id,
+        repeat,
+        noul: null,
+        model,
+        provider,
+        status: 'unscored',
+        cause: 'missing answer',
+      };
     }
     const noul = answer.choice === 'yes' ? true : answer.choice === 'no' ? false : null;
-    return { traceId: trace.traceId, criterionId: c.id, repeat, noul, model, provider, status: 'ok' };
+    return {
+      traceId: trace.traceId,
+      criterionId: c.id,
+      repeat,
+      noul,
+      model,
+      provider,
+      status: 'ok',
+    };
   });
 
   return {
@@ -231,10 +281,21 @@ export async function runJudge(
   traces: Trace[],
   criteria: Criterion[],
   cacheDir: string,
-  opts: { base: string; apiKey: string; sleep?: (ms: number) => Promise<void>; concurrency?: number; repeats?: number },
+  opts: {
+    base: string;
+    apiKey: string;
+    sleep?: (ms: number) => Promise<void>;
+    concurrency?: number;
+    repeats?: number;
+  },
 ): Promise<JudgeSummary> {
   const repeats = opts.repeats ?? REPEATS;
-  const jobs = repeats > 0 ? traces.flatMap((trace) => Array.from({ length: repeats }, (_, repeat) => ({ trace, repeat }))) : [];
+  const jobs =
+    repeats > 0
+      ? traces.flatMap((trace) =>
+          Array.from({ length: repeats }, (_, repeat) => ({ trace, repeat })),
+        )
+      : [];
 
   const total = jobs.length;
   const startedAt = Date.now();
@@ -282,8 +343,12 @@ export async function runJudge(
   const ok = summary.rows.filter((r) => r.status === 'ok').length;
   const unscored = summary.rows.length - ok;
   console.log(`rows: ${summary.rows.length} ok=${ok} unscored=${unscored}`);
-  console.log(`usage: input_tokens=${summary.totalInputTokens} output_tokens=${summary.totalOutputTokens} marketCost=${summary.totalMarketCost}`);
-  console.log(`model(s): ${summary.models.join(', ')}; finalProvider(s): ${summary.finalProviders.join(', ')}`);
+  console.log(
+    `usage: input_tokens=${summary.totalInputTokens} output_tokens=${summary.totalOutputTokens} marketCost=${summary.totalMarketCost}`,
+  );
+  console.log(
+    `model(s): ${summary.models.join(', ')}; finalProvider(s): ${summary.finalProviders.join(', ')}`,
+  );
 
   return summary;
 }
@@ -294,10 +359,16 @@ async function main(): Promise<void> {
   const base = process.env.SPIKE_GATEWAY_BASE ?? DEFAULT_GATEWAY_BASE;
 
   const traces = await readJsonl<Trace>(join(spikeDataDir, 'traces.jsonl'));
-  const criteria = JSON.parse(await readFile(join(spikeDataDir, 'criteria.json'), 'utf8')) as Criterion[];
+  const criteria: Criterion[] = JSON.parse(
+    await readFile(join(spikeDataDir, 'criteria.json'), 'utf8'),
+  );
   const cacheDir = join(spikeDataDir, 'cache');
 
-  const summary = await runJudge(traces, criteria, cacheDir, { base, apiKey, concurrency: CONCURRENCY });
+  const summary = await runJudge(traces, criteria, cacheDir, {
+    base,
+    apiKey,
+    concurrency: CONCURRENCY,
+  });
 
   await writeJsonl(join(spikeDataDir, 'verdicts.jsonl'), summary.rows);
   console.log(`judge.ts: wrote ${summary.rows.length} rows to spike/data/verdicts.jsonl`);

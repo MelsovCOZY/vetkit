@@ -114,11 +114,16 @@ function isSource(value: string | undefined): value is Source {
 }
 
 export function serializeRow(row: LabelRow): string {
-  return [row.traceId, row.criterionId, row.label, row.source, row.labelledAt, row.baseline].join(',');
+  return [row.traceId, row.criterionId, row.label, row.source, row.labelledAt, row.baseline].join(
+    ',',
+  );
 }
 
 export function parseCsv(text: string): LabelRow[] {
-  const lines = text.split('\n').map((line) => line.trimEnd()).filter((line) => line.length > 0);
+  const lines = text
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .filter((line) => line.length > 0);
   const body = lines[0] === CSV_HEADER ? lines.slice(1) : lines;
   const rows: LabelRow[] = [];
   for (const line of body) {
@@ -161,7 +166,9 @@ export function runAuto(
   existing: LabelRow[],
   now: () => string = () => new Date().toISOString(),
 ): { rows: LabelRow[]; counts: AutoCounts } {
-  const existingKeys = new Set(existing.map((r) => `${r.traceId}\u0000${r.criterionId}\u0000${r.source}`));
+  const existingKeys = new Set(
+    existing.map((r) => `${r.traceId}\u0000${r.criterionId}\u0000${r.source}`),
+  );
   const rows: LabelRow[] = [];
   const counts: AutoCounts = { c1: { yes: 0, no: 0, review: 0 }, c2: { yes: 0, no: 0 }, c3: 0 };
 
@@ -169,13 +176,27 @@ export function runAuto(
     const c1Label = compareAnswerToReference(t.answer, t.reference);
     counts.c1[c1Label] += 1;
     if (!existingKeys.has(`${t.traceId}\u0000c1\u0000auto`)) {
-      rows.push({ traceId: t.traceId, criterionId: 'c1', label: c1Label, source: 'auto', labelledAt: now(), baseline: '' });
+      rows.push({
+        traceId: t.traceId,
+        criterionId: 'c1',
+        label: c1Label,
+        source: 'auto',
+        labelledAt: now(),
+        baseline: '',
+      });
     }
 
     const c2Label = computeC2Label(t.answer, t.unanswerable);
     counts.c2[c2Label] += 1;
     if (!existingKeys.has(`${t.traceId}\u0000c2\u0000auto`)) {
-      rows.push({ traceId: t.traceId, criterionId: 'c2', label: c2Label, source: 'auto', labelledAt: now(), baseline: '' });
+      rows.push({
+        traceId: t.traceId,
+        criterionId: 'c2',
+        label: c2Label,
+        source: 'auto',
+        labelledAt: now(),
+        baseline: '',
+      });
     }
 
     const c3 = computeC3Baseline(t.baseline.faithfulness);
@@ -211,9 +232,7 @@ export function seededShuffle<T>(items: readonly T[], seed: number): T[] {
   const rand = mulberry32(seed);
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(rand() * (i + 1));
-    const tmp = arr[i]!;
-    arr[i] = arr[j]!;
-    arr[j] = tmp;
+    [arr[i], arr[j]] = [arr[j], arr[i]];
   }
   return arr;
 }
@@ -226,11 +245,11 @@ export function selectSample(traces: Trace[], seed: number, minSize: number): st
     group.push(t);
     byLang.set(t.lang, group);
   }
-  const langs = [...byLang.keys()].sort();
+  const langs = [...byLang.keys()].toSorted();
   const perLang = Math.ceil(minSize / Math.max(langs.length, 1));
   const picked: Trace[] = [];
   for (const lang of langs) {
-    picked.push(...seededShuffle(byLang.get(lang)!, seed).slice(0, perLang));
+    picked.push(...seededShuffle(byLang.get(lang) ?? [], seed).slice(0, perLang));
   }
   return seededShuffle(picked, seed + 1).map((t) => t.traceId);
 }
@@ -246,7 +265,9 @@ export function buildQueue(
     existing.filter((r) => r.source === 'human').map((r) => `${r.traceId}\u0000${r.criterionId}`),
   );
   const autoC1ByTrace = new Map(
-    existing.filter((r) => r.source === 'auto' && r.criterionId === 'c1').map((r) => [r.traceId, r]),
+    existing
+      .filter((r) => r.source === 'auto' && r.criterionId === 'c1')
+      .map((r) => [r.traceId, r]),
   );
   const queue: { traceId: string; criterionId: string }[] = [];
 
@@ -307,14 +328,25 @@ export async function runInteractiveLoop(opts: {
     if (raw === 'q') return { answered, quit: true };
 
     const label: Label = raw === 'y' ? 'yes' : raw === 'n' ? 'no' : 'review';
-    opts.onRow({ traceId: t.traceId, criterionId: c.id, label, source: 'human', labelledAt: now(), baseline: '' });
+    opts.onRow({
+      traceId: t.traceId,
+      criterionId: c.id,
+      label,
+      source: 'human',
+      labelledAt: now(),
+      baseline: '',
+    });
     answered += 1;
   }
 
   return { answered, quit: false };
 }
 
-export function validateImportRow(row: LabelRow, traceIds: Set<string>, criterionIds: Set<string>): boolean {
+export function validateImportRow(
+  row: LabelRow,
+  traceIds: Set<string>,
+  criterionIds: Set<string>,
+): boolean {
   return (
     traceIds.has(row.traceId) &&
     criterionIds.has(row.criterionId) &&
@@ -331,7 +363,9 @@ export function mergeImport(
   traceIds: Set<string>,
   criterionIds: Set<string>,
 ): { toAppend: LabelRow[]; imported: number; rejected: number } {
-  const existingKeys = new Set(existing.map((r) => `${r.traceId}\u0000${r.criterionId}\u0000${r.source}`));
+  const existingKeys = new Set(
+    existing.map((r) => `${r.traceId}\u0000${r.criterionId}\u0000${r.source}`),
+  );
   const lastWins = new Map<string, LabelRow>();
   let rejected = 0;
 
@@ -376,11 +410,12 @@ const SAMPLE_SEED = 20260925;
 const SAMPLE_MIN_SIZE = 30;
 
 async function loadCriteria(): Promise<Criterion[]> {
-  return JSON.parse(readFileSync(CRITERIA_PATH, 'utf8')) as Criterion[];
+  const criteria: Criterion[] = JSON.parse(readFileSync(CRITERIA_PATH, 'utf8'));
+  return criteria;
 }
 
 async function main(): Promise<void> {
-  const mode = resolveMode(process.argv.slice(2), Boolean(process.stdin.isTTY));
+  const mode = resolveMode(process.argv.slice(2), process.stdin.isTTY);
 
   if (mode.mode === 'exit2') {
     process.exitCode = 2;
@@ -405,7 +440,12 @@ async function main(): Promise<void> {
     const criterionIds = new Set(criteria.map((c) => c.id));
     const existing = loadExistingRows(LABELS_PATH);
     const importRows = parseCsv(readFileSync(mode.path, 'utf8'));
-    const { toAppend, imported, rejected } = mergeImport(importRows, existing, traceIds, criterionIds);
+    const { toAppend, imported, rejected } = mergeImport(
+      importRows,
+      existing,
+      traceIds,
+      criterionIds,
+    );
     appendRows(LABELS_PATH, toAppend);
     console.log(`imported: ${imported}, rejected: ${rejected}`);
     return;
@@ -435,5 +475,5 @@ async function main(): Promise<void> {
 }
 
 if (import.meta.main) {
-  main();
+  void main();
 }
