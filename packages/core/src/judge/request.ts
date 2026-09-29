@@ -2,7 +2,7 @@
 // of a case goes to the judge as one keyed question inside a single doJudge call). Consumed only
 // through runJudge in run.ts (DECISION: core seams named).
 //
-// Channel rule (eval-quality brief §4 items 9-10, §5.2 item 13): the judged content — the case's
+// Channel rule: the judged content — the case's
 // `input.state` — goes into the request's `state` and nowhere else; a reference answer
 // (Case.expected, via renderReference) goes into that question's `instructions` and never into
 // `state`.

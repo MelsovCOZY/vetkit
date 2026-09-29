@@ -1,4 +1,4 @@
-// `vet estimate` numbers (UX brief §1.4, §5.3): judge calls, input tokens, cost and minutes
+// `vet estimate` numbers: judge calls, input tokens, cost and minutes
 // before a run or a validate, with no network call. Prices are input data (the CLI passes the
 // transport's price row from its adapter); core holds no vendor price. The only I/O is a
 // listing of the verdict cache directory, so cached cases count as 0 calls.
@@ -7,7 +7,7 @@ import type { Case, Criterion } from '@vetkit/spec';
 import { buildRequest, cacheKey } from './judge/request.ts';
 import { CALIBRATION_MIN_REPEATS } from './validate/calibrate.ts';
 
-/** The measured gateway pace (UX brief §2.1): about 25 judge calls per minute. */
+/** The measured gateway pace: about 25 judge calls per minute. */
 export const DEFAULT_CALLS_PER_MINUTE = 25;
 
 const CHARS_PER_TOKEN = 4;

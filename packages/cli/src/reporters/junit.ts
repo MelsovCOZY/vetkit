@@ -1,7 +1,7 @@
-// JUnit reporter for `vet run` (UX brief §3 item 6; DECISION C10: a reporter, not a sink).
+// JUnit reporter for `vet run` (a reporter, not a sink).
 // renderJunit is pure so the GitHub Action and the vitest export can reuse it. One <testsuite>
 // per criteria file, one <testcase name="caseId::criterionId"> per verdict. Only ok verdicts
-// are pass or fail; every other status is a skip carrying the status (JEV brief §2: judge
+// are pass or fail; every other status is a skip carrying the status (judge
 // failures stay separate from incorrect answers). The XML is string-built (no dependency) and
 // targets the windyroad JUnit XSD (fixtures/reporters/junit-10.xsd).
 import { createHash } from 'node:crypto';

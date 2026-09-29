@@ -6,7 +6,7 @@
 //
 // Attribute names pinned to SPEC_COMMIT below:
 // https://github.com/Arize-ai/openinference/blob/7feb0c4ba2fd77cb76036712e21d06ff15a2be22/spec/semantic_conventions.md
-// ET brief appendix: Phoenix converts gen_ai.* to OpenInference at ingest and OpenInference takes
+// Phoenix converts gen_ai.* to OpenInference at ingest and OpenInference takes
 // precedence — this module never reads gen_ai.* keys itself; that precedence belongs to the normalize cascade.
 
 import {

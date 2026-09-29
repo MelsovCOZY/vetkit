@@ -1,4 +1,4 @@
-// Gauntlet A wording checks (JEV brief §4 item 4; eval-quality brief §4 item 7, §5.2 items 4-5):
+// Gauntlet A wording checks:
 // a criterion whose decision changes with rewording is not measuring the trace. The generator
 // (GeneratorV1) drafts the wordings, core validates them (DECISION (structured output)), and the
 // judge sees them through runJudge with the cache bypassed. Paraphrases gate on decision

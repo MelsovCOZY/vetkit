@@ -1,5 +1,5 @@
 {
-  "description": "Content-free paddings for Gauntlet C length checks (eval-quality brief §4 item 6; arXiv 2404.04475, 2306.05685). Each text is appended after the final assistant turn of a known-fail state; none adds task content, so a fail→pass flip is verbosity bias.",
+  "description": "Content-free paddings for Gauntlet C length checks (arXiv 2404.04475, 2306.05685). Each text is appended after the final assistant turn of a known-fail state; none adds task content, so a fail→pass flip is verbosity bias.",
   "paddings": [
     {
       "id": "restated-bullets",

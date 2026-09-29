@@ -1,4 +1,4 @@
-// Span tree. Causality first, timestamps second (ET brief OTEL-5): a span sits
+// Span tree. Causality first, timestamps second: a span sits
 // under its parent whatever the clocks say, and only siblings are ordered by startTimeUnixNano.
 // A parentSpanId that never arrived is listed in missingParents and its span becomes a root,
 // never a throw (OTEL-4).

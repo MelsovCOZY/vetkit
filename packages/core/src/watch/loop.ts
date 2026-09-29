@@ -9,8 +9,7 @@
 // Concurrency is bounded twice, deliberately: an owned semaphore caps how many traces are between
 // "sampled" and "judged" at once, so a for-await over a stream that may never end (the receiver)
 // never buffers unboundedly (RISK note); `judge` itself is invoked through the shared J1 pacing
-// limiter (judge/pacing.ts) so watch, run and validate pace against the same Retry-After state
-// (UX brief C1).
+// limiter (judge/pacing.ts) so watch, run and validate pace against the same Retry-After state.
 import {
   VetError,
   type Case,
@@ -38,7 +37,7 @@ export interface JudgeCaseFn {
 }
 
 export interface RunWatchOptions extends WatchOptions {
-  /** Per judge call. RISK (brief 6): whole-call deadlines are mandatory. Default 30_000. */
+  /** Per judge call. Whole-call deadlines are mandatory: a hung judge call must not stall the run. Default 30_000. */
   readonly judgeTimeoutMs?: number;
   /** Deadline for the final outbox drain, independent of any abort signal.
    * Default 30_000. */

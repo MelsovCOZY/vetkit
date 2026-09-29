@@ -4,7 +4,7 @@
 // `${caseId} · ${criterionId}` name @vetkit/export-vitest's emitTestFile embeds in every test
 // (vitest reporter docs $1).
 // A skipped vitest test (an uncalibrated lock, or an incomplete trace) is not a verdict
-// disagreement (JEV brief §2 "keep judge failed separate from incorrect") and is excluded from
+// disagreement (judge failures stay separate from incorrect answers) and is excluded from
 // the diff. Plain Node ESM, no dependencies, so CI can run it without the workspace built.
 import { readFileSync } from 'node:fs';
 

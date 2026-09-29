@@ -7,7 +7,7 @@
 // https://github.com/vercel/ai/blob/main/content/docs/03-ai-sdk-core/60-telemetry.mdx
 // The outer `ai.generateText`/`ai.streamText`/`ai.generateObject`/`ai.streamObject` span is
 // kind 'other'; only its inner `.doGenerate`/`.doStream` provider span is an LLM span, so a
-// duplicate ai.usage.* attribute copy on the outer span is never summed (ET brief §2.4).
+// duplicate ai.usage.* attribute copy on the outer span is never summed.
 //
 // RISK (bead notes): the GenAI semconv conventions this maps against are unreleased
 // (gen-ai-dev/1.42.0-dev) and renames are queued in changelog.d; SPEC_COMMIT pins the doc

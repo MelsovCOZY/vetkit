@@ -6,7 +6,7 @@
 // choice {yes, no, escape}; p = P(yes), P(escape) >= escapeThreshold gives not_applicable,
 // pass = p >= threshold (pass_when_true) or 1-p >= threshold (pass_when_false). Choice passes when
 // P(passWhen) = Σ p over the passWhen labels >= threshold (1 − P for pass_when_false). Score passes when the expected level E >= threshold (max − E
-// for pass_when_false). Only boolean and choice criteria gate (eval-quality brief §5.2 item 14);
+// for pass_when_false). Only boolean and choice criteria gate;
 // code-graded criteria never reach the judge.
 import {
   CEV_ERROR_CODES,
@@ -28,7 +28,7 @@ import { gradeCode } from './judge/reference.ts';
 import { httpStatusOf, judgeCase } from './judge/request.ts';
 import { assertLockGates } from './validate/lock.ts';
 
-/** Uncalibrated placeholder threshold, never trusted for gating (jev brief §5). */
+/** Uncalibrated placeholder threshold, never trusted for gating. */
 const DEFAULT_THRESHOLD = 0.5;
 const DEFAULT_ESCAPE_THRESHOLD = 0.5;
 const ESCAPE_KEY = 'escape';

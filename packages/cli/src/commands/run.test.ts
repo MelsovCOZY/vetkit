@@ -332,7 +332,7 @@ describe('vet run default criteria/cases paths', () => {
   });
 });
 
-describe('vet run and evals/cases/pending/ (root DECISION UX brief C11)', () => {
+describe('vet run and evals/cases/pending/ (promotion rule: one file per day)', () => {
   test('no pending/ directory: the stderr pending-count line reads 0', () => {
     const result = runVet(['run'], freshProject(), fixtureEnv('pass'));
     expect(result.status).toBe(0);

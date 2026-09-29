@@ -9,7 +9,7 @@
 // PREMISE (web, raw doc fetched 2026-09-25, gen-ai-events.md;
 // https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md).
 // The manifest at that commit is unreleased/Development (`gen-ai-dev/1.42.0-dev`), so the
-// attribute table is pinned here rather than to a tagged release (ET brief §2.4, root RISK).
+// attribute table is pinned here rather than to a tagged release (the attribute names may still change).
 
 import type { Message, MessagePart } from '@vetkit/spec';
 import { safeParseJson, validateJson, type JsonSchema } from '@vetkit/spec';

@@ -1,5 +1,5 @@
 // `vet estimate [--for run|validate]`: judge calls, input tokens, cost and minutes before a run
-// or a validate, with no network call (UX brief §5.3: a separate command, not --dry-run flags).
+// or a validate, with no network call (a separate command, not --dry-run flags).
 // The price row comes from the judge adapter's preset table for the resolved transport; a
 // transport with no row (custom baseURL, in-process adapter) prints cost 'unknown'.
 //

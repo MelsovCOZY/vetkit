@@ -1,6 +1,6 @@
 // Near-duplicate case clusters (MinHash over word 5-grams + LSH banding, confirmed by normalised
 // edit similarity) and cluster-robust standard errors. Pure functions; the only side effect is the
-// optional injected `emit`. Eval-quality brief §2.2, §5.2 items 9 and 11; arXiv 2107.06499.
+// optional injected `emit`. See arXiv 2107.06499.
 import type { Case } from '@vetkit/spec';
 
 /** Edit similarity is computed on at most this many characters per side. */

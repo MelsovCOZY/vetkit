@@ -1,4 +1,4 @@
-// The vetkit action's PR comment (UX brief §3 item 8; DECISION C10). Reads the `vet run --json`
+// The vetkit action's PR comment. Reads the `vet run --json`
 // document and, when present, the base branch's one, renders ONE markdown comment identified by
 // a hidden marker and upserts it through `gh api` (no npm dependencies). Only case ids, outcomes,
 // counts, the model and gate reasons are rendered: never verdict payloads or judge requests,
