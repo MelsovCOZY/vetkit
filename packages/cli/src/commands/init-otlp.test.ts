@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { GenerateEvalsResult } from '@vetkit/core';
 import { safeParseJson, type Case, type NormalizedTrace } from '@vetkit/spec';
-import { beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import { ensureCliBuilt } from '../test-support/build-cli.js';
 import { buildOtlpSummary, otlpSourceFromArg } from './init-otlp.ts';
 
@@ -144,6 +144,83 @@ describe('otlpSourceFromArg: file-backed', () => {
     expect(() => otlpSourceFromArg('/does/not/exist/otlp-source')).toThrowError(
       expect.objectContaining({ code: 'SOURCE_UNREADABLE' }),
     );
+  });
+});
+
+const str = (stringValue: string) => ({ stringValue });
+
+function narratorTraceBody(): string {
+  return JSON.stringify({
+    resourceSpans: [
+      {
+        resource: { attributes: [] },
+        scopeSpans: [
+          {
+            spans: [
+              {
+                traceId: '0102030405060708090a0b0c0d0e0f10',
+                spanId: '1112131415161718',
+                name: 'chat',
+                kind: 1,
+                startTimeUnixNano: '1700000000000000000',
+                endTimeUnixNano: '1700000001000000000',
+                attributes: [
+                  { key: 'ai.operationId', value: str('ai.generateText.doGenerate') },
+                  {
+                    key: 'ai.prompt.messages',
+                    value: str(JSON.stringify([{ role: 'narrator', content: 'secret text' }])),
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+}
+
+async function readWithStderrCaptured(file: string): Promise<string[]> {
+  const written: string[] = [];
+  const spy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+    written.push(String(chunk));
+    return true;
+  });
+  try {
+    for await (const trace of otlpSourceFromArg(file).doRead({})) void trace;
+  } finally {
+    spy.mockRestore();
+  }
+  return written;
+}
+
+describe('otlpSourceFromArg: source diagnostics under CEV_DIAG', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test('CEV_DIAG=1 writes an unknown_role diag as one JSON line on stderr', async () => {
+    vi.stubEnv('CEV_DIAG', '1');
+    const file = join(tmpOtlpDir(), 'a.json');
+    writeFileSync(file, narratorTraceBody());
+    const lines = (await readWithStderrCaptured(file)).filter((l) => l.includes('unknown_role'));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.endsWith('\n')).toBe(true);
+    const parsed = safeParseJson<{ diag: { otlp: { detail: string } } }>(lines[0] ?? '', {});
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.value.diag.otlp).toMatchObject({ code: 'unknown_role', level: 'warn' });
+    expect(parsed.value.diag.otlp.detail).toContain('narrator');
+    expect(lines[0]).not.toContain('secret text');
+  });
+
+  test('without CEV_DIAG nothing is written', async () => {
+    vi.stubEnv('CEV_DIAG', '');
+    vi.stubEnv('CEV_TRACE_HTTP', '');
+    const file = join(tmpOtlpDir(), 'a.json');
+    writeFileSync(file, narratorTraceBody());
+    const lines = (await readWithStderrCaptured(file)).filter((l) => l.includes('unknown_role'));
+    expect(lines).toEqual([]);
   });
 });
 
