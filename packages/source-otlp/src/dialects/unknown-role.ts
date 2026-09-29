@@ -8,7 +8,7 @@ const MAX_ROLE_CHARS = 64;
 
 const KNOWN_ROLES: readonly string[] = ['user', 'assistant', 'system', 'tool'];
 
-export function isKnownRole(role: string): role is Message['role'] {
+function isKnownRole(role: string): role is Message['role'] {
   return KNOWN_ROLES.includes(role);
 }
 

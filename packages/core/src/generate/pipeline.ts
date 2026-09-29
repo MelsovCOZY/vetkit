@@ -23,7 +23,7 @@ import { proposeCriteria } from './criteria.ts';
 import { dedupeCriteria, type DuplicateRecord } from './dedupe.ts';
 import { proposeFailureModes, type FailureMode } from './failure-modes.ts';
 
-export const CASES_BATCH_FILE = 'generated.jsonl';
+const CASES_BATCH_FILE = 'generated.jsonl';
 
 export interface GenerateConfig {
   /** Keep at most this many criteria after lint. */

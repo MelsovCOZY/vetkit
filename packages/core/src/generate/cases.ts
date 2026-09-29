@@ -8,7 +8,7 @@ import { MAX_STATE_TOKENS } from '../cases/load.ts';
 import { statusForTrace, type ExclusionStatus } from '../judge/completeness.ts';
 
 /** Bump when rendering changes: it is part of every case id. */
-export const CASE_RENDERER_VERSION = '1';
+const CASE_RENDERER_VERSION = '1';
 
 const MAX_STATE_CHARS = MAX_STATE_TOKENS * 4;
 const TRUNCATION_MARKER = '[truncated]\n';

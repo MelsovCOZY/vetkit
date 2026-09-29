@@ -35,7 +35,7 @@ export interface JevHealthEndpoint {
 
 // A price row for one transport (the per-transport price table lives here, as
 // data with its source, never in logic). USD per 1M tokens; `asOf` is printed with estimates.
-export interface JevPricing {
+interface JevPricing {
   readonly inputPerMTok: number;
   readonly outputPerMTok: number;
   readonly source: string;

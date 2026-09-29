@@ -28,8 +28,8 @@ export interface ProposeFailureModesInput {
   readonly seed?: number;
 }
 
-export const MAX_DIGEST_TRACES = 20;
-export const MAX_TRACE_CHARS = 2000;
+const MAX_DIGEST_TRACES = 20;
+const MAX_TRACE_CHARS = 2000;
 const MIN_TRACES = 5;
 
 // mulberry32: small, deterministic, good enough for a reproducible sample.

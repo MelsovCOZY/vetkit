@@ -11,7 +11,7 @@ import { emit, getLogger, type GlobalOptions } from '../output.ts';
 
 const DEFAULT_CRITERIA_FILES = ['evals/criteria.yaml'];
 
-export interface ExportOptions extends GlobalOptions {
+interface ExportOptions extends GlobalOptions {
   readonly config?: string;
   readonly criteria?: string[];
   readonly cases?: string;

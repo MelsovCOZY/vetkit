@@ -151,7 +151,7 @@ export function renderJunit(
 }
 
 /** Parses `junit` or `junit=<path>`; anything else is a usage error. */
-export function parseReporterSpec(value: string): ReporterSpec {
+function parseReporterSpec(value: string): ReporterSpec {
   const [kind, ...rest] = value.split('=');
   const path = rest.length === 0 ? DEFAULT_JUNIT_PATH : rest.join('=');
   if (kind !== 'junit' || path === '') {
