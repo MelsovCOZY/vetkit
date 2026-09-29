@@ -7,10 +7,13 @@ import { CEV_ERROR_CODES, VetError } from '../errors.ts';
 import type { Verdict } from '../generated/index.ts';
 import { assertSpecVersion } from '../registry.ts';
 
-// accepted and rejected[].id are Verdict.id values from the batch passed to doWrite.
+// accepted, rejected[].id and skipped[].id are Verdict.id values from the batch passed to doWrite.
+// skipped lists verdicts the sink declined on purpose (nothing to write): terminal, never retried
+// and not a failure.
 export interface SinkAck {
   accepted: string[];
   rejected: Array<{ id: string; reason: string; retryable: boolean }>;
+  skipped?: Array<{ id: string; reason: string }>;
 }
 
 export interface SinkV1 {

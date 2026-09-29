@@ -61,11 +61,11 @@ export function createLangfuseSink(options: LangfuseSinkOptions): SinkV1 {
     id: string,
     verdict: Verdict,
     signal?: AbortSignal,
-  ): Promise<Rejection | undefined> {
+  ): Promise<Rejection | 'skipped' | undefined> {
     const traceId = verdict.provenance?.traceId;
     if (traceId === undefined) return { id, reason: 'no correlation id', retryable: false };
     const score = toLangfuseScore(verdict, traceId);
-    if (score === undefined) return { id, reason: 'skipped:unscored:no_answer', retryable: false };
+    if (score === undefined) return 'skipped';
     const deadline = AbortSignal.timeout(timeoutMs);
     let response: Response;
     try {
@@ -88,17 +88,19 @@ export function createLangfuseSink(options: LangfuseSinkOptions): SinkV1 {
     capabilities: { batch: 50, idempotent: false },
     async doWrite(batch, opts) {
       const ack: SinkAck = { accepted: [], rejected: [] };
+      const skipped: NonNullable<SinkAck['skipped']> = [];
       for (const verdict of batch) {
         const id = verdict.id ?? `${verdict.caseId}:${verdict.criterionId}`;
         if (verdict.status !== 'ok') {
-          ack.rejected.push({ id, reason: `skipped:unscored:${verdict.status}`, retryable: false });
+          skipped.push({ id, reason: `unscored:${verdict.status}` });
           continue;
         }
         const rejection = await post(id, verdict, opts.signal);
         if (rejection === undefined) ack.accepted.push(id);
+        else if (rejection === 'skipped') skipped.push({ id, reason: 'unscored:no_answer' });
         else ack.rejected.push(rejection);
       }
-      return ack;
+      return skipped.length === 0 ? ack : { ...ack, skipped };
     },
   });
 }

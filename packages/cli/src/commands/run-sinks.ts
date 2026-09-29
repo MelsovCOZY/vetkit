@@ -1,7 +1,7 @@
 // `vet run --sink <names>`: after the run, every verdict (partial on SIGINT)
 // is enqueued in the durable outbox under <cacheDir>/outbox, drained to the named sinks and
-// reconciled. The counts merge into the run's result: `sinks.<name> = {accepted, rejected}`
-// for this drain and `outbox = {produced, acknowledged, dead}` as outbox-file totals, which
+// reconciled. The counts merge into the run's result: `sinks.<name> = {accepted, skipped, rejected}`
+// for this drain and `outbox = {produced, acknowledged, skipped, dead}` as outbox-file totals, which
 // add up across runs so a second run shows the drained backlog. Retained pending
 // items only warn on stderr; the exit code stays the run's.
 import { join, resolve } from 'node:path';
@@ -28,22 +28,23 @@ function finishFor(ctx: RunHookContext, sinks: readonly ResolvedSink[]): RunHook
 
     const events = createEvents();
     const stopRendering = renderEvents(events, { options: ctx.options });
-    const counts: Record<string, { accepted: number; rejected: number }> = {};
+    const counts: Record<string, { accepted: number; skipped: number; rejected: number }> = {};
     const lines: string[] = [];
     let pending = 0;
     for (const { name, sink } of sinks) {
       const d = drained.find((r) => r.sink === sink.id);
       if (d === undefined) continue;
       events.emit('outbox:drain', { sink: d.sink, drained: d.acknowledged, pending: d.pending });
-      counts[name] = { accepted: d.acknowledged, rejected: d.dead + d.pending };
+      const accepted = d.acknowledged - d.skipped;
+      counts[name] = { accepted, skipped: d.skipped, rejected: d.dead + d.pending };
       pending += d.pending;
       lines.push(
-        `sink ${name}: ${String(d.acknowledged)} accepted, ${String(d.dead + d.pending)} rejected`,
+        `sink ${name}: ${String(accepted)} accepted, ${String(d.skipped)} skipped, ${String(d.dead + d.pending)} rejected`,
       );
     }
     stopRendering();
     lines.push(
-      `outbox totals: ${String(totals.produced)} produced, ${String(totals.acknowledged)} acknowledged, ${String(totals.dead)} dead`,
+      `outbox totals: ${String(totals.produced)} produced, ${String(totals.acknowledged)} acknowledged (${String(totals.skipped)} skipped), ${String(totals.dead)} dead`,
     );
     if (pending > 0) {
       getLogger().warn(
