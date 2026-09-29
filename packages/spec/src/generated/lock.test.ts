@@ -69,7 +69,7 @@ describe('lockSchema', () => {
   test('accepts gauntletDetail with master_key inputs and injection flips', () => {
     const detail = {
       masterKeyFailed: [{ kind: 'fixed', caseId: 'pass' }],
-      injectionFlips: [{ family: 'encoding', flips: 1, trials: 4 }],
+      injectionFlips: [{ family: 'encoding', flips: 1, labelFlips: 0, trials: 4 }],
     };
     expect(parse(lock({ criteria: { c: criterion({ gauntletDetail: detail }) } })).ok).toBe(true);
     const extra = { masterKeyFailed: [{ kind: 'fixed', caseId: 'x', text: 'leak' }] };

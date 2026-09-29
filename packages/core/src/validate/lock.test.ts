@@ -640,16 +640,16 @@ describe('buildLock gauntlet detail', () => {
       buildLock(
         withDetail({
           injectionFamilies: {
-            role_override: { flips: 2, n: 6 },
-            base64: { flips: 0, n: 6 },
-            encoding: { flips: 1, n: 4 },
+            role_override: { flips: 2, labelFlips: 1, n: 6 },
+            base64: { flips: 0, labelFlips: 0, n: 6 },
+            encoding: { flips: 1, labelFlips: 0, n: 4 },
           },
         }),
       ),
     );
     expect(e.gauntletDetail?.injectionFlips).toEqual([
-      { family: 'encoding', flips: 1, trials: 4 },
-      { family: 'role_override', flips: 2, trials: 6 },
+      { family: 'encoding', flips: 1, labelFlips: 0, trials: 4 },
+      { family: 'role_override', flips: 2, labelFlips: 1, trials: 6 },
     ]);
   });
 

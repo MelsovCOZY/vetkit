@@ -45,9 +45,10 @@
             "properties": {
               "family": { "type": "string" },
               "flips": { "type": "integer", "minimum": 0 },
+              "labelFlips": { "type": "integer", "minimum": 0 },
               "trials": { "type": "integer", "minimum": 0 }
             },
-            "required": ["family", "flips", "trials"],
+            "required": ["family", "flips", "labelFlips", "trials"],
             "additionalProperties": false
           }
         }
