@@ -1,7 +1,6 @@
-// Fixed verbatim by docs/contracts/j7.md "Ports and types".
-// Not re-exported from packages/core/src/index.ts: the implementation leaves (sampler.ts,
-// loop.ts, promote.ts / commands/watch.ts) import this module by path, same as the
-// spec ports (docs/contracts/j0.md "core seams") are imported directly rather than re-barreled.
+// Not re-exported from packages/core/src/index.ts: sampler.ts, loop.ts, promote.ts and
+// commands/watch.ts import this module by path, as the spec ports are imported directly
+// rather than re-barreled.
 import type { Case } from '@vetkit/spec';
 
 export interface WatchOptions {
@@ -30,10 +29,9 @@ export interface InclusionRecord {
 }
 
 export interface PromotedCase extends Case {
-  // Case['provenance'] is `unknown` today (packages/spec/schemas/case.schema.json), so this
-  // intersection reduces to the promotedFrom shape alone (docs/contracts/j7.md Premise) — kept
-  // as an intersection, not a replacement, so this still widens correctly if Case.provenance
-  // ever gains real fields.
+  // Case['provenance'] is `unknown` (packages/spec/schemas/case.schema.json), so this
+  // intersection reduces to the promotedFrom shape alone. It stays an intersection, not a
+  // replacement, so it still widens correctly if Case.provenance gains real fields.
   // oxlint-disable-next-line typescript/no-redundant-type-constituents
   provenance: Case['provenance'] & {
     promotedFrom: { traceId: string; criterionId: string; verdictId: string; at: string };

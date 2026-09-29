@@ -1,14 +1,13 @@
-// runWatch: drives the J5 receiver stream through the sampler, the judge and the unsampled
-// outbox (docs/contracts/j7.md "Sampling rule" / "Inclusion log"). OUT of scope: sampler internals, promotion (hooked in
-// here only via the `onVerdict` callback), CLI rendering.
+// runWatch: drives the receiver stream through the sampler, the judge and the outbox.
+// Sampler internals, promotion (hooked in only via the `onVerdict` callback) and CLI rendering
+// live elsewhere.
 //
-// `judge` is the only judging surface this module touches (design: "no new judge or sink logic"):
-// the case built from each trace and any doJudge/request-building live behind that callable,
+// `judge` is the only judging surface this module touches: the case built from each trace and any doJudge/request-building live behind that callable,
 // bound to real criteria + a JudgeV1 by the caller.
 //
 // Concurrency is bounded twice, deliberately: an owned semaphore caps how many traces are between
 // "sampled" and "judged" at once, so a for-await over a stream that may never end (the receiver)
-// never buffers unboundedly (RISK note); `judge` itself is invoked through the shared J1 pacing
+// never buffers unboundedly; `judge` itself is invoked through the shared pacing
 // limiter (judge/pacing.ts) so watch, run and validate pace against the same Retry-After state.
 import {
   VetError,
@@ -78,7 +77,7 @@ export interface CoverageSummary {
   readonly promoted: number;
   readonly produced: number;
   readonly acknowledged: number;
-  /** Cases excluded from (full or partial) judging by completeness status (root DECISION):
+  /** Cases excluded from (full or partial) judging by completeness status:
    * a case can be counted here and still be judged, on its content-independent
    * criteria only — see `partitionCases`. */
   readonly excluded: Record<ExclusionStatus, number>;
@@ -99,7 +98,7 @@ function causeCode(cause: unknown): string {
   return typeof code === 'string' && CODE_SHAPE.test(code) ? code : 'UNKNOWN';
 }
 
-/** Cause of a thrown judge: the CevError code if present, else JUDGE_UNAVAILABLE; never the
+/** Cause of a thrown judge: the VetError code if present, else JUDGE_UNAVAILABLE; never the
  * raw message. */
 function thrownCause(err: unknown): { readonly code: string } {
   return { code: VetError.isInstance(err) ? err.code : 'JUDGE_UNAVAILABLE' };
@@ -120,8 +119,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 // Same shape run.ts's private verdictProvenance() builds for `vet run` (picks the six
 // verdict-provenance schema keys off the case's provenance, case.traceId winning): duplicated
-// here rather than imported, since exporting it would mean touching run.ts/index.ts, which
-// aren't owned by this bead (same duplication as commands/watch.ts's caseProvenance).
+// here rather than exported from run.ts (same duplication as commands/watch.ts's caseProvenance).
 function caseProvenance(evalCase: Case): Verdict['provenance'] | undefined {
   const source = isRecord(evalCase.provenance) ? evalCase.provenance : {};
   const out: NonNullable<Verdict['provenance']> = {};
@@ -133,9 +131,6 @@ function caseProvenance(evalCase: Case): Verdict['provenance'] | undefined {
   return Object.keys(out).length === 0 ? undefined : out;
 }
 
-/** Edge case: "Judge throws → catch, produce a Verdict with status 'infra_failure' and cause,
- * enqueue, continue." One sentinel verdict per failed case: the loop has no criterion ids to
- * attribute the failure to (those live behind the opaque `judge` callable). */
 // enqueue() assigns each verdict's id to a copy it builds internally ({...v, id}), never
 // mutating the array this loop already has in hand — so a caller-supplied id is kept, and
 // only a missing one is backfilled from what enqueue reports back for that same position.
@@ -144,6 +139,9 @@ function withAssignedId(v: Verdict, id: string | undefined): Verdict {
   return { ...v, id };
 }
 
+/** A judge that throws becomes one sentinel 'infra_failure' verdict per failed case: the loop
+ * has no criterion ids to attribute the failure to (those live behind the opaque `judge`
+ * callable). */
 function infraFailureVerdict(
   caseId: string,
   cause: { readonly code: string },
@@ -195,7 +193,7 @@ export async function runWatch(input: RunWatchInput): Promise<CoverageSummary> {
     return run;
   }
 
-  // Own semaphore (Approach: "acquire semaphore"): bounds how many traces are between "sampled"
+  // Own semaphore: bounds how many traces are between "sampled"
   // and "judged" at once, so the for-await pull below applies real backpressure.
   let activeSlots = 0;
   const waiters: Array<() => void> = [];
@@ -237,8 +235,8 @@ export async function runWatch(input: RunWatchInput): Promise<CoverageSummary> {
         { signal: perCall },
       );
     } catch (err) {
-      // Edge case: "Abort during a judge call → the in-flight call is aborted via the signal,
-      // its verdict is 'infra_failure:aborted' and NOT enqueued (nothing to write back)."
+      // Abort during a judge call: the in-flight call is aborted via the signal and nothing is
+      // enqueued.
       if (perCall.aborted) return;
       verdicts = [infraFailureVerdict(evalCase.id, thrownCause(err), caseProvenance(evalCase))];
     }
@@ -316,8 +314,8 @@ export async function runWatch(input: RunWatchInput): Promise<CoverageSummary> {
   }
 
   await Promise.allSettled(tasks);
-  // Edge case: "the FIRST SIGINT drains the outbox once" — the same single drain-once call
-  // covers both a natural end and an abort-driven end of the source stream.
+  // The first SIGINT drains the outbox once: the same single drain-once call covers both a
+  // natural end and an abort-driven end of the source stream.
   await boundedFinalDrain();
 
   if (sourceError !== undefined) throw sourceError;

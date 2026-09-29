@@ -5,7 +5,7 @@
 import type { Answer, Case, Criterion, GauntletOutcome, JudgeV1 } from '@vetkit/spec';
 import { judgeCase } from '../judge/request.ts';
 
-/** Position consistency floor (vetkit choice; re-tune after the JS spike). */
+/** Position consistency floor (vetkit choice). */
 const DEFAULT_MIN_CONSISTENCY = 0.9;
 const MIN_SAMPLES = 10;
 /**

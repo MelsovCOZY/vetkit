@@ -1,9 +1,9 @@
-// Durable file-backed outbox (OTEL-7): verdicts are appended to pending.jsonl before any
+// Durable file-backed outbox: verdicts are appended to pending.jsonl before any
 // sink call; each sink's outcome is appended to acked.jsonl or dead.jsonl with the sink id.
 // Files are never rewritten: what a sink still owes is pending minus its acked and dead ids.
 // Retry policy lives here, not in sinks. Only non-retryable rejections are dead-lettered; a
 // retryable item that exhausts its attempts gets no line and stays pending for the next
-// drain (J6 gate: the collector is down, a second run drains).
+// drain (a down collector leaves items pending; the next run drains them).
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import {

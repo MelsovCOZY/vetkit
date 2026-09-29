@@ -1,5 +1,5 @@
 // Loads the developer's hand-written criteria.yaml into validated Criterion[].
-// Failures are data, never throws (DECISION: Code conventions). YAML goes through
+// Failures are data, never throws. YAML goes through
 // yaml@2, then the spec validator (validateJson + criterionSchema), never a copy of
 // the schema. wordingHash is computed here and is the only wording hash the cache and
 // the lock use; any value written in the YAML is overwritten.

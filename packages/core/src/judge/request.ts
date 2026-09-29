@@ -1,6 +1,6 @@
-// Judge request builder and per-case judging (DECISION: one request per case — every criterion
-// of a case goes to the judge as one keyed question inside a single doJudge call). Consumed only
-// through runJudge in run.ts (DECISION: core seams named).
+// Judge request builder and per-case judging: one request per case, every criterion of a case
+// going to the judge as one keyed question inside a single doJudge call. Consumed only through
+// runJudge in run.ts.
 //
 // Channel rule: the judged content — the case's
 // `input.state` — goes into the request's `state` and nowhere else; a reference answer
@@ -72,7 +72,7 @@ function toQuestion(
     };
   }
 
-  // Boolean → 3-way choice {yes, no, escape} (DECISION: escape and pass semantics): Jev never
+  // Boolean → 3-way choice {yes, no, escape} Jev never
   // abstains on a plain noul, so the escape wording is both an option and appended to the
   // instructions.
   return {
@@ -97,8 +97,8 @@ export function buildRequest(
 /**
  * sha256 over (state, each criterion's wordingHash in id order, model, rendered reference text,
  * option order). `model` is the judge's declared model id (JudgeV1.capabilities.model) used for lookup —
- * `model.resolved` is only known after a call, so it is stored inside the entry instead
- * (bead RISK note); a different declared model is a different key, hence a miss.
+ * `model.resolved` is only known after a call, so it is stored inside the entry instead;
+ * a different declared model is a different key, hence a miss.
  */
 export function cacheKey(
   evalCase: Case,

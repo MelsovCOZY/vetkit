@@ -70,9 +70,8 @@ function finalAnswer(messages: readonly Message[]): string | undefined {
   return text === '' ? undefined : text;
 }
 
-// the span the conversation/LLM output came from, per
-// docs/sinks.md "Correlation" — the llm-kind span whose messageRange covers the final
-// assistant message. Undefined when no such span exists (e.g. no spans at all).
+// the span the conversation/LLM output came from: the llm-kind span whose messageRange covers
+// the final assistant message. Undefined when no such span exists (e.g. no spans at all).
 function answerSpanId(trace: NormalizedTrace): string | undefined {
   const index = trace.messages.findLastIndex((m) => m.role === 'assistant');
   if (index === -1) return undefined;

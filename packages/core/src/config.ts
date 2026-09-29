@@ -1,6 +1,6 @@
-// vetkit.config.ts: defineConfig + validation + defaults (root design 'Cross-cutting deliverables';
-// DECISION access layer: judge/generator accept `string | endpoint | adapter object`, strings resolve
-// only through the user's `registry`, never an implicit env-chosen default). The declarative shape
+// vetkit.config.ts: defineConfig + validation + defaults. judge/generator accept
+// `string | endpoint | adapter object`; strings resolve only through the user's `registry`,
+// never an implicit env-chosen default. The declarative shape
 // lives in packages/spec/schemas/config.schema.json; adapter objects are validated there as a
 // {specVersion, id, capabilities} projection, and their methods are checked structurally here.
 // c12 loading and file:// references belong to the CLI, not here.
@@ -22,14 +22,14 @@ import {
 
 export type { GeneratorEndpoint, JudgeEndpoint } from '@vetkit/spec';
 
-// A configured sink: an opaque name, an adapter object (option A), or a
-// `{kind,*Env}` descriptor the CLI resolves by reading the named env vars (OPEN-9 DECISION).
+// A configured sink: an opaque name, an adapter object, or a
+// `{kind,*Env}` descriptor the CLI resolves by reading the named env vars.
 // Derived structurally from ConfigDoc so the descriptor shapes never need a
 // second hand-written declaration here.
 export type SinkRef = NonNullable<ConfigDoc['sinks']>[number];
 export type SinkDescriptor = Exclude<SinkRef, PluginRef>;
 
-// No GeneratorV1 port exists in @vetkit/spec yet; this is the structural minimum config checks.
+// The structural minimum config checks of a generator adapter object; the full port is GeneratorV1.
 export interface GeneratorAdapter {
   readonly specVersion: 'v1';
   readonly id: string;

@@ -1,4 +1,3 @@
-// docs/contracts/j7.md "Sampling rule" / "Inclusion log".
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -69,7 +68,7 @@ function finiteSource(traces: readonly NormalizedTrace[]): SourceV1 {
   };
 }
 
-/** Simulates the J5 receiver: yields `traces`, then blocks until `signal` aborts. */
+/** Simulates the receiver: yields `traces`, then blocks until `signal` aborts. */
 function blockingSource(traces: readonly NormalizedTrace[]): SourceV1 {
   return {
     specVersion: 'v1',
@@ -119,7 +118,7 @@ function readTraceId(provenance: unknown): string | undefined {
 }
 
 /** Rejects any verdict with no `provenance.traceId`, reason 'no correlation id' — same rule
- * real otel/langfuse sinks apply (docs/sinks.md "Correlation"). */
+ * real otel/langfuse sinks apply. */
 function correlationRequiringSink(): SinkV1 {
   return {
     specVersion: 'v1',
@@ -185,8 +184,7 @@ const throwingJudge: JudgeCaseFn = () => {
 };
 
 /** Plays the role a real judge/adapter does: copies the case's own provenance.traceId onto
- * the Verdict it returns, so a correlation-requiring sink can decide whether to accept it
- *. */
+ * the Verdict it returns, so a correlation-requiring sink can decide whether to accept it. */
 const correlatingJudge: JudgeCaseFn = async ({ case: c, criteria }) => {
   const traceId = readTraceId(c.provenance);
   return criteria.map((crit) => ({
@@ -533,10 +531,9 @@ describe('runWatch', () => {
     expect(received[0]?.evalCase.traceId).toBe('trace-onverdict');
   });
 
-  // OTLP-derived cases carried no provenance.traceId/spanId, so
-  // a correlation-requiring sink dead-lettered every verdict ('no correlation id'). The judge
-  // here plays the role a real judge/adapter does: it copies the case's own provenance.traceId
-  // onto the Verdict it returns, so the sink can decide whether to accept it.
+  // A correlation-requiring sink dead-letters every verdict without provenance.traceId
+  // ('no correlation id'). The judge here plays the role a real judge/adapter does: it copies
+  // the case's own provenance.traceId onto the Verdict it returns, so the sink can accept it.
   test('a fake sink requiring provenance.traceId acknowledges every verdict when the case carries traceId', async () => {
     const t = trace('trace-otel');
     const outbox = createOutbox({ dir: join(dir, 'outbox') });
@@ -556,9 +553,8 @@ describe('runWatch', () => {
     expect(summary.acknowledged).toBe(summary.produced);
   });
 
-  // judgeOne's infra_failure sentinel (built when the judge
-  // itself throws) carried no provenance at all, so a correlation-requiring sink dead-lettered
-  // it just like ordinary verdicts do.
+  // The infra_failure sentinel (built when the judge itself throws) must carry provenance too,
+  // or a correlation-requiring sink dead-letters it.
   test("judge throw: the infra_failure verdict carries the judged case's provenance.traceId, so a correlation-requiring sink acknowledges it", async () => {
     const t = trace('trace-throw');
     const outbox = createOutbox({ dir: join(dir, 'outbox') });
@@ -574,7 +570,7 @@ describe('runWatch', () => {
       signal: new AbortController().signal,
     });
 
-    // a thrown judge is unscored, not judged (was pinned as judged 1).
+    // a thrown judge is unscored, not judged.
     expect(summary.judged).toBe(0);
     expect(summary.unscored).toBe(1);
     expect(summary.produced).toBeGreaterThan(0);

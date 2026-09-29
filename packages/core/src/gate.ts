@@ -1,6 +1,5 @@
-// Exit-code decision and gate policy (DECISION: core seams named — `vet run --gate` calls
-// evaluateGate). Exit codes: 0 all gated verdicts pass, 1 any gated verdict fails or is
-// unscored, 2 the gate refuses (no lock, uncalibrated gated criterion, unpinned transport),
+// Exit-code decision and gate policy: `vet run --gate` calls evaluateGate.
+// Exit codes: 0 all gated verdicts pass, 1 any gated verdict fails or is unscored, 2 the gate refuses (no lock, uncalibrated gated criterion, unpinned transport),
 // 130 aborted. Verdicts with gated:false (score criteria, uncalibrated languages) never count.
 import type { Lock, Verdict } from '@vetkit/spec';
 import { LOCK_FILE, lockEntryGateable } from './validate/lock.ts';

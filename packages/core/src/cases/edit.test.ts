@@ -1,5 +1,5 @@
-// dedupe/quarantine/review/promote helpers behind `vet cases`. Reuses J7's
-// promoteFailure id/provenance shape for promoteVerdict (duplicated, not imported: promote.ts
+// dedupe/quarantine/review/promote helpers behind `vet cases`. Reuses
+// promoteFailure's id/provenance shape for promoteVerdict (duplicated, not imported: promote.ts
 // hardcodes its dayFile under <dir>/pending/, but this manual path targets <dir>/ directly —
 // see promoteVerdict's own comment).
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';

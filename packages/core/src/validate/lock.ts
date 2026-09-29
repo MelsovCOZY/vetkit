@@ -1,11 +1,11 @@
 // criteria.lock.json: the only artifact allowed to gate. buildLock folds the
 // calibrate and gauntlet results into per-criterion status + reasons; writeLockAtomic writes it
 // through a temp file and rename; readLock validates it against lockSchema; checkLock recomputes
-// the content hashes (DECISION: content hashes of questions and dataset); assertLockGates is the
-// pre-judge refusal `vet run --gate/--ci` applies (DECISION: pinning honesty — alias locks are
-// floating and never gate CI without --allow-unpinned).
+// the content hashes of questions and dataset; assertLockGates is the pre-judge refusal
+// `vet run --gate/--ci` applies (alias locks are floating and never gate CI without
+// --allow-unpinned).
 //
-// Floating rule (proposal 3, review revision 10): an unpinned model turns only entries that would
+// Floating rule: an unpinned model turns only entries that would
 // otherwise be calibrated into `floating`; failing entries stay `uncalibrated`.
 import { createHash, randomBytes } from 'node:crypto';
 import { readFile, rename, rm, stat, writeFile } from 'node:fs/promises';

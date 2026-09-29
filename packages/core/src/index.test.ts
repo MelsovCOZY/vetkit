@@ -275,7 +275,7 @@ describe('@vetkit/core package entry', () => {
     expect(DEFAULT_CALLS_PER_MINUTE).toBe(25);
   });
 
-  it('re-exports CALIBRATION_MIN_REPEATS as 3 (J3 judge repeats per labelled case)', () => {
+  it('re-exports CALIBRATION_MIN_REPEATS as 3 (judge repeats per labelled case)', () => {
     expect(CALIBRATION_MIN_REPEATS).toBe(3);
   });
 

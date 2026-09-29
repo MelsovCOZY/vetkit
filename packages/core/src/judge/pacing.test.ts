@@ -3,7 +3,7 @@ import { VetError } from '@vetkit/spec';
 import { createLimiter, type PacingEvent } from './pacing.ts';
 
 // All tests drive the limiter through an injected virtual clock (`now` + `sleep`), so no real
-// time passes; 'no pending timers when idle' uses the defaults under vi.useFakeTimers() (R5).
+// time passes; 'no pending timers when idle' uses the defaults under vi.useFakeTimers().
 
 interface Sleeper {
   readonly at: number;

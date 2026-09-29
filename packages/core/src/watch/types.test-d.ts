@@ -1,5 +1,4 @@
-// Asserts the exact shapes fixed by docs/contracts/j7.md "Ports and types" (bead
-// admin repair: zde owns types.ts + this test).
+// Asserts the exact shapes of the watch option, inclusion-record and promoted-case types.
 import { expectTypeOf, test } from 'vitest';
 import type { Case } from '@vetkit/spec';
 import type { InclusionRecord, PromotedCase, WatchOptions } from './types.ts';

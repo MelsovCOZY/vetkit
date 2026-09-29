@@ -1,6 +1,6 @@
 // Gauntlet A wording checks:
 // a criterion whose decision changes with rewording is not measuring the trace. The generator
-// (GeneratorV1) drafts the wordings, core validates them (DECISION (structured output)), and the
+// (GeneratorV1) drafts the wordings, core validates them, and the
 // judge sees them through runJudge with the cache bypassed. Paraphrases gate on decision
 // agreement; max |ΔP| is a diagnostic only. Polarity compares decisions after label remapping,
 // the negated wording at its own fitted threshold, never probabilities across polarities. The
