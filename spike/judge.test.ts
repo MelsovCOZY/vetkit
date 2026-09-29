@@ -17,10 +17,7 @@ import {
 } from './judge.ts';
 
 const RESPONSE_FIXTURE_PATH = fileURLToPath(
-  new URL(
-    '../docs/research/fixtures/2026-09-25-gateway-systemone-response-run1.json',
-    import.meta.url,
-  ),
+  new URL('../fixtures/research/2026-09-25-gateway-systemone-response-run1.json', import.meta.url),
 );
 
 function trace(overrides: Partial<Trace> = {}): Trace {

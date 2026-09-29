@@ -85,8 +85,7 @@ export const JEV_PRESETS: Record<'typesafe' | 'vercel' | 'openrouter' | 'cloudfl
     pricing: {
       inputPerMTok: 0.042,
       outputPerMTok: 0,
-      source:
-        'measured in the pre-spike: 3.4M input tokens ≈ $0.143, output free (docs/research/2026-09-25-jev-vs-gemini-haystack-prespike.md, Cost)',
+      source: 'measured in the pre-spike: 3.4M input tokens ≈ $0.143, output free',
       asOf: '2026-09-25',
     },
   },

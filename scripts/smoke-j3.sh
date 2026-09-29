@@ -100,7 +100,7 @@ if [ -z "${!KEY_ENV:-}" ]; then
 else
   KEY="${!KEY_ENV}"
 fi
-PROBE_BODY="$ROOT/docs/research/fixtures/2026-09-25-gateway-systemone-request.json"
+PROBE_BODY="$ROOT/fixtures/research/2026-09-25-gateway-systemone-request.json"
 if [ "$JUDGE" = vercel ]; then
   PROBE_URL=https://ai-gateway.vercel.sh/typesafe/v1/systemone
   PROBE_MODEL=typesafe-ai/jev
