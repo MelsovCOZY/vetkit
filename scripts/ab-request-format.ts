@@ -16,41 +16,23 @@ import { parseArgs } from 'node:util';
 import { DEFAULT_GAUNTLET_CORPORA, judgeCase, loadCases, loadCriteria } from '@vetkit/core';
 import { createJevJudgeFromEndpoint } from '@vetkit/judge-jev';
 import type { Case, Criterion, RequestFormat } from '@vetkit/spec';
+import {
+  FAMILIES,
+  classifyVerdict,
+  tally,
+  type ArmReport,
+  type Job,
+  type Outcome,
+} from './ab-request-format-lib.ts';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PROJECT = join(ROOT, 'fixtures/projects/j3');
 const LABELS = join(ROOT, 'fixtures/labels/answer_correct.csv');
 const CRITERION_ID = 'answer_correct';
-const FAMILIES = ['fake_instruction_output', 'encoding'] as const;
 const ARMS: readonly RequestFormat[] = ['raw', 'fenced-v1'];
 // Same separator the gauntlet appends injections with (gauntlet-controls.ts, not exported).
 const INJECTION_SEPARATOR = '\n\n';
 const CONCURRENCY = 4;
-
-/** 95% Wilson score interval for k successes of n. */
-function wilson(k: number, n: number): [number, number] {
-  if (n === 0) return [0, 1];
-  const z = 1.96;
-  const p = k / n;
-  const denom = 1 + (z * z) / n;
-  const centre = (p + (z * z) / (2 * n)) / denom;
-  const half = (z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))) / denom;
-  return [Math.max(0, centre - half), Math.min(1, centre + half)];
-}
-
-interface Job {
-  readonly arm: RequestFormat;
-  readonly kind: 'pass-original' | 'fail-original' | 'injected';
-  readonly family?: string;
-  readonly baseId: string;
-  readonly repeat: number;
-  readonly evalCase: Case;
-}
-interface Outcome {
-  readonly job: Job;
-  readonly status: 'pass' | 'fail' | 'unscored';
-  readonly cause?: string;
-}
 
 function readLabels(): Map<string, 'pass' | 'fail'> {
   const labels = new Map<string, 'pass' | 'fail'>();
@@ -121,10 +103,6 @@ function buildJobs(passes: readonly Case[], fails: readonly Case[], repeats: num
   );
 }
 
-function causeOf(cause: unknown): string {
-  return typeof cause === 'string' ? cause : 'unknown';
-}
-
 async function runJobs(
   jobs: readonly Job[],
   criterion: Criterion,
@@ -141,68 +119,11 @@ async function runJobs(
         case: job.evalCase,
         criteria: [criterion],
       });
-      if (verdict === undefined || verdict.status !== 'ok') {
-        out.push({ job, status: 'unscored', cause: causeOf(verdict?.cause ?? verdict?.status) });
-      } else {
-        out.push({ job, status: verdict.pass === true ? 'pass' : 'fail' });
-      }
+      out.push({ job, ...classifyVerdict(verdict, criterion) });
     }
   };
   await Promise.all(Array.from({ length: CONCURRENCY }, worker));
   return out;
-}
-
-interface FamilyStat {
-  flips: number;
-  n: number;
-  ci: [number, number];
-}
-interface ArmReport {
-  arm: RequestFormat;
-  families: Record<string, FamilyStat>;
-  knownPass: { judgedPass: number; scored: number };
-  knownFail: { judgedFail: number; scored: number };
-  unscored: { total: number; causes: Record<string, number> };
-}
-
-function tally(arm: RequestFormat, outcomes: readonly Outcome[]): ArmReport {
-  const mine = outcomes.filter((o) => o.job.arm === arm);
-  const count = (pred: (o: Outcome) => boolean): number => mine.filter(pred).length;
-  const originalFailed = new Set(
-    mine
-      .filter((o) => o.job.kind === 'fail-original' && o.status === 'fail')
-      .map((o) => o.job.baseId),
-  );
-  const families: Record<string, FamilyStat> = {};
-  for (const family of FAMILIES) {
-    const trials = mine.filter(
-      (o) =>
-        o.job.kind === 'injected' &&
-        o.job.family === family &&
-        o.status !== 'unscored' &&
-        originalFailed.has(`${o.job.baseId}#${String(o.job.repeat)}`),
-    );
-    const flips = trials.filter((o) => o.status === 'pass').length;
-    families[family] = { flips, n: trials.length, ci: wilson(flips, trials.length) };
-  }
-  const causes: Record<string, number> = {};
-  for (const o of mine) {
-    if (o.status === 'unscored')
-      causes[o.cause ?? 'unknown'] = (causes[o.cause ?? 'unknown'] ?? 0) + 1;
-  }
-  return {
-    arm,
-    families,
-    knownPass: {
-      judgedPass: count((o) => o.job.kind === 'pass-original' && o.status === 'pass'),
-      scored: count((o) => o.job.kind === 'pass-original' && o.status !== 'unscored'),
-    },
-    knownFail: {
-      judgedFail: count((o) => o.job.kind === 'fail-original' && o.status === 'fail'),
-      scored: count((o) => o.job.kind === 'fail-original' && o.status !== 'unscored'),
-    },
-    unscored: { total: count((o) => o.status === 'unscored'), causes },
-  };
 }
 
 const pct = (x: number): string => `${(x * 100).toFixed(0)}%`;
