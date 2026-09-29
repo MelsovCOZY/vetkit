@@ -684,6 +684,7 @@ export const lockSchema: JsonSchema = {
         'language_limited',
         'score_not_gateable',
         'reference_missing',
+        'judge_unavailable',
         'paraphrase',
         'polarity',
         'injection',
@@ -745,6 +746,16 @@ export const lockSchema: JsonSchema = {
         labelCount: {
           type: 'integer',
           minimum: 0,
+        },
+        unscored: {
+          type: 'integer',
+          minimum: 0,
+        },
+        unscoredCauses: {
+          type: 'array',
+          items: {
+            type: 'string',
+          },
         },
       },
       required: ['wordingHash', 'status', 'gauntlet', 'reasons', 'labelCount'],

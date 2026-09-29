@@ -263,7 +263,9 @@ export {
   LOCK_FILE,
   lockEntryGateable,
   readLock,
+  judgeUnavailable,
   readLockOrNull,
+  unscoredOf,
   writeLockAtomic,
 } from './validate/lock.ts';
 export type {
@@ -274,6 +276,7 @@ export type {
   LockInputs,
   StaleReason,
   StaleReport,
+  Unscored,
   WriteLockOptions,
 } from './validate/lock.ts';
 

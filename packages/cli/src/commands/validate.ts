@@ -38,6 +38,8 @@ import {
   type PaddingTemplate,
   type ResolvedConfig,
   type RunVerdict,
+  type Unscored,
+  unscoredOf,
 } from '@vetkit/core';
 import {
   CEV_ERROR_CODES,
@@ -300,35 +302,6 @@ function addRepeats(
 
 // ---------- judge outage ----------
 
-/** Unscored fraction above which the report blames the judge instead of the data (mol-q4q.21). */
-const UNAVAILABLE_ABOVE = 0.1;
-
-interface Unscored {
-  readonly count: number;
-  readonly total: number;
-  readonly causes: string[];
-}
-
-/** Code of a verdict cause: a bare code string or `{code}`; never the rest of the cause. */
-function causeCode(cause: unknown): string {
-  if (typeof cause === 'string') return cause;
-  if (typeof cause === 'object' && cause !== null) {
-    const code = (cause as { code?: unknown }).code;
-    if (typeof code === 'string') return code;
-  }
-  return 'UNKNOWN';
-}
-
-function unscoredOf(criterion: Criterion, verdicts: readonly RunVerdict[]): Unscored {
-  const own = verdicts.filter((v) => v.criterionId === criterion.id);
-  const failed = own.filter((v) => v.status !== 'ok');
-  return {
-    count: failed.length,
-    total: own.length,
-    causes: [...new Set(failed.map((v) => causeCode(v.cause)))].toSorted(),
-  };
-}
-
 // ---------- gauntlets ----------
 
 type GauntletMap = Record<keyof GauntletResult, GauntletOutcome>;
@@ -584,7 +557,12 @@ async function validate(
   events.diag('debug', 'VALIDATE_PHASE_GAUNTLET', 'validate: gauntlets');
   const results: Record<
     string,
-    { calibration: CalibrationResult; gauntlet: GauntletMap; detail: Detail }
+    {
+      calibration: CalibrationResult;
+      gauntlet: GauntletMap;
+      detail: Detail;
+      unscored: Unscored;
+    }
   > = {};
   for (const c of active) {
     const entry = calibrated.get(c.id);
@@ -602,7 +580,12 @@ async function validate(
             generator,
             corpora,
           });
-    results[c.id] = { calibration: entry.calibration, gauntlet, detail };
+    results[c.id] = {
+      calibration: entry.calibration,
+      gauntlet,
+      detail,
+      unscored: unscoredOf(c.id, verdicts),
+    };
   }
 
   const lock = buildLock({ model: runModel(verdicts, judge), criteria: active, cases, results });
@@ -630,14 +613,11 @@ async function validate(
       const e = lock.criteria[c.id];
       const cal = r?.calibration;
       const reps = calibrated.get(c.id)?.repeats ?? new Map();
-      const unscored = unscoredOf(c, verdicts);
-      // The lock's LockReason enum is closed (spec), so the outage cause lives in the report
-      // only: it replaces the data-shape reasons the scored subset would otherwise produce.
-      const unavailable = unscored.total > 0 && unscored.count / unscored.total > UNAVAILABLE_ABOVE;
+      const unscored = unscoredOf(c.id, verdicts);
       return {
         id: c.id,
         status: e?.status,
-        reasons: unavailable ? ['judge_unavailable'] : (e?.reasons ?? []),
+        reasons: e?.reasons ?? [],
         unscored,
         languages: e?.languages ?? [],
         byLanguage: cal?.byLanguage ?? {},
