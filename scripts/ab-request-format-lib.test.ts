@@ -3,7 +3,13 @@ import { fileURLToPath } from 'node:url';
 import { loadCriteria } from '@vetkit/core';
 import type { Case, Criterion, Verdict } from '@vetkit/spec';
 import { describe, expect, it } from 'vitest';
-import { classifyVerdict, tally, type Job, type Outcome } from './ab-request-format-lib.ts';
+import {
+  classifyVerdict,
+  tally,
+  withPass,
+  type Job,
+  type Outcome,
+} from './ab-request-format-lib.ts';
 
 const PROJECT = fileURLToPath(new URL('../fixtures/projects/j3', import.meta.url));
 const evalCase: Case = { id: 'c1', input: { state: 's' }, provenance: null, tags: [] };
@@ -16,35 +22,78 @@ const job = (over: Partial<Job>): Job => ({
   ...over,
 });
 
-describe('tally pairing', () => {
-  it('pairs an injected verdict with its failed original', () => {
-    const outcomes: Outcome[] = [
-      { job: job({}), status: 'fail' },
-      { job: job({ kind: 'injected', family: 'encoding' }), status: 'pass' },
-      { job: job({ kind: 'injected', family: 'fake_instruction_output' }), status: 'fail' },
-    ];
-    const r = tally('raw', outcomes);
-    expect(r.families['encoding']).toMatchObject({ flips: 1, n: 1 });
-    expect(r.families['fake_instruction_output']).toMatchObject({ flips: 0, n: 1 });
-  });
-
-  it('does not pair across repeats or arms', () => {
-    const outcomes: Outcome[] = [
-      { job: job({ repeat: 0 }), status: 'fail' },
-      { job: job({ kind: 'injected', family: 'encoding', repeat: 1 }), status: 'pass' },
-    ];
-    expect(tally('raw', outcomes).families['encoding']?.n).toBe(0);
-  });
-});
-
 const model = { requested: 'm', resolved: 'm', transport: 't', pinned: false };
-const verdictWith = (p: number): Verdict => ({
+const verdictWith = (p: number, pass?: boolean, status: Verdict['status'] = 'ok'): Verdict => ({
   caseId: 'c1',
   criterionId: 'answer_correct',
-  status: 'ok',
+  status,
   answer: { type: 'boolean', probability: p },
+  ...(pass === undefined ? {} : { pass }),
   model,
   cacheHit: false,
+});
+const outcome = (j: Job, p: number, pass: boolean, status: Verdict['status'] = 'ok'): Outcome => ({
+  job: j,
+  status: status === 'ok' ? (pass ? 'pass' : 'fail') : 'unscored',
+  verdict: verdictWith(p, pass, status),
+});
+
+describe('tally pairing', () => {
+  it('pairs an injected outcome with its original and applies the gauntlet trial rule', async () => {
+    const criterion = await answerCorrect();
+    const outcomes: Outcome[] = [
+      outcome(job({}), 0.1, false),
+      outcome(job({ kind: 'injected', family: 'encoding' }), 0.5, false),
+      outcome(job({ kind: 'injected', family: 'fake_instruction_output' }), 0.2, false),
+    ];
+    const r = tally('raw', outcomes, criterion);
+    expect(r.families['encoding']).toMatchObject({
+      trials: 1,
+      failed: 1,
+      flips: 0,
+      broken: 0,
+      overMax: 1,
+    });
+    expect(r.families['fake_instruction_output']).toMatchObject({
+      trials: 1,
+      failed: 0,
+      overMax: 0,
+    });
+    expect(r.families['encoding']?.maxDelta).toBeCloseTo(0.4);
+    expect(r.trials).toContainEqual({
+      arm: 'raw',
+      family: 'encoding',
+      caseId: 'c1',
+      repeat: 0,
+      pOrig: 0.1,
+      pInj: 0.5,
+      delta: expect.closeTo(0.4),
+      failed: true,
+    });
+  });
+
+  it('injects known-pass cases too and counts a broken injected verdict', async () => {
+    const criterion = await answerCorrect();
+    const outcomes: Outcome[] = [
+      outcome(job({ kind: 'pass-original' }), 0.9, true),
+      outcome(job({ kind: 'injected', family: 'encoding' }), 0.9, true, 'unscored'),
+    ];
+    expect(tally('raw', outcomes, criterion).families['encoding']).toMatchObject({
+      trials: 1,
+      failed: 1,
+      broken: 1,
+    });
+  });
+
+  it('does not pair across repeats or arms', async () => {
+    const criterion = await answerCorrect();
+    const outcomes: Outcome[] = [
+      outcome(job({ repeat: 0 }), 0.1, false),
+      outcome(job({ kind: 'injected', family: 'encoding', repeat: 1 }), 0.9, true),
+      outcome(job({ kind: 'injected', family: 'encoding', arm: 'fenced-v1' }), 0.9, true),
+    ];
+    expect(tally('raw', outcomes, criterion).families['encoding']?.trials).toBe(0);
+  });
 });
 
 async function answerCorrect(): Promise<Criterion> {
@@ -64,5 +113,11 @@ describe('classifyVerdict', () => {
 
   it('marks a missing verdict unscored', async () => {
     expect(classifyVerdict(undefined, await answerCorrect()).status).toBe('unscored');
+  });
+
+  it('withPass sets the pass flag the gauntlet trial rule reads', async () => {
+    const criterion = await answerCorrect();
+    expect(withPass(verdictWith(0.9), criterion).pass).toBe(true);
+    expect(withPass(verdictWith(0.1), criterion).pass).toBe(false);
   });
 });

@@ -178,7 +178,9 @@ export {
   gauntletInjection,
   gauntletLabelPermutation,
   gauntletMasterKey,
+  INJECTION_DEFAULT_MAX_DELTA,
   INJECTION_KINDS,
+  judgeInjectionTrial,
 } from './validate/gauntlet-controls.ts';
 export type {
   ConstantEntry,
@@ -188,6 +190,7 @@ export type {
   GauntletControlsSkipReason,
   GauntletJudgeOptions,
   InjectionEntry,
+  InjectionTrial,
   InjectionKind,
   InjectionOptions,
   InjectionResult,
