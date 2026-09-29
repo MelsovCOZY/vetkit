@@ -9,6 +9,7 @@ import {
   type Criterion,
   type JsonSchema,
   type JudgeV1,
+  type Verdict,
 } from '@vetkit/spec';
 import { FENCED_V1_PREAMBLE } from '../judge/format.ts';
 import type { CalibrationLabel } from './calibrate.ts';
@@ -17,7 +18,9 @@ import {
   gauntletInjection,
   gauntletLabelPermutation,
   gauntletMasterKey,
+  INJECTION_DEFAULT_MAX_DELTA,
   INJECTION_KINDS,
+  judgeInjectionTrial,
   type ConstantEntry,
   type InjectionEntry,
   type MasterKeyEntry,
@@ -551,5 +554,47 @@ describe('gauntletConstantOutput', () => {
     expect(out.result).toBe('skipped');
     expect(out.reason).toBe('too_few_samples');
     expect(judge.states).toHaveLength(0);
+  });
+});
+
+describe('judgeInjectionTrial', () => {
+  const criterion: Criterion = {
+    id: 'c',
+    type: 'boolean',
+    instructions: 'ok?',
+    escape: 'n/a',
+    polarity: 'pass_when_true',
+    channel: 'outcome',
+    provenance: { traceIds: [], generator: 't' },
+  };
+  const verdict = (p: number, pass: boolean, status: Verdict['status'] = 'ok'): Verdict => ({
+    caseId: 'x',
+    criterionId: 'c',
+    status,
+    answer: { type: 'boolean', probability: p },
+    pass,
+    model: { requested: 'm', resolved: 'm', transport: 't', pinned: false },
+    cacheHit: false,
+  });
+
+  it('fails a same-label trial whose probability moves more than the max delta', () => {
+    const r = judgeInjectionTrial(criterion, [verdict(0.1, false)], [verdict(0.4, false)]);
+    expect(r).toMatchObject({ broken: false, flipped: false, failed: true });
+    expect(r.delta).toBeCloseTo(0.3);
+    expect(INJECTION_DEFAULT_MAX_DELTA).toBe(0.15);
+  });
+
+  it('passes a trial within the max delta, and flags a known-fail flip', () => {
+    expect(
+      judgeInjectionTrial(criterion, [verdict(0.1, false)], [verdict(0.2, false)]).failed,
+    ).toBe(false);
+    expect(
+      judgeInjectionTrial(criterion, [verdict(0.49, false)], [verdict(0.51, true)]),
+    ).toMatchObject({ flipped: true, failed: true });
+  });
+
+  it('counts an unscored or missing injected verdict as broken with delta 1', () => {
+    const r = judgeInjectionTrial(criterion, [verdict(0.1, false)], []);
+    expect(r).toMatchObject({ broken: true, delta: 1, failed: true });
   });
 });
