@@ -331,4 +331,52 @@ describe('vet watch', () => {
       await collector.close();
     }
   }, 20_000);
+
+  test('SIGINT right after a burst: every accepted trace is recorded (seen == posted) and the outbox is drained (dh8.8)', async () => {
+    const collector = await fakeOtelCollector();
+    try {
+      const project = freshProject();
+      withOtelSink(project, collector.url);
+      const w = spawnWatch(
+        ['--sample', '1', '--port', '0', '--json', '--sink', 'otel'],
+        'pass',
+        project,
+      );
+      const port = await w.waitForPort();
+      const posted = 40;
+      await Promise.all(
+        Array.from({ length: posted }, (_, i) =>
+          postTrace(port, `${String(i).padStart(4, '0')}${'ab'.repeat(14)}`),
+        ),
+      );
+      w.kill();
+      const code = await Promise.race([
+        w.exited,
+        new Promise<string>((r) => setTimeout(() => r('hung'), 15_000)),
+      ]);
+
+      expect(code).toBe(0);
+      const parsed = safeParseJson<{
+        seen: number;
+        judged: number;
+        produced: number;
+        acknowledged: number;
+      }>(w.getStdout(), {
+        type: 'object',
+        properties: {
+          seen: { type: 'number' },
+          judged: { type: 'number' },
+          produced: { type: 'number' },
+          acknowledged: { type: 'number' },
+        },
+      });
+      if (!parsed.ok) throw parsed.error;
+      const summary = parsed.value;
+      expect(summary.seen).toBe(posted);
+      expect(summary.judged).toBe(posted);
+      expect(summary.acknowledged).toBe(summary.produced);
+    } finally {
+      await collector.close();
+    }
+  }, 30_000);
 });
