@@ -71,8 +71,10 @@ async function checkLockFile(options: CheckOptions, deps: ValidateDeps): Promise
     typeof options.lock === 'string' ? options.lock : join(rootDir, LOCK_FILE),
   );
   const lock = await readSupportedLock(lockPath);
+  // Disabled criteria (`enabled: false`) have no lock entry by design; check skips them.
+  const criteria = project.criteria.filter((c) => c.enabled !== false);
   const base = checkLock(lock, {
-    criteria: project.criteria,
+    criteria,
     cases: project.cases,
     model: {
       transport: judge.capabilities.transport,
@@ -82,7 +84,7 @@ async function checkLockFile(options: CheckOptions, deps: ValidateDeps): Promise
   const reasons: LockCheckReport['reasons'] = [...base.reasons];
   if (lock.model.requested !== judge.capabilities.model) reasons.push('requested');
   const modelChanged = reasons.some((r) => r !== 'wordingHash' && r !== 'datasetHash');
-  const staleCriteria = project.criteria.flatMap((c) => {
+  const staleCriteria = criteria.flatMap((c) => {
     const entry = lock.criteria[c.id];
     const drift: CriterionDrift[] = [];
     if (entry === undefined) drift.push('uncalibrated');
