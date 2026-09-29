@@ -178,13 +178,11 @@ export function createLimiter(opts: LimiterOptions = {}): Limiter {
     let start: number | undefined;
     let attempts = 0;
     for (;;) {
-      // oxlint-disable-next-line no-await-in-loop
       await acquire(signal);
       start ??= now();
       attempts += 1;
       let error: unknown;
       try {
-        // oxlint-disable-next-line no-await-in-loop
         const value = await fn();
         streak += 1;
         if (streak >= RECOVERY_STREAK) {

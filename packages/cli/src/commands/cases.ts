@@ -178,14 +178,12 @@ async function reviewCommand(
     }
   } else if (options.all === true) {
     for (const p of await listPendingCases(dir)) {
-      // oxlint-disable-next-line no-await-in-loop
       await reviewCase(dir, p.case.id, action, reasonOption(options.reason));
     }
   } else {
     // Interactive TTY loop: a non-TTY/CI stdin makes the first prompt() throw NOT_INTERACTIVE
     // (exit 2), before touching any pending case.
     for (const p of await listPendingCases(dir)) {
-      // oxlint-disable-next-line no-await-in-loop
       const answer = (
         await prompt(
           { name: 'review', message: `${p.case.id}: ${summarise(p.case)} — accept/reject/skip?` },
@@ -195,12 +193,9 @@ async function reviewCommand(
         .trim()
         .toLowerCase();
       if (answer.startsWith('a')) {
-        // oxlint-disable-next-line no-await-in-loop
         await reviewCase(dir, p.case.id, 'accept');
       } else if (answer.startsWith('r')) {
-        // oxlint-disable-next-line no-await-in-loop
         const reason = await prompt({ name: 'reason', message: 'reason for rejecting?' }, deps);
-        // oxlint-disable-next-line no-await-in-loop
         await reviewCase(dir, p.case.id, 'reject', { reason });
       }
     }

@@ -47,7 +47,6 @@ function virtualClock(): {
       sleepers = sleepers.filter((s) => s !== due);
       t = due.at;
       due.resolve();
-      // oxlint-disable-next-line no-await-in-loop
       await flush();
     }
     t = target;
@@ -168,7 +167,6 @@ describe('createLimiter ceiling', () => {
     expect(limiter.stats()).toMatchObject({ inFlight: 4, ceiling: 4, queued: 16 });
     for (let released = 0; released < 20; released += 1) {
       g.gates[released]?.resolve();
-      // oxlint-disable-next-line no-await-in-loop
       await flush();
       expect(g.cur).toBeLessThanOrEqual(4);
     }
@@ -234,12 +232,10 @@ describe('createLimiter retry and AIMD', () => {
     expect(limiter.stats().ceiling).toBe(1);
     // Each failure resets the success streak; the third call's retry is success 1 of 10.
     for (let i = 0; i < 9; i += 1) {
-      // oxlint-disable-next-line no-await-in-loop
       await limiter.run(async () => 'ok');
     }
     expect(limiter.stats().ceiling).toBe(2);
     for (let i = 0; i < 50; i += 1) {
-      // oxlint-disable-next-line no-await-in-loop
       await limiter.run(async () => 'ok');
     }
     expect(limiter.stats().ceiling).toBe(4);
@@ -259,7 +255,6 @@ describe('createLimiter retry and AIMD', () => {
     await failing;
     // slow + failing's retry = 2 successes after the halving; 8 more grow the ceiling.
     for (let i = 0; i < 8; i += 1) {
-      // oxlint-disable-next-line no-await-in-loop
       await limiter.run(async () => 'ok');
     }
     expect(limiter.stats().ceiling).toBe(3);
@@ -282,7 +277,6 @@ describe('createLimiter retry and AIMD', () => {
     for (let i = 0; i < 10; i += 1) {
       expect(limiter.stats().inFlight).toBeLessThanOrEqual(2);
       for (const gate of g.gates) gate.resolve();
-      // oxlint-disable-next-line no-await-in-loop
       await flush();
     }
     await expect(failing).resolves.toBe('ok');

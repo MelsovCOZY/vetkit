@@ -83,7 +83,6 @@ async function watchOnce(
   child.stderr.on('data', (d: Buffer) => (stderr += d.toString()));
   const exited = new Promise<number | null>((resolve) => child.on('close', resolve));
   for (let i = 0; i < 120 && !stderr.includes('"listening"'); i += 1) {
-    // oxlint-disable-next-line no-await-in-loop
     await new Promise((r) => setTimeout(r, 500));
   }
   expect(stderr, 'vet watch never reported listening').toContain('"listening"');

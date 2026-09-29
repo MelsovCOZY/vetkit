@@ -121,7 +121,6 @@ export async function replay(options: ReplayOptions): Promise<ReplayPlan & { fai
       next += 1;
       const id = traceIds[i];
       if (id === undefined) return;
-      // oxlint-disable-next-line no-await-in-loop
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
