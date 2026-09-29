@@ -259,17 +259,16 @@ describe('dependency budget', () => {
     }
   });
 
-  it('packages/sink-otel requires @opentelemetry/api as a non-optional peer, plus its OTel deps', () => {
+  it('packages/sink-otel declares no @opentelemetry dependency', () => {
     const pkg = loadPkg('sink-otel');
-    expect(externalPeers(pkg)).toEqual(['@opentelemetry/api']);
-    expect(pkg?.peerDependenciesMeta?.['@opentelemetry/api']?.optional).not.toBe(true);
-    expect(externalDeps(pkg).toSorted()).toEqual(
-      [
-        '@opentelemetry/api-logs',
-        '@opentelemetry/exporter-logs-otlp-http',
-        '@opentelemetry/sdk-trace-base',
-      ].toSorted(),
-    );
+    expect(externalDeps(pkg)).toEqual([]);
+    expect(
+      Object.keys(allDeclaredDeps(pkg)).filter((k) => k.startsWith('@opentelemetry/')),
+    ).toEqual([]);
+  });
+
+  it('packages/sink-otel declares no external peer dependency', () => {
+    expect(externalPeers(loadPkg('sink-otel'))).toEqual([]);
   });
 
   it('packages/export-vitest requires vitest as a non-optional peer and pins evalite exactly', () => {
