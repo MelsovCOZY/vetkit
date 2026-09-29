@@ -41,6 +41,8 @@ function fakeJudge(): JudgeV1 {
   };
 }
 
+const doJudge = (): Promise<never> => Promise.reject(new Error('not called'));
+
 function issuesOf(fn: () => unknown): ConfigIssue[] {
   try {
     fn();
@@ -378,7 +380,6 @@ describe('describeConfig', () => {
 });
 
 describe('registry entries and roles', () => {
-  const doJudge = (): Promise<never> => Promise.reject(new Error('not called'));
   const plain = {
     kind: 'openai-compatible',
     baseURL: 'https://gen.example/v1',
