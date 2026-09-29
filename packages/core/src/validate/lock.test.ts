@@ -13,6 +13,7 @@ import {
   type LockCriterion,
 } from '@vetkit/spec';
 import { computeWordingHash, type WordingFields } from '../criteria/load.ts';
+import { computeNormalizedWordingHash, wordingOf } from '../criteria/wording.ts';
 import { createEvents } from '../events.ts';
 import type { CalibrationResult } from './calibrate.ts';
 import {
@@ -135,6 +136,14 @@ function entryOf(lock: Lock, id = 'answers-question'): LockCriterion {
 // ---------- buildLock status matrix ----------
 
 describe('buildLock', () => {
+  test('records normalizedWordingHash, equal across in-sentence whitespace edits', () => {
+    const e = entryOf(buildLock(inputs()));
+    const c = criterion();
+    expect(e.normalizedWordingHash).toBe(computeNormalizedWordingHash(wordingOf(c)));
+    const spaced = criterion({ instructions: 'Does  the reply   answer the question?' });
+    expect(computeNormalizedWordingHash(wordingOf(spaced))).toBe(e.normalizedWordingHash);
+  });
+
   test('status matrix: calibrated only when all conditions hold', () => {
     const lock = buildLock(inputs());
     expect(lock.lockVersion).toBe(1);

@@ -135,6 +135,18 @@ describe('lockSchema', () => {
     expect(parse(lock({ criteria: { c } })).ok).toBe(true);
   });
 
+  test('accepts a criterion with normalizedWordingHash and one without it', () => {
+    const withField = criterion({ normalizedWordingHash: HASH });
+    expect(parse(lock({ criteria: { c: withField } })).ok).toBe(true);
+    expect(criterion()).not.toHaveProperty('normalizedWordingHash');
+    expect(parse(lock({ criteria: { c: criterion() } })).ok).toBe(true);
+  });
+
+  test('rejects a normalizedWordingHash that is not a sha256 hex digest', () => {
+    const c = criterion({ normalizedWordingHash: 'abc' });
+    expect(parse(lock({ criteria: { c } })).ok).toBe(false);
+  });
+
   test('lockSchema deep-equals schemas/lock.schema.json', () => {
     const raw = readFileSync(join(SCHEMAS_DIR, 'lock.schema.json'), 'utf8');
     const file = safeParseJson<unknown>(raw, {});
