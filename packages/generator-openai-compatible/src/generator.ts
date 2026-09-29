@@ -1,8 +1,8 @@
 // OpenAI-compatible chat-completions generator: one raw-fetch adapter for any base URL that
 // speaks POST /chat/completions (OpenAI, OpenRouter, Vercel AI Gateway, Ollama, vLLM, Groq,
-// Mistral). No `ai`/`openai` dependency (root DECISION: access layer). The structured
-// strategy is declared by the caller; a mismatch is GENERATOR_CAPABILITY before any I/O
-// (root DECISION: structured output). The one internal retry on GENERATOR_BAD_OUTPUT shares
+// Mistral). No `ai`/`openai` dependency. The structured
+// strategy is declared by the caller; a mismatch is GENERATOR_CAPABILITY before any I/O.
+// The one internal retry on GENERATOR_BAD_OUTPUT shares
 // the single whole-call deadline; core must not retry BAD_OUTPUT again.
 import {
   defineGenerator,

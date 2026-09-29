@@ -236,7 +236,7 @@ describe('emitTestFile', () => {
       });
       expect(source).toContain('c2 · helpful (content_not_captured)');
       expect(source).not.toContain('c2 · latency (content_not_captured)');
-      // tone has no lock entry at all: c1 (complete trace) now runs for real instead of being
+      // tone has no lock entry at all: c1 (complete trace) runs for real rather than being
       // skipped as uncalibrated; c2 is still skipped, but for content_not_captured (tone is
       // content-dependent by default), not uncalibrated.
       expect(source).toMatch(/test\(['"`]c1 · tone['"`]/);

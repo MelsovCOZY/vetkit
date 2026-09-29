@@ -19,7 +19,7 @@ test('defineSource and defineGenerator are importable from the @vetkit/spec inde
   expectTypeOf(defineGenerator).toEqualTypeOf<(x: GeneratorV1) => GeneratorV1>();
 });
 
-test('SourceV1 matches the J2 contract body', () => {
+test('SourceV1 matches its declared shape', () => {
   expectTypeOf<SourceV1['specVersion']>().toEqualTypeOf<'v1'>();
   expectTypeOf<SourceV1['id']>().toEqualTypeOf<string>();
   expectTypeOf<SourceV1['capabilities']>().toEqualTypeOf<{
@@ -30,7 +30,7 @@ test('SourceV1 matches the J2 contract body', () => {
   expectTypeOf<SourceV1['doRead']>().returns.toEqualTypeOf<AsyncIterable<NormalizedTrace>>();
 });
 
-test('GeneratorV1 matches the J2 contract body', () => {
+test('GeneratorV1 matches its declared shape', () => {
   expectTypeOf<GeneratorV1['specVersion']>().toEqualTypeOf<'v1'>();
   expectTypeOf<GeneratorV1['capabilities']>().toEqualTypeOf<{
     structured: 'json_schema' | 'json_object' | 'tool' | 'prompt';

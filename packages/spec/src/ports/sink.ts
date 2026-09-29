@@ -1,7 +1,7 @@
-// Sink port: writes verdicts back to an observability backend (docs/contracts/j6.md "Port").
+// Sink port: writes verdicts back to an observability backend.
 // Mirrors JudgeV1/ExporterV1: a hand-written port interface with no kind field. defineSink
-// checks specVersion and that capabilities.batch is a positive integer (root DECISION
-// 2026-09-28): no defineAdapter, no freeze, no marker, no id-shape check ('otel/logs' ok).
+// checks specVersion and that capabilities.batch is a positive integer:
+// no defineAdapter, no freeze, no marker, no id-shape check ('otel/logs' ok).
 
 import { CEV_ERROR_CODES, VetError } from '../errors.ts';
 import type { Verdict } from '../generated/index.ts';

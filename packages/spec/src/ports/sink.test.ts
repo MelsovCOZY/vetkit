@@ -78,7 +78,7 @@ describe('verdictSchema provenance and id', () => {
     cacheHit: false,
   };
 
-  test('a J1 verdict with no provenance and no id still validates', () => {
+  test('a verdict with no provenance and no id still validates', () => {
     expect(validateJson(baseVerdict, verdictSchema).ok).toBe(true);
   });
 

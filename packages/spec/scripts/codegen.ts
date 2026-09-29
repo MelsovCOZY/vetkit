@@ -7,7 +7,7 @@ import { compile } from 'json-schema-to-typescript';
 // Sourced from packages/spec/schemas/*.schema.json (JSON Schema 2020-12 IR), this
 // script writes packages/spec/src/generated/<name>.ts + index.ts. Determinism: schema
 // files are sorted by name, the banner carries no timestamp, and the compile() option
-// object never varies between runs (docs/contracts/j0.md, DECISION: Architecture).
+// object never varies between runs.
 
 const PACKAGE_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const REPO_ROOT = join(PACKAGE_ROOT, '..', '..');
@@ -70,7 +70,7 @@ function exportedTypeNames(output: string): string[] {
   return names;
 }
 
-// version.schema.json's title is SpecVersionDoc (docs/contracts/j1.md), but the wire
+// version.schema.json's title is SpecVersionDoc, but the wire
 // name consumers ask safeParseJson for is specVersionSchema, not versionSchema.
 const SCHEMA_CONSTANT_NAME_OVERRIDES: Record<string, string> = { version: 'specVersion' };
 
@@ -80,7 +80,7 @@ function schemaConstantName(moduleName: string): string {
 
 // Emits packages/spec/src/generated/schemas.ts: one typed JsonSchema constant per
 // schemas/*.schema.json file, so consumers can safeParseJson/validateJson against the
-// IR without reading packages/spec/schemas/ directly (docs/contracts/j1.md).
+// IR without reading packages/spec/schemas/ directly.
 function buildSchemasFile(entries: { moduleName: string; schema: SchemaFile }[]): string {
   const lines: string[] = [
     BANNER_COMMENT,

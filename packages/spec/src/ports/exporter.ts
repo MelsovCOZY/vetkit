@@ -1,6 +1,6 @@
 // Exporter port: turns the IR (criteria, cases, lock) into files for another runner.
 // Mirrors JudgeV1: a hand-written port interface with no kind field and, for v1, no
-// capabilities. defineExporter only checks specVersion (root DECISION 2026-09-28): no
+// capabilities. defineExporter only checks specVersion: no
 // defineAdapter, no freeze, no marker, no runtime id check.
 
 import type { Case, Criterion, Lock } from '../generated/index.ts';

@@ -1,10 +1,9 @@
 // Response normaliser: turns a raw /v1/systemone-dialect Jev wire response (already
 // parsed from JSON by the caller — transport.ts's `await response.json()`, or
 // the Cloudflare envelope unwrap) into the IR `JudgeResponse`, so
-// `packages/core` never sees a raw wire shape (docs/contracts/j1.md "Ports"; root
-// ledger DECISION: access layer). One normaliser feeds every transport.
+// `packages/core` never sees a raw wire shape. One normaliser feeds every transport.
 //
-// Scope (bead payload "Scope"): normalisation, confidence lift, legend fill,
+// Scope: normalisation, confidence lift, legend fill,
 // provider selection, pinned flag, usage snake->camel, raw passthrough. Fetching is
 // transport.ts's job; Cloudflare envelope unwrapping is a separate concern.
 import {
@@ -82,7 +81,7 @@ function extractGatewayRouting(body: Record<string, unknown>): Record<string, un
 
 // Finds the credentialType of the provider attempt that actually succeeded
 // (routing.modelAttempts[].providerAttempts[].success === true), rather than
-// assuming the first attempt succeeded (root ledger PREMISE: the gateway can plan
+// assuming the first attempt succeeded (the gateway can plan
 // more than one provider and fall back).
 function extractCredentialType(routing: Record<string, unknown> | undefined): string | undefined {
   const modelAttempts = routing?.['modelAttempts'];

@@ -1,12 +1,10 @@
 // parseIr(text, schema) wraps safeParseJson (packages/spec/src/json.ts) and remaps its
 // ParseResult<T> = {ok:true;value}|{ok:false;error:VetError} into a plain, dependency-free
-// discriminated shape: {ok:true;value:T}|{ok:false;issues:Array<{path;message}>}. This is
-// the shape the J1 contract's acceptance criteria describe as "safeParseJson(text, schema)
-// returns a discriminated {ok:true,value}|{ok:false,issues[]}"; json.ts's actual
-// safeParseJson returns {ok:false,error:VetError} instead (error.cause is either an ajv
-// ErrorObject[] on a schema-validation failure, or the JSON.parse exception on a parse
-// failure), so this file is the one place that mapping happens. json.ts itself is
-// untouched — parseIr never throws, exactly like the function it wraps.
+// discriminated shape: {ok:true;value:T}|{ok:false;issues:Array<{path;message}>}.
+// safeParseJson returns {ok:false,error:VetError}, where error.cause is either an ajv
+// ErrorObject[] on a schema-validation failure or the JSON.parse exception on a parse
+// failure, so this file is the one place that mapping happens. parseIr never throws,
+// exactly like the function it wraps.
 import type { ErrorObject } from 'ajv/dist/2020.js';
 import { safeParseJson, type JsonSchema } from '../src/json.ts';
 

@@ -44,7 +44,7 @@ describe('VetError', () => {
     expect(VetError.isInstance(undefined)).toBe(false);
   });
 
-  test('accepts the ten J1 error codes (judge port, IR validation, gate, cache)', () => {
+  test('accepts the ten judge error codes (judge port, IR validation, gate, cache)', () => {
     const j1Codes = [
       'CONFIG_INVALID',
       'CRITERIA_INVALID',
@@ -66,7 +66,7 @@ describe('VetError', () => {
     }
   });
 
-  test('accepts the six J3 codes (labels, lock staleness, gate, CLI exit mapping)', () => {
+  test('accepts the six calibration and gate codes (labels, lock staleness, gate, CLI exit mapping)', () => {
     const j3Codes = [
       'LABELS_TOO_FEW',
       'LOCK_STALE',
@@ -84,14 +84,14 @@ describe('VetError', () => {
     }
   });
 
-  test('accepts LABELS_INVALID (malformed labels row, J3)', () => {
+  test('accepts LABELS_INVALID (malformed labels row)', () => {
     expect(CEV_ERROR_CODES.LABELS_INVALID).toBe('LABELS_INVALID');
     const err = new VetError('LABELS_INVALID', 'labels.csv:3: bad row');
     expect(VetError.isInstance(err)).toBe(true);
     expect(err.code).toBe('LABELS_INVALID');
   });
 
-  test('accepts the five sink codes (J6 sink/outbox)', () => {
+  test('accepts the five sink codes (sink/outbox)', () => {
     const sinkCodes = [
       'SINK_REJECTED',
       'SINK_UNREACHABLE',
@@ -108,14 +108,14 @@ describe('VetError', () => {
     }
   });
 
-  test('accepts CONFIG_UNKNOWN_SINK (vet run --sink names a sink not in config, J6)', () => {
+  test('accepts CONFIG_UNKNOWN_SINK (vet run --sink names a sink not in config)', () => {
     expect(CEV_ERROR_CODES.CONFIG_UNKNOWN_SINK).toBe('CONFIG_UNKNOWN_SINK');
     const err = new VetError('CONFIG_UNKNOWN_SINK', "unknown sink 'nope'");
     expect(VetError.isInstance(err)).toBe(true);
     expect(err.code).toBe('CONFIG_UNKNOWN_SINK');
   });
 
-  test('accepts the five J2 codes (source/generator)', () => {
+  test('accepts the five source and generator codes (source/generator)', () => {
     const j2Codes = [
       'SOURCE_UNREADABLE',
       'TRACE_INVALID',
@@ -132,7 +132,7 @@ describe('VetError', () => {
     }
   });
 
-  test('accepts the three J5 codes (OTLP reader, receiver, empty source)', () => {
+  test('accepts the three OTLP codes (OTLP reader, receiver, empty source)', () => {
     const j5Codes = ['OTLP_PARSE', 'OTLP_UNSUPPORTED_CONTENT_TYPE', 'SOURCE_EMPTY'] as const;
 
     for (const code of j5Codes) {
@@ -161,7 +161,7 @@ describe('VetError', () => {
     }
   });
 
-  test('accepts RECEIVER_BIND and WATCH_CONFIG (J7 `vet watch`, docs/contracts/j7.md)', () => {
+  test('accepts RECEIVER_BIND and WATCH_CONFIG (`vet watch`)', () => {
     const j7Codes = ['RECEIVER_BIND', 'WATCH_CONFIG'] as const;
 
     for (const code of j7Codes) {

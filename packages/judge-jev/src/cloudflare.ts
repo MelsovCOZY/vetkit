@@ -1,12 +1,12 @@
 // Cloudflare Workers AI transport for Jev: the REST run endpoint
 // (POST /accounts/<id>/ai/run/typesafe/jev, body {state, questions}) wrapped in
 // Cloudflare's {result, success, errors} envelope. A sibling transport behind the
-// same JudgeV1, not a separate contract (root ledger DECISION: access layer).
+// same JudgeV1.
 // transport.ts owns the shared parts (question mapping, deadline, error mapping,
 // redaction, normalise()); this file only supplies what differs. pinned:false comes
-// from JEV_PRESETS.cloudflare (DECISION pinning honesty).
+// from JEV_PRESETS.cloudflare.
 //
-// UNVERIFIED (bead RISK): the envelope shape follows Cloudflare's docs
+// UNVERIFIED: the envelope shape follows Cloudflare's docs
 // (https://developers.cloudflare.com/ai/models/typesafe/jev/) and has not been
 // exercised with a real token yet.
 import { VetError } from '@vetkit/spec';

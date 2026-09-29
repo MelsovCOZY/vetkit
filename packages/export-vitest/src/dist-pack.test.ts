@@ -1,17 +1,15 @@
-// Regression test: `bun run build` did not copy templates/scorer.ts.tmpl into
-// dist, so the built CLI's `vet export --to vitest` crashed with ENOENT reading
-// packages/export-vitest/dist/templates/scorer.ts.tmpl (emit-scorer.ts's TEMPLATE_PATH is
-// resolved relative to its own, built, module location). Unit tests elsewhere in this package
-// alias @vetkit/spec to source via vitest.config.ts and import emit-scorer.ts directly, so
-// they never touch dist and never caught this. These two tests prove the fix at the dist
-// level: dist/index.js runs emitScorer without ENOENT, and the packed tarball's file list
-// contains the template.
+// emit-scorer.ts resolves its TEMPLATE_PATH relative to its own, built, module location, so
+// the built package must ship dist/templates/scorer.ts.tmpl or `vet export --to vitest`
+// crashes with ENOENT. Unit tests elsewhere in this package alias @vetkit/spec to source
+// via vitest.config.ts and import emit-scorer.ts directly, so they never touch dist. These
+// two tests check at the dist level: dist/index.js runs emitScorer without ENOENT, and the
+// packed tarball's file list contains the template.
 //
-// This reads the package's own already-built dist/ instead of rebuilding it here: an earlier
-// version ran `rm -rf dist; bun run build` in a beforeAll, which raced with the cli project's
-// tests (packages/cli/src/test-support/build-cli.ts) spawning the built CLI against this same
-// dist/ from a parallel vitest worker — dist briefly didn't exist mid-rebuild, and 31 cli
-// tests failed with ERR_MODULE_NOT_FOUND. The root `bun run build` (which every
+// This reads the package's own already-built dist/ instead of rebuilding it: a rebuild in
+// a beforeAll (`rm -rf dist; bun run build`) races with the cli project's tests
+// (packages/cli/src/test-support/build-cli.ts), which spawn the built CLI against this same
+// dist/ from a parallel vitest worker; dist briefly doesn't exist mid-rebuild and those
+// tests fail with ERR_MODULE_NOT_FOUND. The root `bun run build` (which every
 // documented verify command, and CI, runs before `bun run test`) always builds this package's
 // real dist/ first, so it is current here; requireBuilt() fails loudly instead of silently
 // skipping if it somehow isn't.

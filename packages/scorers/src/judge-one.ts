@@ -4,8 +4,8 @@
 // lock-fitted threshold/tolerance match what `vet run` computes for the same criterion
 // (`criterion` is a full @vetkit/spec Criterion, wordingHash included,
 // passed straight through; never re-derived here). Pass/threshold math is decideVerdict's,
-// reused as-is (DECISION: emitted scorer modules call the same math instead of
-// duplicating it) — this module never reimplements the polarity/escape/threshold comparison.
+// reused as-is so emitted scorer modules call the same math instead of
+// duplicating it; this module never reimplements the polarity/escape/threshold comparison.
 import { decideVerdict, judgeCase, type VerdictCache } from '@vetkit/core';
 import type { Answer, Case, Criterion, JudgeV1, Verdict } from '@vetkit/spec';
 

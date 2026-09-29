@@ -1,7 +1,6 @@
-// emitTestFile: renders one vitest test file per criteria-file group (root acceptance J4;
-// docs/contracts/j4.md "Emitted file shapes"). One `describe` per criteria file, one `test`
-// per (case × criterion) pair: a real test imports the j4-2 scorer (packages/export-vitest/src/
-// emit-scorer.ts, `./scorers/<slug>.ts` relative to outDir) and asserts `score === 1`. An
+// emitTestFile: renders one vitest test file per criteria-file group. One `describe`
+// per criteria file, one `test` per (case × criterion) pair: a real test imports the
+// scorer (emit-scorer.ts, `./scorers/<slug>.ts` relative to outDir) and asserts `score === 1`. An
 // uncalibrated lock entry, or (for a content-dependent criterion) a case whose trace wasn't
 // fully captured, becomes `test.skip` instead — the real vitest 5 API is a literal
 // `test.skip(name, () => {})` with the reason embedded in the name, never a fake
@@ -70,8 +69,8 @@ function completenessStatus(provenance: unknown): CompletenessStatus {
   return 'ok';
 }
 
-// Mirrors emit-scorer.ts's private slugify (duplicated: that module is outside this bead's
-// owned paths). Filenames only; the raw criterion id stays inside the emitted module as data.
+// Mirrors emit-scorer.ts's private slugify (duplicated to keep the two
+// modules independent). Filenames only; the raw criterion id stays inside the emitted module as data.
 function slugify(id: string): string {
   const slug = id
     .toLowerCase()
@@ -143,7 +142,7 @@ function renderBody(
 
 /**
  * Renders `<outDir>/<basename(criteriaFile)>.evals.test.ts`: one describe per criteria file
- * and one test per (case × criterion) pair, calling the j4-2 scorer for that criterion. Cases
+ * and one test per (case × criterion) pair, calling the scorer for that criterion. Cases
  * whose case×criterion pair is not judgeable (an uncalibrated lock, or an incomplete trace for
  * a content-dependent criterion) become `test.skip` with the reason in the name instead. Zero
  * cases emits a single `test.todo`.

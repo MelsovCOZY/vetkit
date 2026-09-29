@@ -1,14 +1,13 @@
 // OpenAI strict-mode schema normalisation for the chat-completions dialect. The IR stays
 // JSON Schema 2020-12; only the wire copy is rewritten, and a schema whose meaning the
-// rewrite would change is rejected with GENERATOR_CAPABILITY instead (root DECISION:
-// structured output).
+// rewrite would change is rejected with GENERATOR_CAPABILITY instead.
 import { VetError, type JsonSchema } from '@vetkit/spec';
 
 type Json = Record<string, unknown>;
 
 // Keywords OpenAI strict mode documents as unsupported. Source:
 // https://developers.openai.com/api/docs/guides/structured-outputs ("Supported schemas").
-// UNVERIFIED (docs/research/2026-09-25-provider-agnostic-access-layer-brief.md §2.2): the
+// UNVERIFIED: the
 // list was not re-read from the live page; reject only these and widen it once confirmed.
 const UNSUPPORTED_KEYWORDS: readonly string[] = [
   'allOf',
