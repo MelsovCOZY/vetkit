@@ -119,6 +119,10 @@
         "baseURL": { "type": "string" },
         "apiKeyEnv": { "description": "Name of the env var holding the key.", "type": "string" },
         "model": { "type": "string" },
+        "requestFormat": {
+          "description": "Judge request format; 'raw' when omitted.",
+          "enum": ["raw", "fenced-v1"]
+        },
         "providerOptions": { "type": "object", "additionalProperties": {} }
       },
       "required": ["kind", "apiKeyEnv"],

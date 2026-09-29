@@ -15,6 +15,20 @@ const ep = {
   model: 'gen-model',
 };
 
+describe('config.schema.json judgeEndpoint.requestFormat', () => {
+  test.each(['raw', 'fenced-v1'])('accepts requestFormat %s', (requestFormat) => {
+    expect(validateJson({ judge: { ...judge, requestFormat } }, configSchema).ok).toBe(true);
+  });
+
+  test('accepts a judge endpoint without requestFormat', () => {
+    expect(validateJson({ judge }, configSchema).ok).toBe(true);
+  });
+
+  test.each(['fenced', 'RAW', '', 1])('rejects requestFormat %s', (requestFormat) => {
+    expect(validateJson({ judge: { ...judge, requestFormat } }, configSchema).ok).toBe(false);
+  });
+});
+
 describe('config.schema.json generatorEndpoint.structured', () => {
   test.each(['json_schema', 'json_object', 'prompt'])('accepts structured %s', (structured) => {
     const result = validateJson({ judge, generator: { ...ep, structured } }, configSchema);

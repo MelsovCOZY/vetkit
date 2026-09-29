@@ -8,6 +8,8 @@ export type Question =
   | { type: 'choice'; instructions: string; criteria: Record<string, string> }
   | { type: 'score'; instructions: string; criteria: string[] }; // 2..10 levels
 
+export type RequestFormat = 'raw' | 'fenced-v1';
+
 export interface JudgeV1 {
   specVersion: 'v1';
   id: string;
@@ -17,6 +19,7 @@ export interface JudgeV1 {
     pinned: boolean;
     transport: string;
     model: string; // declared/requested model id (cache key, unscored model.requested)
+    requestFormat?: RequestFormat;
   };
   doJudge(req: {
     state: string;

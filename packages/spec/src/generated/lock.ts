@@ -28,6 +28,10 @@ export interface Lock {
     [k: string]: LockCriterion;
   };
   datasetHash: string;
+  /**
+   * Judge request format the lock was calibrated with.
+   */
+  requestFormat?: 'raw' | 'fenced-v1';
 }
 export interface LockModel {
   requested: string;

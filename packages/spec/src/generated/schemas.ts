@@ -238,6 +238,10 @@ export const configSchema: JsonSchema = {
         model: {
           type: 'string',
         },
+        requestFormat: {
+          description: "Judge request format; 'raw' when omitted.",
+          enum: ['raw', 'fenced-v1'],
+        },
         providerOptions: {
           type: 'object',
           additionalProperties: {},
@@ -833,6 +837,10 @@ export const lockSchema: JsonSchema = {
     datasetHash: {
       type: 'string',
       pattern: '^[0-9a-f]{64}$',
+    },
+    requestFormat: {
+      description: 'Judge request format the lock was calibrated with.',
+      enum: ['raw', 'fenced-v1'],
     },
   },
   required: ['lockVersion', 'model', 'criteria', 'datasetHash'],
