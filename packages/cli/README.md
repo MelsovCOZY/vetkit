@@ -1,8 +1,8 @@
-<h1 align="center">
+<p align="center">
   <img src="https://raw.githubusercontent.com/MelsovCOZY/vetkit/master/assets/logo.png" alt="vetkit" width="192" height="192">
-</h1>
+</p>
 
-Generate, validate and run LLM evals from the command line. Installs the `vet` binary.
+vetkit generates, validates and runs LLM evals from the command line. This package installs the `vet` binary.
 
 ```
 npm i -D vetkit

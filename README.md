@@ -1,14 +1,13 @@
-<h1 align="center">
+<p align="center">
   <img src="assets/logo.png" alt="vetkit" width="256" height="256">
-</h1>
-
-<p align="center">Generate, validate and run LLM evals from the command line.</p>
+</p>
 
 ## What it is
 
-vetkit is a TypeScript library and CLI (`vet`) for LLM evals. You describe criteria in
-`criteria.yaml`, `vet` judges cases against them, and `vet validate` calibrates each criterion
-against human labels and records the result in `criteria.lock.json`.
+vetkit generates, validates and runs LLM evals from the command line. It is a TypeScript
+library and CLI (`vet`): you describe criteria in `criteria.yaml`, `vet` judges cases against
+them, and `vet validate` calibrates each criterion against human labels and records the result
+in `criteria.lock.json`.
 
 The judge is Jev, a model that answers typed choice and score questions. Jev cannot generate
 text, so any step that drafts criteria or cases uses a generator chat model (any
