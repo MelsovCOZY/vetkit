@@ -15,7 +15,8 @@
 
 import { safeParseJson, type JsonSchema, type Message, type MessagePart } from '@vetkit/spec';
 import type { OtlpSpan } from '../../reader/index.ts';
-import type { DialectV1 } from '../../normalize/dialect.ts';
+import type { DialectV1, OtlpDiag } from '../../normalize/dialect.ts';
+import { reportUnknownRole } from '../unknown-role.ts';
 
 const SPEC_COMMIT = 'vercel/ai content/docs/03-ai-sdk-core/60-telemetry.mdx @ 2026-09-25';
 
@@ -80,8 +81,10 @@ function numberAttr(span: OtlpSpan, key: string): number | undefined {
   return typeof value === 'number' ? value : undefined;
 }
 
-function toRole(raw: unknown): Message['role'] {
-  return raw === 'system' || raw === 'assistant' || raw === 'tool' ? raw : 'user';
+function toRole(raw: unknown, spanId: string, onDiag?: (d: OtlpDiag) => void): Message['role'] {
+  if (raw === 'system' || raw === 'assistant' || raw === 'tool') return raw;
+  if (raw !== 'user') reportUnknownRole(onDiag, spanId, raw, 'user');
+  return 'user';
 }
 
 // A content-parts array entry's text, when it is a `{type:'text', text}` part; other Vercel
@@ -139,7 +142,7 @@ function contentToParts(content: unknown): MessagePart[] {
 
 // ai.prompt.messages wins over ai.prompt when both are present (real Vercel traces never emit
 // both for the same span); undefined means the attribute itself was absent.
-function messagesFromPrompt(span: OtlpSpan): Message[] {
+function messagesFromPrompt(span: OtlpSpan, onDiag?: (d: OtlpDiag) => void): Message[] {
   const rawMessages = stringAttr(span, 'ai.prompt.messages');
   if (rawMessages !== undefined) {
     const parsed = safeParseJson<WirePromptMessage[]>(rawMessages, promptMessagesSchema);
@@ -151,7 +154,10 @@ function messagesFromPrompt(span: OtlpSpan): Message[] {
         },
       ];
     }
-    return parsed.value.map((m) => ({ role: toRole(m.role), parts: contentToParts(m.content) }));
+    return parsed.value.map((m) => ({
+      role: toRole(m.role, span.spanId, onDiag),
+      parts: contentToParts(m.content),
+    }));
   }
 
   const plainPrompt = stringAttr(span, 'ai.prompt');
@@ -217,8 +223,8 @@ export const vercelDialect: DialectV1 = {
     return operationId !== undefined && INNER_OPERATION_IDS.has(operationId);
   },
 
-  extractMessages: (span) => {
-    const messages = messagesFromPrompt(span);
+  extractMessages: (span, _tree, onDiag) => {
+    const messages = messagesFromPrompt(span, onDiag);
     const parts = responseParts(span);
     if (parts.length > 0) messages.push({ role: 'assistant', parts });
     return messages;

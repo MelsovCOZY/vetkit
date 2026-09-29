@@ -171,7 +171,11 @@ export function normalizeTrace(
     const otlpSpan = node.span;
     if (dialect !== undefined && dialect.isLlmSpan(otlpSpan)) {
       const start = messages.length;
-      messages.push(...dialect.extractMessages(otlpSpan, tree));
+      messages.push(
+        ...dialect.extractMessages(otlpSpan, tree, (d) =>
+          onDiag?.({ ...d, ...(d.traceId === undefined ? { traceId: resolvedTraceId } : {}) }),
+        ),
+      );
       spans.push({
         spanId: otlpSpan.spanId,
         name: otlpSpan.name,
