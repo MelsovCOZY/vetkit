@@ -1,0 +1,15 @@
+[
+  {
+    "id": "otel-fixture",
+    "input": {
+      "state": "User: Can I get a refund for my order #4411?\nAssistant: Yes, I have issued a full refund for order #4411."
+    },
+    "provenance": {
+      "traceId": "00000000000000000000000000000001",
+      "spanId": "0000000000000003",
+      "observationId": "0000000000000003",
+      "dialect": "gen_ai-latest"
+    },
+    "tags": []
+  }
+]
