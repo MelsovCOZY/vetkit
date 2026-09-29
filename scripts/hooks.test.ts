@@ -5,8 +5,8 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
-  readdirSync,
   realpathSync,
+  statSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -34,6 +34,42 @@ function makeRepo(): string {
     'pre-commit:\n  commands:\n    noop:\n      run: echo ok\n',
   );
   return dir;
+}
+
+const BD_MARKER = '# --- BEGIN BEADS INTEGRATION';
+const CHAIN_BEGIN = '# --- BEGIN LEFTHOOK CHAIN';
+
+// A checkout the way bd leaves it: .beads/, core.hooksPath, and a marked pre-commit shim.
+function bdCheckout(dir: string): string {
+  const hooks = join(dir, '.beads', 'hooks');
+  mkdirSync(hooks, { recursive: true });
+  git(dir, 'config', 'core.hooksPath', '.beads/hooks');
+  writeFileSync(
+    join(hooks, 'pre-commit'),
+    `#!/usr/bin/env sh\n${BD_MARKER} v1 ---\necho bd-ran >> "$HOOK_LOG"\n# --- END BEADS INTEGRATION v1 ---\n`,
+    { mode: 0o755 },
+  );
+  return hooks;
+}
+
+// Commits with a recording stand-in for bun, so the hooks' real chain is exercised.
+function commitWithFakeBun(dir: string): string {
+  const bin = join(dir, 'fakebin');
+  const log = join(dir, 'hook.log');
+  mkdirSync(bin);
+  writeFileSync(join(bin, 'bun'), '#!/bin/sh\necho "$@" >> "$HOOK_LOG"\n', { mode: 0o755 });
+  writeFileSync(join(dir, 'f.txt'), 'x');
+  git(dir, 'add', 'f.txt');
+  const r = spawnSync(
+    'git',
+    ['-C', dir, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'msg'],
+    {
+      encoding: 'utf8',
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, HOOK_LOG: log },
+    },
+  );
+  expect(r.status, r.stderr + r.stdout).toBe(0);
+  return readFileSync(log, 'utf8');
 }
 
 function runInstall(cwd: string) {
@@ -74,15 +110,58 @@ describe('contributor hooks: lefthook installed directly', () => {
     });
   });
 
-  it('leaves the maintainer bd chain alone when a .beads dir exists', () => {
+  it('still installs plain lefthook hooks when no .beads dir exists', () => {
     withRepo((dir) => {
-      mkdirSync(join(dir, '.beads', 'hooks'), { recursive: true });
-      git(dir, 'config', 'core.hooksPath', '.beads/hooks');
+      const run = runInstall(dir);
+      expect(run.status, run.stderr + run.stdout).toBe(0);
+      expect(readFileSync(join(dir, '.git', 'hooks', 'pre-commit'), 'utf8')).toContain('lefthook');
+    });
+  });
+
+  it('chains lefthook into bd-managed hooks and runs both on commit', () => {
+    withRepo((dir) => {
+      const hooks = bdCheckout(dir);
       const run = runInstall(dir);
       expect(run.status, run.stderr + run.stdout).toBe(0);
       expect(git(dir, 'config', '--local', '--get', 'core.hooksPath').out).toBe('.beads/hooks');
-      expect(run.stdout + run.stderr).toContain('.beads');
-      expect(readdirSync(join(dir, '.git', 'hooks')).includes('pre-commit')).toBe(false);
+      expect(existsSync(join(dir, '.git', 'hooks', 'pre-commit'))).toBe(false);
+
+      for (const name of ['pre-commit', 'commit-msg']) {
+        expect(statSync(join(hooks, name)).mode & 0o111, name).not.toBe(0);
+      }
+      expect(readFileSync(join(hooks, 'pre-commit'), 'utf8')).toContain(BD_MARKER);
+
+      const log = commitWithFakeBun(dir);
+      expect(log).toContain('bd-ran');
+      expect(log).toContain('x lefthook run pre-commit');
+      expect(log).toContain('x lefthook run commit-msg');
+    });
+  });
+
+  it('is idempotent: a rerun adds no second chain block', () => {
+    withRepo((dir) => {
+      const hooks = bdCheckout(dir);
+      runInstall(dir);
+      const before = ['pre-commit', 'commit-msg'].map((n) => readFileSync(join(hooks, n), 'utf8'));
+      const run = runInstall(dir);
+      expect(run.status, run.stderr + run.stdout).toBe(0);
+      const after = ['pre-commit', 'commit-msg'].map((n) => readFileSync(join(hooks, n), 'utf8'));
+      expect(after).toEqual(before);
+      for (const text of after) expect(text.split(CHAIN_BEGIN).length - 1).toBe(1);
+    });
+  });
+
+  it('keeps the chain when bd rewrites only its own marked section', () => {
+    withRepo((dir) => {
+      const hooks = bdCheckout(dir);
+      runInstall(dir);
+      const file = join(hooks, 'pre-commit');
+      writeFileSync(file, readFileSync(file, 'utf8').replace('bd-ran', 'bd-ran-v2'));
+      const run = runInstall(dir);
+      expect(run.status, run.stderr + run.stdout).toBe(0);
+      const text = readFileSync(file, 'utf8');
+      expect(text).toContain('bd-ran-v2');
+      expect(text.split(CHAIN_BEGIN).length - 1).toBe(1);
     });
   });
 

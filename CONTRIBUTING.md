@@ -55,6 +55,13 @@ Every script below is declared in the root `package.json`; run any of them with 
 and `oxfmt --check` on staged files in parallel. The hook is advisory tooling, not a gate on
 correctness — CI runs the same checks (plus typecheck and tests) regardless.
 
+In a checkout that also uses the beads tracker (a `.beads/` directory with `core.hooksPath`
+set by `bd`), `hooks:install` does not run `lefthook install`, which would displace bd's
+hooks. It appends a marked lefthook block to bd's `pre-commit` and `commit-msg` hook files, so
+both run. Rerunning it is a no-op, and `bd hooks install` keeps the block because it only
+rewrites its own marked section. If bd's hook files are ever deleted outright, rerun
+`bun run hooks:install`.
+
 To skip the hook for one commit:
 
 ```
