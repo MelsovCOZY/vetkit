@@ -159,6 +159,12 @@ describe('judge endpoint presets', () => {
     expect(issues.map((i) => i.pointer)).toContain('/judge');
   });
 
+  it('accepts requestFormat fenced-v1 and rejects fenced at /judge/requestFormat', () => {
+    expect(validateConfig({ judge: { ...judgeEndpoint, requestFormat: 'fenced-v1' } })).toEqual([]);
+    const issues = validateConfig({ judge: { ...judgeEndpoint, requestFormat: 'fenced' } });
+    expect(issues.map((i) => i.pointer)).toContain('/judge/requestFormat');
+  });
+
   it('still accepts baseURL without preset', () => {
     expect(validateConfig({ judge: judgeEndpoint })).toEqual([]);
   });

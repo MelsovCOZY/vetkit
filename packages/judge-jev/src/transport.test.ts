@@ -736,3 +736,34 @@ describe('createJevJudgeFromEndpoint', () => {
     expect(judge.capabilities.model).toBe('m');
   });
 });
+
+describe('requestFormat capability', () => {
+  test('a fenced-v1 endpoint echoes it and leaves the wire state untouched', async () => {
+    const calls: CapturedCall[] = [];
+    const fetchStub: typeof fetch = vi.fn(async (input, init) => {
+      calls.push({ url: String(input), init: init ?? {} });
+      return jsonResponse(fakeSuccessBody('m'));
+    });
+    const judge = createJevJudgeFromEndpoint(
+      { baseURL: 'https://judge.example', model: 'm', requestFormat: 'fenced-v1' },
+      { apiKey: 'k', fetch: fetchStub },
+    );
+    expect(judge.capabilities.requestFormat).toBe('fenced-v1');
+    await judge.doJudge({
+      state: 'plain state',
+      questions: { ok: { type: 'boolean', instructions: 'q?' } },
+    });
+    const call = calls[0];
+    if (call === undefined) throw new Error('fetch was not called');
+    const sent = JSON.stringify(await new Request(call.url, call.init).json());
+    expect(sent).toContain('"plain state"');
+  });
+
+  test.each([['raw' as const], [undefined]])('%s omits the capability', (requestFormat) => {
+    const judge = createJevJudgeFromEndpoint(
+      { preset: 'vercel', ...(requestFormat === undefined ? {} : { requestFormat }) },
+      { apiKey: 'k' },
+    );
+    expect('requestFormat' in judge.capabilities).toBe(false);
+  });
+});
