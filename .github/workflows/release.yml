@@ -85,7 +85,7 @@ jobs:
       - name: Publish tarballs (dependency order, idempotent)
         run: |
           set -euo pipefail
-          bun scripts/release-preflight.ts --publish-order | while IFS=$'\t' read -r dir name version tgz; do
+          bun scripts/release-preflight.ts --publish-order | while IFS=$'\t' read -r _ name version tgz; do
             tgzPath="dist-tarballs/${tgz}"
             if [ ! -f "$tgzPath" ]; then
               continue
