@@ -23,8 +23,6 @@ const LABELS = join(ROOT, 'fixtures/labels/answer_correct.csv');
 const CRITERION_ID = 'answer_correct';
 const FAMILIES = ['fake_instruction_output', 'encoding'] as const;
 const ARMS: readonly RequestFormat[] = ['raw', 'fenced-v1'];
-const MAX_PASS = 25;
-const MAX_FAIL = 8;
 // Same separator the gauntlet appends injections with (gauntlet-controls.ts, not exported).
 const INJECTION_SEPARATOR = '\n\n';
 const CONCURRENCY = 4;
@@ -45,6 +43,7 @@ interface Job {
   readonly kind: 'pass-original' | 'fail-original' | 'injected';
   readonly family?: string;
   readonly baseId: string;
+  readonly repeat: number;
   readonly evalCase: Case;
 }
 interface Outcome {
@@ -63,10 +62,14 @@ function readLabels(): Map<string, 'pass' | 'fail'> {
   return labels;
 }
 
-async function loadData(): Promise<{
+async function loadData(
+  knownPass: number,
+  knownFail: number,
+): Promise<{
   criterion: Criterion;
   passes: Case[];
   fails: Case[];
+  failPool: number;
 }> {
   const criteria = await loadCriteria(join(PROJECT, 'evals/criteria.yaml'));
   if (!criteria.ok) throw new Error('cannot load fixture criteria');
@@ -79,32 +82,43 @@ async function loadData(): Promise<{
   const of = (label: string): Case[] => sorted.filter((c) => labels.get(c.id) === label);
   return {
     criterion,
-    passes: of('pass').slice(0, MAX_PASS),
-    fails: of('fail').slice(0, MAX_FAIL),
+    passes: of('pass').slice(0, knownPass),
+    fails: of('fail').slice(0, knownFail),
+    failPool: of('fail').length,
   };
 }
 
-function buildJobs(passes: readonly Case[], fails: readonly Case[]): Job[] {
+function buildJobs(passes: readonly Case[], fails: readonly Case[], repeats: number): Job[] {
   const injections = DEFAULT_GAUNTLET_CORPORA.injections.filter((i) =>
     (FAMILIES as readonly string[]).includes(i.kind),
   );
-  return ARMS.flatMap((arm) => [
-    ...passes.map((c): Job => ({ arm, kind: 'pass-original', baseId: c.id, evalCase: c })),
-    ...fails.flatMap((c): Job[] => [
-      { arm, kind: 'fail-original', baseId: c.id, evalCase: c },
-      ...injections.map((inj): Job => ({
+  const repeatIdx = Array.from({ length: repeats }, (_, i) => i);
+  return ARMS.flatMap((arm) =>
+    repeatIdx.flatMap((repeat) => [
+      ...passes.map((c): Job => ({
         arm,
-        kind: 'injected',
-        family: inj.kind,
+        kind: 'pass-original',
+        repeat,
         baseId: c.id,
-        evalCase: {
-          ...c,
-          id: `${c.id}#injection:${inj.id}`,
-          input: { ...c.input, state: `${c.input.state}${INJECTION_SEPARATOR}${inj.text}` },
-        },
+        evalCase: c,
       })),
+      ...fails.flatMap((c): Job[] => [
+        { arm, kind: 'fail-original', repeat, baseId: c.id, evalCase: c },
+        ...injections.map((inj): Job => ({
+          arm,
+          kind: 'injected',
+          repeat,
+          family: inj.kind,
+          baseId: c.id,
+          evalCase: {
+            ...c,
+            id: `${c.id}#injection:${inj.id}`,
+            input: { ...c.input, state: `${c.input.state}${INJECTION_SEPARATOR}${inj.text}` },
+          },
+        })),
+      ]),
     ]),
-  ]);
+  );
 }
 
 function causeOf(cause: unknown): string {
@@ -166,7 +180,7 @@ function tally(arm: RequestFormat, outcomes: readonly Outcome[]): ArmReport {
         o.job.kind === 'injected' &&
         o.job.family === family &&
         o.status !== 'unscored' &&
-        originalFailed.has(o.job.baseId),
+        originalFailed.has(`${o.job.baseId}#${String(o.job.repeat)}`),
     );
     const flips = trials.filter((o) => o.status === 'pass').length;
     families[family] = { flips, n: trials.length, ci: wilson(flips, trials.length) };
@@ -227,6 +241,9 @@ async function main(): Promise<number> {
       'dry-run': { type: 'boolean', default: false },
       out: { type: 'string' },
       'max-calls': { type: 'string', default: '300' },
+      'known-pass': { type: 'string', default: '25' },
+      'known-fail': { type: 'string', default: '8' },
+      repeats: { type: 'string', default: '1' },
     },
   });
   const maxCalls = Number(values['max-calls']);
@@ -234,14 +251,24 @@ async function main(): Promise<number> {
     console.error('--max-calls must be a positive integer');
     return 2;
   }
-  const { criterion, passes, fails } = await loadData();
-  const jobs = buildJobs(passes, fails);
-  const perArm = jobs.length / ARMS.length;
+  const [nPass, nFail, repeats] = [
+    Number(values['known-pass']),
+    Number(values['known-fail']),
+    Number(values.repeats),
+  ];
+  if (![nPass, nFail, repeats].every((n) => Number.isInteger(n) && n >= 1)) {
+    console.error('--known-pass, --known-fail and --repeats must be positive integers');
+    return 2;
+  }
+  const { criterion, passes, fails, failPool } = await loadData(nPass, nFail);
+  console.log(`known-fail pool: ${String(failPool)}; using ${String(fails.length)}`);
+  const jobs = buildJobs(passes, fails, repeats);
+  const perArm = jobs.length / ARMS.length / repeats;
   console.log(
     `plan: ${String(jobs.length)} calls = ${String(ARMS.length)} arms (${ARMS.join(', ')}) x ` +
-      `(${String(passes.length)} known-pass + ${String(fails.length)} known-fail originals + ` +
+      `${String(repeats)} repeats x (${String(passes.length)} known-pass + ${String(fails.length)} known-fail originals + ` +
       `${String(perArm - passes.length - fails.length)} injected known-fail); criterion ${CRITERION_ID}; ` +
-      `families ${FAMILIES.join(', ')}; no cache, 1 repeat; cap ${String(maxCalls)}`,
+      `families ${FAMILIES.join(', ')}; no cache, ${String(repeats)} repeat(s); cap ${String(maxCalls)}`,
   );
   if (jobs.length > maxCalls) {
     console.error(
