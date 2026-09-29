@@ -256,7 +256,8 @@ describe('estimateValidate position-swap calls', () => {
 
   it('does not depend on the verdict cache (the gauntlet bypasses it)', async () => {
     const cacheDir = mkdtempSync(join(tmpdir(), 'vetkit-estimate-'));
-    for (const c of cases) writeFileSync(join(cacheDir, `${cacheKey(c, criteria, MODEL)}.json`), '{}');
+    for (const c of cases)
+      writeFileSync(join(cacheDir, `${cacheKey(c, criteria, MODEL)}.json`), '{}');
     const est = await estimateValidate({ criteria, cases, model: MODEL, cacheDir });
     const part = est.parts.find((p) => p.name === 'gauntlet-position-swap');
     expect(part?.calls).toBe(cases.length * (perCase(3) + POSITION_SWAP_MAX_ORDERS));

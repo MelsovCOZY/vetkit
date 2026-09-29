@@ -206,7 +206,11 @@ export async function estimateValidate(input: EstimateValidateInput): Promise<Va
   ];
   const known = parts.every((p) => p.calls !== 'unknown');
   const factor = known ? repeats + (packs.bias ?? 0) + (packs.controls ?? 0) : undefined;
-  const { name: _name, reason: _reason, ...scaledTotal } = scaled('calibration', base, factor, input.pricing);
+  const {
+    name: _name,
+    reason: _reason,
+    ...scaledTotal
+  } = scaled('calibration', base, factor, input.pricing);
   const total =
     scaledTotal.calls === 'unknown'
       ? scaledTotal

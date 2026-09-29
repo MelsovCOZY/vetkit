@@ -191,7 +191,15 @@ describe('vet estimate', () => {
     expect(result.fetched).toBe(false);
     const doc = parseJson(result.stdout);
     const base = doc['base'];
-    const cases = { cases: typeof base === 'object' && base !== null && 'cases' in base && typeof base.cases === 'number' ? base.cases : -1 };
+    const cases = {
+      cases:
+        typeof base === 'object' &&
+        base !== null &&
+        'cases' in base &&
+        typeof base.cases === 'number'
+          ? base.cases
+          : -1,
+    };
     // boolean: 3 options (3! = 6); 3-key choice + escape: 4 options (24, capped at 6); score: none.
     expect(doc['parts']).toEqual(
       expect.arrayContaining([
@@ -206,7 +214,9 @@ describe('vet estimate', () => {
     );
     const human = runVet(['estimate', '--for', 'validate'], dir);
     expect(human.status).toBe(0);
-    expect(human.stdout).toMatch(new RegExp(`gauntlet-position-swap: calls ${String(cases.cases * 12)}\\b`));
+    expect(human.stdout).toMatch(
+      new RegExp(`gauntlet-position-swap: calls ${String(cases.cases * 12)}\\b`),
+    );
     expect(human.stdout).toMatch(/gauntlet-bias.*unknown.*pack/);
   });
 
