@@ -1,11 +1,23 @@
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveConfig } from '@vetkit/core';
 import { safeParseJson } from '@vetkit/spec';
 import { beforeAll, describe, expect, test } from 'vitest';
+import { loadVetConfig } from '../config-load.ts';
 import { ensureCliBuilt } from '../test-support/build-cli.js';
+import { renderInlineConfig } from './init.ts';
 
 const binPath = fileURLToPath(new URL('../../dist/bin.js', import.meta.url));
 const fixtureDir = fileURLToPath(new URL('../../../../fixtures/cli/init/', import.meta.url));
@@ -304,5 +316,107 @@ describe('vet init --source generator usage', () => {
       inputTokens: 10,
       outputTokens: 4,
     });
+  });
+});
+
+const runFixtureDir = fileURLToPath(new URL('../../../../fixtures/cli/run/', import.meta.url));
+const SECRET = 'sentinel-secret-value-31337';
+
+const descriptorDoc = {
+  judge: {
+    kind: 'typesafe-compatible',
+    baseURL: 'http://127.0.0.1:9/v1',
+    model: 'judge-model',
+    apiKeyEnv: 'INIT_TEST_JUDGE_KEY',
+  },
+  generator: {
+    kind: 'openai-compatible',
+    baseURL: 'http://127.0.0.1:9/v1',
+    model: 'gen-model',
+    apiKeyEnv: 'INIT_TEST_GEN_KEY',
+  },
+  sinks: [
+    {
+      kind: 'otel',
+      endpoint: 'http://127.0.0.1:9/v1/traces',
+      headersEnv: 'INIT_TEST_OTEL_HEADERS',
+    },
+    'report',
+  ],
+  thresholds: { default: 0.7, perCriterion: { 'c-1': 0.9 } },
+  cacheDir: '.cache-x',
+};
+
+describe('the generated --out config is self-contained', () => {
+  test('inlines judge, generator and sinks with no relative import or re-export', () => {
+    const text = renderInlineConfig(resolveConfig(descriptorDoc).config);
+    expect(text).toBeDefined();
+    expect(text).not.toContain('../');
+    expect(text).not.toMatch(/\bfrom\s+['"]/u);
+    expect(text).not.toMatch(/\bimport\b|\brequire\(/u);
+    expect(text).toContain('INIT_TEST_JUDGE_KEY');
+    expect(text).toContain('INIT_TEST_GEN_KEY');
+    expect(text).toContain('INIT_TEST_OTEL_HEADERS');
+  });
+
+  test('carries env var names only, never a value from the environment', () => {
+    process.env['INIT_TEST_JUDGE_KEY'] = SECRET;
+    process.env['INIT_TEST_GEN_KEY'] = SECRET;
+    try {
+      const text = renderInlineConfig(resolveConfig(descriptorDoc).config);
+      expect(text).not.toContain(SECRET);
+    } finally {
+      delete process.env['INIT_TEST_JUDGE_KEY'];
+      delete process.env['INIT_TEST_GEN_KEY'];
+    }
+  });
+
+  test('loads back to the same effective judge, generator, sinks, thresholds and cacheDir', async () => {
+    const parent = resolveConfig(descriptorDoc).config;
+    const dir = mkdtempSync(join(tmpdir(), 'vetkit-inline-'));
+    writeFileSync(join(dir, 'vetkit.config.ts'), renderInlineConfig(parent) ?? '');
+    const loaded = await loadVetConfig({ cwd: dir, requireCredentials: false });
+    expect(loaded.config.judge).toEqual(parent.judge);
+    expect(loaded.config.generator).toEqual(parent.generator);
+    expect(loaded.config.sinks).toEqual(parent.sinks);
+    expect(loaded.config.thresholds).toEqual(parent.thresholds);
+    expect(loaded.config.cacheDir).toBe(parent.cacheDir);
+  });
+
+  test('a moved folder still loads: vet estimate --json succeeds from the new location', () => {
+    const parent = resolveConfig(descriptorDoc).config;
+    const home = mkdtempSync(join(tmpdir(), 'vetkit-inline-src-'));
+    const out = join(home, 'evals-out');
+    cpSync(join(runFixtureDir, 'evals'), join(out, 'evals'), { recursive: true });
+    writeFileSync(join(out, 'vetkit.config.ts'), renderInlineConfig(parent) ?? '');
+    const elsewhere = join(mkdtempSync(join(tmpdir(), 'vetkit-inline-dst-')), 'moved');
+    renameSync(out, elsewhere);
+    rmSync(home, { recursive: true, force: true });
+    const env = { ...process.env, INIT_TEST_JUDGE_KEY: undefined };
+    const result = runVet(['estimate', '--json'], elsewhere, env);
+    expect(result.stderr).not.toContain('CONFIG_INVALID');
+    expect(result.status).toBe(0);
+  });
+
+  test('an in-process adapter object cannot be inlined', () => {
+    const adapter = {
+      specVersion: 'v1' as const,
+      id: 'in-process',
+      capabilities: {},
+      doJudge: () => Promise.reject(new Error('unused')),
+    };
+    expect(renderInlineConfig(resolveConfig({ judge: adapter }).config)).toBeUndefined();
+  });
+
+  test('--out with an adapter-object config warns the folder is not movable and keeps the re-export', () => {
+    const project = freshProject();
+    const out = join(project, 'evals-out');
+    const result = runVet(['init', '--source', 'traces', '--out', out, '--json'], project);
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain('not movable');
+    expect(result.stderr).toContain('in-process');
+    expect(readFileSync(join(out, 'vetkit.config.ts'), 'utf8')).toMatch(
+      /export \{ default \} from/u,
+    );
   });
 });
