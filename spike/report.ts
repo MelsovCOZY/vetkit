@@ -360,6 +360,8 @@ async function loadCorpus(traces: Trace[], criteria: Criterion[]): Promise<Corpu
 // they are reported separately in the baseline block).
 // ---------------------------------------------------------------------------
 
+export const NOT_EVALUABLE = 'not evaluable (single-class truth)';
+
 export type CriterionRow = {
   id: string;
   n: number;
@@ -370,7 +372,7 @@ export type CriterionRow = {
   tnr: number | null;
   flipPct: number;
   escapePct: number;
-  verdict: 'pass' | 'fail' | 'unanswerable' | 'pending' | 'n/a';
+  verdict: 'pass' | 'fail' | 'unanswerable' | 'pending' | 'n/a' | typeof NOT_EVALUABLE;
 };
 
 export function computeCriterionRow(
@@ -430,14 +432,19 @@ export function computeCriterionRow(
   }
 
   const threshold = fitThreshold(scoresForFit, labelsForFit);
+  // Single-class truth (all yes or all no, review excluded): kappa/alpha are undefined, not 0.
+  const singleClass = new Set(labelsForFit).size < 2;
   const { tpr, tnr } = rates(scoresForFit, labelsForFit, threshold);
   const predictions = scoresForFit.map((s) => s >= threshold);
-  const kappa = cohenKappa(predictions, labelsForFit);
-  const alpha = krippendorffAlphaNominal(predictions.map((p, i) => [p, labelsForFit[i] ?? null]));
+  const kappa = singleClass ? null : cohenKappa(predictions, labelsForFit);
+  const alpha = singleClass
+    ? null
+    : krippendorffAlphaNominal(predictions.map((p, i) => [p, labelsForFit[i] ?? null]));
   const flipPct = flipRate(repeatsForFlip, threshold);
 
-  const verdict: CriterionRow['verdict'] =
-    escapePct > ESCAPE_UNANSWERABLE_BAR
+  const verdict: CriterionRow['verdict'] = singleClass
+    ? NOT_EVALUABLE
+    : escapePct > ESCAPE_UNANSWERABLE_BAR
       ? 'unanswerable'
       : kappa === null
         ? 'n/a'
@@ -701,6 +708,7 @@ export function criterionTableNote(check: LabelCheck): string {
 export function limitationsParagraph(
   haystackAggregateFaithfulness: number[],
   check: LabelCheck,
+  notEvaluable: string[],
 ): string {
   const nearCeiling = haystackAggregateFaithfulness.map((f) => f.toFixed(3)).join(', ');
   return [
@@ -713,6 +721,11 @@ export function limitationsParagraph(
       'then model, then auto. Model labels stand in for a human labeller, so any decision drawn from ' +
       'them is provisional. With a single labeller, Krippendorff alpha reduces to plain agreement ' +
       'between the labeller and the judge; a second labeller is out of scope of this spike.',
+    notEvaluable.length > 0
+      ? `Not evaluable: ${notEvaluable.join(', ')} - the labelled sample has no positive cases (or no negative cases) ` +
+        'for them, so truth is single-class and kappa is undefined; they are excluded from the median-kappa rule ' +
+        'and cannot count toward the pass count.'
+      : 'Not evaluable: none (every criterion has two-class truth).',
     `Jev is reached only through the gateway alias ${MODEL} (TypeSafe registration is closed); the served ` +
       `model id recorded on every verdict is that alias, release_date ${JEV_RELEASE_DATE} per ` +
       `${JEV_RELEASE_DATE_SOURCE}; \`pinned: false\`.`,
@@ -795,7 +808,11 @@ async function main(): Promise<void> {
       haystackAggregates.push(summary.aggregate.scores.faithfulness);
     }
   }
-  const limitationsMarkdown = limitationsParagraph(haystackAggregates, check);
+  const limitationsMarkdown = limitationsParagraph(
+    haystackAggregates,
+    check,
+    criterionRows.filter((r) => r.verdict === NOT_EVALUABLE).map((r) => r.id),
+  );
 
   const passCount = criterionRows.filter((r) => r.verdict === 'pass').length;
   const medianKappa = medianOfDefined(criterionRows.map((r) => r.kappa));
