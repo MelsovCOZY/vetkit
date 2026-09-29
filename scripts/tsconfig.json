@@ -1,0 +1,21 @@
+{
+  // Type-check-only project for the non-published trees (scripts/, spike/) plus the root
+  // vitest.config.ts they import. Same strict flags as tsconfig.base.json; isolatedDeclarations is
+  // off because nothing here ships, so it has nothing to protect.
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "isolatedDeclarations": false,
+    "emitDeclarationOnly": false,
+    "noEmit": true,
+    "rootDir": "..",
+    "tsBuildInfoFile": "${configDir}/../.tsbuild/scripts.tsbuildinfo",
+    "paths": {
+      "@vetkit/core": ["../packages/core/src/index.ts"],
+      "@vetkit/spec": ["../packages/spec/src/index.ts"]
+    }
+  },
+  "include": ["**/*.ts", "../spike/**/*.ts", "../vitest.config.ts"],
+  "exclude": ["fixtures", "../spike/data"],
+  "references": [{ "path": "../packages/core" }, { "path": "../packages/spec" }]
+}
