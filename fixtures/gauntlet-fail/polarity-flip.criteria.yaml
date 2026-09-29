@@ -1,0 +1,12 @@
+# The planted polarity flip alone, so `vet run --gate` names it (the refusal names the first
+# uncalibrated criterion id in sorted order). Same wording and polarity as criteria.yaml.
+criteria:
+  - id: polarity_flip
+    type: boolean
+    instructions: Does the answer respond to the question that was asked?
+    escape: The answer is empty or not readable.
+    polarity: pass_when_false
+    channel: quality
+    provenance:
+      traceIds: []
+      generator: gate-seed

@@ -1,0 +1,25 @@
+# The enabled criteria of evals/criteria.yaml, for `vet check --lock --criteria`: a disabled
+# criterion has no lock entry by design, and `vet check --lock` reports it as a stale wordingHash
+# (finding in the gate report), so the fresh/stale checks run on this file instead.
+criteria:
+  - id: answer_correct
+    type: boolean
+    instructions: Does the answer state the same fact as the reference answer to the question?
+    escape: The answer is empty or not readable.
+    polarity: pass_when_true
+    channel: outcome
+    checkable: factual
+    grader:
+      kind: reference
+    provenance:
+      traceIds: []
+      generator: gate-seed
+  - id: answer_quality
+    type: score
+    instructions: How well does the answer respond to the question that was asked?
+    criteria: [does not respond, partly responds, fully responds]
+    polarity: pass_when_true
+    channel: quality
+    provenance:
+      traceIds: []
+      generator: gate-seed

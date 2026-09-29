@@ -1,0 +1,34 @@
+# J3 gate criteria. thin_class is disabled here: it is validated in fixtures/gauntlet-fail/,
+# and stays declared so `vet label --from fixtures/labels/` accepts fixtures/labels/thin-class.csv.
+criteria:
+  - id: answer_correct
+    type: boolean
+    instructions: Does the answer state the same fact as the reference answer to the question?
+    escape: The answer is empty or not readable.
+    polarity: pass_when_true
+    channel: outcome
+    checkable: factual
+    grader:
+      kind: reference
+    provenance:
+      traceIds: []
+      generator: gate-seed
+  - id: answer_quality
+    type: score
+    instructions: How well does the answer respond to the question that was asked?
+    criteria: [does not respond, partly responds, fully responds]
+    polarity: pass_when_true
+    channel: quality
+    provenance:
+      traceIds: []
+      generator: gate-seed
+  - id: thin_class
+    type: boolean
+    instructions: Does the answer respond to the question that was asked?
+    escape: The answer is empty or not readable.
+    polarity: pass_when_true
+    channel: quality
+    enabled: false
+    provenance:
+      traceIds: []
+      generator: gate-seed

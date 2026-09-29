@@ -1,0 +1,47 @@
+# Criteria planted to fail validation, for the J3 gate (bd classified-evals-mol-lts).
+# Labels: fixtures/labels/thin-class.csv and fixtures/gauntlet-fail/labels/. Cases: ./cases (no `expected`).
+criteria:
+  # <30 fails in the held-out split -> class_too_small.
+  - id: thin_class
+    type: boolean
+    instructions: Does the answer respond to the question that was asked?
+    escape: The answer is empty or not readable.
+    polarity: pass_when_true
+    channel: quality
+    provenance:
+      traceIds: []
+      generator: gate-seed
+  # Planted polarity flip: the wording asks a yes-means-good question but polarity says
+  # pass_when_false, so every fitted decision points the wrong way.
+  - id: polarity_flip
+    type: boolean
+    instructions: Does the answer respond to the question that was asked?
+    escape: The answer is empty or not readable.
+    polarity: pass_when_false
+    channel: quality
+    provenance:
+      traceIds: []
+      generator: gate-seed
+  # Wording a generic persuasive constant satisfies -> constant_output.
+  - id: persuasive_constant
+    type: boolean
+    instructions: Is the answer written in a confident, complete and helpful tone?
+    escape: The answer is empty or not readable.
+    polarity: pass_when_true
+    channel: quality
+    provenance:
+      traceIds: []
+      generator: gate-seed
+  # checkable:factual with a reference grader, but the cases carry no `expected` -> reference_missing.
+  - id: needs_reference
+    type: boolean
+    instructions: Does the answer state the correct fact for the question?
+    escape: The answer is empty or not readable.
+    polarity: pass_when_true
+    channel: outcome
+    checkable: factual
+    grader:
+      kind: reference
+    provenance:
+      traceIds: []
+      generator: gate-seed
