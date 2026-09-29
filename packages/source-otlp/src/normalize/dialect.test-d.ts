@@ -23,8 +23,22 @@ test('DialectV1.isLlmSpan takes a span and returns boolean', () => {
   expectTypeOf<DialectV1['isLlmSpan']>().returns.toEqualTypeOf<boolean>();
 });
 
-test('DialectV1.extractMessages takes (span, tree) and returns Message[]', () => {
-  expectTypeOf<DialectV1['extractMessages']>().parameters.toEqualTypeOf<[OtlpSpan, SpanTree]>();
+test('DialectV1.extractMessages takes (span, tree, optional onDiag) and returns Message[]', () => {
+  expectTypeOf<DialectV1['extractMessages']>().parameters.toEqualTypeOf<
+    [OtlpSpan, SpanTree, (((d: OtlpDiag) => void) | undefined)?]
+  >();
+});
+
+test('a dialect whose extractMessages ignores onDiag still satisfies DialectV1', () => {
+  const legacy = {
+    name: 'vercel',
+    detect: () => true,
+    isLlmSpan: () => true,
+    extractMessages: (_span: OtlpSpan, _tree: SpanTree) => [],
+    extractUsage: () => null,
+    contentState: () => 'captured',
+  } as const satisfies DialectV1;
+  expectTypeOf(legacy).toMatchTypeOf<DialectV1>();
 });
 
 test('DialectV1.extractUsage returns a partial token pair/total or null', () => {

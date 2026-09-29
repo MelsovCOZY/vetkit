@@ -19,7 +19,8 @@ import {
 } from '@vetkit/spec';
 import type { AnyValue, OtlpResource, OtlpSpan } from '../../reader/index.ts';
 import type { SpanTree } from '../../reader/tree.ts';
-import type { DialectV1 } from '../../normalize/dialect.ts';
+import type { DialectV1, OtlpDiag } from '../../normalize/dialect.ts';
+import { reportUnknownRole } from '../unknown-role.ts';
 
 // RISK: the conventions are unreleased (manifest gen-ai-dev/1.42.0-dev) and renames
 // are queued in changelog.d. This pins the attribute table to one commit of
@@ -93,14 +94,19 @@ const MESSAGE_LIST_SCHEMA: JsonSchema = {
   },
 };
 
-// Unknown roles map to 'user'. DialectV1.extractMessages has no diag output channel — only
-// detectDialect's mixed_dialects warning does — so this mapping is silent.
+// Unknown roles map to 'user' and, when a diag callback is given, are reported through it.
 function isRole(value: string): value is Message['role'] {
   return (VALID_ROLES as readonly string[]).includes(value);
 }
 
-function mapRole(raw: AnyValue | undefined): Message['role'] {
-  return typeof raw === 'string' && isRole(raw) ? raw : 'user';
+function mapRole(
+  raw: AnyValue | undefined,
+  spanId: string,
+  onDiag?: (d: OtlpDiag) => void,
+): Message['role'] {
+  if (typeof raw === 'string' && isRole(raw)) return raw;
+  reportUnknownRole(onDiag, spanId, raw, 'user');
+  return 'user';
 }
 
 function textContent(value: AnyValue): string {
@@ -161,9 +167,14 @@ function toolCallParts(
 // message.tool_calls.*. Returns [] when no index is present under this prefix at all.
 // message.tool_call_id marks this index as a tool turn responding to a call — its
 // content becomes a tool_call_response part, never a sibling text part.
-function indexedMessages(attrs: Record<string, AnyValue>, prefix: string): Message[] {
+function indexedMessages(
+  span: OtlpSpan,
+  prefix: string,
+  onDiag?: (d: OtlpDiag) => void,
+): Message[] {
+  const attrs = span.attributes;
   return messageIndices(attrs, prefix).map((index) => {
-    const role = mapRole(attrs[`${prefix}.${index}.message.role`]);
+    const role = mapRole(attrs[`${prefix}.${index}.message.role`], span.spanId, onDiag);
     const content = attrs[`${prefix}.${index}.message.content`];
     const toolCallId = attrs[`${prefix}.${index}.message.tool_call_id`];
     const parts: MessagePart[] = [];
@@ -241,12 +252,12 @@ function toolSpanMessages(attrs: Record<string, AnyValue>): Message[] {
 // The mapping itself needs only span.attributes — SpanTree carries sibling/parent structure this
 // dialect has no use for (its content lives entirely on the one span), but extractMessages keeps
 // the (span, tree) shape DialectV1 requires; contentState reuses this same computation.
-function messagesFor(span: OtlpSpan): Message[] {
+function messagesFor(span: OtlpSpan, onDiag?: (d: OtlpDiag) => void): Message[] {
   const attrs = span.attributes;
   if (attrs[KIND] === 'TOOL') return toolSpanMessages(attrs);
 
-  const input = indexedMessages(attrs, INPUT_MESSAGES);
-  const output = indexedMessages(attrs, OUTPUT_MESSAGES);
+  const input = indexedMessages(span, INPUT_MESSAGES, onDiag);
+  const output = indexedMessages(span, OUTPUT_MESSAGES, onDiag);
   const resolvedInput =
     input.length > 0 ? input : fallbackMessages(attrs, INPUT_VALUE, INPUT_MIME, 'user');
   const resolvedOutput =
@@ -254,8 +265,12 @@ function messagesFor(span: OtlpSpan): Message[] {
   return [...resolvedInput, ...resolvedOutput];
 }
 
-function extractMessages(span: OtlpSpan, _tree: SpanTree): Message[] {
-  return messagesFor(span);
+function extractMessages(
+  span: OtlpSpan,
+  _tree: SpanTree,
+  onDiag?: (d: OtlpDiag) => void,
+): Message[] {
+  return messagesFor(span, onDiag);
 }
 
 function extractUsage(span: OtlpSpan): { inputTokens?: number; outputTokens?: number } | null {

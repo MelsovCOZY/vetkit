@@ -18,7 +18,9 @@ import {
   type MessagePart,
 } from '@vetkit/spec';
 import type { AnyValue, OtlpSpan } from '../../reader/index.ts';
-import type { DialectV1 } from '../../normalize/dialect.ts';
+import type { SpanTree } from '../../reader/tree.ts';
+import type { DialectV1, OtlpDiag } from '../../normalize/dialect.ts';
+import { reportUnknownRole } from '../unknown-role.ts';
 
 // The conventions this table was mapped from are unreleased (gen-ai-dev manifest) and renames
 // are queued in changelog.d — pinned here rather than assumed stable.
@@ -29,8 +31,15 @@ function isRole(value: string): value is Message['role'] {
   return value === 'user' || value === 'assistant' || value === 'system' || value === 'tool';
 }
 
-function asRole(value: AnyValue | undefined, fallback: Message['role']): Message['role'] {
-  return typeof value === 'string' && isRole(value) ? value : fallback;
+function asRole(
+  value: AnyValue | undefined,
+  fallback: Message['role'],
+  spanId: string,
+  onDiag?: (d: OtlpDiag) => void,
+): Message['role'] {
+  if (typeof value === 'string' && isRole(value)) return value;
+  reportUnknownRole(onDiag, spanId, value, fallback);
+  return fallback;
 }
 
 // A JSON array of Message['parts'] entries, $ref'd against @vetkit/spec's own published
@@ -99,12 +108,13 @@ const CONTENT_PREFIXES: readonly { prefix: string; role: Message['role'] }[] = [
   { prefix: 'gen_ai.completion', role: 'assistant' },
 ];
 
-function messagesFromIndexed(attrs: Record<string, AnyValue>): Message[] {
+function messagesFromIndexed(span: OtlpSpan, onDiag?: (d: OtlpDiag) => void): Message[] {
+  const attrs = span.attributes;
   const messages: Message[] = [];
   for (const { prefix, role: defaultRole } of CONTENT_PREFIXES) {
     for (const entry of indexed(attrs, prefix)) {
       messages.push({
-        role: asRole(entry.role, defaultRole),
+        role: asRole(entry.role, defaultRole, span.spanId, onDiag),
         parts: contentToParts(entry.content),
       });
     }
@@ -152,9 +162,8 @@ export const openllmetryDialect: DialectV1 = {
     return attrs['traceloop.span.kind'] === 'llm' || attrs['llm.request.type'] !== undefined;
   },
 
-  extractMessages(span: OtlpSpan): Message[] {
-    const attrs = span.attributes;
-    return [...messagesFromIndexed(attrs), ...messagesFromEntity(attrs)];
+  extractMessages(span: OtlpSpan, _tree: SpanTree, onDiag?: (d: OtlpDiag) => void): Message[] {
+    return [...messagesFromIndexed(span, onDiag), ...messagesFromEntity(span.attributes)];
   },
 
   extractUsage(

@@ -14,18 +14,21 @@
 
 import type { Message, MessagePart } from '@vetkit/spec';
 import { safeParseJson, validateJson, type JsonSchema } from '@vetkit/spec';
-import type { DialectV1 } from '../../normalize/dialect.ts';
+import type { DialectV1, OtlpDiag } from '../../normalize/dialect.ts';
 import type { AnyValue, OtlpSpan } from '../../reader/index.ts';
+import { reportUnknownRole } from '../unknown-role.ts';
 
 const SPEC_COMMIT = 'gen-ai-dev/1.42.0-dev';
 
 const LLM_OPERATIONS = ['chat', 'text_completion', 'generate_content'] as const;
-const KNOWN_ROLES: Record<string, Message['role']> = {
-  user: 'user',
-  assistant: 'assistant',
-  system: 'system',
-  tool: 'tool',
-};
+// A Map, not an object literal: roles come from untrusted traces, and a plain-object lookup
+// would resolve names like 'constructor' or 'toString' through Object.prototype.
+const KNOWN_ROLES: ReadonlyMap<string, Message['role']> = new Map([
+  ['user', 'user'],
+  ['assistant', 'assistant'],
+  ['system', 'system'],
+  ['tool', 'tool'],
+]);
 
 function operationName(span: OtlpSpan): string | undefined {
   const value = span.attributes['gen_ai.operation.name'];
@@ -43,9 +46,19 @@ function isLlmSpan(span: OtlpSpan): boolean {
   return LLM_OPERATIONS.some((prefix) => span.name.startsWith(prefix));
 }
 
-function mapRole(role: unknown, fallback: Message['role']): Message['role'] {
+// Reports through `report` (bound to the span and the caller's onDiag) when a string role is
+// not one of the known four and falls back.
+type RoleReporter = (role: unknown, mappedTo: Message['role']) => void;
+
+function reporterFor(span: OtlpSpan, onDiag?: (d: OtlpDiag) => void): RoleReporter {
+  return (role, mappedTo) => reportUnknownRole(onDiag, span.spanId, role, mappedTo);
+}
+
+function mapRole(role: unknown, fallback: Message['role'], report?: RoleReporter): Message['role'] {
   if (typeof role !== 'string') return fallback;
-  return KNOWN_ROLES[role] ?? fallback;
+  const known = KNOWN_ROLES.get(role);
+  if (known === undefined) report?.(role, fallback);
+  return known ?? fallback;
 }
 
 // gen_ai.input.messages / output.messages / system_instructions arrive either as a JSON string
@@ -126,9 +139,13 @@ function mapParts(raw: readonly RawPart[]): MessagePart[] {
 
 // A message left with zero parts after dropping its reasoning content carries nothing, so it is
 // omitted entirely rather than kept as an empty-parts message.
-function messagesFromRaw(raw: readonly RawMessage[], fallbackRole: Message['role']): Message[] {
+function messagesFromRaw(
+  raw: readonly RawMessage[],
+  fallbackRole: Message['role'],
+  report?: RoleReporter,
+): Message[] {
   return raw
-    .map((m) => ({ role: mapRole(m.role, fallbackRole), parts: mapParts(m.parts) }))
+    .map((m) => ({ role: mapRole(m.role, fallbackRole, report), parts: mapParts(m.parts) }))
     .filter((m) => m.parts.length > 0);
 }
 
@@ -136,17 +153,21 @@ function parseErrorMessage(role: Message['role'], detail: string): Message[] {
   return [{ role, parts: [{ type: 'parse_error', detail }] }];
 }
 
-function parseMessagesAttr(value: AnyValue | undefined, fallbackRole: Message['role']): Message[] {
+function parseMessagesAttr(
+  value: AnyValue | undefined,
+  fallbackRole: Message['role'],
+  report?: RoleReporter,
+): Message[] {
   if (value === undefined) return [];
   if (typeof value === 'string') {
     const parsed = safeParseJson<RawMessage[]>(value, RAW_MESSAGES_SCHEMA);
     return parsed.ok
-      ? messagesFromRaw(parsed.value, fallbackRole)
+      ? messagesFromRaw(parsed.value, fallbackRole, report)
       : parseErrorMessage(fallbackRole, parsed.error.message);
   }
   const validated = validateJson<RawMessage[]>(value, RAW_MESSAGES_SCHEMA);
   return validated.ok
-    ? messagesFromRaw(validated.value, fallbackRole)
+    ? messagesFromRaw(validated.value, fallbackRole, report)
     : parseErrorMessage(fallbackRole, validated.error.message);
 }
 
@@ -207,11 +228,12 @@ function toolCallMessages(span: OtlpSpan): Message[] {
   return [{ role: 'tool', parts }];
 }
 
-function extractMessagesLatest(span: OtlpSpan): Message[] {
+function extractMessagesLatest(span: OtlpSpan, onDiag?: (d: OtlpDiag) => void): Message[] {
+  const report = reporterFor(span, onDiag);
   const messages = [
     ...parseSystemInstructions(span.attributes['gen_ai.system_instructions']),
-    ...parseMessagesAttr(span.attributes['gen_ai.input.messages'], 'user'),
-    ...parseMessagesAttr(span.attributes['gen_ai.output.messages'], 'assistant'),
+    ...parseMessagesAttr(span.attributes['gen_ai.input.messages'], 'user', report),
+    ...parseMessagesAttr(span.attributes['gen_ai.output.messages'], 'assistant', report),
   ];
   return messages.length > 0 ? messages : toolCallMessages(span);
 }
@@ -242,7 +264,7 @@ export const genAiDialect: DialectV1 = {
   specCommit: SPEC_COMMIT,
   detect: (span) => detectLatest(span),
   isLlmSpan,
-  extractMessages: (span) => extractMessagesLatest(span),
+  extractMessages: (span, _tree, onDiag) => extractMessagesLatest(span, onDiag),
   extractUsage: extractUsageLatest,
   contentState: contentStateLatest,
 };
@@ -293,6 +315,7 @@ function legacyIndexedMessages(
   span: OtlpSpan,
   group: 'prompt' | 'completion',
   fallbackRole: Message['role'],
+  report?: RoleReporter,
 ): Message[] {
   const byIndex = new Map<number, LegacyIndexedEntry>();
   const entryFor = (idx: number): LegacyIndexedEntry => {
@@ -347,7 +370,7 @@ function legacyIndexedMessages(
           ...(call.arguments === undefined ? {} : { arguments: call.arguments }),
         });
       }
-      return { role: mapRole(entry.role, fallbackRole), parts };
+      return { role: mapRole(entry.role, fallbackRole, report), parts };
     });
 }
 
@@ -365,7 +388,11 @@ const RAW_LEGACY_ARRAY_SCHEMA: JsonSchema = {
   },
 };
 
-function legacyEventBody(value: AnyValue | undefined, fallbackRole: Message['role']): Message[] {
+function legacyEventBody(
+  value: AnyValue | undefined,
+  fallbackRole: Message['role'],
+  report?: RoleReporter,
+): Message[] {
   if (value === undefined) return [];
   const result =
     typeof value === 'string'
@@ -373,31 +400,32 @@ function legacyEventBody(value: AnyValue | undefined, fallbackRole: Message['rol
       : validateJson<RawLegacyEntry[]>(value, RAW_LEGACY_ARRAY_SCHEMA);
   if (!result.ok) return parseErrorMessage(fallbackRole, result.error.message);
   return result.value.map((entry) => ({
-    role: mapRole(entry.role, fallbackRole),
+    role: mapRole(entry.role, fallbackRole, report),
     parts: [{ type: 'text', content: typeof entry.content === 'string' ? entry.content : '' }],
   }));
 }
 
 // gen_ai.content.prompt / gen_ai.content.completion span events carry the messages as a JSON
 // body under gen_ai.prompt / gen_ai.completion respectively (see gen-ai-events.md).
-function legacyEventMessages(span: OtlpSpan): Message[] {
+function legacyEventMessages(span: OtlpSpan, report: RoleReporter): Message[] {
   const messages: Message[] = [];
   for (const event of span.events) {
     if (event.name === 'gen_ai.content.prompt') {
-      messages.push(...legacyEventBody(event.attributes['gen_ai.prompt'], 'user'));
+      messages.push(...legacyEventBody(event.attributes['gen_ai.prompt'], 'user', report));
     } else if (event.name === 'gen_ai.content.completion') {
-      messages.push(...legacyEventBody(event.attributes['gen_ai.completion'], 'assistant'));
+      messages.push(...legacyEventBody(event.attributes['gen_ai.completion'], 'assistant', report));
     }
   }
   return messages;
 }
 
-function extractMessagesLegacy(span: OtlpSpan): Message[] {
+function extractMessagesLegacy(span: OtlpSpan, onDiag?: (d: OtlpDiag) => void): Message[] {
+  const report = reporterFor(span, onDiag);
   const indexed = [
-    ...legacyIndexedMessages(span, 'prompt', 'user'),
-    ...legacyIndexedMessages(span, 'completion', 'assistant'),
+    ...legacyIndexedMessages(span, 'prompt', 'user', report),
+    ...legacyIndexedMessages(span, 'completion', 'assistant', report),
   ];
-  return indexed.length > 0 ? indexed : legacyEventMessages(span);
+  return indexed.length > 0 ? indexed : legacyEventMessages(span, report);
 }
 
 // Reads only the legacy gen_ai.usage.{prompt,completion}_tokens keys — never the latest
@@ -419,7 +447,7 @@ export const genAiLegacyDialect: DialectV1 = {
   specCommit: SPEC_COMMIT,
   detect: (span) => detectLegacy(span),
   isLlmSpan,
-  extractMessages: (span) => extractMessagesLegacy(span),
+  extractMessages: (span, _tree, onDiag) => extractMessagesLegacy(span, onDiag),
   extractUsage: extractUsageLegacy,
   contentState: contentStateLegacy,
 };

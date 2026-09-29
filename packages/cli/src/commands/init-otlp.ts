@@ -9,7 +9,7 @@
 import { readdirSync, statSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import type { GenerateEvalsResult } from '@vetkit/core';
-import { otlpSource, startReceiver } from '@vetkit/source-otlp';
+import { otlpSource, startReceiver, type OtlpDiag } from '@vetkit/source-otlp';
 import {
   CEV_ERROR_CODES,
   VetError,
@@ -18,6 +18,7 @@ import {
   type SourceV1,
 } from '@vetkit/spec';
 import { EXIT_USAGE, withExitCode } from '../errors.ts';
+import { diagEnabled } from '../diag.ts';
 import { getLogger } from '../output.ts';
 import { registerSourcePrefix, type SourceOptions } from '../sources.ts';
 
@@ -40,6 +41,13 @@ function filesInDir(dir: string): string[] {
     .toSorted();
 }
 
+// Source diagnostics go to stderr as one JSON line each, only under CEV_DIAG (or its alias);
+// stdout (the --json document) is never touched.
+function writeSourceDiag(d: OtlpDiag): void {
+  if (!diagEnabled(process.env)) return;
+  process.stderr.write(`${JSON.stringify({ diag: { otlp: d } })}\n`);
+}
+
 function fileBackedSource(rest: string): SourceV1 {
   let stat: ReturnType<typeof statSync>;
   try {
@@ -48,7 +56,7 @@ function fileBackedSource(rest: string): SourceV1 {
     throw unreadable(rest);
   }
   const files = stat.isDirectory() ? filesInDir(rest) : [rest];
-  return otlpSource({ files });
+  return otlpSource({ files, onDiag: writeSourceDiag });
 }
 
 // Resolves once activity happens: a trace queued (`wake`), `signal` aborted, or `pollMs`
@@ -84,6 +92,7 @@ function receiverSource(port: number, options: SourceOptions): SourceV1 {
     const receiver = await startReceiver({
       port,
       host: '127.0.0.1',
+      onDiag: writeSourceDiag,
       onRequest: (trace) => {
         if (seen.has(trace.traceId)) return;
         seen.add(trace.traceId);

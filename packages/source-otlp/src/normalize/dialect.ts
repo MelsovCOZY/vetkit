@@ -15,7 +15,9 @@ export interface DialectV1 {
   readonly specCommit?: string;
   detect(span: OtlpSpan, resource: OtlpResource): boolean;
   isLlmSpan(span: OtlpSpan): boolean;
-  extractMessages(span: OtlpSpan, tree: SpanTree): Message[];
+  // onDiag, when given, receives a warning for each message role the dialect had to map to a
+  // fallback; it never carries message content. Existing implementations may omit the parameter.
+  extractMessages(span: OtlpSpan, tree: SpanTree, onDiag?: (d: OtlpDiag) => void): Message[];
   extractUsage(
     span: OtlpSpan,
   ): { inputTokens?: number; outputTokens?: number; totalTokens?: number } | null;
