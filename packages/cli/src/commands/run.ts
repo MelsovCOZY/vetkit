@@ -9,6 +9,8 @@ import {
   LOCK_FILE,
   readLockOrNull,
   runEvals,
+  type EventMap,
+  type Events,
   type ResolvedConfig,
   type RunEvalsResult,
   type RunVerdict,
@@ -64,6 +66,41 @@ function caseOutcome(verdicts: readonly RunVerdict[]): Outcome {
 // a genuine scored failure still exits 1, and without --sink nothing here changes.
 function hasScoredFailure(verdicts: readonly RunVerdict[]): boolean {
   return verdicts.some((v) => v.gated !== false && v.status === 'ok' && v.pass !== true);
+}
+
+// mol-yxn.21: core emits `run:end` (which the pretty "run done" line and NDJSON render)
+// the instant it decides exitCode, one tick before the --sink override above can downgrade
+// it. Buffering that one event here and re-emitting the corrected payload once the override
+// is decided (still before renderEvents unsubscribes) keeps every renderer in sync with the
+// process exit code; every other event still passes straight through, live.
+function deferRunEnd(events: Events): {
+  readonly events: Events;
+  readonly take: () => EventMap['run:end'] | undefined;
+} {
+  let pending: EventMap['run:end'] | undefined;
+  // A real generic function (not an inferred object-literal property) so the forwarding call
+  // below keeps `name`/`payload` correlated by K; only the run:end branch narrows unsoundly,
+  // since TS can't prove that from `name === 'run:end'` alone.
+  function emitOrBuffer<K extends keyof EventMap>(name: K, payload: EventMap[K]): void {
+    if (name === 'run:end') {
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      pending = payload as EventMap['run:end'];
+      return;
+    }
+    events.emit(name, payload);
+  }
+  const proxy: Events = {
+    on: (name, listener) => events.on(name, listener),
+    once: (name, listener) => events.once(name, listener),
+    off: (name, listener) => {
+      events.off(name, listener);
+    },
+    diag: (level, code, message, data) => {
+      events.diag(level, code, message, data);
+    },
+    emit: emitOrBuffer,
+  };
+  return { events: proxy, take: () => pending };
 }
 
 function render(result: RunEvalsResult): string {
@@ -123,6 +160,7 @@ async function runCommand(options: RunOptions & Readonly<Record<string, unknown>
   );
   const cacheDir = resolve(rootDir, config.cacheDir);
   const startedAt = new Date().toISOString();
+  const { events: runEvalsEvents, take: takeRunEnd } = deferRunEnd(events);
   let result: RunEvalsResult;
   try {
     result = await runEvals({
@@ -141,16 +179,27 @@ async function runCommand(options: RunOptions & Readonly<Record<string, unknown>
       },
       lock,
       signal: controller.signal,
-      events,
+      events: runEvalsEvents,
     });
+
+    // --sink AC1: an exit of 1 from unscored verdicts alone never blocks a --sink run.
+    if (
+      options['sink'] !== undefined &&
+      result.exitCode === 1 &&
+      !hasScoredFailure(result.results)
+    ) {
+      result.exitCode = 0;
+    }
+
+    // Re-emit the buffered run:end (if any) with the now-final exitCode, while renderEvents
+    // is still subscribed, so the pretty/NDJSON line matches the process exit code.
+    const pendingRunEnd = takeRunEnd();
+    if (pendingRunEnd !== undefined) {
+      events.emit('run:end', { ...pendingRunEnd, exitCode: result.exitCode });
+    }
   } finally {
     stopRendering();
     process.off('SIGINT', onSigint);
-  }
-
-  // --sink AC1: an exit of 1 from unscored verdicts alone never blocks a --sink run.
-  if (options['sink'] !== undefined && result.exitCode === 1 && !hasScoredFailure(result.results)) {
-    result.exitCode = 0;
   }
 
   for (const reason of result.gateReasons) log.error(`gate refused: ${reason}`);
