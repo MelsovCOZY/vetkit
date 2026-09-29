@@ -11,13 +11,13 @@ permissions:
 
 jobs:
   comment-script:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22
 
@@ -25,10 +25,10 @@ jobs:
         run: node --test action/comment.test.mjs
 
   pack:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
@@ -36,7 +36,7 @@ jobs:
           bun-version: '1.4.2'
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22
 
@@ -50,14 +50,14 @@ jobs:
         run: bun run pack
 
       - name: Upload dist-tarballs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: action-selftest-tarballs
           path: dist-tarballs
 
   selftest:
     needs: pack
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       pull-requests: write
@@ -94,10 +94,10 @@ jobs:
       VETKIT_FIXTURE_KEY: sk-fake-selftest-0123456789abcdef
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download dist-tarballs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: action-selftest-tarballs
           path: dist-tarballs
