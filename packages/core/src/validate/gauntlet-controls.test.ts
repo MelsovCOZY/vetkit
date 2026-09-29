@@ -332,6 +332,56 @@ describe('gauntletMasterKey', () => {
     expect(judge.states).toContain('user: question 2?\nassistant: GOOD answer 2.');
   });
 
+  describe('probes identical to their source', () => {
+    const norm = (s: string): string => s.replace(/\s+/g, ' ').trim();
+    const oneSentence = (id: string, answer: string): Case => ({
+      id,
+      input: { state: `user: q?\nassistant: ${answer}` },
+      provenance: {},
+      tags: [],
+    });
+
+    it('never judges a probe equal to its known-pass source, and a correct judge passes', async () => {
+      const cases = [oneSentence('s1', 'GOOD only one sentence here.')];
+      const sources = cases.map((c) => norm(c.input.state));
+      const judge = fakeJudge((s) => (sources.includes(norm(s)) ? YES : ESCAPE));
+      const out = await gauntletMasterKey(CRITERION, judge, cases, { inputs: MASTER_KEYS });
+      expect(judge.states.filter((s) => sources.includes(norm(s)))).toEqual([]);
+      expect(out.result).toBe('pass');
+      expect(out.failedInputs).toEqual([]);
+    });
+
+    it('cuts a one-sentence answer mid-sentence, deterministically', async () => {
+      const cases = [oneSentence('s1', 'GOOD only one sentence here.')];
+      const a = fakeJudge(() => ESCAPE);
+      const b = fakeJudge(() => ESCAPE);
+      await gauntletMasterKey(CRITERION, a, cases, { inputs: [] });
+      await gauntletMasterKey(CRITERION, b, cases, { inputs: [] });
+      expect(a.states.length).toBeGreaterThan(0);
+      expect(a.states.every((s) => s.length < cases[0]!.input.state.length)).toBe(true);
+      expect(a.states).toEqual(b.states);
+    });
+
+    it('skips a probe that cannot remove content and counts it as neither pass nor fail', async () => {
+      const cases = [oneSentence('w1', 'GOOD')];
+      const judge = fakeJudge(() => YES);
+      const out = await gauntletMasterKey(CRITERION, judge, cases, { inputs: [] });
+      expect(judge.states).toEqual([]);
+      expect(out.failedInputs).toEqual([]);
+      expect(out.result).toBe('pass');
+    });
+
+    it('skips a fixed master-key input equal to a known-pass case state', async () => {
+      const cases = [oneSentence('s1', 'GOOD only one sentence here.')];
+      const inputs = [
+        { id: 'dup', text: '  user: q?\nassistant:  GOOD only one sentence here.\n' },
+      ];
+      const judge = fakeJudge((s) => (norm(s) === norm(cases[0]!.input.state) ? YES : ESCAPE));
+      const out = await gauntletMasterKey(CRITERION, judge, cases, { inputs });
+      expect(out.failedInputs).toEqual([]);
+    });
+  });
+
   it('fails with reason no_escape when the criterion has no escape option', async () => {
     const score: Criterion = {
       id: 'quality',
