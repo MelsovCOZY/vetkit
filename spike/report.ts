@@ -34,7 +34,7 @@ export const CONTRACT_RULE_TEXT =
   'the labelled set and the boolean flip rate at threshold is ≤ 5%; AMEND (criteria need ' +
   'wording rules) if 4–6 criteria pass; NO-GO if median κ < 0.4';
 const JEV_RELEASE_DATE = '2026-09-15';
-const JEV_RELEASE_DATE_SOURCE = 'docs/research/fixtures/2026-09-25-gateway-models.json';
+const JEV_RELEASE_DATE_SOURCE = 'fixtures/research/2026-09-25-gateway-models.json';
 
 /** Cohen's kappa for two same-length boolean raters. Null when chance agreement is 1 (undefined). */
 export function cohenKappa(a: boolean[], b: boolean[]): number | null {

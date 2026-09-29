@@ -61,7 +61,7 @@ export const LINT_RULES: readonly LintRule[] = [
   rule(
     'ESCAPE_MISSING',
     'error',
-    'Jev must be able to decline when the evidence is missing, and removing the escape option took its accuracy from 0.95 to 0.00 (docs/research/2026-09-25-jev-eval-generation-brief.md l.147-149).',
+    'Jev must be able to decline when the evidence is missing, and removing the escape option took its accuracy from 0.95 to 0.00.',
   ),
   rule(
     'DOUBLE_NEGATIVE',

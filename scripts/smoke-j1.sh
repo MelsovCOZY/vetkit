@@ -90,7 +90,7 @@ EOF
 
 # The refund transcript from the recorded gateway System One request fixture.
 PASS_CASE="$(jq -c '{id: "one", input: {state: .state}, provenance: null, tags: []}' \
-  "$ROOT/docs/research/fixtures/2026-09-25-gateway-systemone-request.json")"
+  "$ROOT/fixtures/research/2026-09-25-gateway-systemone-request.json")"
 FAIL_CASE='{"id":"one","input":{"state":"User: Can I get a refund for my order #4411?\nAssistant: No. Order #4411 is outside the return window, so I cannot issue or promise any refund."},"provenance":null,"tags":[]}'
 printf '%s\n' "$PASS_CASE" >evals/cases/one.jsonl
 

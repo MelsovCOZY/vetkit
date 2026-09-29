@@ -150,6 +150,64 @@ A hard kill (`kill -9`, crash, power loss) leaves no summary, but every verdict 
 judged before dying was already durably enqueued to `.vet/outbox`, so nothing already-judged
 is lost. Just restart it — the outbox recovery above resumes the drain.
 
+## Coding conventions
+
+The linter (oxlint), `tsconfig.base.json` and the scripts tests enforce most of these; the
+list records the decision behind each rule.
+
+- **Codegen output** is erasable, interface-and-`as const` code. The IR is JSON Schema-first with
+  generated TS types, and generated code passes the same lint and `isolatedDeclarations` gates as
+  hand-written code.
+- **Publishing shape:** ESM-only, compiled JS plus `.d.ts` (Node does not strip types in
+  `node_modules`, and `bundler` resolution is infectious). tsdown builds; publint and attw run on the
+  packed tarball; a packed-tarball consumer fixture with `skipLibCheck: false` across a TS matrix is
+  the only check that sees the published types the way a consumer does.
+- **No import cycles and no internal barrels.** `src/index.ts` is an explicit named-re-export seam
+  (alias at the export seam), the only barrel allowed; re-export-all is banned everywhere and no
+  internal code imports its own package's index.
+- **Package boundary:** the exports map is the hard boundary and exposes no deep imports. CI fails if
+  an adapter package's `package.json` lists `@x/core`.
+- **Logging:** `console` is banned in library packages. `@x/core` and the adapters never log; they
+  emit events and diagnostics, and the CLI renders them. consola is confined to the CLI package
+  behind a ~20-line `Logger` interface (`info`/`warn`/`error`/`debug`), so swapping it touches one file.
+- **Errors:** error classes are the one exported class family (`Error` subclassing is needed for
+  `cause` and stack traces). Each carries a `Symbol.for` marker, a `code` and a static `isInstance`;
+  users check `isInstance`/`code`, never `instanceof`. Adapters and every other runtime object are
+  factory-built interfaces.
+- **No TS `enum`.** "Enum" means a JSON Schema `enum` in the IR and an `as const` object plus a union
+  type in TS.
+- **`isolatedDeclarations` is on.** The dts tool (tsdown/oxc) should not depend on the TS API, and
+  it is the documented fix for TS2742. Exports need explicit return types. Declarations go through
+  the oxc path, with TypeScript ^7 for `typecheck`; TS 6 is installed only as a matrix entry, never
+  as the build's compiler.
+- **Node floor:** `engines.node >=22.12` (Node 20 is EOL). Use `module: node20` / `target: es2023`
+  rather than floating `nodenext`/`esnext`, so emitted syntax matches the floor. Only the publish job
+  runs on Node 24 (trusted publishing needs Node >=22.14).
+- **Versioning:** changesets for version bumps and changelogs only; never its publish command. Pin
+  `@changesets/cli` exactly to 3.x, use `changeset git-tag` (not `tag`), and treat `changeset version`
+  exit code 1 as "nothing to release" in CI. The tarball check for leftover `workspace:`/`catalog:`
+  stays mandatory.
+- **Lint scope:** one linter, no typescript-eslint (it needs the TS API, and its strict configs are
+  not semver-stable). Cover the gap with promise rules at error, Result-typed outcomes, a
+  `safeParseJson` chokepoint in place of `no-unsafe-*`, and tests on concurrent fan-out. Pin the
+  linter exactly, since new rules can change at any time.
+- **Hooks:** pre-commit runs only lint/format on staged files, plus a lockfile sync when
+  `package.json` is staged. Do not run tests or `tsc` in hooks; CI owns them.
+- **Commits:** Conventional Commits for history hygiene, not versioning (changesets decides bumps).
+  Allowed scopes are package names (`spec`, `core`, `judge-jev`, `sink-otel`, ...). commitlint runs
+  in the `commit-msg` hook and in CI, because a hook alone is bypassable.
+- **`any` is banned.** This is I/O and boundary code, not a type-level DSL. A genuinely type-level
+  helper (for example `defineConfig` adapter inference) gets a scoped lint-ignore with a reason and a
+  `.test-d.ts` covering it.
+- **`interface` for object shapes, `type` for unions and computed types**, with property-style method
+  signatures.
+- **Import extensions:** write `./x.ts` with `rewriteRelativeImportExtensions`, so the same source
+  runs under Bun and Node type stripping and tsc/tsdown rewrite it on emit. If the dts bundler
+  mishandles `.ts` specifiers, the fallback is `.js` specifiers; the attw and specifier-grep checks
+  catch it.
+- **`exactOptionalPropertyTypes` is on.** Check the published types with the flag both on and off,
+  and keep a fixture using Zod 4 under the flag at the Standard Schema authoring edge.
+
 ## Never run
 
 - `bun publish` — Bun has no OIDC trusted publishing and no `--provenance` support

@@ -7,22 +7,22 @@ import { fileURLToPath } from 'node:url';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 // A numbered or acronym-named reference to a research brief points at a document that a reader
-// without docs/INDEX.md cannot resolve, and it goes stale. State the reason inline instead.
+// that is no longer kept in the repo cannot be resolved, and it goes stale. State the reason inline
+// instead. A path into the removed research directory or its index is banned for the same reason.
 const BRIEF_REF_PATTERNS: readonly RegExp[] = [
   /\b[Bb]rief ?[0-9]+\b/,
   /\bbrief §/,
   /\b(?:[A-Z]{2,4}|[Jj]ev|eval-quality) brief\b/,
   new RegExp(['toolchain', 'brief(?!\\.md)'].join('-')),
+  new RegExp(['docs', '(?:research|INDEX)'].join('/')),
 ];
 
-// Instruction files, the tracker's own export, the briefs and their index, the knowledge-graph
-// output and agent settings may name briefs by number.
+// Instruction files, the tracker's own export, the knowledge-graph output and agent settings may
+// name briefs by number.
 const ALLOWLIST: readonly RegExp[] = [
   /^CLAUDE\.md$/,
   /^AGENTS\.md$/,
   /^\.beads\//,
-  /^docs\/research\//,
-  /^docs\/INDEX\.md$/,
   /^graphify-out\//,
   /^\.claude\//,
   /^bun\.lock$/,
@@ -87,25 +87,31 @@ describe('research-brief references in shipped files', () => {
       `${['ET', 'brief'].join(' ')} OTEL-1`,
       `${['eval-quality', 'brief'].join(' ')} item 18`,
       `${['JEV', 'brief'].join(' ')} §2`,
-      `docs/research/2026-09-25-${['toolchain', 'brief'].join('-')} §2`,
+      `${['toolchain', 'brief'].join('-')} §2`,
     ];
     for (const text of cases) {
       expect(findBriefRefs([{ path: 'docs/contracts/x.md', text }])).not.toEqual([]);
     }
   });
 
-  it('does not flag a brief named by file path or ordinary uses of the word', () => {
-    const text = [
-      'docs/research/2026-09-25-toolchain-brief.md §2',
-      'docs/research/2026-09-25-jev-eval-generation-brief.md §4',
-      'a brief summary of the run',
-    ].join('\n');
+  it('flags a path into the removed research directory or its index', () => {
+    const cases = [
+      `${['docs', 'research'].join('/')}/2026-09-25-x.md`,
+      `see ${['docs', 'INDEX'].join('/')}.md`,
+    ];
+    for (const text of cases) {
+      expect(findBriefRefs([{ path: 'packages/core/src/x.ts', text }])).toHaveLength(1);
+    }
+  });
+
+  it('does not flag ordinary uses of the word', () => {
+    const text = ['a brief summary of the run', 'toolchain-brief.md'].join('\n');
     expect(findBriefRefs([{ path: 'packages/core/src/x.ts', text }])).toEqual([]);
   });
 
   it('skips allowlisted paths', () => {
     const text = ['brief', '6'].join(' ');
-    const files = ['CLAUDE.md', 'docs/INDEX.md', 'docs/research/brief.md'].map((path) => ({
+    const files = ['CLAUDE.md', 'AGENTS.md', '.beads/issues.jsonl'].map((path) => ({
       path,
       text,
     }));

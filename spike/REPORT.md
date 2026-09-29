@@ -68,7 +68,7 @@ Labels: this run has 0 human-labelled traces (0 rows) and 51 model-labelled trac
 
 Not evaluable: c3, c4, c5, c6, c7, c8, c9, c10 - the labelled sample has no positive cases (or no negative cases) for them, so truth is single-class and kappa is undefined; they are excluded from the median-kappa rule and cannot count toward the pass count.
 
-Jev is reached only through the gateway alias typesafe-ai/jev (TypeSafe registration is closed); the served model id recorded on every verdict is that alias, release_date 2026-09-15 per docs/research/fixtures/2026-09-25-gateway-models.json; `pinned: false`.
+Jev is reached only through the gateway alias typesafe-ai/jev (TypeSafe registration is closed); the served model id recorded on every verdict is that alias, release_date 2026-09-15 per fixtures/research/2026-09-25-gateway-models.json; `pinned: false`.
 
 The Gemini baseline is near ceiling: per-variant aggregate faithfulness across the four haystack-hypothesis runs is 0.991, 0.991, 0.982, 0.991 (bm25/embedding/hybrid/hybrid-norerank) - the baseline comparison (block c) shows Jev reads references and abstentions reliably where the baseline rarely scores unfaithful, not that it catches subtle hallucinations.
 
