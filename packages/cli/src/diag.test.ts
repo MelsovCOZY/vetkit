@@ -43,6 +43,13 @@ describe('diag helpers', () => {
     expect(diagEnabled({ CEV_DIAG: '0' })).toBe(false);
   });
 
+  // mol-aq4.18: CEV_TRACE_HTTP=1 is an alias for CEV_DIAG=1 on the existing request counter.
+  test('diagEnabled also treats CEV_TRACE_HTTP=1 as enabling the request counter', () => {
+    expect(diagEnabled({ CEV_TRACE_HTTP: '1' })).toBe(true);
+    expect(diagEnabled({ CEV_TRACE_HTTP: '0' })).toBe(false);
+    expect(diagEnabled({ CEV_TRACE_HTTP: '1', CEV_DIAG: '0' })).toBe(true);
+  });
+
   test('countJudgeRequests counts each doJudge call and passes the response through', async () => {
     let calls = 0;
     const judge = countJudgeRequests(fakeJudge, () => {
@@ -124,5 +131,16 @@ describe('vet run with CEV_DIAG=1', () => {
     expect(result.status).toBe(0);
     expectOneJsonDocument(result.stdout);
     expect(diagLines(result.stderr)).toEqual([]);
+  });
+
+  // mol-aq4.18: CEV_TRACE_HTTP=1 alone (no CEV_DIAG) also drives `vet run`'s request counter.
+  test('CEV_TRACE_HTTP=1 alone works for vet run, as an alias of CEV_DIAG', () => {
+    const cwd = project();
+    const result = runVet(cwd, { CEV_TRACE_HTTP: '1' });
+    expect(result.status).toBe(0);
+    expectOneJsonDocument(result.stdout);
+    expect(diagLines(result.stderr)).toEqual([
+      `{"diag":{"judge":{"requests":${String(CASE_COUNT)}}}}`,
+    ]);
   });
 });

@@ -113,6 +113,9 @@ function renderTest(c: Case, criterion: Criterion, lock: Lock | null): string {
     `  test(${JSON.stringify(name)}, async () => {`,
     `    const { scorer } = ${scorerVarName(criterion.id)}();`,
     `    const result = await scorer({ input: ${JSON.stringify(c.id)}, output: ${output}, expected: ${expected} });`,
+    // mol-aq4.18: count only real judge requests, never cache hits, toward CEV_TRACE_HTTP's
+    // 'judge.requests: <N>' line (printed by the afterAll below).
+    `    if (result.metadata.cacheHit === false) httpRequestCount += 1;`,
     `    expect(result.score).toBe(1);`,
     `  });`,
   ].join('\n');
@@ -156,10 +159,20 @@ export function emitTestFile(
   const source = [
     '// Emitted by @vetkit/export-vitest — do not edit by hand.',
     `// source: ${criteriaFile}`,
-    "import { describe, expect, test } from 'vitest';",
+    "import { afterAll, describe, expect, test } from 'vitest';",
     renderImports(criteria),
     '',
     `describe(${JSON.stringify(criteriaFile)}, () => {`,
+    // mol-aq4.18 (CEV_TRACE_HTTP): a per-file counter of real (non-cache-hit) judge requests,
+    // printed once here instead of relying on the CLI-process-only diag exit handler, which
+    // vitest workers never surface.
+    '  let httpRequestCount = 0;',
+    '  afterAll(() => {',
+    "    if (process.env['CEV_TRACE_HTTP'] === '1') {",
+    '      // oxlint-disable-next-line no-console',
+    '      console.log(`judge.requests: ${httpRequestCount}`);',
+    '    }',
+    '  });',
     renderBody(cases, criteria, lock),
     '});',
     '',
