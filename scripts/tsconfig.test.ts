@@ -179,7 +179,7 @@ describe.each(packageFolders)('packages/%s/tsconfig.json', (folder) => {
   });
 
   test('includes only src', () => {
-    expect(tsconfig.include).toEqual(['src']);
+    expect([['src'], ['src/**/*.ts', 'src/**/*.json']]).toContainEqual(tsconfig.include);
   });
 
   test("references match this package's workspace dependencies", () => {

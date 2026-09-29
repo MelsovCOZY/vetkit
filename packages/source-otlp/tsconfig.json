@@ -3,9 +3,10 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "dist",
+    "resolveJsonModule": true,
     "paths": { "@vetkit/spec": ["../spec/src/index.ts"] }
   },
   "files": [],
-  "include": ["src"],
+  "include": ["src/**/*.ts", "src/**/*.json"],
   "references": [{ "path": "../spec" }]
 }
