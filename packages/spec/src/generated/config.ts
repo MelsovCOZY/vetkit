@@ -87,6 +87,10 @@ export interface JudgeEndpoint {
    */
   apiKeyEnv: string;
   model?: string;
+  /**
+   * Judge request format; 'raw' when omitted.
+   */
+  requestFormat?: 'raw' | 'fenced-v1';
   providerOptions?: {
     [k: string]: unknown;
   };
