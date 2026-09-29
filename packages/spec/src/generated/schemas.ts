@@ -703,6 +703,10 @@ export const lockSchema: JsonSchema = {
           type: 'string',
           pattern: '^[0-9a-f]{64}$',
         },
+        normalizedWordingHash: {
+          type: 'string',
+          pattern: '^[0-9a-f]{64}$',
+        },
         status: {
           enum: ['calibrated', 'uncalibrated', 'floating'],
         },

@@ -37,6 +37,7 @@ export interface LockModel {
 }
 export interface LockCriterion {
   wordingHash: string;
+  normalizedWordingHash?: string;
   status: 'calibrated' | 'uncalibrated' | 'floating';
   threshold?: number;
   tpr?: number;

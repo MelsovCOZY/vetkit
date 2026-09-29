@@ -1,12 +1,19 @@
 // `vet lock refresh`. Re-hashes each criterion's wording with the
 // wording-hash normalisation (loadCriteria's wordingHash: CRLF → LF, trimmed strings; YAML comments never
 // reach the parsed value) and keeps the lock entry, thresholds included, when the normalised
-// wording is unchanged. Any other change is left stale with a pointer to `vet validate`, and
-// refresh exits 1. The lock stores only the hash, so an edit the normalisation does not absorb
-// (e.g. whitespace inside a sentence) cannot be told apart from a semantic one and stays stale.
+// wording is unchanged. When only the wordingHash differs but the entry's normalizedWordingHash
+// (whitespace runs collapsed) still matches, the edit is whitespace inside a sentence: the
+// wordingHash is updated in place. Any other change, and any entry without normalizedWordingHash,
+// is left stale with a pointer to `vet validate`, and refresh exits 1.
 import { join, resolve } from 'node:path';
-import { loadCriteria, LOCK_FILE } from '@vetkit/core';
-import { CEV_ERROR_CODES, VetError } from '@vetkit/spec';
+import {
+  computeNormalizedWordingHash,
+  loadCriteria,
+  LOCK_FILE,
+  wordingOf,
+  writeLockAtomic,
+} from '@vetkit/core';
+import { CEV_ERROR_CODES, VetError, type Lock } from '@vetkit/spec';
 import type { Command } from 'commander';
 import { loadVetConfig } from '../config-load.ts';
 import { emit, getLogger, type GlobalOptions } from '../output.ts';
@@ -21,6 +28,7 @@ interface RefreshOptions extends GlobalOptions {
 
 export interface RefreshReport {
   readonly refreshed: string[];
+  readonly refreshedWhitespace: string[];
   readonly stale: { readonly id: string; readonly message: string }[];
   readonly lockPath: string;
 }
@@ -44,11 +52,18 @@ async function refreshCommand(options: RefreshOptions, deps: ValidateDeps): Prom
   }
   const lock = await readSupportedLock(lockPath);
 
-  const report: RefreshReport = { refreshed: [], stale: [], lockPath };
+  const report: RefreshReport = { refreshed: [], refreshedWhitespace: [], stale: [], lockPath };
+  const absorbed: Lock['criteria'] = {};
   for (const c of criteria.criteria) {
     const entry = lock.criteria[c.id];
     if (entry?.wordingHash === c.wordingHash) {
       report.refreshed.push(c.id);
+    } else if (
+      entry?.normalizedWordingHash !== undefined &&
+      entry.normalizedWordingHash === computeNormalizedWordingHash(wordingOf(c))
+    ) {
+      absorbed[c.id] = { ...entry, wordingHash: c.wordingHash };
+      report.refreshedWhitespace.push(c.id);
     } else {
       report.stale.push({
         id: c.id,
@@ -59,9 +74,13 @@ async function refreshCommand(options: RefreshOptions, deps: ValidateDeps): Prom
       });
     }
   }
+  if (report.refreshedWhitespace.length > 0) {
+    await writeLockAtomic(lockPath, { ...lock, criteria: { ...lock.criteria, ...absorbed } });
+  }
   emit(report, () =>
     [
       ...report.refreshed.map((id) => `${id}: fresh`),
+      ...report.refreshedWhitespace.map((id) => `${id}: refreshed (whitespace only)`),
       ...report.stale.map((s) => `${s.id}: stale (${s.message})`),
     ].join('\n'),
   );

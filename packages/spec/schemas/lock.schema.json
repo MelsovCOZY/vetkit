@@ -73,6 +73,7 @@
       "type": "object",
       "properties": {
         "wordingHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "normalizedWordingHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
         "status": { "enum": ["calibrated", "uncalibrated", "floating"] },
         "threshold": { "type": "number" },
         "tpr": { "type": "number", "minimum": 0, "maximum": 1 },
