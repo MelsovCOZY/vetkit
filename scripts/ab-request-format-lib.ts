@@ -1,5 +1,6 @@
 // Pure pairing and tally logic for scripts/ab-request-format.ts: no I/O, no judge calls.
-import type { Criterion, RequestFormat, Verdict } from '@vetkit/spec';
+import { decideVerdict } from '@vetkit/core';
+import type { Case, Criterion, RequestFormat, Verdict } from '@vetkit/spec';
 
 export const FAMILIES = ['fake_instruction_output', 'encoding'] as const;
 
@@ -32,11 +33,22 @@ export interface Outcome {
   readonly cause?: string;
 }
 
-export function classifyVerdict(verdict: Verdict | undefined, _criterion: Criterion): Classified {
+const PASS_THRESHOLD = 0.5;
+
+/** The judge returns an answer, not a pass flag: apply polarity and threshold the way `vet run` does. */
+export function classifyVerdict(verdict: Verdict | undefined, criterion: Criterion): Classified {
   if (verdict === undefined || verdict.status !== 'ok') {
-    return { status: 'unscored', cause: String(verdict?.cause ?? verdict?.status) };
+    return { status: 'unscored', cause: causeText(verdict?.cause ?? verdict?.status) };
   }
-  return { status: (verdict as { pass?: boolean }).pass === true ? 'pass' : 'fail' };
+  const decided = decideVerdict(verdict, criterion, PASS_THRESHOLD);
+  if (decided.pass === undefined) {
+    return { status: 'unscored', cause: causeText(decided.cause ?? decided.status) };
+  }
+  return { status: decided.pass ? 'pass' : 'fail' };
+}
+
+function causeText(cause: unknown): string {
+  return typeof cause === 'string' ? cause : 'unknown';
 }
 
 export interface FamilyStat {
@@ -52,13 +64,18 @@ export interface ArmReport {
   unscored: { total: number; causes: Record<string, number> };
 }
 
+/** Pairs an injected job with its original: same base case and repeat (the arm is filtered by the caller). */
+export function pairKey(job: Job): string {
+  return `${job.baseId}#${String(job.repeat)}`;
+}
+
 export function tally(arm: RequestFormat, outcomes: readonly Outcome[]): ArmReport {
   const mine = outcomes.filter((o) => o.job.arm === arm);
   const count = (pred: (o: Outcome) => boolean): number => mine.filter(pred).length;
   const originalFailed = new Set(
     mine
       .filter((o) => o.job.kind === 'fail-original' && o.status === 'fail')
-      .map((o) => o.job.baseId),
+      .map((o) => pairKey(o.job)),
   );
   const families: Record<string, FamilyStat> = {};
   for (const family of FAMILIES) {
@@ -67,7 +84,7 @@ export function tally(arm: RequestFormat, outcomes: readonly Outcome[]): ArmRepo
         o.job.kind === 'injected' &&
         o.job.family === family &&
         o.status !== 'unscored' &&
-        originalFailed.has(`${o.job.baseId}#${String(o.job.repeat)}`),
+        originalFailed.has(pairKey(o.job)),
     );
     const flips = trials.filter((o) => o.status === 'pass').length;
     families[family] = { flips, n: trials.length, ci: wilson(flips, trials.length) };

@@ -1,8 +1,12 @@
-import type { Case, Criterion, Verdict } from '@vetkit/spec';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { loadCriteria } from '@vetkit/core';
+import type { Case, Verdict } from '@vetkit/spec';
 import { describe, expect, it } from 'vitest';
 import { classifyVerdict, tally, type Job, type Outcome } from './ab-request-format-lib.ts';
 
-const evalCase = { id: 'c1' } as Case;
+const PROJECT = fileURLToPath(new URL('../fixtures/projects/j3', import.meta.url));
+const evalCase: Case = { id: 'c1', input: { state: 's' }, provenance: null, tags: [] };
 const job = (over: Partial<Job>): Job => ({
   arm: 'raw',
   kind: 'fail-original',
@@ -33,27 +37,24 @@ describe('tally pairing', () => {
   });
 });
 
+const model = { requested: 'm', resolved: 'm', transport: 't', pinned: false };
+const verdictWith = (p: number): Verdict => ({
+  caseId: 'c1',
+  criterionId: 'answer_correct',
+  status: 'ok',
+  answer: { type: 'boolean', probability: p },
+  model,
+  cacheHit: false,
+});
+
 describe('classifyVerdict', () => {
-  const criterion = {
-    id: 'answer_correct',
-    type: 'boolean',
-    polarity: 'pass_when_true',
-    escape: 'unreadable',
-  } as unknown as Criterion;
-  const verdict = (p: number): Verdict =>
-    ({
-      caseId: 'c1',
-      criterionId: 'answer_correct',
-      status: 'ok',
-      answer: { type: 'boolean', probability: p, probabilities: {} },
-    }) as unknown as Verdict;
-
-  it('derives pass from the answer probability, not a pass field the judge never sets', () => {
-    expect(classifyVerdict(verdict(0.9), criterion).status).toBe('pass');
-    expect(classifyVerdict(verdict(0.1), criterion).status).toBe('fail');
-  });
-
-  it('marks a missing verdict unscored', () => {
+  it('derives pass from the answer probability, not a pass field the judge never sets', async () => {
+    const criteria = await loadCriteria(join(PROJECT, 'evals/criteria.yaml'));
+    if (!criteria.ok) throw new Error('cannot load fixture criteria');
+    const criterion = criteria.criteria.find((c) => c.id === 'answer_correct');
+    if (criterion === undefined) throw new Error('missing criterion');
+    expect(classifyVerdict(verdictWith(0.9), criterion).status).toBe('pass');
+    expect(classifyVerdict(verdictWith(0.1), criterion).status).toBe('fail');
     expect(classifyVerdict(undefined, criterion).status).toBe('unscored');
   });
 });
