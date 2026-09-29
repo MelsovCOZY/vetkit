@@ -7,7 +7,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
-import { createServer as createNetServer, type Server as NetServer } from 'node:net';
+import { createServer as createNetServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -36,9 +36,9 @@ function items(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
-function portOf(server: NetServer | Server): number {
+function portOf(server: { address(): unknown }): number {
   const address = server.address();
-  return typeof address === 'object' && address !== null ? address.port : 0;
+  return isRecord(address) && typeof address['port'] === 'number' ? address['port'] : 0;
 }
 
 function freePort(): Promise<number> {
