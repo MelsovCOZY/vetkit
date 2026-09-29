@@ -378,6 +378,16 @@ describe('vet init --source otlp: writes <out>/summary.json (mol-pij.15)', () =>
 // are stripped before the cross-dialect diff below; any other provenance key is left untouched.
 const PER_COPY_PROVENANCE_KEYS = new Set(['traceIds', 'traceId', 'spanId']);
 
+interface CorrelationIds {
+  traceId?: unknown;
+  spanId?: unknown;
+}
+
+function correlationIds(provenance: unknown): CorrelationIds {
+  if (typeof provenance !== 'object' || provenance === null) return {};
+  return provenance;
+}
+
 function normalizeCase(c: Case): unknown {
   const { id: _id, traceId: _traceId, provenance, ...rest } = c;
   const strippedProvenance =
@@ -423,11 +433,11 @@ describe('vet init --source otlp: dialect cases match the golden (mol-pij.15)', 
       // (docs/sinks.md "Correlation"); every OTLP-derived case must carry both, before they
       // are stripped for the cross-dialect diff below.
       for (const c of cases) {
-        const provenance = c.provenance as { traceId?: unknown; spanId?: unknown };
-        expect(typeof provenance.traceId).toBe('string');
-        expect(provenance.traceId).not.toBe('');
-        expect(typeof provenance.spanId).toBe('string');
-        expect(provenance.spanId).not.toBe('');
+        const ids = correlationIds(c.provenance);
+        expect(typeof ids.traceId).toBe('string');
+        expect(ids.traceId).not.toBe('');
+        expect(typeof ids.spanId).toBe('string');
+        expect(ids.spanId).not.toBe('');
       }
 
       expect(cases.map(normalizeCase)).toEqual(golden);

@@ -182,6 +182,17 @@ const throwingJudge: JudgeCaseFn = () => {
   throw new Error('judge exploded');
 };
 
+/** Plays the role a real judge/adapter does: copies the case's own provenance.traceId onto
+ * the Verdict it returns, so a correlation-requiring sink can decide whether to accept it
+ * (bug classified-evals-mol-dh8.6). */
+const correlatingJudge: JudgeCaseFn = async ({ case: c, criteria }) => {
+  const traceId = readTraceId(c.provenance);
+  return criteria.map((crit) => ({
+    ...okVerdict(c.id, crit.id),
+    ...(traceId === undefined ? {} : { provenance: { traceId } }),
+  }));
+};
+
 async function waitUntil(cond: () => boolean, timeoutMs = 2000): Promise<void> {
   const start = Date.now();
   while (!cond()) {
@@ -522,16 +533,11 @@ describe('runWatch', () => {
   test('a fake sink requiring provenance.traceId acknowledges every verdict when the case carries traceId (bug dh8.6)', async () => {
     const t = trace('trace-otel');
     const outbox = createOutbox({ dir: join(dir, 'outbox') });
-    const judge: JudgeCaseFn = async ({ case: c, criteria }) =>
-      criteria.map((crit) => ({
-        ...okVerdict(c.id, crit.id),
-        provenance: { traceId: readTraceId(c.provenance) },
-      }));
 
     const summary = await runWatch({
       source: finiteSource([t]),
       sampler: createSampler({ sampleRate: 1, inclusionPath: join(dir, 'inclusion.jsonl') }),
-      judge,
+      judge: correlatingJudge,
       criteria: defaultCriteria,
       outbox,
       sinks: [correlationRequiringSink()],
