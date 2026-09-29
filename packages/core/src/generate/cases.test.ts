@@ -39,7 +39,7 @@ describe('extractCases', () => {
     );
     expect(c?.input.answer).toBe('Order t1 ships today.');
     expect(c?.traceId).toBe('t1');
-    expect(c?.provenance).toEqual({ traceIds: ['t1'] });
+    expect(c?.provenance).toEqual({ traceIds: ['t1'], traceId: 't1' });
     expect(c?.tags).not.toContain('truncated');
   });
 
@@ -254,7 +254,11 @@ describe('extractCases: includeIncomplete (mol-dh8.4)', () => {
     });
 
     expect(cases).toHaveLength(1);
-    expect(cases[0]?.provenance).toEqual({ traceIds: ['t-trunc'], trace: { completeness } });
+    expect(cases[0]?.provenance).toEqual({
+      traceIds: ['t-trunc'],
+      trace: { completeness },
+      traceId: 't-trunc',
+    });
     // The trace-status bookkeeping (used by vet init's `excluded` summary) is unchanged: this
     // trace is still reported not_applicable/truncated even though a Case now also exists for it.
     expect(traces).toContainEqual({
@@ -288,6 +292,63 @@ describe('extractCases: includeIncomplete (mol-dh8.4)', () => {
       includeIncomplete: true,
     });
 
-    expect(cases[0]?.provenance).toEqual({ traceIds: ['t-ok'] });
+    expect(cases[0]?.provenance).toEqual({ traceIds: ['t-ok'], traceId: 't-ok' });
+  });
+});
+
+// bead classified-evals-mol-dh8.6: sinks correlate verdicts on Verdict.provenance.traceId/spanId
+// (docs/sinks.md "Correlation"), copied from Case.provenance by the caller. extractCases must set
+// both whenever the NormalizedTrace has them: traceId unconditionally (every NormalizedTrace has
+// one), spanId only for the llm-kind span whose messageRange covers the final assistant message
+// (the span the conversation/LLM output came from) — never a non-llm span covering the same range.
+describe('extractCases: correlation ids (mol-dh8.6)', () => {
+  test('provenance.traceId is set to the trace id even with no spans', () => {
+    const { cases } = extractCases({ traces: [trace('t-corr')], criteria: [] });
+
+    expect(cases[0]?.provenance).toEqual({ traceIds: ['t-corr'], traceId: 't-corr' });
+  });
+
+  test('provenance.spanId is the llm span whose messageRange covers the final assistant message', () => {
+    const t = trace('t-span', {
+      spans: [
+        { spanId: 'span-1', name: 'turn-1', kind: 'llm', messageRange: [0, 2] },
+        { spanId: 'span-2', name: 'turn-2', kind: 'llm', messageRange: [2, 3] },
+      ],
+    });
+
+    const { cases } = extractCases({ traces: [t], criteria: [] });
+
+    expect(cases[0]?.provenance).toEqual({
+      traceIds: ['t-span'],
+      traceId: 't-span',
+      spanId: 'span-2',
+    });
+  });
+
+  test('a non-llm span covering the same range is never picked as spanId', () => {
+    const t = trace('t-nonllm', {
+      spans: [{ spanId: 'span-other', name: 'wrapper', kind: 'other', messageRange: [0, 3] }],
+    });
+
+    const { cases } = extractCases({ traces: [t], criteria: [] });
+
+    expect(cases[0]?.provenance).toEqual({ traceIds: ['t-nonllm'], traceId: 't-nonllm' });
+  });
+
+  test('includeIncomplete: true still sets traceId/spanId alongside the completeness provenance', () => {
+    const completeness = { contentCaptured: true, truncated: true, missingParents: false };
+    const t = trace('t-trunc-corr', {
+      completeness,
+      spans: [{ spanId: 'span-2', name: 'turn-2', kind: 'llm', messageRange: [2, 3] }],
+    });
+
+    const { cases } = extractCases({ traces: [t], criteria: [], includeIncomplete: true });
+
+    expect(cases[0]?.provenance).toEqual({
+      traceIds: ['t-trunc-corr'],
+      trace: { completeness },
+      traceId: 't-trunc-corr',
+      spanId: 'span-2',
+    });
   });
 });

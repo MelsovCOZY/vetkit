@@ -70,6 +70,21 @@ function finalAnswer(messages: readonly Message[]): string | undefined {
   return text === '' ? undefined : text;
 }
 
+// bead classified-evals-mol-dh8.6: the span the conversation/LLM output came from, per
+// docs/sinks.md "Correlation" — the llm-kind span whose messageRange covers the final
+// assistant message. Undefined when no such span exists (e.g. no spans at all).
+function answerSpanId(trace: NormalizedTrace): string | undefined {
+  const index = trace.messages.findLastIndex((m) => m.role === 'assistant');
+  if (index === -1) return undefined;
+  return trace.spans.find(
+    (span) =>
+      span.kind === 'llm' &&
+      span.messageRange !== undefined &&
+      index >= span.messageRange[0] &&
+      index < span.messageRange[1],
+  )?.spanId;
+}
+
 function caseId(traceId: string): string {
   return createHash('sha256').update(`${traceId}\n${CASE_RENDERER_VERSION}`).digest('hex');
 }
@@ -99,6 +114,8 @@ export function extractCases(input: ExtractCasesInput): ExtractCasesResult {
       ? TRUNCATION_MARKER + full.slice(-(MAX_STATE_CHARS - TRUNCATION_MARKER.length))
       : full;
     const answer = finalAnswer(trace.messages);
+    const spanId = answerSpanId(trace);
+    const correlation = { traceId, ...(spanId === undefined ? {} : { spanId }) };
 
     cases.push({
       id: caseId(traceId),
@@ -106,8 +123,12 @@ export function extractCases(input: ExtractCasesInput): ExtractCasesResult {
       traceId,
       provenance:
         completenessStatus === 'ok'
-          ? { traceIds: [traceId] }
-          : { traceIds: [traceId], trace: { completeness: trace.completeness } },
+          ? { traceIds: [traceId], ...correlation }
+          : {
+              traceIds: [traceId],
+              trace: { completeness: trace.completeness },
+              ...correlation,
+            },
       tags: truncated ? ['truncated'] : [],
     });
     // The non-ok branch already pushed its not_applicable status above; only an ok trace

@@ -110,6 +110,32 @@ function fakeSink(onWrite?: (batch: Verdict[]) => void): SinkV1 {
   };
 }
 
+function readTraceId(provenance: unknown): string | undefined {
+  if (typeof provenance !== 'object' || provenance === null) return undefined;
+  const traceId = (provenance as { traceId?: unknown }).traceId;
+  return typeof traceId === 'string' ? traceId : undefined;
+}
+
+/** Rejects any verdict with no `provenance.traceId`, reason 'no correlation id' — same rule
+ * real otel/langfuse sinks apply (docs/sinks.md "Correlation"; bug classified-evals-mol-dh8.6). */
+function correlationRequiringSink(): SinkV1 {
+  return {
+    specVersion: 'v1',
+    id: 'fake-correlating-sink',
+    capabilities: { batch: 100, idempotent: true },
+    async doWrite(batch): Promise<SinkAck> {
+      const accepted: string[] = [];
+      const rejected: SinkAck['rejected'] = [];
+      for (const v of batch) {
+        const id = v.id ?? '';
+        if (readTraceId(v.provenance) !== undefined) accepted.push(id);
+        else rejected.push({ id, reason: 'no correlation id', retryable: false });
+      }
+      return { accepted, rejected };
+    },
+  };
+}
+
 function watchOptions(overrides: Partial<RunWatchOptions> = {}): RunWatchOptions {
   return {
     sampleRate: 0.5,
@@ -154,6 +180,17 @@ const alwaysOkJudge: JudgeCaseFn = async ({ case: c, criteria }) =>
 
 const throwingJudge: JudgeCaseFn = () => {
   throw new Error('judge exploded');
+};
+
+/** Plays the role a real judge/adapter does: copies the case's own provenance.traceId onto
+ * the Verdict it returns, so a correlation-requiring sink can decide whether to accept it
+ * (bug classified-evals-mol-dh8.6). */
+const correlatingJudge: JudgeCaseFn = async ({ case: c, criteria }) => {
+  const traceId = readTraceId(c.provenance);
+  return criteria.map((crit) => ({
+    ...okVerdict(c.id, crit.id),
+    ...(traceId === undefined ? {} : { provenance: { traceId } }),
+  }));
 };
 
 async function waitUntil(cond: () => boolean, timeoutMs = 2000): Promise<void> {
@@ -487,5 +524,28 @@ describe('runWatch', () => {
     expect(received).toHaveLength(1);
     expect(received[0]?.id).toBe('known-id-0');
     expect(received[0]?.evalCase.traceId).toBe('trace-onverdict');
+  });
+
+  // bug classified-evals-mol-dh8.6: OTLP-derived cases carried no provenance.traceId/spanId, so
+  // a correlation-requiring sink dead-lettered every verdict ('no correlation id'). The judge
+  // here plays the role a real judge/adapter does: it copies the case's own provenance.traceId
+  // onto the Verdict it returns, so the sink can decide whether to accept it.
+  test('a fake sink requiring provenance.traceId acknowledges every verdict when the case carries traceId (bug dh8.6)', async () => {
+    const t = trace('trace-otel');
+    const outbox = createOutbox({ dir: join(dir, 'outbox') });
+
+    const summary = await runWatch({
+      source: finiteSource([t]),
+      sampler: createSampler({ sampleRate: 1, inclusionPath: join(dir, 'inclusion.jsonl') }),
+      judge: correlatingJudge,
+      criteria: defaultCriteria,
+      outbox,
+      sinks: [correlationRequiringSink()],
+      options: watchOptions({ sampleRate: 1 }),
+      signal: new AbortController().signal,
+    });
+
+    expect(summary.produced).toBeGreaterThan(0);
+    expect(summary.acknowledged).toBe(summary.produced);
   });
 });

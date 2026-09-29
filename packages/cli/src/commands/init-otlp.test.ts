@@ -373,11 +373,28 @@ describe('vet init --source otlp: writes <out>/summary.json (mol-pij.15)', () =>
   });
 });
 
+// Per-copy ids only: traceId/spanId/traceIds all differ fixture-to-fixture by construction
+// (each dialect fixture encodes the same conversation under its own trace/span ids), so they
+// are stripped before the cross-dialect diff below; any other provenance key is left untouched.
+const PER_COPY_PROVENANCE_KEYS = new Set(['traceIds', 'traceId', 'spanId']);
+
+interface CorrelationIds {
+  traceId?: unknown;
+  spanId?: unknown;
+}
+
+function correlationIds(provenance: unknown): CorrelationIds {
+  if (typeof provenance !== 'object' || provenance === null) return {};
+  return provenance;
+}
+
 function normalizeCase(c: Case): unknown {
   const { id: _id, traceId: _traceId, provenance, ...rest } = c;
   const strippedProvenance =
     provenance !== null && typeof provenance === 'object' && !Array.isArray(provenance)
-      ? Object.fromEntries(Object.entries(provenance).filter(([k]) => k !== 'traceIds'))
+      ? Object.fromEntries(
+          Object.entries(provenance).filter(([k]) => !PER_COPY_PROVENANCE_KEYS.has(k)),
+        )
       : provenance;
   return { ...rest, provenance: strippedProvenance };
 }
@@ -391,7 +408,8 @@ function readCases(path: string): Case[] {
 
 // J5 gate (bead mol-pij.15): the five dialect fixtures encode the same conversation in
 // different OTel semconv styles; vet init's cases must be identical across all five once
-// per-dialect ids (traceId, provenance.traceIds) are deleted, matching a committed golden.
+// per-dialect ids (traceId, provenance.traceIds/traceId/spanId) are deleted, matching a
+// committed golden.
 describe('vet init --source otlp: dialect cases match the golden (mol-pij.15)', () => {
   test('the five dialect fixtures produce identical cases after deleting per-dialect ids', () => {
     const golden = readCases(goldenInitCases).map(normalizeCase);
@@ -410,8 +428,19 @@ describe('vet init --source otlp: dialect cases match the golden (mol-pij.15)', 
       );
       expect(result.status).toBe(0);
 
-      const cases = readCases(join(out, 'cases', 'generated.jsonl')).map(normalizeCase);
-      expect(cases).toEqual(golden);
+      const cases = readCases(join(out, 'cases', 'generated.jsonl'));
+      // bug classified-evals-mol-dh8.6: sinks correlate on provenance.traceId/spanId
+      // (docs/sinks.md "Correlation"); every OTLP-derived case must carry both, before they
+      // are stripped for the cross-dialect diff below.
+      for (const c of cases) {
+        const ids = correlationIds(c.provenance);
+        expect(typeof ids.traceId).toBe('string');
+        expect(ids.traceId).not.toBe('');
+        expect(typeof ids.spanId).toBe('string');
+        expect(ids.spanId).not.toBe('');
+      }
+
+      expect(cases.map(normalizeCase)).toEqual(golden);
     }
   });
 });
