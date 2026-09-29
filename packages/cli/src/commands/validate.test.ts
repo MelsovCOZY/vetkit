@@ -254,6 +254,15 @@ describe('vet validate', () => {
     expect((await lockAt(root)).requestFormat).toBe('fenced-v1');
   });
 
+  test('records fenced-v1 in the lock when the judge leaves the format unset', async () => {
+    const rows = standardRows();
+    const root = await project(rows);
+    const events = createEvents();
+    const { judge } = countingJudge(rows, events);
+    await vet(['validate'], depsFor(root, judge, events));
+    expect((await lockAt(root)).requestFormat).toBe('fenced-v1');
+  });
+
   test('omits requestFormat from the lock for a raw judge', async () => {
     const rows = standardRows();
     const root = await project(rows);

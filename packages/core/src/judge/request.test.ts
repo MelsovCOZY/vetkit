@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import {
   CEV_ERROR_CODES,
+  DEFAULT_REQUEST_FORMAT,
   validateJson,
   VetError,
   verdictSchema,
@@ -500,8 +501,11 @@ describe('requestFormat', () => {
     '{"state":"hello <b>\\n\\"x\\"","questions":{"q":{"type":"choice","instructions":"Ok? Answer \\"escape\\" when: none","criteria":{"yes":"Yes.","no":"No.","escape":"none"}}}}';
 
   test('raw request and cache key equal the pre-change values', () => {
-    expect(JSON.stringify(buildRequest(fixedCase, fixedCriteria))).toBe(RAW_REQUEST);
-    expect(cacheKey(fixedCase, fixedCriteria, 'm')).toBe(RAW_KEY);
+    // Default switched to fenced-v1 after the request-format A/B; raw is now explicit.
+    expect(JSON.stringify(buildRequest(fixedCase, fixedCriteria, { requestFormat: 'raw' }))).toBe(
+      RAW_REQUEST,
+    );
+    expect(cacheKey(fixedCase, fixedCriteria, 'm', { requestFormat: 'raw' })).toBe(RAW_KEY);
     expect(cacheKey(fixedCase, fixedCriteria, 'm', { requestFormat: 'raw' })).toBe(RAW_KEY);
   });
 
@@ -511,6 +515,19 @@ describe('requestFormat', () => {
     expect(cacheKey(fixedCase, fixedCriteria, 'm', { requestFormat: 'fenced-v1' })).not.toBe(
       RAW_KEY,
     );
+  });
+
+  test('an unset format resolves to fenced-v1 in buildRequest, cacheKey and judgeCase', async () => {
+    expect(DEFAULT_REQUEST_FORMAT).toBe('fenced-v1');
+    expect(buildRequest(fixedCase, fixedCriteria).state).toBe(
+      renderState(fixedCase.input.state, 'fenced-v1'),
+    );
+    expect(cacheKey(fixedCase, fixedCriteria, 'm')).toBe(
+      cacheKey(fixedCase, fixedCriteria, 'm', { requestFormat: 'fenced-v1' }),
+    );
+    const { judge, doJudge } = fakeJudge();
+    await judgeCase({ judge, case: evalCase, criteria: [booleanCriterion] });
+    expect(doJudge.mock.calls[0]?.[0].state).toBe(renderState(evalCase.input.state, 'fenced-v1'));
   });
 
   test('judgeCase fills the format from the judge capabilities', async () => {

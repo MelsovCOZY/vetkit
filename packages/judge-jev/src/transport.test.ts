@@ -759,11 +759,16 @@ describe('requestFormat capability', () => {
     expect(sent).toContain('"plain state"');
   });
 
-  test.each([['raw' as const], [undefined]])('%s omits the capability', (requestFormat) => {
+  // Default switched to fenced-v1 after the request-format A/B: capabilities always carry the format.
+  test.each([
+    ['raw' as const, 'raw'],
+    ['fenced-v1' as const, 'fenced-v1'],
+    [undefined, 'fenced-v1'],
+  ])('%s carries the resolved format %s', (requestFormat, resolved) => {
     const judge = createJevJudgeFromEndpoint(
       { preset: 'vercel', ...(requestFormat === undefined ? {} : { requestFormat }) },
       { apiKey: 'k' },
     );
-    expect('requestFormat' in judge.capabilities).toBe(false);
+    expect(judge.capabilities.requestFormat).toBe(resolved);
   });
 });
