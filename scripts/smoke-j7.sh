@@ -134,7 +134,7 @@ kill "$BUSY_PID"; wait "$BUSY_PID" 2>/dev/null; BUSY_PID=
 sleep 0.5
 
 # ---- run A: AC1 + AC3 (sink otel) ------------------------------------------------------------
-vet watch --sample 0.1 --sink otel --json --port "$WATCH_PORT" >watch.json 2>watch.err &
+bun "${ENV_ARGS[@]}" "$BIN" watch --sample 0.1 --sink otel --json --port "$WATCH_PORT" >watch.json 2>watch.err &  # direct (not the vet() function): $! must be the bun pid so SIGINT reaches it
 WATCH_PID=$!
 wait_listening watch.err || { say "watch never listened" >&2; cat watch.err | head -5 >&2; exit 1; }
 bun run "$ROOT/scripts/replay-otlp.ts" "$FIXTURE_TRACE" --count 100 --port "$WATCH_PORT" --inject-failure 1 >replay.json
@@ -179,7 +179,7 @@ result "AC2a2: collector received as many log records as acknowledged" 0 0 "$([ 
 # ---- run B: AC2 with the fake sink force-rejecting 3 items ----------------------------------
 rm -rf .vet evals/cases/pending
 export VETKIT_FIXTURE_REJECT=3 VETKIT_FIXTURE_SINK_LOG="$PWD/flaky.log"
-vet watch --sample 0.1 --sink flaky --json --port "$WATCH_PORT" >watch-b.json 2>watch-b.err &
+bun "${ENV_ARGS[@]}" "$BIN" watch --sample 0.1 --sink flaky --json --port "$WATCH_PORT" >watch-b.json 2>watch-b.err &  # direct (not the vet() function): $! must be the bun pid so SIGINT reaches it
 WATCH_PID=$!
 wait_listening watch-b.err || { say "watch B never listened" >&2; exit 1; }
 bun run "$ROOT/scripts/replay-otlp.ts" "$FIXTURE_TRACE" --count 100 --port "$WATCH_PORT" --seed b >replay-b.json
