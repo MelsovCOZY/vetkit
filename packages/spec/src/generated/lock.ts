@@ -46,6 +46,7 @@ export interface LockCriterion {
   ece?: number;
   tolerance?: number;
   gauntlet: GauntletResult;
+  gauntletDetail?: GauntletDetail;
   reasons: LockReason[];
   languages?: string[];
   labelCount: number;
@@ -61,4 +62,15 @@ export interface GauntletResult {
   constant_output: GauntletOutcome;
   position_swap: GauntletOutcome;
   length: GauntletOutcome;
+}
+export interface GauntletDetail {
+  masterKeyFailed?: {
+    kind: string;
+    caseId: string;
+  }[];
+  injectionFlips?: {
+    family: string;
+    flips: number;
+    trials: number;
+  }[];
 }

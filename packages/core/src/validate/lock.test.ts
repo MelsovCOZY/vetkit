@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { describe, expect, test } from 'vitest';
 import {
   CEV_ERROR_CODES,
+  lockSchema,
+  safeParseJson,
   VetError,
   type Case,
   type Criterion,
@@ -25,6 +27,7 @@ import {
   readLock,
   readLockOrNull,
   writeLockAtomic,
+  type LockCriterionInput,
   type LockInputs,
 } from './lock.ts';
 
@@ -571,5 +574,59 @@ describe('checkLock', () => {
     expect(report.stale).toBe(true);
     expect(report.reasons).toContain('wordingHash');
     expect(report.criteria).toContain('extra');
+  });
+});
+
+const withDetail = (detail: NonNullable<LockCriterionInput['gauntletDetail']>): LockInputs =>
+  inputs({
+    results: {
+      'answers-question': {
+        calibration: calibration(),
+        gauntlet: { ...ALL_PASS, injection: 'fail', master_key: 'fail' },
+        gauntletDetail: detail,
+      },
+    },
+  });
+
+describe('buildLock gauntlet detail', () => {
+  test('records failing master_key inputs as sorted {kind, caseId} without text', () => {
+    const e = entryOf(
+      buildLock(
+        withDetail({
+          masterKeyFailedInputs: ['truncation:c9', 'rubric', 'truncation:a:b', 'pass'],
+        }),
+      ),
+    );
+    expect(e.gauntletDetail?.masterKeyFailed).toEqual([
+      { kind: 'fixed', caseId: 'pass' },
+      { kind: 'fixed', caseId: 'rubric' },
+      { kind: 'truncation', caseId: 'a:b' },
+      { kind: 'truncation', caseId: 'c9' },
+    ]);
+  });
+
+  test('records only injection families with flips, sorted by family', () => {
+    const e = entryOf(
+      buildLock(
+        withDetail({
+          injectionFamilies: {
+            role_override: { flips: 2, n: 6 },
+            base64: { flips: 0, n: 6 },
+            encoding: { flips: 1, n: 4 },
+          },
+        }),
+      ),
+    );
+    expect(e.gauntletDetail?.injectionFlips).toEqual([
+      { family: 'encoding', flips: 1, trials: 4 },
+      { family: 'role_override', flips: 2, trials: 6 },
+    ]);
+  });
+
+  test('omits gauntletDetail when nothing failed, and the lock stays schema-valid', () => {
+    const e = entryOf(buildLock(withDetail({ masterKeyFailedInputs: [], injectionFamilies: {} })));
+    expect(e).not.toHaveProperty('gauntletDetail');
+    const failing = buildLock(withDetail({ masterKeyFailedInputs: ['pass'] }));
+    expect(safeParseJson(JSON.stringify(failing), lockSchema).ok).toBe(true);
   });
 });

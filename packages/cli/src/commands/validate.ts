@@ -7,6 +7,9 @@ import { join, resolve } from 'node:path';
 import {
   bandCases,
   buildLock,
+  type LockCriterionInput,
+  flippedFamilies,
+  masterKeyFailures,
   calibrate,
   correctedPassRate,
   createEvents,
@@ -298,7 +301,11 @@ type GauntletMap = Record<keyof GauntletResult, GauntletOutcome>;
 
 interface Detail {
   readonly paraphrase: { readonly agreement: number | null; readonly spread: number | null };
-  readonly injection: { readonly families: Record<string, unknown> };
+  readonly injection: {
+    readonly families: Record<string, unknown>;
+    readonly flipped: { family: string; flips: number; trials: number }[];
+  };
+  readonly master_key: { readonly failedInputs: { kind: string; caseId: string }[] };
   readonly position_swap: {
     readonly consistency: number | null;
     readonly inconclusive: number | null;
@@ -323,7 +330,8 @@ const SKIPPED_ALL: GauntletMap = {
 
 const EMPTY_DETAIL: Detail = {
   paraphrase: { agreement: null, spread: null },
-  injection: { families: {} },
+  injection: { families: {}, flipped: [] },
+  master_key: { failedInputs: [] },
   position_swap: { consistency: null, inconclusive: null },
   length: { paddingFlips: 0, truncationFlips: 0, lengthVerdictCorrelation: null },
 };
@@ -339,9 +347,11 @@ interface GauntletContext {
   readonly corpora: Corpora;
 }
 
-async function runGauntlets(
-  ctx: GauntletContext,
-): Promise<{ gauntlet: GauntletMap; detail: Detail }> {
+async function runGauntlets(ctx: GauntletContext): Promise<{
+  gauntlet: GauntletMap;
+  detail: Detail;
+  gauntletDetail: NonNullable<LockCriterionInput['gauntletDetail']>;
+}> {
   const { criterion, calibration, labels, judge, generator, corpora } = ctx;
   const pick = (ids: readonly string[]): Case[] =>
     ids.flatMap((id) => {
@@ -397,6 +407,10 @@ async function runGauntlets(
         });
 
   return {
+    gauntletDetail: {
+      masterKeyFailedInputs: masterKey?.failedInputs ?? [],
+      injectionFamilies: injection?.families ?? {},
+    },
     gauntlet: {
       paraphrase: paraphrase.result,
       polarity: polarity.result,
@@ -412,7 +426,11 @@ async function runGauntlets(
         agreement: paraphrase.agreement.length === 0 ? null : Math.min(...paraphrase.agreement),
         spread: paraphrase.spread ?? null,
       },
-      injection: { families: injection?.families ?? {} },
+      injection: {
+        families: injection?.families ?? {},
+        flipped: flippedFamilies(injection?.families),
+      },
+      master_key: { failedInputs: masterKeyFailures(masterKey?.failedInputs ?? []) },
       position_swap: { consistency: swap.consistency, inconclusive: swap.inconclusive },
       length:
         length === undefined
@@ -549,15 +567,16 @@ async function validate(
       calibration: CalibrationResult;
       gauntlet: GauntletMap;
       detail: Detail;
+      gauntletDetail: NonNullable<LockCriterionInput['gauntletDetail']>;
       unscored: Unscored;
     }
   > = {};
   for (const c of active) {
     const entry = calibrated.get(c.id);
     if (entry === undefined) continue;
-    const { gauntlet, detail } =
+    const { gauntlet, detail, gauntletDetail } =
       c.grader?.kind === 'code'
-        ? { gauntlet: SKIPPED_ALL, detail: EMPTY_DETAIL }
+        ? { gauntlet: SKIPPED_ALL, detail: EMPTY_DETAIL, gauntletDetail: {} }
         : await runGauntlets({
             criterion: c,
             calibration: entry.calibration,
@@ -572,6 +591,7 @@ async function validate(
       calibration: entry.calibration,
       gauntlet,
       detail,
+      gauntletDetail,
       unscored: unscoredOf(c.id, verdicts),
     };
   }

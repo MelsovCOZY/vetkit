@@ -635,6 +635,50 @@ export const lockSchema: JsonSchema = {
       title: 'GauntletOutcome',
       enum: ['pass', 'fail', 'skipped'],
     },
+    GauntletDetail: {
+      title: 'GauntletDetail',
+      type: 'object',
+      properties: {
+        masterKeyFailed: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              kind: {
+                type: 'string',
+              },
+              caseId: {
+                type: 'string',
+              },
+            },
+            required: ['kind', 'caseId'],
+            additionalProperties: false,
+          },
+        },
+        injectionFlips: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              family: {
+                type: 'string',
+              },
+              flips: {
+                type: 'integer',
+                minimum: 0,
+              },
+              trials: {
+                type: 'integer',
+                minimum: 0,
+              },
+            },
+            required: ['family', 'flips', 'trials'],
+            additionalProperties: false,
+          },
+        },
+      },
+      additionalProperties: false,
+    },
     GauntletResult: {
       title: 'GauntletResult',
       type: 'object',
@@ -738,6 +782,9 @@ export const lockSchema: JsonSchema = {
         },
         gauntlet: {
           $ref: '#/$defs/GauntletResult',
+        },
+        gauntletDetail: {
+          $ref: '#/$defs/GauntletDetail',
         },
         reasons: {
           type: 'array',
