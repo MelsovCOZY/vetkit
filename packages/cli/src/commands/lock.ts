@@ -26,7 +26,7 @@ interface RefreshOptions extends GlobalOptions {
   readonly lock?: string;
 }
 
-export interface RefreshReport {
+interface RefreshReport {
   readonly refreshed: string[];
   readonly refreshedWhitespace: string[];
   readonly stale: { readonly id: string; readonly message: string }[];

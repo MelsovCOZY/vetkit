@@ -25,9 +25,9 @@ interface CheckOptions extends ProjectOptions {
   readonly outbox?: string | boolean;
 }
 
-export type CriterionDrift = 'wording_changed' | 'model_changed' | 'uncalibrated';
+type CriterionDrift = 'wording_changed' | 'model_changed' | 'uncalibrated';
 
-export interface LockCheckReport extends Omit<StaleReport, 'reasons'> {
+interface LockCheckReport extends Omit<StaleReport, 'reasons'> {
   readonly reasons: (StaleReport['reasons'][number] | 'requested')[];
   readonly staleCriteria: { readonly id: string; readonly reasons: CriterionDrift[] }[];
   readonly lockPath: string;

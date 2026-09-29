@@ -6,13 +6,13 @@ import type { Answer, Criterion, JudgeV1, Question } from '@vetkit/spec';
 import type { Events } from '../events.ts';
 
 /** Word-5-gram shingle Jaccard at or above this qualifies a pair. */
-export const SHINGLE_JACCARD_MIN = 0.5;
+const SHINGLE_JACCARD_MIN = 0.5;
 /** Normalised edit similarity above this qualifies a pair. */
-export const EDIT_SIMILARITY_MIN = 0.8;
+const EDIT_SIMILARITY_MIN = 0.8;
 /** A duplicate is removed when Jev's probability for it is at least this. */
-export const DUPLICATE_PROBABILITY_MIN = 0.8;
+const DUPLICATE_PROBABILITY_MIN = 0.8;
 /** Candidates per Jev request (choice questions allow ≤255 options). */
-export const MAX_GROUP_SIZE = 50;
+const MAX_GROUP_SIZE = 50;
 
 const NONE = 'none';
 const NONE_TEXT = 'None: it asks something different from every earlier criterion listed.';

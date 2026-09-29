@@ -10,7 +10,7 @@ export type ExclusionStatus = Exclude<CompletenessStatus, 'ok'>;
 
 // The shape casesFromTraces carries on Case.provenance. Case.provenance is `unknown` at the
 // type level, so it is read defensively below.
-export type CaseTraceProvenance = {
+type CaseTraceProvenance = {
   trace?: { completeness?: NormalizedTrace['completeness'] };
 };
 

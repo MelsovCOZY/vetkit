@@ -8,7 +8,7 @@
 import type { ErrorObject } from 'ajv/dist/2020.js';
 import { safeParseJson, type JsonSchema } from '../src/json.ts';
 
-export interface ParseIrIssue {
+interface ParseIrIssue {
   readonly path: string;
   readonly message: string;
 }

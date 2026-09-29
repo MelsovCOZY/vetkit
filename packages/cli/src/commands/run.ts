@@ -42,7 +42,7 @@ export interface RunHookContext {
   readonly config: ResolvedConfig;
   readonly rootDir: string;
 }
-export interface RunHookOutput {
+interface RunHookOutput {
   readonly json: Record<string, unknown>;
   readonly lines?: readonly string[];
 }
