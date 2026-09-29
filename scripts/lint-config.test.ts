@@ -2,24 +2,15 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
+import { runOxlintOnFixture } from './oxlint-fixture.ts';
 
 // NOTE: this is a script, not packages/*/src — the repo-wide "raw JSON.parse is banned,
 // use safeParseJson" rule applies only to packages/*/src, so
 // the JSON.parse below (reading .oxlintrc.json) is not itself a violation.
 
 const rootDir = path.resolve(import.meta.dirname, '..');
-const oxlintBin = path.join(rootDir, 'node_modules/.bin/oxlint');
 const tsgolintBin = path.join(rootDir, 'node_modules/.bin/tsgolint');
-const fixturesConfig = path.join(rootDir, 'scripts/fixtures/lint-bad/oxlintrc.fixtures.json');
 const banScript = path.join(rootDir, 'scripts/ban-raw-json-parse.sh');
-
-function runOxlintOnFixture(relativeFile: string) {
-  const result = spawnSync(oxlintBin, ['-c', fixturesConfig, relativeFile], {
-    cwd: rootDir,
-    encoding: 'utf8',
-  });
-  return { status: result.status, output: `${result.stdout}${result.stderr}` };
-}
 
 describe('scripts/fixtures/lint-bad fixtures', () => {
   test('adapter importing @vetkit/core fails no-restricted-imports naming the adapters rule', () => {
