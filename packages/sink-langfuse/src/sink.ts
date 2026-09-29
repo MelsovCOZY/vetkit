@@ -2,6 +2,7 @@
 // Raw fetch, no langfuse package. Rejection reasons carry only a code and an HTTP status, never
 // headers, bodies or keys. Retries belong to the outbox; scores are not idempotent.
 
+import { createHash } from 'node:crypto';
 import { CEV_ERROR_CODES, defineSink } from '@vetkit/spec';
 import type { SinkAck, SinkV1, Verdict } from '@vetkit/spec';
 import { toLangfuseScore } from './map.ts';
@@ -35,6 +36,21 @@ function rejectionFor(id: string, status: number): Rejection {
   return { id, reason: `${CEV_ERROR_CODES.SINK_REJECTED}: HTTP ${status}`, retryable: false };
 }
 
+// Deterministic score id, so a rerun of the same verdict upserts instead of duplicating: the
+// observation (else trace), criterion, case and the judged outcome. Not the verdict id, which
+// is fresh on every run.
+function scoreId(verdict: Verdict, traceId: string): string {
+  const target = verdict.provenance?.observationId ?? traceId;
+  const identity = JSON.stringify([
+    target,
+    verdict.criterionId,
+    verdict.caseId,
+    verdict.model.resolved,
+    verdict.answer ?? null,
+  ]);
+  return createHash('sha256').update(identity).digest('hex').slice(0, 32);
+}
+
 export function createLangfuseSink(options: LangfuseSinkOptions): SinkV1 {
   const doFetch = options.fetch ?? fetch;
   const url = `${options.baseUrl.replace(/\/+$/, '')}/api/public/scores`;
@@ -48,15 +64,15 @@ export function createLangfuseSink(options: LangfuseSinkOptions): SinkV1 {
   ): Promise<Rejection | undefined> {
     const traceId = verdict.provenance?.traceId;
     if (traceId === undefined) return { id, reason: 'no correlation id', retryable: false };
-    const body = toLangfuseScore(verdict, traceId);
-    if (body === undefined) return { id, reason: 'unscored:no_answer', retryable: false };
+    const score = toLangfuseScore(verdict, traceId);
+    if (score === undefined) return { id, reason: 'skipped:unscored:no_answer', retryable: false };
     const deadline = AbortSignal.timeout(timeoutMs);
     let response: Response;
     try {
       response = await doFetch(url, {
         method: 'POST',
         headers: { authorization, 'content-type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ id: scoreId(verdict, traceId), ...score }),
         signal: signal === undefined ? deadline : AbortSignal.any([signal, deadline]),
       });
     } catch {
@@ -75,7 +91,7 @@ export function createLangfuseSink(options: LangfuseSinkOptions): SinkV1 {
       for (const verdict of batch) {
         const id = verdict.id ?? `${verdict.caseId}:${verdict.criterionId}`;
         if (verdict.status !== 'ok') {
-          ack.rejected.push({ id, reason: `unscored:${verdict.status}`, retryable: false });
+          ack.rejected.push({ id, reason: `skipped:unscored:${verdict.status}`, retryable: false });
           continue;
         }
         const rejection = await post(id, verdict, opts.signal);
