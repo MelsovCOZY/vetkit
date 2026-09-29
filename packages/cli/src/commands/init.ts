@@ -152,6 +152,30 @@ function reexportConfig(configFile: string, out: string): string {
   ].join('\n');
 }
 
+function isAdapterObject(value: unknown): boolean {
+  return typeof value === 'object' && value !== null && 'specVersion' in value;
+}
+
+/**
+ * A self-contained vetkit.config.ts equivalent to `config`: judge, generator, sinks, thresholds,
+ * watch, gate and cacheDir as a literal, with no import. Endpoint and sink descriptors hold
+ * env var names only, so no secret is written. Undefined when the judge, generator or any sink
+ * is an in-process adapter object, which cannot be serialized.
+ */
+export function renderInlineConfig(config: ResolvedConfig): string | undefined {
+  const { judge, generator, sinks, thresholds, watch, gate, cacheDir } = config;
+  if (isAdapterObject(judge) || isAdapterObject(generator) || sinks.some(isAdapterObject)) {
+    return undefined;
+  }
+  const doc = { judge, generator, sinks, thresholds, watch, gate, cacheDir };
+  return [
+    '// vetkit.config.ts, written by `vet init --source`: the generator, judge and sinks',
+    '// `vet init` resolved, inlined so this folder can move. Keys stay in the env vars named here.',
+    `export default ${JSON.stringify(doc, null, 2)};`,
+    '',
+  ].join('\n');
+}
+
 async function writeAtomic(file: string, content: string): Promise<void> {
   await mkdir(dirname(file), { recursive: true });
   const tmp = `${file}.tmp-${String(process.pid)}`;
@@ -356,7 +380,16 @@ async function generateCommand(options: InitOptions & { source: string }): Promi
     }
   }
 
-  await writeAtomic(join(out, 'vetkit.config.ts'), reexportConfig(loaded.configFile, out));
+  const inlined = renderInlineConfig(loaded.config);
+  if (inlined === undefined) {
+    log.warn(
+      `${out}/vetkit.config.ts re-exports ${loaded.configFile} because the judge, generator or a sink is an in-process adapter object that cannot be written out; the folder is not movable`,
+    );
+  }
+  await writeAtomic(
+    join(out, 'vetkit.config.ts'),
+    inlined ?? reexportConfig(loaded.configFile, out),
+  );
 
   // Only an `otlp:`-sourced run carries a summary (source.id 'otlp/file' or
   // 'otlp/receiver'); every other --source keeps emit()'s existing {criteria, cases, report}
