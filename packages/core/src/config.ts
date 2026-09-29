@@ -37,7 +37,11 @@ export interface GeneratorAdapter {
   doGenerate(req: never): Promise<unknown>;
 }
 
-export type RegistryEntry = JudgeEndpoint | JudgeV1 | GeneratorAdapter;
+export type RegistryEntry = JudgeEndpoint | JudgeV1 | GeneratorEndpoint | GeneratorAdapter;
+
+type RoleValue<R extends Role> = R extends 'judge'
+  ? JudgeEndpoint | JudgeV1
+  : GeneratorEndpoint | GeneratorAdapter;
 
 export interface VetkitConfig {
   readonly generator?: string | GeneratorEndpoint | GeneratorAdapter;
@@ -191,11 +195,18 @@ type Role = 'judge' | 'generator';
 
 const ROLE_METHOD: Record<Role, string> = { judge: 'doJudge', generator: 'doGenerate' };
 
+// Fields only one endpoint shape carries, keyed by the role that owns them; a plain
+// {kind, baseURL, apiKeyEnv, model} suits both roles.
+const ROLE_EXCLUSIVE_FIELDS: Record<Role, readonly string[]> = {
+  judge: ['preset', 'accountId', 'providerOptions'],
+  generator: ['structured'],
+};
+
 // Returns the resolved role value, or an issue explaining why it cannot be resolved.
-function resolveRole(
+function resolveRole<R extends Role>(
   config: VetkitConfig,
-  role: Role,
-): { value?: RegistryEntry | GeneratorEndpoint; issue?: ConfigIssue } {
+  role: R,
+): { value?: RoleValue<R>; issue?: ConfigIssue } {
   const raw = config[role];
   if (raw === undefined) return {};
   const pointer = `/${role}`;
@@ -208,6 +219,16 @@ function resolveRole(
       };
     }
     value = entry;
+    const foreign = ROLE_EXCLUSIVE_FIELDS[role === 'judge' ? 'generator' : 'judge'];
+    const field = isRecord(entry) ? foreign.find((f) => entry[f] !== undefined) : undefined;
+    if (field !== undefined) {
+      return {
+        issue: {
+          pointer,
+          message: `registry entry "${raw}" (/registry/${escapePointer(raw)}) is used as the ${role} but carries "${field}", which only the other role accepts`,
+        },
+      };
+    }
   }
   if (isRecord(value) && 'specVersion' in value) {
     const method = ROLE_METHOD[role];
@@ -217,7 +238,7 @@ function resolveRole(
   }
   // Schema-validated above: an endpoint or an adapter object carrying the role's method.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  return { value: value as RegistryEntry | GeneratorEndpoint };
+  return { value: value as RoleValue<R> };
 }
 
 // A judge endpoint names either an opaque preset (the adapter validates the name and fills in
@@ -286,11 +307,7 @@ export function resolveConfig(input: unknown): ResolveConfigResult {
   // validateConfig guarantees judge resolves; generator may be absent.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   const judge = resolveRole(config, 'judge').value as JudgeEndpoint | JudgeV1;
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  const generator = resolveRole(config, 'generator').value as
-    | GeneratorEndpoint
-    | GeneratorAdapter
-    | undefined;
+  const generator = resolveRole(config, 'generator').value;
 
   const thresholdDefault = config.thresholds?.default;
   if (thresholdDefault === undefined) {
