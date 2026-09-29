@@ -1,4 +1,4 @@
-// Bug fix (bd classified-evals-mol-0nw.25): the e2e project's include only ever matched
+// Bug fix: the e2e project's include only ever matched
 // e2e/**, so `vitest run --project e2e <packages/*/e2e file>` found nothing and exited 0
 // (a false green) instead of failing, while the default per-package projects silently
 // collected (and skipped) the same file. These assertions pin the resolved project shapes

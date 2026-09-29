@@ -301,7 +301,7 @@ function runTypecheckIn(cwd: string): { status: number | null; stdout: string; s
 
 describe("bun run typecheck on an unbuilt tree reports cross-package errors correctly", () => {
   // packages/spec/src/index.ts is currently a placeholder with no exports (real exports
-  // land in mol-fou.8), so the temp type is reachable via "@vetkit/spec" only by
+  // land later), so the temp type is reachable via "@vetkit/spec" only by
   // temporarily re-exporting it from that public entry, the same way a real consumer
   // would import a type — never via a package.json edit (out of scope for this bead).
   // This plants into the isolated temp copy of the workspace, never the real

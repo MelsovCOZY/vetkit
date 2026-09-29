@@ -1,6 +1,6 @@
 // Fixture project for `vet watch` (packages/cli/src/commands/watch.test.ts). The judge is an
 // in-process JudgeV1: no network, and no CEV_JUDGE_FAKE env hook in production code — this
-// config file is the fake (bead classified-evals-mol-dh8.3 acceptance criterion). //
+// config file is the fake (acceptance criterion). //
 // VETKIT_FIXTURE_MODE picks its behaviour: pass (default) -> P(yes) 0.9 · fail -> P(yes) 0.1.
 type Answer = {
   type: 'choice';

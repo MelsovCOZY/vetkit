@@ -1,4 +1,4 @@
-// `vet rerun --disputed` (mol-p4a.3): re-judges only verdicts from the last run that are
+// `vet rerun --disputed`: re-judges only verdicts from the last run that are
 // disputed (borderline, or a judge failure), bypassing the cache for those cases, and writes a
 // new latest run plus a --json run-to-run comparison.
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';

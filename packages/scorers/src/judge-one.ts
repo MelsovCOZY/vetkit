@@ -2,9 +2,9 @@
 // vetMatchers): judges one ad-hoc, single-case/single-criterion request through
 // @vetkit/core's judgeCase — never a hand-rolled request — so the cache key and any
 // lock-fitted threshold/tolerance match what `vet run` computes for the same criterion
-// (contract aq4.6 pt.3: `criterion` is a full @vetkit/spec Criterion, wordingHash included,
+// (`criterion` is a full @vetkit/spec Criterion, wordingHash included,
 // passed straight through; never re-derived here). Pass/threshold math is decideVerdict's,
-// reused as-is (mol-aq4.11 DECISION: emitted scorer modules call the same math instead of
+// reused as-is (DECISION: emitted scorer modules call the same math instead of
 // duplicating it) — this module never reimplements the polarity/escape/threshold comparison.
 import { decideVerdict, judgeCase, type VerdictCache } from '@vetkit/core';
 import type { Answer, Case, Criterion, JudgeV1, Verdict } from '@vetkit/spec';

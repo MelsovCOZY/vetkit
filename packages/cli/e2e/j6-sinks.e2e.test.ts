@@ -1,4 +1,4 @@
-// J6 journey (bd classified-evals-mol-7lg): `vet run --sink otel,langfuse` lands verdicts on the
+// J6 journey: `vet run --sink otel,langfuse` lands verdicts on the
 // evaluated span in a collector and a local self-hosted Langfuse, and a judge failure yields
 // error.type with no score. Runs scripts/smoke-j6.sh, which builds, starts docker (collector +
 // Langfuse compose, TEST-ONLY), calls the REAL judge and checks every AC verify command.

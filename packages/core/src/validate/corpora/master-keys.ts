@@ -1,4 +1,4 @@
-// Shipped default master-key pack (mol-q4q.12): a TS-typed copy of fixtures/gauntlet/master-keys.json,
+// Shipped default master-key pack: a TS-typed copy of fixtures/gauntlet/master-keys.json,
 // kept identical to it (see corpora.test.ts's drift check).
 import type { MasterKeyEntry } from '../gauntlet-controls.ts';
 

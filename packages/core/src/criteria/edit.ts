@@ -1,4 +1,4 @@
-// Secondary criteria actions (bead mol-e3g): disable/enable, delete and revalidate. YAML edits go
+// Secondary criteria actions: disable/enable, delete and revalidate. YAML edits go
 // through the yaml Document API so comments and order survive (DECISION: Code conventions: one
 // parser, IR-first), never string replacement. Lock edits are pure (Lock in, Lock out); the caller
 // writes the result through writeLockAtomic, so wordingHash and datasetHash stay as validate wrote

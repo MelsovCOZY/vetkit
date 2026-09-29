@@ -33,7 +33,7 @@ interface RunOptions extends GlobalOptions {
   readonly reporter?: ReporterSpec;
 }
 
-// Hooks other commands' modules add to `vet run` (mol-yxn.7: `--sink`). A hook runs after the
+// Hooks other commands' modules add to `vet run` (`--sink`). A hook runs after the
 // config loads and before any judge call, so it can fail fast; the finish it returns runs on
 // the result (partial on SIGINT). Only `json` is merged into the --json document; `lines` are
 // appended to the pretty rendering. The exit code stays the run's.
@@ -69,7 +69,7 @@ function hasScoredFailure(verdicts: readonly RunVerdict[]): boolean {
   return verdicts.some((v) => v.gated !== false && v.status === 'ok' && v.pass !== true);
 }
 
-// mol-yxn.21: core emits `run:end` (which the pretty "run done" line and NDJSON render)
+// core emits `run:end` (which the pretty "run done" line and NDJSON render)
 // the instant it decides exitCode, one tick before the --sink override above can downgrade
 // it. Buffering that one event here and re-emitting the corrected payload once the override
 // is decided (still before renderEvents unsubscribes) keeps every renderer in sync with the
@@ -116,12 +116,12 @@ function render(result: RunEvalsResult): string {
   return lines.join('\n');
 }
 
-// evals/cases/pending/ is where promote.ts (dh8.3) writes auto-promoted cases; the J1
+// evals/cases/pending/ is where promote.ts writes auto-promoted cases; the J1
 // loader's default evals/cases/*.jsonl glob never recurses into it (docs/contracts/j7.md
 // "Promotion"), so a case sitting there is otherwise invisible until `vet cases review`
-// (mol-p4a.1) moves it up a level. A missing pending/ directory (the common case before any
+// moves it up a level. A missing pending/ directory (the common case before any
 // promotion has happened) counts as 0, not an error.
-// mol-76a.15: `vet init --out <dir>` writes criteria.yaml and cases/ at the top level of
+// `vet init --out <dir>` writes criteria.yaml and cases/ at the top level of
 // <dir>, with no evals/ subdirectory. evals/ is still the first choice when it exists (the
 // scaffold `vet init` writes with no --source uses it); only its absence falls back to
 // <rootDir> itself.
@@ -144,7 +144,7 @@ async function runCommand(options: RunOptions & Readonly<Record<string, unknown>
   });
   for (const warning of loaded.warnings) log.warn(warning);
   const { config, rootDir } = loaded;
-  // Missing lock → null (the gate then refuses); an invalid one throws (exit 2). q4q.11.
+  // Missing lock → null (the gate then refuses); an invalid one throws (exit 2).
   const lock = await readLockOrNull(resolve(rootDir, LOCK_FILE));
   const finishes: RunHookFinish[] = [];
   for (const hook of runHooks) {
@@ -222,7 +222,7 @@ async function runCommand(options: RunOptions & Readonly<Record<string, unknown>
     Object.assign(extras, out.json);
     lines.push(...(out.lines ?? []));
   }
-  // The record is the --json document plus its inputs (mol-p4a.16); partial runs included.
+  // The record is the --json document plus its inputs; partial runs included.
   await writeRunRecord(cacheDir, { ...result, ...extras, criteriaPath, casesPath, startedAt });
   emit({ ...result, ...extras }, () => [render(result), ...lines].join('\n'));
   process.exitCode = result.exitCode;

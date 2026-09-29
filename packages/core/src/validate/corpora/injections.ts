@@ -1,4 +1,4 @@
-// Shipped default injection pack (mol-q4q.12): a TS-typed copy of fixtures/gauntlet/injections.json,
+// Shipped default injection pack: a TS-typed copy of fixtures/gauntlet/injections.json,
 // kept identical to it (see corpora.test.ts's drift check) so an npm install of @vetkit/core carries
 // real gauntlet corpora even though 'files' stays ['dist'] (fixtures/ is not published).
 import type { InjectionEntry } from '../gauntlet-controls.ts';

@@ -1,5 +1,5 @@
 // `vet doctor --config`: the resolved vetkit config, with every *Env value shown only as
-// <set>/<unset> (bead classified-evals-mol-p15.2).
+// <set>/<unset>.
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

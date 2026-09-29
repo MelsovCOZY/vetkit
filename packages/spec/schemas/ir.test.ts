@@ -172,7 +172,7 @@ describe('criterion.schema.json', () => {
     expect(result.ok).toBe(false);
   });
 
-  // DECISION (turn 9, contract amendment): Criterion.passWhen (choice only) and
+  // Contract amendment: Criterion.passWhen (choice only) and
   // Criterion.escapeThreshold (0..1, default 0.5), docs/contracts/j1.md IR section.
   test('accepts a choice criterion with passWhen and escapeThreshold', () => {
     const result = parseIr(
@@ -201,7 +201,7 @@ describe('criterion.schema.json', () => {
     expect(result.ok).toBe(false);
   });
 
-  // bead classified-evals-mol-0nw.27: contentDependent?: boolean, metadata excluded from
+  // contentDependent?: boolean, metadata excluded from
   // wordingHash (docs/contracts/j1.md).
   test('accepts a boolean criterion with contentDependent:false', () => {
     const result = parseIr(
@@ -213,7 +213,7 @@ describe('criterion.schema.json', () => {
   });
 
   // Rejected by contentDependent's own `{"type":"boolean"}` constraint, not by
-  // additionalProperties (mol-0nw.27 contract revision 3).
+  // additionalProperties (contract revision 3).
   test('rejects contentDependent when it is not a boolean', () => {
     const result = parseIr(
       JSON.stringify({ ...booleanCriterion, contentDependent: 'yes' }),

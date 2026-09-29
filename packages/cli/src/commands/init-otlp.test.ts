@@ -1,4 +1,4 @@
-// Unit + one child-process test for `vet init --source otlp:...` wiring (bead mol-pij.8, root
+// Unit + one child-process test for `vet init --source otlp:...` wiring (root
 // acceptance J5). Every receiver test binds an ephemeral port (0) or a freshly-freed one; none
 // ever binds 4318. otlpSourceFromArg is exercised directly here — no full `generateEvals` run —
 // except the SIGINT test, which spawns the built bin (test-support/build-cli.ts), following
@@ -142,7 +142,7 @@ describe('otlpSourceFromArg: file-backed', () => {
   });
 
   test('a missing --source otlp: path throws SOURCE_UNREADABLE', () => {
-    expect(() => otlpSourceFromArg('/does/not/exist/mol-pij8')).toThrowError(
+    expect(() => otlpSourceFromArg('/does/not/exist/otlp-source')).toThrowError(
       expect.objectContaining({ code: 'SOURCE_UNREADABLE' }),
     );
   });
@@ -222,7 +222,7 @@ describe('otlpSourceFromArg: receiver', () => {
     expect(Date.now() - started).toBeGreaterThanOrEqual(150);
   }, 10_000);
 
-  // Contract pij.8 revision 3: cross-request traceId dedupe lives here, not in the receiver.
+  // Cross-request traceId dedupe lives here, not in the receiver.
   test('a duplicate traceId across two POSTs yields one trace from doRead', async () => {
     const { lines, restore } = watchStderr();
     const controller = new AbortController();
@@ -324,7 +324,7 @@ interface GenerateDoc {
   };
 }
 
-describe('vet init --source otlp:<file> --json summary (orchestrator-widened grant, mol-pij.8)', () => {
+describe('vet init --source otlp:<file> --json summary', () => {
   test('the printed document carries a summary of {cases, excluded, dialects, tokens}', () => {
     const project = freshProject();
     const out = join(project, 'evals-out');
@@ -344,11 +344,11 @@ describe('vet init --source otlp:<file> --json summary (orchestrator-widened gra
   });
 });
 
-// J5 gate (bead mol-pij.15): <out>/summary.json must exist on disk, hold the same
+// J5 gate: <out>/summary.json must exist on disk, hold the same
 // {cases, excluded, dialects, tokens} the --json stdout document carries under `summary`,
 // and excluded must classify by completeness status (content_not_captured, truncated,
 // incomplete_trace), not the old {content_not_captured, no_conversation} pair.
-describe('vet init --source otlp: writes <out>/summary.json (mol-pij.15)', () => {
+describe('vet init --source otlp: writes <out>/summary.json', () => {
   test('summary.json on disk matches stdout summary, excluded classifies by completeness', () => {
     const project = freshProject();
     const out = join(project, 'evals-out');
@@ -406,11 +406,11 @@ function readCases(path: string): Case[] {
     .map((line) => parseJson<Case>(line));
 }
 
-// J5 gate (bead mol-pij.15): the five dialect fixtures encode the same conversation in
+// J5 gate: the five dialect fixtures encode the same conversation in
 // different OTel semconv styles; vet init's cases must be identical across all five once
 // per-dialect ids (traceId, provenance.traceIds/traceId/spanId) are deleted, matching a
 // committed golden.
-describe('vet init --source otlp: dialect cases match the golden (mol-pij.15)', () => {
+describe('vet init --source otlp: dialect cases match the golden', () => {
   test('the five dialect fixtures produce identical cases after deleting per-dialect ids', () => {
     const golden = readCases(goldenInitCases).map(normalizeCase);
     expect(golden).toHaveLength(1);
@@ -429,7 +429,7 @@ describe('vet init --source otlp: dialect cases match the golden (mol-pij.15)', 
       expect(result.status).toBe(0);
 
       const cases = readCases(join(out, 'cases', 'generated.jsonl'));
-      // bug classified-evals-mol-dh8.6: sinks correlate on provenance.traceId/spanId
+      // sinks correlate on provenance.traceId/spanId
       // (docs/sinks.md "Correlation"); every OTLP-derived case must carry both, before they
       // are stripped for the cross-dialect diff below.
       for (const c of cases) {
@@ -445,7 +445,7 @@ describe('vet init --source otlp: dialect cases match the golden (mol-pij.15)', 
   }, 30_000);
 });
 
-describe('vet init --source otlp:: SIGINT (bead mol-pij.8)', () => {
+describe('vet init --source otlp:: SIGINT', () => {
   test('Ctrl-C during otlp::0 receiver mode closes the server and flushes cases written so far', async () => {
     const project = freshProject();
     const out = join(project, 'evals-out');

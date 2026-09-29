@@ -1,4 +1,4 @@
-// DialectV1 (bead mol-pij.2): the pure attribute-mapping contract each OTLP GenAI convention
+// DialectV1: the pure attribute-mapping contract each OTLP GenAI convention
 // module implements. Detection order, message concatenation and token summation are cascade
 // concerns that live in ./index.ts; a dialect only ever answers questions about one span.
 // Dialect modules themselves (gen_ai, gen_ai_legacy, openinference, openllmetry, vercel) are
@@ -11,7 +11,7 @@ import type { SpanTree } from '../reader/tree.ts';
 export interface DialectV1 {
   readonly name: 'gen_ai' | 'gen_ai_legacy' | 'openinference' | 'openllmetry' | 'vercel';
   // The dialect module's pinned semconv/spec commit; absent when a dialect does not track one
-  // (contract pij.2 revision 4). normalizeTrace reads it as NormalizedTrace.dialectVersion.
+  //. normalizeTrace reads it as NormalizedTrace.dialectVersion.
   readonly specCommit?: string;
   detect(span: OtlpSpan, resource: OtlpResource): boolean;
   isLlmSpan(span: OtlpSpan): boolean;
@@ -20,13 +20,13 @@ export interface DialectV1 {
     span: OtlpSpan,
   ): { inputTokens?: number; outputTokens?: number; totalTokens?: number } | null;
   contentState(span: OtlpSpan): 'captured' | 'not_captured' | 'redacted';
-  // Optional (pij.13): maps a non-LLM span (isLlmSpan false) to a Span.kind other than the
+  // Optional: maps a non-LLM span (isLlmSpan false) to a Span.kind other than the
   // 'other' default. Dialects that don't implement it, or that return undefined for a given
   // span, leave normalizeTrace's 'other' fallback in place.
   spanKind?(span: OtlpSpan): 'llm' | 'tool' | 'other' | undefined;
 }
 
-// Warning-only diagnostic channel for otlpSource/normalizeTrace (contract pij.2 revision 2):
+// Warning-only diagnostic channel for otlpSource/normalizeTrace:
 // never thrown, always passed to the caller's onDiag.
 export interface OtlpDiag {
   readonly code: string;

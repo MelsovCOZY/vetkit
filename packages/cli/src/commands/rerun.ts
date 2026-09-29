@@ -1,4 +1,4 @@
-// `vet rerun --disputed`: re-judges only the verdicts from the last `vet run` (mol-p4a.16) that
+// `vet rerun --disputed`: re-judges only the verdicts from the last `vet run` that
 // are disputed — root DECISION: borderline (|value - threshold| <= the lock's tolerance, already
 // computed by run.ts decide() as RunVerdict.borderline) or a judge failure (status 'unscored',
 // 'error' or 'infra_failure') — bypassing the cache for exactly those case ids (runJudge,

@@ -18,7 +18,7 @@ function record(overrides: Partial<RunRecord> = {}): RunRecord {
   };
 }
 
-describe('run record (mol-p4a.16)', () => {
+describe('run record', () => {
   it('writeRunRecord writes <cacheDir>/runs/latest.json, creating the directory', async () => {
     const cacheDir = join(mkdtempSync(join(tmpdir(), 'vetkit-rr-')), '.vet');
     await writeRunRecord(cacheDir, record());

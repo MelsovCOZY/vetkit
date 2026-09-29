@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# J5 slice-gate smoke (bd classified-evals-mol-pe8): OTel-in end-to-end, exactly the root
+# J5 slice-gate smoke: OTel-in end-to-end, exactly the root
 # acceptance J5 verify commands, against IN-PROCESS FAKE generator/judge adapters (the fake
 # config from fixtures/cli/init/vetkit.config.ts, copied into a scratch project dir since
 # `vet init` has no --config flag). No network, no keys: generation quality and judge calls
@@ -40,11 +40,11 @@ cd "$PROJECT" || exit 1
 vet() { bun "$BIN" "$@"; }
 
 # ---- AC1: five dialects -> identical normalized cases (ids aside) --------------------------
-# Gate DECISION (c): diff against fixtures/otlp/golden/init-cases.jsonl (vet-init Case shape,
-# bug pij.15), not golden/cases.jsonl (pij.9's unrelated normalized-trace golden). Normalization
+# Gate DECISION (c): diff against fixtures/otlp/golden/init-cases.jsonl (vet-init Case shape,),
+# not golden/cases.jsonl (an unrelated normalized-trace golden). Normalization
 # matches packages/cli/src/commands/init-otlp.test.ts's normalizeCase(): strip .id, .traceId and
 # .provenance.{traceIds,traceId,spanId} (leaving any other provenance keys untouched). Before
-# stripping, bug mol-dh8.6 requires every generated case to actually carry
+# stripping, every generated case is required every generated case to actually carry
 # .provenance.traceId/.spanId (docs/sinks.md "Correlation") — checked per dialect below.
 DIALECTS="gen_ai-latest gen_ai-legacy openinference openllmetry vercel"
 NORMALIZE='del(.id, .traceId, .provenance.traceIds, .provenance.traceId, .provenance.spanId)'

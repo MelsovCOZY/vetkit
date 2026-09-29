@@ -1,13 +1,13 @@
-// OpenLLMetry (traceloop) dialect (bead mol-pij.5): maps the legacy indexed llm.prompts.{n}/
+// OpenLLMetry (traceloop) dialect: maps the legacy indexed llm.prompts.{n}/
 // llm.completions.{n} attributes, the gen_ai.prompt.{n}/gen_ai.completion.{n} legacy form that
 // traceloop's genainormalizerprocessor also emits, and the JSON-string traceloop.entity.input/
 // traceloop.entity.output attributes on workflow/task spans, onto Message[]/usage per DialectV1
-// (mol-pij.2). Detection order, cross-span token summation and completeness flags belong to
-// pij.2/pij.7; this module only ever answers questions about one span, and never reads another
-// dialect's keys (contract pij.5 scope — no cross-dialect fallbacks).
+//. Detection order, cross-span token summation and completeness flags belong to
+// the normalize cascade; this module only ever answers questions about one span, and never reads another
+// dialect's keys (no cross-dialect fallbacks).
 //
-// The indexed-attribute reader below is intentionally duplicated per dialect (contract pij.5
-// note: "read via the shared indexed-attribute helper duplicated locally — no cross-dialect
+// The indexed-attribute reader below is intentionally duplicated per dialect
+// (note: "read via the shared indexed-attribute helper duplicated locally — no cross-dialect
 // import"), rather than imported from a sibling dialects/* module.
 
 import {
@@ -170,7 +170,7 @@ export const openllmetryDialect: DialectV1 = {
         ...(outputTokens === undefined ? {} : { outputTokens }),
       };
     }
-    // llm.usage.total_tokens without a split (pij.13): carried as totalTokens so sumTokens can
+    // llm.usage.total_tokens without a split: carried as totalTokens so sumTokens can
     // record tokens.total with input/output left unknown, rather than losing the signal.
     const totalTokens = numberAttr(attrs['llm.usage.total_tokens']);
     if (totalTokens !== undefined) return { totalTokens };
@@ -181,7 +181,7 @@ export const openllmetryDialect: DialectV1 = {
     return hasCapturedContent(span.attributes) ? 'captured' : 'not_captured';
   },
 
-  // pij.13: traceloop.span.kind tool/workflow/task/agent -> Span.kind; 'llm' spans are already
+  // traceloop.span.kind tool/workflow/task/agent -> Span.kind; 'llm' spans are already
   // routed to 'llm' by isLlmSpan before normalizeTrace ever calls this hook, and any other value
   // (or no attribute) is left undefined so normalizeTrace's 'other' fallback applies.
   spanKind(span: OtlpSpan): 'llm' | 'tool' | 'other' | undefined {

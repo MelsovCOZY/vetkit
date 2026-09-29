@@ -8,7 +8,7 @@ import { beforeAll, describe, expect, test } from 'vitest';
 import { countJudgeRequests, diagEnabled, formatDiagLine } from './diag.ts';
 import { ensureCliBuilt } from './test-support/build-cli.js';
 
-// mol-0nw.24: CEV_DIAG=1 makes `vet run` report how many judge requests actually went out.
+// CEV_DIAG=1 makes `vet run` report how many judge requests actually went out.
 
 const binPath = fileURLToPath(new URL('../dist/bin.js', import.meta.url));
 const fixtureDir = fileURLToPath(new URL('../../../fixtures/cli/run', import.meta.url));
@@ -43,7 +43,7 @@ describe('diag helpers', () => {
     expect(diagEnabled({ CEV_DIAG: '0' })).toBe(false);
   });
 
-  // mol-aq4.18: CEV_TRACE_HTTP=1 is an alias for CEV_DIAG=1 on the existing request counter.
+  // CEV_TRACE_HTTP=1 is an alias for CEV_DIAG=1 on the existing request counter.
   test('diagEnabled also treats CEV_TRACE_HTTP=1 as enabling the request counter', () => {
     expect(diagEnabled({ CEV_TRACE_HTTP: '1' })).toBe(true);
     expect(diagEnabled({ CEV_TRACE_HTTP: '0' })).toBe(false);
@@ -133,7 +133,7 @@ describe('vet run with CEV_DIAG=1', () => {
     expect(diagLines(result.stderr)).toEqual([]);
   });
 
-  // mol-aq4.18: CEV_TRACE_HTTP=1 alone (no CEV_DIAG) also drives `vet run`'s request counter.
+  // CEV_TRACE_HTTP=1 alone (no CEV_DIAG) also drives `vet run`'s request counter.
   test('CEV_TRACE_HTTP=1 alone works for vet run, as an alias of CEV_DIAG', () => {
     const cwd = project();
     const result = runVet(cwd, { CEV_TRACE_HTTP: '1' });

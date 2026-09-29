@@ -1,4 +1,4 @@
-// Shipped default constant-output pack (mol-q4q.12): a TS-typed copy of
+// Shipped default constant-output pack: a TS-typed copy of
 // fixtures/gauntlet/constant-outputs.json, kept identical to it (see corpora.test.ts's drift check).
 import type { ConstantEntry } from '../gauntlet-controls.ts';
 

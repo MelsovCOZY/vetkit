@@ -41,7 +41,7 @@ function describeCause(cause: unknown): string | undefined {
     : message;
 }
 
-// vet cases quarantine (mol-p4a.1) moves a case's line into <dir>/quarantine.jsonl; excluding
+// vet cases quarantine moves a case's line into <dir>/quarantine.jsonl; excluding
 // it here is what makes `vet run` (which loads cases through this same function) skip
 // quarantined cases, without run.ts (not an owned path for that bead) needing a change.
 const QUARANTINE_FILE = 'quarantine.jsonl';

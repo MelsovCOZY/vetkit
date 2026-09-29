@@ -1,4 +1,4 @@
-// openinference dialect tests (bead mol-pij.4). Attribute names per
+// openinference dialect tests. Attribute names per
 // https://github.com/Arize-ai/openinference/blob/7feb0c4ba2fd77cb76036712e21d06ff15a2be22/spec/semantic_conventions.md
 // (pinned commit, matches SPEC_COMMIT in ./index.ts).
 
@@ -109,7 +109,7 @@ describe('openinferenceDialect.extractMessages — tool_calls', () => {
   });
 });
 
-// pij.14: an indexed message carrying message.tool_call_id (a tool turn responding to a call)
+// an indexed message carrying message.tool_call_id (a tool turn responding to a call)
 // maps to a tool_call_response part, not the text part its message.content would otherwise get.
 describe('openinferenceDialect.extractMessages — message.tool_call_id', () => {
   test('a tool_call_id turns message.content into a tool_call_response, not text', () => {

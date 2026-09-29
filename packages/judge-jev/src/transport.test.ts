@@ -252,7 +252,7 @@ describe('network failure vs timeout', () => {
     expect(err.details?.hint).toBe('TypeError');
   });
 
-  // Node/undici's real fetch failure shape (mol-0nw.30): a TypeError('fetch failed') whose
+  // Node/undici's real fetch failure shape: a TypeError('fetch failed') whose
   // own `.code` is unset, wrapping the real system error (with the useful `.code`) one level
   // down at `.cause`. Without unwrapping that nested cause, the hint was the useless
   // 'TypeError' class name instead of 'ECONNREFUSED'.

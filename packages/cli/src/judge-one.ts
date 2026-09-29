@@ -1,4 +1,4 @@
-// judgeOne: one criterion over one state, for emitted vitest scorers (mol-aq4.8). It loads the
+// judgeOne: one criterion over one state, for emitted vitest scorers. It loads the
 // user's vetkit.config.* through the shared loader (the judge is built here in the CLI, never in
 // core), then runs core judgeCase with the same file cache `vet run` uses (config cacheDir).
 import { resolve } from 'node:path';
@@ -16,7 +16,7 @@ import { loadVetConfig } from './config-load.ts';
 
 // Re-exported so emit-scorer.test.ts's inline typecheck tsconfig (mapping the bare `vetkit`
 // specifier straight to this file) resolves decideVerdict the same way production resolution
-// (vetkit -> cli/src/index.ts) does (contract aq4.11 point 4).
+// (vetkit -> cli/src/index.ts) does.
 export { decideVerdict } from '@vetkit/core';
 
 type Env = Readonly<Record<string, string | undefined>>;

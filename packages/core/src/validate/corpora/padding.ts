@@ -1,4 +1,4 @@
-// Shipped default padding pack (mol-q4q.12): a TS-typed copy of fixtures/gauntlet/padding.json,
+// Shipped default padding pack: a TS-typed copy of fixtures/gauntlet/padding.json,
 // kept identical to it (see corpora.test.ts's drift check).
 import type { PaddingTemplate } from '../gauntlet-bias.ts';
 

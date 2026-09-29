@@ -1,4 +1,4 @@
-// Unit tests for declarative sink descriptors (mol-yxn.13, OPEN-9 DECISION): resolveSinks
+// Unit tests for declarative sink descriptors (OPEN-9 DECISION): resolveSinks
 // builds @vetkit/sink-otel / @vetkit/sink-langfuse adapters from a `{kind,*Env}` descriptor,
 // reading the named env vars. Network is always stubbed via the `fetch` option; nothing here
 // makes a live call. The exact-id/prefix matching tests for plain adapter-object refs already
@@ -241,7 +241,7 @@ function makeStream(): { stream: Writable; text: () => string } {
 
 // In-process handleError path (matches commands/run-sinks.test.ts's exit-2 assertions), rather
 // than spawning the built CLI: a missing descriptor env var must exit 2 and never print the
-// stubbed value (contract yxn.13 revision 1).
+// stubbed value.
 describe('a missing descriptor env var, via handleError', () => {
   test('exits 2, stderr names the variable and never the stubbed value', () => {
     const error = caughtError(() =>

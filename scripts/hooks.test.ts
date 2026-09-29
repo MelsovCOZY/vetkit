@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Proves the git hook chain from classified-evals-mol-fou.13: core.hooksPath stays
+// Proves the git hook chain: core.hooksPath stays
 // .beads/hooks (bd-managed), an advisory `bun x lefthook run <hook>` line runs after
 // the BEADS markers (never installed via `lefthook install`, never gates on its exit
 // code — CI is the gate per the root DECISION resolving OPEN-3), and the pre-existing
@@ -35,7 +35,7 @@ function hasCommand(cmd: string): boolean {
 
 const HAS_GRAPHIFY = hasCommand('graphify');
 
-describe('git hook chain: bd markers + advisory lefthook (fou.13)', () => {
+describe('git hook chain: bd markers + advisory lefthook', () => {
   it.each(['pre-commit', 'pre-push'])(
     '%s keeps the BEADS markers intact and appends an advisory, always-exit-0 lefthook call',
     (hookName) => {
@@ -89,7 +89,7 @@ describe('git hook chain: bd markers + advisory lefthook (fou.13)', () => {
         expect(whereOut.stdout).not.toContain(ROOT);
 
         // Fixture lefthook.yml: a command whose output is unmistakable, independent of
-        // {staged_files} globbing (lefthook.yml's real contents are owned by fou.10).
+        // {staged_files} globbing (lefthook.yml's real contents are owned by another test).
         writeFileSync(
           join(clonePath, 'lefthook.yml'),
           'pre-commit:\n  commands:\n    hooks-test-marker:\n      run: echo HOOKS_TEST_MARKER\n',
@@ -112,7 +112,7 @@ describe('git hook chain: bd markers + advisory lefthook (fou.13)', () => {
         ]);
         const commit = spawnSync(
           'git',
-          ['-C', clonePath, 'commit', '-m', 'test: hooktest fixture (fou.13)'],
+          ['-C', clonePath, 'commit', '-m', 'test: hooktest fixture'],
           { encoding: 'utf8' },
         );
         expect(commit.status, commit.stderr + commit.stdout).toBe(0);

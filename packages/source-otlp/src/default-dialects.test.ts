@@ -1,4 +1,4 @@
-// DEFAULT_DIALECT_ORDER tests (bead mol-pij.11): otlpSource() with no `dialects` option must
+// DEFAULT_DIALECT_ORDER tests: otlpSource() with no `dialects` option must
 // cascade through the five merged dialects (gen_ai, gen_ai_legacy, openinference, openllmetry,
 // vercel) in Langfuse order. One inline OTLP/JSON fixture per dialect, each carrying only that
 // dialect's own detect() markers so no other dialect in the cascade can also match, proves the

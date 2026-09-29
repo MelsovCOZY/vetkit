@@ -180,7 +180,7 @@ describe('vet run', () => {
   }, 60_000);
 });
 
-describe('vet run --reporter junit (mol-aq4.7)', () => {
+describe('vet run --reporter junit', () => {
   test('--reporter junit=vet-junit.xml --json writes the file and stdout is exactly one JSON document', () => {
     const project = freshProject();
     const result = runVet(
@@ -246,7 +246,7 @@ function parseObject(text: string): Record<string, unknown> {
   return result.value;
 }
 
-describe('vet run persists .vet/runs/latest.json (mol-p4a.16)', () => {
+describe('vet run persists .vet/runs/latest.json', () => {
   test('the record is the --json document plus criteriaPath, casesPath and startedAt', () => {
     const project = freshProject();
     const result = runVet(['run', '--json'], project, fixtureEnv('fail'));
@@ -294,7 +294,7 @@ describe('vet run persists .vet/runs/latest.json (mol-p4a.16)', () => {
   }, 60_000);
 });
 
-describe('vet run default criteria/cases paths (mol-76a.15)', () => {
+describe('vet run default criteria/cases paths', () => {
   // `vet init --out <dir>` writes criteria.yaml and cases/ at the top level of <dir>, with no
   // evals/ subdirectory; `vet run`'s defaults used to look only under evals/, so a run there
   // always failed to find any cases.
@@ -332,7 +332,7 @@ describe('vet run default criteria/cases paths (mol-76a.15)', () => {
   });
 });
 
-describe('vet run and evals/cases/pending/ (dh8.3, root DECISION UX brief C11)', () => {
+describe('vet run and evals/cases/pending/ (root DECISION UX brief C11)', () => {
   test('no pending/ directory: the stderr pending-count line reads 0', () => {
     const result = runVet(['run'], freshProject(), fixtureEnv('pass'));
     expect(result.status).toBe(0);

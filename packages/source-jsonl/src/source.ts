@@ -1,4 +1,4 @@
-// createJsonlSource: a SourceV1 over a folder of *.jsonl files (bead mol-76a.2). Files are read
+// createJsonlSource: a SourceV1 over a folder of *.jsonl files. Files are read
 // one at a time, in name order, only as the consumer pulls traces. Nested directories are not
 // scanned. Failures never throw: they are reported through `onDiag` and the line or folder is
 // skipped. The diag shape mirrors core's DiagEvent (adapters import only @vetkit/spec).

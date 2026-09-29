@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// diff-verdicts.mjs (bead mol-aq4.3): diffs `vet run --json`'s per-case/criterion `pass` verdicts
+// diff-verdicts.mjs: diffs `vet run --json`'s per-case/criterion `pass` verdicts
 // against the vitest JSON reporter's output for the same emitted tests, keying on the
 // `${caseId} · ${criterionId}` name @vetkit/export-vitest's emitTestFile embeds in every test
-// (contract aq4.3 #2; vitest reporter docs https://vitest.dev/guide/reporters#json-reporter).
+// (vitest reporter docs $1).
 // A skipped vitest test (an uncalibrated lock, or an incomplete trace) is not a verdict
 // disagreement (JEV brief §2 "keep judge failed separate from incorrect") and is excluded from
 // the diff. Plain Node ESM, no dependencies, so CI can run it without the workspace built.

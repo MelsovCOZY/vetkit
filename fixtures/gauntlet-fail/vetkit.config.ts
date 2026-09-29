@@ -1,4 +1,4 @@
-// J3 gate project for the planted-failure criteria (bd classified-evals-mol-lts): the same
+// J3 gate project for the planted-failure criteria: the same
 // judge as fixtures/projects/j3 but no generator, so the paraphrase and polarity gauntlets are
 // `skipped` and the run stays small. The planted criteria fail on the other gauntlets and the
 // class-size rule; every skipped gauntlet also keeps a criterion uncalibrated.

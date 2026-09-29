@@ -58,7 +58,7 @@ describe('defineSource', () => {
   });
 
   // AC2 names the error SPEC_VERSION_MISMATCH; that wording is stale. The registry code is
-  // E_ADAPTER_SPEC_VERSION (DECISION fou.6/J4, no rename), thrown via assertSpecVersion.
+  // E_ADAPTER_SPEC_VERSION (no rename), thrown via assertSpecVersion.
   test("rejects specVersion 'v0' with E_ADAPTER_SPEC_VERSION naming the id", () => {
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const source = { ...makeSource(), specVersion: 'v0' } as unknown as SourceV1;

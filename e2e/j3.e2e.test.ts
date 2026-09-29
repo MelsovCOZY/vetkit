@@ -1,4 +1,4 @@
-// J3 journey (bd classified-evals-mol-lts): import labels, `vet validate` into criteria.lock.json,
+// J3 journey: import labels, `vet validate` into criteria.lock.json,
 // and gate on it, against the REAL Jev judge. Runs scripts/smoke-j3.sh, which builds, stages the
 // fixture projects (fixtures/projects/j3, fixtures/gauntlet-fail, fixtures/labels) and checks
 // every acceptance-criterion verify command.

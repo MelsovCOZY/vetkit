@@ -1,4 +1,4 @@
-// docs/contracts/j7.md "Promotion"; bead classified-evals-mol-dh8.3.
+// docs/contracts/j7.md "Promotion".
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -30,9 +30,9 @@ function evalCase(overrides: Partial<Case> = {}): Case {
   };
 }
 
-// dh8.5: the real onVerdict call site now always hands promoteFailure a verdict whose `id`
+// the real onVerdict call site now always hands promoteFailure a verdict whose `id`
 // is exactly what outbox.enqueue assigned it — so every fixture here has a real id, same as
-// production, rather than relying on a synthesized fallback (dh8.3's earlier randomUUID
+// production, rather than relying on a synthesized fallback (an earlier randomUUID
 // stand-in, dropped now that the real id is always available).
 function failingVerdict(overrides: Partial<Verdict> = {}): Verdict {
   return {
@@ -78,7 +78,7 @@ describe('promoteFailure', () => {
     });
   });
 
-  test("dh8.7: keeps the case's existing provenance fields (traceIds) alongside promotedFrom", async () => {
+  test("keeps the case's existing provenance fields (traceIds) alongside promotedFrom", async () => {
     const verdict = failingVerdict();
     expect(promoteFailure(verdict, evalCase(), dir, { now: NOW })).toBe(true);
 
@@ -94,7 +94,7 @@ describe('promoteFailure', () => {
     });
   });
 
-  test('a verdict with no id is never promoted (dh8.5: no random-id fallback)', async () => {
+  test('a verdict with no id is never promoted (no random-id fallback)', async () => {
     const noId: Verdict = {
       caseId: 'case-orig',
       criterionId: 'k-1',

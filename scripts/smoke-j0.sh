@@ -1,5 +1,5 @@
 #!/bin/sh
-# J0 slice-gate smoke (bd classified-evals-mol-crs): proves a clean `git clone` of HEAD
+# J0 slice-gate smoke: proves a clean `git clone` of HEAD
 # builds, packs and installs on the local consumer matrix.
 #
 # Sequence: git clone HEAD into a mktemp dir (never `git worktree add`) -> in the clone,

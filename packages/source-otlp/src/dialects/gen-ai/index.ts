@@ -1,9 +1,9 @@
-// gen_ai dialect (bead mol-pij.3): two DialectV1 objects (packages/source-otlp/src/normalize/
-// dialect.ts, owned by pij.2) for the OTel GenAI semantic conventions —
+// gen_ai dialect: two DialectV1 objects (packages/source-otlp/src/normalize/
+// dialect.ts) for the OTel GenAI semantic conventions —
 //   genAiDialect       (name: 'gen_ai')        the latest attribute-based convention
 //   genAiLegacyDialect (name: 'gen_ai_legacy')  the deprecated indexed/event-based convention
 // Detection order, token single-counting and completeness flags are cascade concerns owned by
-// pij.2/pij.7/pij.11; this module only ever answers questions about one span, and each dialect
+// the normalize cascade; this module only ever answers questions about one span, and each dialect
 // reads only its own attribute keys — never the other's (no cross-dialect fallback).
 //
 // PREMISE (web, raw doc fetched 2026-09-25, gen-ai-events.md;
@@ -187,7 +187,7 @@ function contentStateLatest(span: OtlpSpan): 'captured' | 'not_captured' | 'reda
 
 // execute_tool spans (never isLlmSpan) carry the call's arguments/result as flat attributes
 // instead of gen_ai.{input,output}.messages. Read directly so extractMessages stays faithful to
-// the full latest attribute table even though the default cascade (pij.11) never calls it here.
+// the full latest attribute table even though the default cascade never calls it here.
 function toolCallMessages(span: OtlpSpan): Message[] {
   const args = span.attributes['gen_ai.tool.call.arguments'];
   const result = span.attributes['gen_ai.tool.call.result'];
@@ -253,7 +253,7 @@ export const genAiDialect: DialectV1 = {
 // -- genAiLegacyDialect ---------------------------------------------------------------------------
 
 const LEGACY_INDEX_RE = /^gen_ai\.(prompt|completion)\.(\d+)\.(role|content|tool_call_id)$/;
-// pij.14: gen_ai.{prompt,completion}.{n}.tool_calls.{i}.{id,name,arguments} — an assistant turn's
+// gen_ai.{prompt,completion}.{n}.tool_calls.{i}.{id,name,arguments} — an assistant turn's
 // own tool call(s), indexed the same way llm.output_messages.*.message.tool_calls is in the
 // OpenInference dialect (no cross-dialect import; the pattern is only coincidentally similar).
 const LEGACY_TOOL_CALL_RE =

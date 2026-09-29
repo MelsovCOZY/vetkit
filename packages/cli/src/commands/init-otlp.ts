@@ -1,11 +1,11 @@
-// `otlp:` source wiring for `vet init --source` (bead mol-pij.8, root design J5). Registers
+// `otlp:` source wiring for `vet init --source` (root design J5). Registers
 // the `otlp` prefix on the same seam source-jsonl uses (sources.ts): `otlp:<path>` is
 // file-backed (a file or a directory of files, source-otlp's own otlpSource semantics);
 // `otlp::<port>` / `otlp::0` starts an OTLP/HTTP receiver (source-otlp's startReceiver) and
 // stops on --until N traces, --seconds S, or an aborted signal, whichever comes first;
 // `otlp:http://…` is rejected (CONFIG_INVALID) — a remote collector push is exactly what the
 // receiver is for, not a client the CLI dials out to. Cross-request traceId dedupe for the
-// receiver lives here (contract pij.8 revision 3), not in startReceiver itself.
+// receiver lives here, not in startReceiver itself.
 import { readdirSync, statSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import type { GenerateEvalsResult } from '@vetkit/core';

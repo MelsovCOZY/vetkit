@@ -5,7 +5,7 @@
 // uncalibrated lock entry, or (for a content-dependent criterion) a case whose trace wasn't
 // fully captured, becomes `test.skip` instead — the real vitest 5 API is a literal
 // `test.skip(name, () => {})` with the reason embedded in the name, never a fake
-// string-second-argument shape (contract aq4.3 #2).
+// string-second-argument shape.
 import { createHash } from 'node:crypto';
 import { basename } from 'node:path';
 import type { Case, Criterion, Lock } from '@vetkit/spec';
@@ -46,7 +46,7 @@ function reserveTestFileName(outDir: string, criteriaFile: string): string {
 }
 
 // Mirrors packages/core/src/judge/completeness.ts statusForTrace; duplicated here because
-// export-vitest does not depend on @vetkit/core (contract aq4.3 #1). Priority order:
+// export-vitest does not depend on @vetkit/core. Priority order:
 // content_not_captured > truncated > incomplete_trace > ok.
 type CompletenessStatus = 'ok' | 'content_not_captured' | 'truncated' | 'incomplete_trace';
 
@@ -113,7 +113,7 @@ function renderTest(c: Case, criterion: Criterion, lock: Lock | null): string {
     `  test(${JSON.stringify(name)}, async () => {`,
     `    const { scorer } = ${scorerVarName(criterion.id)}();`,
     `    const result = await scorer({ input: ${JSON.stringify(c.id)}, output: ${output}, expected: ${expected} });`,
-    // mol-aq4.18: count only real judge requests, never cache hits, toward CEV_TRACE_HTTP's
+    // count only real judge requests, never cache hits, toward CEV_TRACE_HTTP's
     // 'judge.requests: <N>' line (printed by the afterAll below).
     `    if (result.metadata.cacheHit === false) httpRequestCount += 1;`,
     `    expect(result.score).toBe(1);`,
@@ -163,7 +163,7 @@ export function emitTestFile(
     renderImports(criteria),
     '',
     `describe(${JSON.stringify(criteriaFile)}, () => {`,
-    // mol-aq4.18 (CEV_TRACE_HTTP): a per-file counter of real (non-cache-hit) judge requests,
+    // CEV_TRACE_HTTP: a per-file counter of real (non-cache-hit) judge requests,
     // printed once here instead of relying on the CLI-process-only diag exit handler, which
     // vitest workers never surface.
     '  let httpRequestCount = 0;',

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# J2 slice-gate smoke (bd classified-evals-mol-hzv): `vet init --source fixtures/traces/` with the
+# J2 slice-gate smoke: `vet init --source fixtures/traces/` with the
 # REAL generator and REAL Jev judge, then lint the generated file and every lint-bad fixture, then
 # `vet run` on the generated set. Prints one PASS/FAIL line per acceptance-criterion step.
 #

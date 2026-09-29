@@ -138,7 +138,7 @@ function verdictModel(model: JudgeResponse['model']): Verdict['model'] {
 }
 
 /**
- * Reads only the numeric HTTP status off a caught transport error (bead mol-0nw.28): every
+ * Reads only the numeric HTTP status off a caught transport error: every
  * transport error branch sets `err.cause` to `{status, body}` (redacted), so `err.cause.status`
  * is the reliable source; the "HTTP \d+" text in `err.message` is a fallback for an error shaped
  * differently. Never reads `err.cause.body` — only the numeric `status` field — so no request or
@@ -161,7 +161,7 @@ export function httpStatusOf(err: unknown): number | undefined {
 
 /**
  * A transport rejection's `err.code` alone hides the HTTP status and provider error type
- * (bead mol-0nw.28) — e.g. a 403 no_providers_available surfaces only 'JUDGE_UNAVAILABLE'. When
+ * — e.g. a 403 no_providers_available surfaces only 'JUDGE_UNAVAILABLE'. When
  * the VetError carries a `details.hint` (the provider's error type, set by the judge transport),
  * this folds the HTTP status (via httpStatusOf) in alongside the code and hint. Never reads
  * `err.cause.body` so no request/response body or key ever reaches a verdict.

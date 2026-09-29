@@ -17,7 +17,7 @@ export const CEV_ERROR_CODES = {
   E_UNPINNED_LOCK: 'E_UNPINNED_LOCK',
   E_UNCALIBRATED: 'E_UNCALIBRATED',
   // J1 contract (docs/contracts/j1.md "Error codes"), plus JUDGE_UNAUTHORIZED and
-  // INPUT_TOO_LARGE (root ledger DECISION, turn 9): unprefixed codes for the judge
+  // INPUT_TOO_LARGE: unprefixed codes for the judge
   // port, config/IR validation and the gate. None of the twelve E_* codes above move.
   CONFIG_INVALID: 'CONFIG_INVALID',
   CRITERIA_INVALID: 'CRITERIA_INVALID',
@@ -29,7 +29,7 @@ export const CEV_ERROR_CODES = {
   CACHE_IO: 'CACHE_IO',
   JUDGE_UNAUTHORIZED: 'JUDGE_UNAUTHORIZED',
   INPUT_TOO_LARGE: 'INPUT_TOO_LARGE',
-  // J3 (mol-q4q.1): calibration labels, lock staleness, the gate's refusal reasons, and
+  // J3: calibration labels, lock staleness, the gate's refusal reasons, and
   // the two CLI conditions resolveExit maps to exit codes 2 and 3.
   LABELS_TOO_FEW: 'LABELS_TOO_FEW',
   LOCK_STALE: 'LOCK_STALE',
@@ -37,7 +37,7 @@ export const CEV_ERROR_CODES = {
   GATE_UNPINNED: 'GATE_UNPINNED',
   NOT_INTERACTIVE: 'NOT_INTERACTIVE',
   UNSCORED_ONLY: 'UNSCORED_ONLY',
-  // mol-p4a.7: a malformed labels row (q4q.2), exit 2 naming file:line.
+  // a malformed labels row, exit 2 naming file:line.
   LABELS_INVALID: 'LABELS_INVALID',
   // J6 contract (docs/contracts/j6.md "Error codes"): sink write outcomes and the outbox's
   // corrupt-file config error. OUTBOX_CORRUPT is thrown, never a doWrite rejection.
@@ -46,9 +46,9 @@ export const CEV_ERROR_CODES = {
   SINK_AUTH: 'SINK_AUTH',
   SINK_PAYLOAD_TOO_LARGE: 'SINK_PAYLOAD_TOO_LARGE',
   OUTBOX_CORRUPT: 'OUTBOX_CORRUPT',
-  // mol-yxn.7: `vet run --sink` names a sink that vetkit.config.ts does not configure (exit 2).
+  // `vet run --sink` names a sink that vetkit.config.ts does not configure (exit 2).
   CONFIG_UNKNOWN_SINK: 'CONFIG_UNKNOWN_SINK',
-  // J2 contract (mol-76a.1, root DECISION on o8i gaps): source reads, trace validation and
+  // J2 contract (root DECISION on o8i gaps): source reads, trace validation and
   // generator outcomes. GENERATOR_CAPABILITY is a declared-strategy mismatch, never a
   // silent downgrade (docs/contracts/j2.md "Generation contract").
   SOURCE_UNREADABLE: 'SOURCE_UNREADABLE',
@@ -56,26 +56,25 @@ export const CEV_ERROR_CODES = {
   GENERATOR_UNAVAILABLE: 'GENERATOR_UNAVAILABLE',
   GENERATOR_BAD_OUTPUT: 'GENERATOR_BAD_OUTPUT',
   GENERATOR_CAPABILITY: 'GENERATOR_CAPABILITY',
-  // J5 contract (docs/contracts/j5.md "Error codes", mol-pij.1): an OTLP body that is not an
+  // J5 contract (docs/contracts/j5.md "Error codes"): an OTLP body that is not an
   // ExportTraceServiceRequest, a non-JSON body at the receiver (HTTP 415), and a source that
   // produced 0 traces.
   OTLP_PARSE: 'OTLP_PARSE',
   OTLP_UNSUPPORTED_CONTENT_TYPE: 'OTLP_UNSUPPORTED_CONTENT_TYPE',
   SOURCE_EMPTY: 'SOURCE_EMPTY',
-  // mol-p4a.3: `vet rerun` finds no persisted run record (<cacheDir>/runs/latest.json,
-  // mol-p4a.16) to re-judge from; exits 2 (cli errors.ts).
+  // `vet rerun` finds no persisted run record (<cacheDir>/runs/latest.json) to re-judge from; exits 2 (cli errors.ts).
   RUN_NOT_FOUND: 'RUN_NOT_FOUND',
-  // mol-yxn.5: the Langfuse source (packages/source-langfuse). A 401/403 from the Langfuse
+  // the Langfuse source (packages/source-langfuse). A 401/403 from the Langfuse
   // API, or a missing credential, thrown at first read (SOURCE_ prefix -> cli errors.ts
   // resolveExit's existing sinkSource rule, no CLI change needed). SOURCE_UNREACHABLE is a
   // 429 exhausted after 3 retries, or any other non-OK response.
   SOURCE_AUTH: 'SOURCE_AUTH',
   SOURCE_UNREACHABLE: 'SOURCE_UNREACHABLE',
-  // mol-aq4.3: `vet export --to <id>` (an unregistered exporter id) and `vet export
+  // `vet export --to <id>` (an unregistered exporter id) and `vet export
   // --require-lock` (no criteria.lock.json); both exit 2 (cli errors.ts EXPORT_* rule).
   EXPORT_TARGET_UNKNOWN: 'EXPORT_TARGET_UNKNOWN',
   EXPORT_NO_LOCK: 'EXPORT_NO_LOCK',
-  // J7 contract (docs/contracts/j7.md "Error codes", mol-zde): `vet watch`'s receiver bind
+  // J7 contract (docs/contracts/j7.md "Error codes"): `vet watch`'s receiver bind
   // failure and an out-of-range --sample. Both exit 2 (cli errors.ts).
   RECEIVER_BIND: 'RECEIVER_BIND',
   WATCH_CONFIG: 'WATCH_CONFIG',
@@ -83,7 +82,7 @@ export const CEV_ERROR_CODES = {
 
 export type CevErrorCode = (typeof CEV_ERROR_CODES)[keyof typeof CEV_ERROR_CODES];
 
-// Additive detail bag for the judge/gate/cache paths (root ledger DECISION, turn 9):
+// Additive detail bag for the judge/gate/cache paths:
 // carried through the constructor's `options.details`, never required, never replacing
 // `cause`.
 export interface VetErrorDetails {

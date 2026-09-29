@@ -1,4 +1,4 @@
-// `vet cases dedupe|quarantine|promote|review` (bead classified-evals-mol-p4a.1). J1 (load.ts)
+// `vet cases dedupe|quarantine|promote|review`. J1 (load.ts)
 // leaves j1-5/j1-8; J7 (watch/promote.ts) leaf j7-3.
 import { createHash, randomBytes } from 'node:crypto';
 import { readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
@@ -251,7 +251,7 @@ export async function reviewCase(
 // --- promote (manual, from a run verdict) ---------------------------------------------------
 
 // watch/promote.ts's promoteFailure hardcodes its dayFile under <dir>/pending/ (auto-promotion
-// from `vet watch`, dh8.3); this manual path (`vet cases promote <verdict-id>`) targets
+// from `vet watch`); this manual path (`vet cases promote <verdict-id>`) targets
 // `<dir>/promoted-<date>.jsonl` directly, one level up, so a human-reviewed promotion never
 // needs a second `vet cases review` pass. promote.ts is not editable to take a target dir
 // (not this bead's owned path), so the small id/provenance shape it builds is duplicated here

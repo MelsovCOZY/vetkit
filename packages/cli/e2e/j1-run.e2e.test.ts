@@ -1,4 +1,4 @@
-// J1 journey (bd classified-evals-mol-n5w): `vet run` judges one case against the REAL Jev
+// J1 journey: `vet run` judges one case against the REAL Jev
 // judge and its exit code is usable in CI. Runs scripts/smoke-j1.sh, which builds, writes a
 // scratch project and checks every acceptance-criterion verify command.
 //

@@ -1,4 +1,4 @@
-// J7 journey (bd classified-evals-mol-529): `vet watch` in fixtures/projects/j7 samples 100
+// J7 journey: `vet watch` in fixtures/projects/j7 samples 100
 // replayed traces, judges the sample with the REAL Jev judge (transport from vetkit.config.ts),
 // writes results through the outbox, reports coverage and promotes the injected failing trace.
 // Encodes the gate steps in TypeScript (the collector is an in-test OTLP/HTTP stub; the docker

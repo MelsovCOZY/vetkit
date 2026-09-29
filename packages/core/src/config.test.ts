@@ -192,7 +192,7 @@ describe('judge endpoint presets', () => {
 });
 
 // OPEN-9 DECISION: declarative sink descriptors ({kind:'otel'|'langfuse', *Env}) resolved by
-// the CLI (mol-yxn.13), added alongside the option-A adapter objects from mol-yxn.7.
+// the CLI, added alongside the option-A adapter objects.
 describe('sink descriptors', () => {
   const otelDescriptor = {
     kind: 'otel',

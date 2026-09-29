@@ -863,7 +863,7 @@ describe('byCriterion saturation', () => {
   });
 });
 
-// ---------- verdict provenance (mol-yxn.7) ----------
+// ---------- verdict provenance ----------
 
 describe('verdict provenance', () => {
   const TRACE = '0af7651916cd43dd8448eb211c80319c';
@@ -929,9 +929,9 @@ describe('verdict provenance', () => {
   });
 });
 
-// ---------- pre-judge gate refusal (q4q.11) ----------
+// ---------- pre-judge gate refusal ----------
 
-describe('gate refusal before any judge call (q4q.11)', () => {
+describe('gate refusal before any judge call', () => {
   test('--gate with no lock refuses with 0 judge calls, naming criteria.lock.json', async () => {
     const paths = await suite([BOOL_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
     const { judge, doJudge } = scriptedJudge({ S1: { 'answers-question': yes(0.9) } });
@@ -1030,7 +1030,7 @@ describe('gate refusal before any judge call (q4q.11)', () => {
   });
 });
 
-// ---------- one threshold scale across calibrate, lock and run (mol-q4q.14) ----------
+// ---------- one threshold scale across calibrate, lock and run ----------
 
 describe('pass_when_false threshold scale: calibrate → lock → runEvals', () => {
   test('a pass_when_false criterion calibrated at t ≠ 0.5 passes exactly the cases on the pass side of t', async () => {
@@ -1092,7 +1092,7 @@ describe('pass_when_false threshold scale: calibrate → lock → runEvals', () 
   });
 });
 
-// ---------- score threshold scale: expected level E, max − E for pass_when_false (mol-q4q.15) ----------
+// ---------- score threshold scale: expected level E, max − E for pass_when_false ----------
 
 const NEG_SCORE_YAML = `  - id: harm
     type: score
@@ -1141,7 +1141,7 @@ describe('score threshold scale matches calibrate repeatValues', () => {
   });
 });
 
-// ---------- choice threshold scale: P(passWhen), 1 − P(passWhen) for pass_when_false (mol-q4q.16) ----------
+// ---------- choice threshold scale: P(passWhen), 1 − P(passWhen) for pass_when_false ----------
 
 const TONE3_YAML = `  - id: tone3
     type: choice
@@ -1161,7 +1161,7 @@ function picked(choice: string, probabilities: Record<string, number>): Answer {
   return { type: 'choice', choice, confidence: 0.5, probabilities };
 }
 
-describe('choice threshold scale matches calibrate repeatValues (DECISION 2026-09-28, q4q.14)', () => {
+describe('choice threshold scale matches calibrate repeatValues (DECISION 2026-09-28)', () => {
   test('spread mass: argmax in passWhen but P(passWhen) below the threshold fails', async () => {
     const paths = await suite([TONE3_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
     const { judge } = scriptedJudge({
@@ -1243,7 +1243,7 @@ describe('choice threshold scale matches calibrate repeatValues (DECISION 2026-0
   });
 });
 
-// ---------- disabled criteria (mol-e3g) ----------
+// ---------- disabled criteria ----------
 
 describe('disabled criteria (enabled: false)', () => {
   const DISABLED_YAML = NEG_YAML.replace(

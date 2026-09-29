@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# J6 slice-gate smoke (bd classified-evals-mol-7lg): `vet run --sink otel,langfuse` end to end.
+# J6 slice-gate smoke: `vet run --sink otel,langfuse` end to end.
 # REAL Jev judge through the vercel preset, a REAL OTel collector (docker, file exporter, TEST-ONLY
 # dependency) and, when LANGFUSE_* keys exist, a real Langfuse project. Every AC verify command is
 # run as written except where the recorded deviation below says otherwise.

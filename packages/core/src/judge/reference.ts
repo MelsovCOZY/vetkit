@@ -2,7 +2,7 @@
 // brief §2.1, §5.2 item 13): a judge cannot grade what it cannot solve, so a checkable criterion
 // either quotes the reference answer to the judge (renderReference) or is graded by a pure
 // string/number comparison instead of the judge (gradeCode). referenceRequirement is the rule
-// mol-q4q.6's lock writer consults to decide whether a checkable criterion may reach calibrated.
+// the lock writer consults to decide whether a checkable criterion may reach calibrated.
 // Pure functions throughout (DECISION: Code conventions) — none of these ever throw.
 import type { Case, Criterion } from '@vetkit/spec';
 

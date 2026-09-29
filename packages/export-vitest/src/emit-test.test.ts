@@ -154,7 +154,7 @@ describe('emitTestFile', () => {
     expect(source).toMatch(/test\(['"`]c1 · latency['"`]/);
   });
 
-  // mol-aq4.18: CEV_TRACE_HTTP=1 prints 'judge.requests: <N>' once per emitted test file, via
+  // CEV_TRACE_HTTP=1 prints 'judge.requests: <N>' once per emitted test file, via
   // an afterAll counting real (non-cache-hit) judge requests across its own tests.
   test('emits an afterAll that prints judge.requests only under CEV_TRACE_HTTP', () => {
     const { source } = emitTestFile(

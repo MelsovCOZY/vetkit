@@ -1,10 +1,10 @@
-// Per-trace normaliser (bead mol-pij.2): cascades through `dialects` in the order given, picks
+// Per-trace normaliser: cascades through `dialects` in the order given, picks
 // the first whose detect() matches any span, then walks the tree causally (parent before child,
 // then SpanTree's existing start-time sibling order, ET brief §2 "Precedence cascade") to
 // concatenate LLM-span messages and sum tokens once per qualifying span — a nested LLM span is
 // never rolled into an ancestor's total (root acceptance J5, "tokens not double-counted").
 // Dialect modules (gen_ai, gen_ai_legacy, openinference, openllmetry, vercel) and the default
-// cascade order are owned by pij.11: this module only consumes DialectV1, it never imports one.
+// cascade order are owned by their own modules: this module only consumes DialectV1, it never imports one.
 
 import type { Message, NormalizedTrace, Span } from '@vetkit/spec';
 import { assessCompleteness } from '../completeness/index.ts';
@@ -22,7 +22,7 @@ export interface TraceGroup {
 
 // Groups spans across possibly-many resourceSpans blocks by traceId, in file order. A traceId
 // that recurs under a later resourceSpans block keeps the first resource seen for its
-// attributes/schemaUrl (contract pij.2 revision 6).
+// attributes/schemaUrl.
 export function groupByTraceId(resourceSpansList: readonly OtlpResourceSpans[]): TraceGroup[] {
   const groups = new Map<string, TraceGroup>();
   const result: TraceGroup[] = [];
@@ -60,7 +60,7 @@ function firstTraceId(tree: SpanTree): string | undefined {
 
 // First dialect (in the given order) whose detect() matches any span in the tree wins. A
 // second, different dialect also matching emits a `mixed_dialects` warning but never changes
-// the winner (contract pij.2 revision 3).
+// the winner.
 export function detectDialect(
   tree: SpanTree,
   resource: OtlpResource,
@@ -90,7 +90,7 @@ export function detectDialect(
 
 // Sums extractUsage() once per span for which the winning dialect's isLlmSpan is true; a
 // nested LLM span contributes only its own usage, never an ancestor's. Omitted (not null) when
-// no LLM span yields usage. A span's bare totalTokens (pij.13: usage reported with no
+// no LLM span yields usage. A span's bare totalTokens (usage reported with no
 // input/output split) folds into tokens.total; when that same span's usage also carries a
 // split, the split alone determines its contribution, so the bare total is never added on top.
 export function sumTokens(
@@ -124,7 +124,7 @@ export function sumTokens(
 }
 
 // Normalises tool_call/tool_call_response ids across the whole trace to tool_call_1,
-// tool_call_2... in first-seen call order (contract pij.14): every dialect's extractMessages
+// tool_call_2... in first-seen call order: every dialect's extractMessages
 // keeps emitting its own native ids, and this single pass renumbers them afterwards so all five
 // dialects agree on the same ids for the same conversation. A part with no id is left as-is, and
 // a tool_call_response id that never matches an earlier tool_call id is also left as-is (nothing
@@ -180,7 +180,7 @@ export function normalizeTrace(
         messageRange: [start, messages.length],
       });
     } else {
-      // pij.13: a dialect's optional spanKind() maps a non-LLM span to a more specific kind
+      // a dialect's optional spanKind() maps a non-LLM span to a more specific kind
       // (e.g. 'tool'); undefined (no hook, or the hook declines this span) keeps 'other'.
       const kind = dialect?.spanKind?.(otlpSpan) ?? 'other';
       spans.push({ spanId: otlpSpan.spanId, name: otlpSpan.name, kind });

@@ -201,7 +201,7 @@ describe('vet estimate', () => {
     expect(result.status).toBe(2);
   });
 
-  test('a criterion with enabled: false is excluded from the criteria and cost counts (mol-e3g.1)', () => {
+  test('a criterion with enabled: false is excluded from the criteria and cost counts', () => {
     const dir = freshProject();
     writeFileSync(
       join(dir, 'evals', 'criteria.yaml'),

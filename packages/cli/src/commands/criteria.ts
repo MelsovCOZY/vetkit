@@ -1,4 +1,4 @@
-// `vet criteria disable|enable|delete|revalidate <id>` (bead mol-e3g): secondary criteria actions,
+// `vet criteria disable|enable|delete|revalidate <id>`: secondary criteria actions,
 // so nobody hand-edits criteria.yaml and lets the lock drift. YAML edits go through @vetkit/core's
 // Document-API helpers (comments and order kept); lock edits go through writeLockAtomic.
 import { existsSync } from 'node:fs';

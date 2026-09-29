@@ -22,9 +22,9 @@ import {
 
 export type { GeneratorEndpoint, JudgeEndpoint } from '@vetkit/spec';
 
-// A configured sink: an opaque name, an adapter object (option A, mol-yxn.7), or a
-// `{kind,*Env}` descriptor the CLI resolves by reading the named env vars (OPEN-9 DECISION,
-// mol-yxn.13). Derived structurally from ConfigDoc so the descriptor shapes never need a
+// A configured sink: an opaque name, an adapter object (option A), or a
+// `{kind,*Env}` descriptor the CLI resolves by reading the named env vars (OPEN-9 DECISION).
+// Derived structurally from ConfigDoc so the descriptor shapes never need a
 // second hand-written declaration here.
 export type SinkRef = NonNullable<ConfigDoc['sinks']>[number];
 export type SinkDescriptor = Exclude<SinkRef, PluginRef>;

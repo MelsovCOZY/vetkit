@@ -4,7 +4,7 @@
 // no vendor or key value appears here; only env var names reach the written config.
 // Nothing is written until every check passes; each file lands via tmp + rename.
 //
-// `vet init --source <spec> --out <dir>` (bead mol-76a.7) instead resolves the source string
+// `vet init --source <spec> --out <dir>` instead resolves the source string
 // (sources.ts), the generator and judge (vetkit.config.ts), calls core's generateEvals and
 // writes into a temp sibling of --out, renaming it into place only once generation succeeds
 // (or replacing --out, under --force) — closing the SIGINT partial-write gap.
@@ -39,7 +39,7 @@ interface InitOptions extends GlobalOptions {
   readonly force?: boolean;
   readonly source?: string;
   readonly out?: string;
-  // J5 (bead mol-pij.8): forwarded to resolveSource as SourceOptions, for otlp::<port>'s
+  // J5: forwarded to resolveSource as SourceOptions, for otlp::<port>'s
   // receiver mode. Commander hands option values through as strings; the jsonl factory (and
   // any other prefix that ignores SourceOptions) never sees these at all.
   readonly until?: string;
@@ -136,7 +136,7 @@ async function confirmOverwrite(existing: readonly string[]): Promise<void> {
   if (!/^y(es)?$/i.test(answer.trim())) throw invalid(message);
 }
 
-// mol-76a.15 AC1: `vet init --out <dir>` left <dir> with criteria.yaml and cases/ but no
+// AC1: `vet init --out <dir>` left <dir> with criteria.yaml and cases/ but no
 // vetkit.config.ts, so `vet run` there always failed CONFIG_INVALID. Re-exporting the config
 // `vet init` itself just resolved (by relative import) makes <dir> runnable without inlining
 // its generator/judge (an in-process adapter object can't be serialized) or any credential:
@@ -145,7 +145,7 @@ function reexportConfig(configFile: string, out: string): string {
   const rel = relative(out, configFile).split('\\').join('/');
   const specifier = rel.startsWith('.') ? rel : `./${rel}`;
   return [
-    '// vetkit.config.ts, written by `vet init --source` (bead mol-76a.15): re-exports the',
+    '// vetkit.config.ts, written by `vet init --source`: re-exports the',
     '// config `vet init` itself resolved, so `vet run` here uses the same generator and',
     '// judge, with no credential or config duplicated.',
     `export { default } from '${specifier}';`,
@@ -199,7 +199,7 @@ async function initCommand(options: InitOptions): Promise<void> {
 // core's ResolvedConfig['generator'] is a GeneratorEndpoint or core's own structural
 // GeneratorAdapter stand-in (spec has no GeneratorV1 registry entry yet); an adapter object
 // is used as-is here, cast at this boundary, since the two shapes differ structurally
-// (root ledger contract 76a.7 #1).
+//.
 function resolveGenerator(raw: ResolvedConfig['generator']): GeneratorV1 {
   if (raw === undefined) throw invalid('no generator configured');
   if ('specVersion' in raw) {
@@ -245,7 +245,7 @@ async function generateIntoOut(
 
 // Tees every trace the wrapped source yields into `sink`, as a side effect of the one read
 // generateEvals already does — no second pass over the source. Used only to build the otlp:
-// summary (orchestrator DECISION, mol-pij.8): buildOtlpSummary needs each trace's dialect and
+// summary: buildOtlpSummary needs each trace's dialect and
 // tokens, which GenerateEvalsResult does not carry.
 function tapSource(source: SourceV1, sink: NormalizedTrace[]): SourceV1 {
   return {
@@ -297,7 +297,7 @@ async function generateCommand(options: InitOptions & { source: string }): Promi
 
   // Additive: only an `otlp:`-sourced run carries a summary (source.id 'otlp/file' or
   // 'otlp/receiver'); every other --source keeps emit()'s existing {criteria, cases, report}
-  // document unchanged. J5 gate (mol-pij.15): also written to <out>/summary.json, since a
+  // document unchanged. J5 gate: also written to <out>/summary.json, since a
   // caller scripting on the written directory (not stdout) needs it there too.
   const summary = source.id.startsWith('otlp/')
     ? buildOtlpSummary(collectedTraces, result)

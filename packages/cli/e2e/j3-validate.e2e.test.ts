@@ -1,4 +1,4 @@
-// J3 edge journeys that need no judge answers (bd classified-evals-mol-lts): the built `vet`
+// J3 edge journeys that need no judge answers: the built `vet`
 // refuses cleanly with exit 2 and writes no lock when a criterion has too few labels, and
 // `vet check --lock` on a project without a lock exits 2. The judge endpoint is a refused
 // connection (CEV_JUDGE_BASE_URL) and the key is a placeholder, so no request leaves the machine.

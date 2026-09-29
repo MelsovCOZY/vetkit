@@ -1,11 +1,11 @@
-// map.ts — Langfuse trace + observations -> NormalizedTrace (bead mol-yxn.5). Only GENERATION
+// map.ts — Langfuse trace + observations -> NormalizedTrace. Only GENERATION
 // observations become messages, in start-time order: `input` becomes one message per chat turn
 // when it is an array of {role, content} entries (the common shape for a GENERATION's prompt),
 // otherwise it is wrapped as one 'user' message; `output` becomes one 'assistant' message.
 // NormalizedTrace carries no provenance field (packages/spec/schemas/trace.schema.json has none,
 // and it is not planned there — only on the not-yet-implemented Verdict, docs/contracts/j6.md),
 // so provenance (the trace id and the last generation's observation id) is recorded as
-// attributes on that last generation's span (orchestrator DECISION, mol-yxn.5 premise repair).
+// attributes on that last generation's span.
 
 import type { Message, NormalizedTrace, Span } from '@vetkit/spec';
 

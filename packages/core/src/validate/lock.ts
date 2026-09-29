@@ -1,4 +1,4 @@
-// criteria.lock.json: the only artifact allowed to gate (bead mol-q4q.6). buildLock folds the
+// criteria.lock.json: the only artifact allowed to gate. buildLock folds the
 // calibrate and gauntlet results into per-criterion status + reasons; writeLockAtomic writes it
 // through a temp file and rename; readLock validates it against lockSchema; checkLock recomputes
 // the content hashes (DECISION: content hashes of questions and dataset); assertLockGates is the
@@ -59,7 +59,7 @@ const REASON_ORDER: readonly LockReason[] = [
   ...GAUNTLET_KEYS,
 ];
 
-/** Unscored fraction above which the lock blames the judge instead of the data (mol-q4q.22). */
+/** Unscored fraction above which the lock blames the judge instead of the data. */
 const UNAVAILABLE_ABOVE = 0.1;
 
 export interface Unscored {

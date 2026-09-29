@@ -1,11 +1,10 @@
 // runWatch: drives the J5 receiver stream through the sampler, the judge and the unsampled
-// outbox (docs/contracts/j7.md "Sampling rule" / "Inclusion log"; bead classified-evals-mol-dh8.2,
-// Approach + Edge cases). OUT of scope: sampler internals (dh8.1), promotion (dh8.3, hooked in
+// outbox (docs/contracts/j7.md "Sampling rule" / "Inclusion log"). OUT of scope: sampler internals, promotion (hooked in
 // here only via the `onVerdict` callback), CLI rendering.
 //
 // `judge` is the only judging surface this module touches (design: "no new judge or sink logic"):
 // the case built from each trace and any doJudge/request-building live behind that callable,
-// bound to real criteria + a JudgeV1 by the caller (dh8.3).
+// bound to real criteria + a JudgeV1 by the caller.
 //
 // Concurrency is bounded twice, deliberately: an owned semaphore caps how many traces are between
 // "sampled" and "judged" at once, so a for-await over a stream that may never end (the receiver)
@@ -28,8 +27,8 @@ import type { Sampler } from './sampler.ts';
 import type { WatchOptions } from './types.ts';
 
 /** One judged case in, one Verdict per criterion out. `criteria` is already the judgeable
- * subset for this case (bead classified-evals-mol-dh8.4: `partitionCases` has already excluded
- * content-dependent criteria for a non-ok trace). Bound to a JudgeV1 by the caller (dh8.3). */
+ * subset for this case (`partitionCases` has already excluded
+ * content-dependent criteria for a non-ok trace). Bound to a JudgeV1 by the caller. */
 export interface JudgeCaseFn {
   (input: {
     readonly case: Case;
@@ -41,7 +40,7 @@ export interface JudgeCaseFn {
 export interface RunWatchOptions extends WatchOptions {
   /** Per judge call. RISK (brief 6): whole-call deadlines are mandatory. Default 30_000. */
   readonly judgeTimeoutMs?: number;
-  /** Deadline for the final outbox drain, independent of any abort signal (bug dh8.8).
+  /** Deadline for the final outbox drain, independent of any abort signal.
    * Default 30_000. */
   readonly drainTimeoutMs?: number;
 }
@@ -55,12 +54,12 @@ export interface RunWatchInput {
   readonly sinks: readonly SinkV1[];
   readonly options: RunWatchOptions;
   readonly signal: AbortSignal;
-  /** Graceful stop (first SIGINT, bug dh8.8): the source is told to end, but everything it
+  /** Graceful stop (first SIGINT): the source is told to end, but everything it
    * had already accepted is still recorded, judged (if sampled) and drained; in-flight judge
    * calls are NOT aborted. `signal` stays the hard abort. */
   readonly stop?: AbortSignal;
-  /** dh8.3's promotion hook, called once per enqueued verdict with the Case it was judged
-   * against. `verdict.id` is exactly the id `outbox.enqueue` assigned it (bug dh8.5: enqueue
+  /** The promotion hook, called once per enqueued verdict with the Case it was judged
+   * against. `verdict.id` is exactly the id `outbox.enqueue` assigned it (enqueue
    * assigns each verdict's id to a copy it builds internally, so the bare Verdict this loop
    * judges never carries it — this hook is handed the corrected copy instead). Returning
    * `true` counts it toward `promoted`. */
@@ -80,8 +79,8 @@ export interface CoverageSummary {
   readonly promoted: number;
   readonly produced: number;
   readonly acknowledged: number;
-  /** Cases excluded from (full or partial) judging by completeness status (root DECISION,
-   * dh8.4): a case can be counted here and still be judged, on its content-independent
+  /** Cases excluded from (full or partial) judging by completeness status (root DECISION):
+   * a case can be counted here and still be judged, on its content-independent
    * criteria only — see `partitionCases`. */
   readonly excluded: Record<ExclusionStatus, number>;
 }
@@ -102,7 +101,7 @@ function causeCode(cause: unknown): string {
 }
 
 /** Cause of a thrown judge: the CevError code if present, else JUDGE_UNAVAILABLE; never the
- * raw message (dh8.10). */
+ * raw message. */
 function thrownCause(err: unknown): { readonly code: string } {
   return { code: VetError.isInstance(err) ? err.code : 'JUDGE_UNAVAILABLE' };
 }
@@ -123,7 +122,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 // Same shape run.ts's private verdictProvenance() builds for `vet run` (picks the six
 // verdict-provenance schema keys off the case's provenance, case.traceId winning): duplicated
 // here rather than imported, since exporting it would mean touching run.ts/index.ts, which
-// aren't owned by this bead (dh8.7, same duplication as commands/watch.ts's caseProvenance).
+// aren't owned by this bead (same duplication as commands/watch.ts's caseProvenance).
 function caseProvenance(evalCase: Case): Verdict['provenance'] | undefined {
   const source = isRecord(evalCase.provenance) ? evalCase.provenance : {};
   const out: NonNullable<Verdict['provenance']> = {};
@@ -289,7 +288,7 @@ export async function runWatch(input: RunWatchInput): Promise<CoverageSummary> {
 
       // oxlint-disable-next-line no-await-in-loop
       await acquireSlot();
-      // includeIncomplete: true (dh8.4) — a truncated/incomplete trace with a real conversation
+      // includeIncomplete: true — a truncated/incomplete trace with a real conversation
       // still becomes a Case (with completeness-carrying provenance), so partitionCases below
       // can select its content-independent criteria instead of the whole trace being dropped.
       const { cases } = extractCases({ traces: [trace], criteria, includeIncomplete: true });

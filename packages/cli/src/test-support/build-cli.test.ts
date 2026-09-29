@@ -20,7 +20,7 @@ beforeAll(async () => {
 // Other tests plant files in packages/*/src mid-run (scripts/tsconfig.test.ts writes
 // packages/spec/src/__tmp_te.ts), which makes that src newer than its dist. A rebuild
 // at that point runs tsdown, which cleans every dist/ first, so core's dist vanishes
-// under the cli bins other workers are spawning (mol-p4a.10). Once built for a run,
+// under the cli bins other workers are spawning. Once built for a run,
 // ensureCliBuilt must not build again.
 test('a src file that turns newer than dist mid-run does not rebuild (and clean) dist', async () => {
   const before = statSync(coreEntry);
@@ -39,7 +39,7 @@ test('a src file that turns newer than dist mid-run does not rebuild (and clean)
   });
 }, 180_000);
 
-// mol-76a.12: a workspace dependency missing from BUILD_ORDER has no dist/ in spawned tests, so
+// a workspace dependency missing from BUILD_ORDER has no dist/ in spawned tests, so
 // any static import of it from the cli bin fails.
 test.each(workspaceDeps)('cli dependency %s is built before the spawned cli tests', (name) => {
   expect(BUILD_ORDER).toContain(name.slice('@vetkit/'.length));

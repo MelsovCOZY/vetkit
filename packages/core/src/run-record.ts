@@ -1,6 +1,6 @@
-// The persisted result of the last `vet run` (mol-p4a.16): the runEvals result as `vet run --json`
+// The persisted result of the last `vet run`: the runEvals result as `vet run --json`
 // prints it, plus where its criteria and cases came from and when it started. It lives at
-// <cacheDir>/runs/latest.json, the path the GitHub Action (aq4.5) also fills from --json output,
+// <cacheDir>/runs/latest.json, the path the GitHub Action also fills from --json output,
 // and is written through a temp file and rename so a reader never sees half a record.
 import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';

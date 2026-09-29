@@ -1,4 +1,4 @@
-// Tests for createLangfuseSource (bead mol-yxn.5), written from the acceptance criteria:
+// Tests for createLangfuseSource, written from the acceptance criteria:
 // - `createLangfuseSource(...).doRead()` yields one NormalizedTrace per Langfuse trace, with
 //   messages assembled from GENERATION observations in start-time order, provenance
 //   ('langfuse.trace.id' / 'langfuse.observation.id' of the last generation) recorded as

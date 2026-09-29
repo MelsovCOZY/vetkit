@@ -1,4 +1,4 @@
-// `vet lock refresh` (bead mol-p4a.2). Re-hashes each criterion's wording with the J3
+// `vet lock refresh`. Re-hashes each criterion's wording with the J3
 // normalisation (loadCriteria's wordingHash: CRLF → LF, trimmed strings; YAML comments never
 // reach the parsed value) and keeps the lock entry, thresholds included, when the normalised
 // wording is unchanged. Any other change is left stale with a pointer to `vet validate`, and

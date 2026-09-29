@@ -1,13 +1,13 @@
-// OpenInference dialect (bead mol-pij.4): the one DialectV1 (packages/source-otlp/src/normalize/
-// dialect.ts, mol-pij.2) that maps the OpenInference semantic conventions. Detection order, token
-// single-counting and completeness flags are cascade concerns owned by pij.2/pij.7/pij.11 — this
+// OpenInference dialect: the one DialectV1 (packages/source-otlp/src/normalize/
+// dialect.ts) that maps the OpenInference semantic conventions. Detection order, token
+// single-counting and completeness flags are cascade concerns owned by the normalize cascade — this
 // module only ever reads its own attribute keys off one span (root ledger DECISION: no
 // cross-dialect fallbacks inside a dialect).
 //
 // Attribute names pinned to SPEC_COMMIT below:
 // https://github.com/Arize-ai/openinference/blob/7feb0c4ba2fd77cb76036712e21d06ff15a2be22/spec/semantic_conventions.md
 // ET brief appendix: Phoenix converts gen_ai.* to OpenInference at ingest and OpenInference takes
-// precedence — this module never reads gen_ai.* keys itself; that precedence is pij.2's cascade.
+// precedence — this module never reads gen_ai.* keys itself; that precedence belongs to the normalize cascade.
 
 import {
   CEV_ERROR_CODES,
@@ -95,7 +95,7 @@ const MESSAGE_LIST_SCHEMA: JsonSchema = {
 
 // Unknown roles map to 'user' (Approach: "unknown roles map to 'user' with a diag warning
 // event"). DialectV1.extractMessages has no diag output channel — only detectDialect's
-// mixed_dialects warning does (contract pij.2 revision 2) — so this mapping is silent here; a
+// mixed_dialects warning does — so this mapping is silent here; a
 // diag channel for per-message warnings is out of this bead's scope.
 function isRole(value: string): value is Message['role'] {
   return (VALID_ROLES as readonly string[]).includes(value);
@@ -161,7 +161,7 @@ function toolCallParts(
 
 // llm.input_messages / llm.output_messages: indexed message.role + message.content +
 // message.tool_calls.*. Returns [] when no index is present under this prefix at all.
-// pij.14: message.tool_call_id marks this index as a tool turn responding to a call — its
+// message.tool_call_id marks this index as a tool turn responding to a call — its
 // content becomes a tool_call_response part, never a sibling text part.
 function indexedMessages(attrs: Record<string, AnyValue>, prefix: string): Message[] {
   return messageIndices(attrs, prefix).map((index) => {

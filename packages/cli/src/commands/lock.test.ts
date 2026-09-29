@@ -1,4 +1,4 @@
-// `vet lock refresh` (bead mol-p4a.2): re-hashes each criterion's wording with the J3
+// `vet lock refresh`: re-hashes each criterion's wording with the J3
 // normalisation (loadCriteria's wordingHash) and keeps the lock entry when the normalised
 // wording is unchanged; a semantic change stays stale with a pointer to `vet validate`.
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';

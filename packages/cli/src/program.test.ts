@@ -111,7 +111,7 @@ describe('vet bin', () => {
   });
 });
 
-describe('vet bin: validate and check (q4q.6)', () => {
+describe('vet bin: validate and check', () => {
   test('--help lists the validate and check commands', () => {
     const result = runBin(['--help']);
     expect(result.status).toBe(0);
@@ -126,7 +126,7 @@ describe('vet bin: validate and check (q4q.6)', () => {
   });
 });
 
-describe('vet bin: check --outbox and lock refresh (p4a.2)', () => {
+describe('vet bin: check --outbox and lock refresh', () => {
   test('--help lists the lock command; check --help lists --outbox; lock --help lists refresh', () => {
     const top = runBin(['--help']);
     expect(top.status).toBe(0);
@@ -140,7 +140,7 @@ describe('vet bin: check --outbox and lock refresh (p4a.2)', () => {
   });
 });
 
-describe('vet bin: rerun --disputed (mol-p4a.3)', () => {
+describe('vet bin: rerun --disputed', () => {
   test('--help lists the rerun command; rerun --help lists --disputed', () => {
     const top = runBin(['--help']);
     expect(top.status).toBe(0);
@@ -151,7 +151,7 @@ describe('vet bin: rerun --disputed (mol-p4a.3)', () => {
   });
 });
 
-describe('vet bin: criteria (mol-e3g)', () => {
+describe('vet bin: criteria', () => {
   test('--help lists the criteria command', () => {
     const result = runBin(['--help']);
     expect(result.status).toBe(0);
@@ -159,7 +159,7 @@ describe('vet bin: criteria (mol-e3g)', () => {
   });
 });
 
-describe('vet bin: init --source and lint (mol-76a.7)', () => {
+describe('vet bin: init --source and lint', () => {
   test('--help lists the lint command', () => {
     const result = runBin(['--help']);
     expect(result.status).toBe(0);

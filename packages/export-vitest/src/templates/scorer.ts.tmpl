@@ -23,7 +23,7 @@ interface ScorerMetadata {
   readonly status: string;
   readonly probability?: number;
   readonly threshold?: number;
-  /** False for a real judge request, true for a verdict cache hit (mol-aq4.18: CEV_TRACE_HTTP). */
+  /** False for a real judge request, true for a verdict cache hit (CEV_TRACE_HTTP). */
   readonly cacheHit: boolean;
 }
 
@@ -50,7 +50,7 @@ export interface ScorerOverrides {
 }
 
 // Pass derivation calls the same pure decideVerdict() packages/core/src/run.ts decide() calls
-// (mol-aq4.11), instead of duplicating the threshold/escape math here.
+//, instead of duplicating the threshold/escape math here.
 export function createScorer(overrides: ScorerOverrides = {}): {
   readonly name: string;
   readonly scorer: (input: ScorerInput) => Promise<ScorerResult>;

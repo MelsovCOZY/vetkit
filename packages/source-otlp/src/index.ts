@@ -1,4 +1,4 @@
-// Named re-exports only — no `export *` (oxc/no-barrel-file). The OtlpSource port lands in mol-pij.2.
+// Named re-exports only — no `export *` (oxc/no-barrel-file). The OtlpSource port lands here.
 import { readFile } from 'node:fs/promises';
 import { extname } from 'node:path';
 import {
@@ -50,10 +50,10 @@ export interface OtlpSourceOptions {
   onDiag?: (d: OtlpDiag) => void;
 }
 
-// otlpSource: a SourceV1 over a fixed list of OTLP/JSON files (bead mol-pij.2). Grouping spans
+// otlpSource: a SourceV1 over a fixed list of OTLP/JSON files. Grouping spans
 // into per-trace SpanTrees and cascading through `opts.dialects` is the only job. `opts.dialects`
-// undefined falls back to DEFAULT_DIALECT_ORDER (mol-pij.11); an explicit `[]` still means every
-// trace normalises to 'unknown'. `opts.listen` (a receiver) is explicitly out of scope (pij.8).
+// undefined falls back to DEFAULT_DIALECT_ORDER; an explicit `[]` still means every
+// trace normalises to 'unknown'. `opts.listen` (a receiver) is explicitly out of scope.
 export function otlpSource(opts: OtlpSourceOptions): SourceV1 {
   const dialects = opts.dialects ?? DEFAULT_DIALECT_ORDER;
   const files = opts.files ?? [];

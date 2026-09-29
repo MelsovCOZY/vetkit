@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# J7 slice-gate smoke (bd classified-evals-mol-529): `vet watch` end to end against the REAL Jev
+# J7 slice-gate smoke: `vet watch` end to end against the REAL Jev
 # judge (config transport: Vercel AI Gateway) and a REAL OpenTelemetry Collector (docker image
 # otel/opentelemetry-collector-contrib, J6 gate recipe), traffic from scripts/replay-otlp.ts.
 # Runs in a scratch copy of fixtures/projects/j7 so the fixture stays clean.

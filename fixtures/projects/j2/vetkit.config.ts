@@ -1,4 +1,4 @@
-// Config fixture for the J2 gate (bd classified-evals-mol-hzv): the REAL generator and the
+// Config fixture for the J2 gate: the REAL generator and the
 // REAL Jev judge (Vercel preset). Only env var NAMES appear here; keys come from the environment.
 //
 // The AC names anthropic/claude-sonnet-5 on the Vercel gateway. The gate run overrides that with

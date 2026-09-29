@@ -12,7 +12,7 @@ export interface GradingResult {
   reason: string;
   namedScores?: Record<string, number>;
   metadata?: Record<string, unknown>;
-  /** true only for a transport failure (unscored/error) — never for an escape (contract aq4.6 pt.4). */
+  /** true only for a transport failure (unscored/error) — never for an escape. */
   graderError?: boolean;
 }
 
@@ -37,7 +37,7 @@ export function toPromptfooAssertion(
     const model = verdict.model.resolved || verdict.model.requested;
     const id = options.criterion.id;
 
-    // Escape/not_applicable never fails the promptfoo suite (contract aq4.6 pt.4): pass:true,
+    // Escape/not_applicable never fails the promptfoo suite: pass:true,
     // score:0, status/reason carry the distinction, graderError stays unset.
     if (verdict.status === 'not_applicable') {
       return {
