@@ -29,8 +29,8 @@ naming specific variables.
 `judge.requestFormat` in `vetkit.config.ts` (on the judge endpoint) chooses how the case state is
 put into the judge request. It flows into `JudgeV1.capabilities.requestFormat`.
 
-- `raw` (default, also what an absent value means): the state is sent unchanged.
-- `fenced-v1`: the state is wrapped in a fence so hostile case content cannot pass itself off as
+- `raw`: the state is sent unchanged. Set `requestFormat: 'raw'` to opt out of the default.
+- `fenced-v1` (default, also what an absent value means): the state is wrapped in a fence so hostile case content cannot pass itself off as
   instructions. The rendered state is exactly four lines, with `<nonce>` the first 16 hex characters
   of the sha256 of the utf8 state, and the state JSON-escaped (with `<` written as `<`) on line 3:
 
@@ -41,10 +41,13 @@ put into the judge request. It flows into `JudgeV1.capabilities.requestFormat`.
   <<<VETKIT_CASE_END nonce=<nonce>>>>
   ```
 
-`fenced-v1` is opt-in because it changes what the judge sees, so verdicts, calibration and
-thresholds measured under `raw` do not carry over. It defends against prompt injection in the
+`fenced-v1` became the default after a live A/B of the two formats. It changes what the judge sees,
+so verdicts, calibration and thresholds measured under `raw` do not carry over. It defends against prompt injection in the
 judged content; the gauntlet's injection checks send their injected states fenced too, and
 `vet estimate` counts the wrapper tokens.
+
+A lock written before the default changed has no `requestFormat`, which is read as `raw`, so
+`vet check` reports it stale until `vet validate` is re-run (or the judge sets `requestFormat: 'raw'`).
 
 Switching formats invalidates the verdict cache (the format is part of the cache key) and marks
 every lock stale: `vet check` reports the reason `requestFormat`. Re-run `vet validate` after the

@@ -149,6 +149,8 @@ describe('capabilities', () => {
       pinned: false,
       transport: 'vercel',
       model: 'typesafe-ai/jev',
+      // Default switched to fenced-v1 after the request-format A/B.
+      requestFormat: 'fenced-v1',
     });
   });
 

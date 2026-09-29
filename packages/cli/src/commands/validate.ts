@@ -46,6 +46,7 @@ import {
 } from '@vetkit/core';
 import {
   CEV_ERROR_CODES,
+  DEFAULT_REQUEST_FORMAT,
   safeParseJson,
   VetError,
   type Case,
@@ -601,7 +602,7 @@ async function validate(
     criteria: active,
     cases,
     results,
-    requestFormat: judge.capabilities.requestFormat ?? 'raw',
+    requestFormat: judge.capabilities.requestFormat ?? DEFAULT_REQUEST_FORMAT,
   });
   // buildLock only sees `active`, so a criterion turned off after being calibrated would
   // otherwise lose its lock entry; carry over its existing entry unchanged instead.

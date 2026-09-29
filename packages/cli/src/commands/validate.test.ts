@@ -122,7 +122,8 @@ function countingJudge(
         pinned,
         transport,
         model: 'fake/jev',
-        ...(opts.requestFormat === undefined ? {} : { requestFormat: opts.requestFormat }),
+        // Fake judge reads the raw state; default switched to fenced-v1 after the request-format A/B.
+        requestFormat: opts.requestFormat ?? 'raw',
       },
       doJudge: (req) => {
         counting.total += 1;
@@ -258,8 +259,9 @@ describe('vet validate', () => {
     const rows = standardRows();
     const root = await project(rows);
     const events = createEvents();
-    const { judge } = countingJudge(rows, events);
-    await vet(['validate'], depsFor(root, judge, events));
+    const { judge: raw } = countingJudge(rows, events);
+    const { requestFormat: _raw, ...capabilities } = raw.capabilities;
+    await vet(['validate'], depsFor(root, { ...raw, capabilities }, events));
     expect((await lockAt(root)).requestFormat).toBe('fenced-v1');
   });
 

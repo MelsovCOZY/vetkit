@@ -36,6 +36,8 @@ function fakeJudge(impl: JudgeV1['doJudge']): JudgeV1 {
       pinned: false,
       transport: 'fake',
       model: 'jev-fake-model',
+      // Fake judge reads the raw state; default switched to fenced-v1 after the request-format A/B.
+      requestFormat: 'raw',
     },
     doJudge: impl,
   };
@@ -121,6 +123,8 @@ describe('vetMatchers', () => {
         pinned: false,
         transport: 'fake',
         model: 'jev-fake-model',
+        // Fake judge reads the raw state; default switched to fenced-v1 after the request-format A/B.
+        requestFormat: 'raw',
       },
       doJudge,
     };

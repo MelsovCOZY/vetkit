@@ -52,6 +52,8 @@ function makeJudge(passByCaseId: ReadonlyMap<string, boolean>, seen: Set<string>
       pinned: true,
       transport: 'fake-transport',
       model: 'fake/jev',
+      // Fake judge reads the raw state; default switched to fenced-v1 after the request-format A/B.
+      requestFormat: 'raw',
     },
     doJudge: (req) => {
       seen.add(req.state);

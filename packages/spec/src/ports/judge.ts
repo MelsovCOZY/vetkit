@@ -10,6 +10,9 @@ export type Question =
 
 export type RequestFormat = 'raw' | 'fenced-v1';
 
+/** What an unset endpoint or adapter `requestFormat` resolves to. */
+export const DEFAULT_REQUEST_FORMAT: RequestFormat = 'fenced-v1';
+
 export interface JudgeV1 {
   specVersion: 'v1';
   id: string;

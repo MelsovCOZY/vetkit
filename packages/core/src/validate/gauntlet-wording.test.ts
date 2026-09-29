@@ -48,6 +48,8 @@ function fakeJudge(
       pinned: false,
       transport: 'fake',
       model: 'fake-model',
+      // Fake judge reads the raw state; default switched to fenced-v1 after the request-format A/B.
+      requestFormat: 'raw',
     },
     doJudge: async (req) => {
       const answers: Record<string, Answer> = {};

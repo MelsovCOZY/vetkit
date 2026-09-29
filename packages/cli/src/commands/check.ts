@@ -14,7 +14,14 @@ import {
   type ReconcileResult,
   type StaleReport,
 } from '@vetkit/core';
-import { CEV_ERROR_CODES, safeParseJson, VetError, type JudgeV1, type Lock } from '@vetkit/spec';
+import {
+  CEV_ERROR_CODES,
+  DEFAULT_REQUEST_FORMAT,
+  safeParseJson,
+  VetError,
+  type JudgeV1,
+  type Lock,
+} from '@vetkit/spec';
 import type { Command } from 'commander';
 import { loadVetConfig } from '../config-load.ts';
 import { emit, getLogger } from '../output.ts';
@@ -80,7 +87,7 @@ async function checkLockFile(options: CheckOptions, deps: ValidateDeps): Promise
       transport: judge.capabilities.transport,
       releaseDate: await describeReleaseDate(judge),
     },
-    requestFormat: judge.capabilities.requestFormat ?? 'raw',
+    requestFormat: judge.capabilities.requestFormat ?? DEFAULT_REQUEST_FORMAT,
   });
   const reasons: LockCheckReport['reasons'] = [...base.reasons];
   if (lock.model.requested !== judge.capabilities.model) reasons.push('requested');

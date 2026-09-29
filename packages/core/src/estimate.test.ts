@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { Case, Criterion } from '@vetkit/spec';
+import type { Case, Criterion, RequestFormat } from '@vetkit/spec';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { loadCases } from './cases/load.ts';
 import { loadCriteria } from './criteria/load.ts';
@@ -41,8 +41,8 @@ beforeAll(async () => {
   cases = k.cases;
 });
 
-function expectedTokens(evalCase: Case): number {
-  const req = buildRequest(evalCase, criteria);
+function expectedTokens(evalCase: Case, requestFormat?: RequestFormat): number {
+  const req = buildRequest(evalCase, criteria, { requestFormat });
   return Math.ceil((req.state.length + JSON.stringify(req.questions).length) / 4);
 }
 
@@ -54,7 +54,7 @@ describe('estimateRun', () => {
     expect(est.criteria).toBe(3);
     expect(est.calls).toBe(2);
     expect(est.cacheHits).toBe(0);
-    expect(est.inputTokens).toBe(cases.reduce((sum, c) => sum + expectedTokens(c), 0));
+    expect(est.inputTokens).toBe(cases.reduce((sum, c) => sum + expectedTokens(c, 'raw'), 0));
   });
 
   it('an unset request format is measured as fenced-v1', async () => {

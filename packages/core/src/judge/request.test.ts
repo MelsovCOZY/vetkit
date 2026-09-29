@@ -202,7 +202,8 @@ describe('buildRequest', () => {
   });
 
   test('judged content sits in state only, never in any question field', () => {
-    const built = buildRequest(evalCase, criteria);
+    // Default switched to fenced-v1 after the request-format A/B; this asserts the raw state.
+    const built = buildRequest(evalCase, criteria, { requestFormat: 'raw' });
     expect(built.state).toContain(SENTINEL);
     expect(built.state).toBe(evalCase.input.state);
     expect(JSON.stringify(built.questions)).not.toContain(SENTINEL);

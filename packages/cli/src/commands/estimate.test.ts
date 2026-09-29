@@ -30,15 +30,15 @@ function freshProject(): string {
   return dir;
 }
 
-// The fake-judge project with capabilities.requestFormat set to 'fenced-v1'.
-function fencedProject(): string {
+// The fake-judge project with capabilities.requestFormat set explicitly.
+function formatProject(format: 'raw' | 'fenced-v1'): string {
   const dir = freshProject();
   const file = join(dir, 'vetkit.config.ts');
   writeFileSync(
     file,
     readFileSync(file, 'utf8').replace(
       'pinned: false,\n    transport',
-      "pinned: false,\n    requestFormat: 'fenced-v1' as const,\n    transport",
+      `pinned: false,\n    requestFormat: '${format}' as const,\n    transport`,
     ),
   );
   return dir;
@@ -113,9 +113,12 @@ describe('vet estimate', () => {
   test.each(['run', 'validate'])(
     'estimate --for %s counts the fenced-v1 wrapper tokens when the judge is fenced',
     (target) => {
-      const raw = parseJson(runVet(['estimate', '--for', target, '--json'], freshProject()).stdout);
+      // Default switched to fenced-v1 after the request-format A/B; raw is now explicit.
+      const raw = parseJson(
+        runVet(['estimate', '--for', target, '--json'], formatProject('raw')).stdout,
+      );
       const fenced = parseJson(
-        runVet(['estimate', '--for', target, '--json'], fencedProject()).stdout,
+        runVet(['estimate', '--for', target, '--json'], formatProject('fenced-v1')).stdout,
       );
       const tokens = (doc: Record<string, unknown>): number => {
         const holder = target === 'run' ? doc : doc['base'];

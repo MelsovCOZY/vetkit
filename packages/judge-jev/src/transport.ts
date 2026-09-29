@@ -3,7 +3,13 @@
 // model, all speaking the `/v1/systemone` dialect; plus the cloudflare preset, whose
 // REST run endpoint and envelope live in cloudflare.ts). Plain fetch only — the
 // @typesafe-ai/sdk peer stays optional and unused here.
-import { VetError, type JudgeV1, type Question, type RequestFormat } from '@vetkit/spec';
+import {
+  DEFAULT_REQUEST_FORMAT,
+  VetError,
+  type JudgeV1,
+  type Question,
+  type RequestFormat,
+} from '@vetkit/spec';
 import { createCloudflareTransport } from './cloudflare.ts';
 import { normalise } from './normalise.ts';
 import { JEV_PRESETS, type JevPresetName, type JevProviderOptions } from './presets.ts';
@@ -340,7 +346,7 @@ export function createJevJudge(opts: CreateJevJudgeOptions): JudgeV1 {
       pinned,
       transport,
       model,
-      ...(opts.requestFormat === 'fenced-v1' ? { requestFormat: opts.requestFormat } : {}),
+      requestFormat: opts.requestFormat ?? DEFAULT_REQUEST_FORMAT,
     },
     async doJudge(req) {
       validateRequest(req.state, req.questions);

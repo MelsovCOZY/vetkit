@@ -9,6 +9,7 @@
 import { createHash } from 'node:crypto';
 import {
   CEV_ERROR_CODES,
+  DEFAULT_REQUEST_FORMAT,
   VetError,
   type Case,
   type CevErrorCode,
@@ -96,7 +97,7 @@ export function buildRequest(
     questions[criterion.id] = toQuestion(criterion, evalCase, options.optionOrder?.[criterion.id]);
   }
   return {
-    state: renderState(evalCase.input.state, options.requestFormat ?? 'raw'),
+    state: renderState(evalCase.input.state, options.requestFormat ?? DEFAULT_REQUEST_FORMAT),
     questions,
   };
 }
@@ -122,10 +123,8 @@ export function cacheKey(
     optionOrder: sorted.map((c) => [c.id, options.optionOrder?.[c.id] ?? null]),
   };
   // Only a non-raw format enters the material, so raw keys stay identical to before it existed.
-  const keyed =
-    options.requestFormat === undefined || options.requestFormat === 'raw'
-      ? material
-      : { ...material, requestFormat: options.requestFormat };
+  const requestFormat = options.requestFormat ?? DEFAULT_REQUEST_FORMAT;
+  const keyed = requestFormat === 'raw' ? material : { ...material, requestFormat };
   return createHash('sha256').update(JSON.stringify(keyed)).digest('hex');
 }
 
@@ -229,7 +228,7 @@ export async function judgeCase(input: JudgeCaseInput): Promise<Verdict[]> {
 
   const options: BuildRequestOptions = {
     ...input,
-    requestFormat: input.judge.capabilities.requestFormat ?? 'raw',
+    requestFormat: input.judge.capabilities.requestFormat ?? DEFAULT_REQUEST_FORMAT,
   };
   const key = cacheKey(input.case, input.criteria, input.judge.capabilities.model, options);
   const cached = await input.cache?.get(key);
