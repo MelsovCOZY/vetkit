@@ -275,13 +275,10 @@ export function createOutbox(opts: OutboxOptions): Outbox {
       for (const batch of chunk(queue, sink.capabilities.batch)) {
         const outcome = await sendBatch(sink, batch);
         const at = new Date().toISOString();
-        await appendLines(
-          ackedFile,
-          [
-            ...outcome.accepted.map((id): AckedLine => ({ id, sink: sink.id, at })),
-            ...outcome.skipped.map((id): AckedLine => ({ id, sink: sink.id, at, skipped: true })),
-          ],
-        );
+        await appendLines(ackedFile, [
+          ...outcome.accepted.map((id): AckedLine => ({ id, sink: sink.id, at })),
+          ...outcome.skipped.map((id): AckedLine => ({ id, sink: sink.id, at, skipped: true })),
+        ]);
         await appendLines(
           deadFile,
           outcome.dead.map((d): DeadLine => ({ ...d, sink: sink.id, at })),
@@ -342,7 +339,9 @@ export function createOutbox(opts: OutboxOptions): Outbox {
       const pending = await scanPending();
       const acked = await scanLines<AckedLine>(ackedFile, ackedSchema);
       const deadLines = await scanLines<DeadLine>(deadFile, deadSchema);
-      const configured = options?.sinks ?? [...new Set([...acked, ...deadLines].map((l) => l.sink))];
+      const configured = options?.sinks ?? [
+        ...new Set([...acked, ...deadLines].map((l) => l.sink)),
+      ];
       const ackedBy = new Set(acked.map((l) => `${l.sink}\u0000${l.id}`));
       const deadBy = new Set(deadLines.map((l) => `${l.sink}\u0000${l.id}`));
       let acknowledged = 0;

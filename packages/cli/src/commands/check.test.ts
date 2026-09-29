@@ -433,22 +433,22 @@ async function seedOutbox(dir: string, dead: boolean): Promise<void> {
   }
 }
 
-  const sink = (id: string, skip: boolean): SinkV1 => ({
-    specVersion: 'v1',
-    id,
-    capabilities: { batch: 10, idempotent: true },
-    doWrite: (batch) =>
-      Promise.resolve({
-        accepted: skip ? [] : batch.map((v) => v.id ?? ''),
-        rejected: skip
-          ? batch.map((v) => ({
-              id: v.id ?? '',
-              reason: 'skipped:unscored:infra_failure',
-              retryable: false,
-            }))
-          : [],
-      }),
-  });
+const sink = (id: string, skip: boolean): SinkV1 => ({
+  specVersion: 'v1',
+  id,
+  capabilities: { batch: 10, idempotent: true },
+  doWrite: (batch) =>
+    Promise.resolve({
+      accepted: skip ? [] : batch.map((v) => v.id ?? ''),
+      rejected: skip
+        ? batch.map((v) => ({
+            id: v.id ?? '',
+            reason: 'skipped:unscored:infra_failure',
+            retryable: false,
+          }))
+        : [],
+    }),
+});
 
 describe('vet check --outbox', () => {
   test('outbox: --outbox --json prints {produced, acknowledged, dead} from <cacheDir>/outbox', async () => {
