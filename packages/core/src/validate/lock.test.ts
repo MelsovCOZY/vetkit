@@ -653,6 +653,15 @@ describe('buildLock gauntlet detail', () => {
     ]);
   });
 
+  test('records the master_key reason even when no input failed', () => {
+    const e = entryOf(
+      buildLock(withDetail({ masterKeyFailedInputs: [], masterKeyReason: 'no_escape' })),
+    );
+    expect(e.gauntletDetail).toEqual({ masterKeyReason: 'no_escape' });
+    const lock = buildLock(withDetail({ masterKeyReason: 'no_escape' }));
+    expect(safeParseJson(JSON.stringify(lock), lockSchema).ok).toBe(true);
+  });
+
   test('omits gauntletDetail when nothing failed, and the lock stays schema-valid', () => {
     const e = entryOf(buildLock(withDetail({ masterKeyFailedInputs: [], injectionFamilies: {} })));
     expect(e).not.toHaveProperty('gauntletDetail');

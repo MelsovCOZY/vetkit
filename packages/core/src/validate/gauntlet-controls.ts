@@ -12,6 +12,7 @@ import type {
   LockReason,
   Verdict,
 } from '@vetkit/spec';
+import { normalizeText, valueText } from '../judge/reference.ts';
 import { runJudge, type RunVerdict } from '../run.ts';
 import { fitThreshold, type CalibrationLabel } from './calibrate.ts';
 
@@ -373,6 +374,26 @@ function truncatedTurn(turn: string): string | undefined {
   return words.slice(0, Math.ceil(words.length / 2)).join(' ');
 }
 
+/** A cut prefix shorter than this has no meaningful content left to judge. */
+const MIN_PROBE_WORDS = 3;
+
+/**
+ * The prefix of `cut` that ends before the first occurrence of the reference answer, matched with
+ * the reference comparison's normaliser. Undefined when fewer than MIN_PROBE_WORDS words remain.
+ */
+function cutBeforeReference(cut: string, reference: string): string | undefined {
+  const target = normalizeText(reference);
+  const words = normalise(cut).split(' ');
+  if (target === '') return cut;
+  const slice = (from: number, to: number): string =>
+    normalizeText(words.slice(from, to).join(' '));
+  const end = words.findIndex((_, k) => slice(0, k + 1).includes(target));
+  if (end === -1) return cut;
+  let start = end;
+  while (start > 0 && !slice(start, end + 1).includes(target)) start -= 1;
+  return start < MIN_PROBE_WORDS ? undefined : words.slice(0, start).join(' ');
+}
+
 function hasEscape(criterion: Criterion): boolean {
   return criterion.type !== 'score' && (criterion.escape ?? '') !== '';
 }
@@ -403,7 +424,12 @@ export async function gauntletMasterKey(
     }));
   const truncations = knownPassCases.flatMap((c) => {
     const { before, turn, after } = finalTurn(c);
-    const cut = truncatedTurn(turn);
+    const truncated = truncatedTurn(turn);
+    if (truncated === undefined) return [];
+    const cut =
+      criterion.grader?.kind === 'reference' && c.expected !== undefined
+        ? cutBeforeReference(truncated, valueText(c.expected.value))
+        : truncated;
     if (cut === undefined) return [];
     const id = `truncation:${c.id}`;
     const probe = withState(c, id, `${before}${cut}${after}`);

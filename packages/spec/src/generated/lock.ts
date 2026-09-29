@@ -68,6 +68,7 @@ export interface GauntletResult {
   length: GauntletOutcome;
 }
 export interface GauntletDetail {
+  masterKeyReason?: 'no_escape';
   masterKeyFailed?: {
     kind: string;
     caseId: string;

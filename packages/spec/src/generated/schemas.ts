@@ -643,6 +643,9 @@ export const lockSchema: JsonSchema = {
       title: 'GauntletDetail',
       type: 'object',
       properties: {
+        masterKeyReason: {
+          enum: ['no_escape'],
+        },
         masterKeyFailed: {
           type: 'array',
           items: {

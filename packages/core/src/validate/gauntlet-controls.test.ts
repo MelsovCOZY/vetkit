@@ -298,6 +298,13 @@ const oneSentence = (id: string, answer: string): Case => ({
   tags: [],
 });
 
+const withReference = (id: string, answer: string, value: string): Case => ({
+  ...oneSentence(id, answer),
+  expected: { value, source: 'user' },
+});
+const probeStates = (judge: { states: string[] }): string[] =>
+  judge.states.filter((s) => s.includes('assistant:'));
+
 describe('gauntletMasterKey', () => {
   const knownPass = [makeCase(0), makeCase(2)];
 
@@ -398,6 +405,40 @@ describe('gauntletMasterKey', () => {
       );
       const out = await gauntletMasterKey(CRITERION, judge, cases, { inputs });
       expect(out.failedInputs).toEqual([]);
+    });
+  });
+
+  describe('reference-bearing truncation probes', () => {
+    const REFERENCE_CRITERION: Criterion = { ...CRITERION, grader: { kind: 'reference' } };
+    it('cuts a probe before the first occurrence of the reference, using the reference normaliser', async () => {
+      const cases = [
+        withReference('r1', 'The first train leaves at 05:40 from the old station [1]', '05:40'),
+      ];
+      const judge = fakeJudge(() => ESCAPE);
+      await gauntletMasterKey(REFERENCE_CRITERION, judge, cases, { inputs: [] });
+      const probes = probeStates(judge);
+      expect(probes.length).toBeGreaterThan(0);
+      for (const probe of probes) expect(probe).not.toContain('05:40');
+      expect(probes[0]).toContain('The first train leaves at');
+    });
+
+    it('skips the probe when fewer than 3 words remain before the reference', async () => {
+      const cases = [
+        withReference('r2', 'Odile Farrant supervises the apprentices here [1]', 'Odile Farrant'),
+      ];
+      const judge = fakeJudge(() => YES);
+      const out = await gauntletMasterKey(REFERENCE_CRITERION, judge, cases, { inputs: [] });
+      expect(judge.states).toEqual([]);
+      expect(out.result).toBe('skipped');
+    });
+
+    it('keeps the current truncation for a non-reference criterion', async () => {
+      const cases = [
+        withReference('r3', 'The first train leaves at 05:40 from the old station [1]', '05:40'),
+      ];
+      const judge = fakeJudge(() => ESCAPE);
+      await gauntletMasterKey(CRITERION, judge, cases, { inputs: [] });
+      expect(probeStates(judge).some((s) => s.includes('05:40'))).toBe(true);
     });
   });
 

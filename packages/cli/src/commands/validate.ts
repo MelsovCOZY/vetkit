@@ -306,7 +306,10 @@ interface Detail {
     readonly families: Record<string, unknown>;
     readonly flipped: { family: string; flips: number; trials: number }[];
   };
-  readonly master_key: { readonly failedInputs: { kind: string; caseId: string }[] };
+  readonly master_key: {
+    readonly failedInputs: { kind: string; caseId: string }[];
+    readonly reason?: 'no_escape';
+  };
   readonly position_swap: {
     readonly consistency: number | null;
     readonly inconclusive: number | null;
@@ -410,6 +413,7 @@ async function runGauntlets(ctx: GauntletContext): Promise<{
   return {
     gauntletDetail: {
       masterKeyFailedInputs: masterKey?.failedInputs ?? [],
+      ...(masterKey?.reason === 'no_escape' ? { masterKeyReason: masterKey.reason } : {}),
       injectionFamilies: injection?.families ?? {},
     },
     gauntlet: {
@@ -431,7 +435,10 @@ async function runGauntlets(ctx: GauntletContext): Promise<{
         families: injection?.families ?? {},
         flipped: flippedFamilies(injection?.families),
       },
-      master_key: { failedInputs: masterKeyFailures(masterKey?.failedInputs ?? []) },
+      master_key: {
+        failedInputs: masterKeyFailures(masterKey?.failedInputs ?? []),
+        ...(masterKey?.reason === 'no_escape' ? { reason: masterKey.reason } : {}),
+      },
       position_swap: { consistency: swap.consistency, inconclusive: swap.inconclusive },
       length:
         length === undefined
