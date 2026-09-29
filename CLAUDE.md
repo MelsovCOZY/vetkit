@@ -17,7 +17,7 @@ model, provider or gateway. No code exists yet: the plan lives in bd. Research b
 - Jev is reached through a configurable transport, default Vercel AI Gateway (`AI_GATEWAY_API_KEY` in `.env`).
   **Why:** TypeSafe registration is closed. The gateway exposes only the alias `typesafe-ai/jev`; record
   the served model id and `pinned: false` on every judgment.
-- Jev score answers drift run to run (see `fixtures/research/`). **Why:** thresholds need tolerance
+- Jev score answers drift run to run. **Why:** thresholds need tolerance
   bands and N≥3 repeats; never gate on `confidence` alone.
 - Bun is the package manager and script runner only. **Why:** the build is tsdown, tests are vitest,
   typecheck is TypeScript 7, and publishing is `bun pm pack` → tarball checks → `npm publish <tgz>` with OIDC.

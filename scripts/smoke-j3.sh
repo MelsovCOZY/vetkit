@@ -100,7 +100,8 @@ if [ -z "${!KEY_ENV:-}" ]; then
 else
   KEY="${!KEY_ENV}"
 fi
-PROBE_BODY="$ROOT/fixtures/research/2026-09-25-gateway-systemone-request.json"
+PROBE_BODY="$(mktemp)"
+printf '%s' '{"model":"","state":"User: Can I get a refund for my order #4411?\nAssistant: Yes, I have issued a full refund of $80 to your card.","questions":{"promised_refund":{"type":"noul","instructions":"Did the assistant promise or issue a refund?"}}}' >"$PROBE_BODY"
 if [ "$JUDGE" = vercel ]; then
   PROBE_URL=https://ai-gateway.vercel.sh/typesafe/v1/systemone
   PROBE_MODEL=typesafe-ai/jev
@@ -118,6 +119,7 @@ for _ in $(seq 1 30); do
   sleep 20
 done
 unset KEY
+rm -f "$PROBE_BODY"
 say "preflight judge HTTP $status"
 if [ "$status" != 200 ]; then
   say "NOT RUN: the judge upstream never answered 200 (last HTTP $status; external, retry later)" >&2

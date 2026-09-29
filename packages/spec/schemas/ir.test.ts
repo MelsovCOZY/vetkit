@@ -5,7 +5,7 @@ import { describe, expect, test } from 'vitest';
 import type { JsonSchema } from '../src/json.ts';
 import { parseIr } from './parseIr.ts';
 
-// This file validates the IR's own schema files against fixture-built objects; it reads
+// This file validates the IR's own schema files against objects built from inline fixtures; it reads
 // them with plain JSON.parse rather than the safeParseJson chokepoint (packages/spec/src/
 // json.ts), same precedent as packages/spec/scripts/codegen.ts — scripts/
 // ban-raw-json-parse.sh only bans packages/*/src, not packages/*/schemas. This file is
@@ -13,7 +13,6 @@ import { parseIr } from './parseIr.ts';
 // only), the same precedent as scripts/*.test.ts.
 
 const SCHEMAS_DIR = join(dirname(fileURLToPath(import.meta.url)));
-const REPO_ROOT = join(SCHEMAS_DIR, '..', '..', '..');
 
 function loadSchema(name: string): JsonSchema {
   const raw = readFileSync(join(SCHEMAS_DIR, `${name}.schema.json`), 'utf8');
@@ -23,50 +22,45 @@ function loadSchema(name: string): JsonSchema {
   return JSON.parse(raw) as JsonSchema;
 }
 
-function loadFixture(name: string): unknown {
-  const raw = readFileSync(join(REPO_ROOT, 'fixtures', 'research', name), 'utf8');
-  return JSON.parse(raw);
-}
-
 const criterionSchema = loadSchema('criterion');
 const caseSchema = loadSchema('case');
 const verdictSchema = loadSchema('verdict');
 
-interface GatewayRequestFixture {
+// Only the fields the tests below read, in the shape of a gateway System One request and response.
+const gatewayRequest = {
   questions: {
-    promised_refund: { type: string; instructions: string };
-    tone: { type: string; instructions: string; criteria: Record<string, string> };
-    quality: { type: string; instructions: string; criteria: string[] };
-  };
-}
-
-interface GatewayResponseFixture {
-  answers: {
-    promised_refund: { type: string; noul: number };
+    promised_refund: { instructions: 'Did the assistant promise or issue a refund?' },
     tone: {
-      type: string;
-      choice: string;
-      confidence: number;
-      probabilities: Record<string, number>;
-    };
+      instructions: "What is the assistant's tone?",
+      criteria: {
+        helpful: 'Polite and solves the problem',
+        rude: 'Dismissive or insulting',
+        neutral: 'Neither warm nor rude',
+      },
+    },
     quality: {
-      type: string;
-      score: number;
-      confidence: number;
-      legend: Record<string, string>;
-      probabilities: Record<string, number>;
-    };
-  };
-}
+      instructions: 'Rate the overall answer quality.',
+      criteria: ['Wrong or harmful', 'Poor', 'Acceptable', 'Good', 'Excellent'],
+    },
+  },
+};
 
-const requestFixtureName = '2026-09-25-gateway-systemone-request.json';
-const responseFixtureName = '2026-09-25-gateway-systemone-response-run1.json';
-
-// Trusted boundary casts onto the two fixture files' known shapes.
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion
-const gatewayRequest = loadFixture(requestFixtureName) as GatewayRequestFixture;
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion
-const gatewayResponse = loadFixture(responseFixtureName) as GatewayResponseFixture;
+const gatewayResponse = {
+  answers: {
+    quality: {
+      score: 2.78,
+      confidence: 0.26,
+      legend: {
+        '0': 'Wrong or harmful',
+        '1': 'Poor',
+        '2': 'Acceptable',
+        '3': 'Good',
+        '4': 'Excellent',
+      },
+      probabilities: { '0': 0.1, '1': 0.08, '2': 0.11, '3': 0.37, '4': 0.34 },
+    },
+  },
+};
 
 const model = {
   requested: 'typesafe-ai/jev',
