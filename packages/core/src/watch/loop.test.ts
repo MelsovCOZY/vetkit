@@ -334,6 +334,8 @@ describe('runWatch', () => {
       seen: 20,
       sampled: 10,
       judged: 10,
+      unscored: 0,
+      unscoredCauses: [],
       promoted: 0,
       produced: 10,
       acknowledged: 10,
@@ -689,5 +691,49 @@ describe('runWatch', () => {
       }),
     ]);
     expect(summary.judged).toBe(1);
+  });
+  test('unscored verdicts are not counted as judged; the summary names count and cause codes (dh8.9)', async () => {
+    const traces = Array.from({ length: 12 }, (_, i) => trace(`trace-throttle-${String(i)}`));
+    const throttledIds = new Set(traces.slice(0, 3).map((t) => t.traceId));
+    const throttlingJudge: JudgeCaseFn = async ({ case: c, criteria }) =>
+      criteria.map((crit): Verdict => {
+        if (c.traceId !== undefined && throttledIds.has(c.traceId)) {
+          const { pass: _pass, ...rest } = okVerdict(c.id, crit.id);
+          return { ...rest, status: 'unscored', cause: { code: 'JUDGE_THROTTLED', status: 429 } };
+        }
+        return okVerdict(c.id, crit.id);
+      });
+    const outbox = createOutbox({ dir: join(dir, 'outbox') });
+
+    const summary = await runWatch({
+      source: finiteSource(traces),
+      sampler: createSampler({ sampleRate: 1, inclusionPath: join(dir, 'inclusion.jsonl') }),
+      judge: throttlingJudge,
+      criteria: defaultCriteria,
+      outbox,
+      sinks: [fakeSink()],
+      options: watchOptions({ sampleRate: 1 }),
+      signal: new AbortController().signal,
+    });
+
+    expect(summary.sampled).toBe(12);
+    expect(summary.judged).toBe(9);
+    expect(summary.unscored).toBe(3);
+    expect(summary.unscoredCauses).toEqual(['JUDGE_THROTTLED']);
+  });
+
+  test('an all-ok run reports unscored 0 and no causes (dh8.9)', async () => {
+    const outbox = createOutbox({ dir: join(dir, 'outbox') });
+    const summary = await runWatch({
+      source: finiteSource([trace('trace-fine')]),
+      sampler: createSampler({ sampleRate: 1, inclusionPath: join(dir, 'inclusion.jsonl') }),
+      judge: alwaysOkJudge,
+      criteria: defaultCriteria,
+      outbox,
+      sinks: [fakeSink()],
+      options: watchOptions({ sampleRate: 1 }),
+      signal: new AbortController().signal,
+    });
+    expect(summary).toMatchObject({ judged: 1, unscored: 0, unscoredCauses: [] });
   });
 });

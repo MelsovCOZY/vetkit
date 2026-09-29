@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { safeParseJson } from '@vetkit/spec';
 import { beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import { ensureCliBuilt } from '../test-support/build-cli.js';
+import { renderSummary } from './watch.ts';
 
 const binPath = fileURLToPath(new URL('../../dist/bin.js', import.meta.url));
 const fixtureDir = fileURLToPath(new URL('../../../../fixtures/cli/watch', import.meta.url));
@@ -379,4 +380,28 @@ describe('vet watch', () => {
       await collector.close();
     }
   }, 30_000);
+});
+
+describe('watch summary text (dh8.9)', () => {
+  const base = {
+    seen: 20,
+    sampled: 12,
+    judged: 9,
+    promoted: 0,
+    produced: 9,
+    acknowledged: 9,
+    excluded: { content_not_captured: 0, truncated: 0, incomplete_trace: 0 },
+  } as const;
+
+  test('names the outage with cause code and count when unscored > 0', () => {
+    const text = renderSummary({ ...base, unscored: 3, unscoredCauses: ['JUDGE_THROTTLED'] }, 0);
+    expect(text).toContain('judged 9');
+    expect(text).toContain('unscored 3');
+    expect(text).toContain('JUDGE_THROTTLED x 3');
+  });
+
+  test('says nothing about an outage when unscored is 0', () => {
+    const text = renderSummary({ ...base, judged: 12, unscored: 0, unscoredCauses: [] }, 0);
+    expect(text).not.toMatch(/unscored|JUDGE_/);
+  });
 });
