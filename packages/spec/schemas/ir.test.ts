@@ -24,7 +24,7 @@ function loadSchema(name: string): JsonSchema {
 }
 
 function loadFixture(name: string): unknown {
-  const raw = readFileSync(join(REPO_ROOT, 'docs', 'research', 'fixtures', name), 'utf8');
+  const raw = readFileSync(join(REPO_ROOT, 'fixtures', 'research', name), 'utf8');
   return JSON.parse(raw);
 }
 

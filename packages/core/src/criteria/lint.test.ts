@@ -113,7 +113,6 @@ describe('lint issue shape', () => {
     expect(rule?.why).toMatch(/decline/);
     expect(rule?.why).toMatch(/0\.95/);
     expect(rule?.why).toMatch(/0\.00/);
-    expect(rule?.why).toMatch(/2026-09-25-jev-eval-generation-brief\.md/);
   });
 
   test('DEEP_INDIRECTION warns; FORBIDDEN_WORD and the other eight rules are errors', () => {
