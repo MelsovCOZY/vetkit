@@ -56,9 +56,15 @@ async function readJsonlLines(file: string): Promise<string[]> {
 }
 
 // Temp file + rename: a reader never sees a half-written file (same pattern as run-record.ts).
+// No lines left: unlink the file instead of rewriting it empty (a 0-line *.jsonl file is not
+// a meaningful artifact, and `vet cases review --all` should leave nothing behind).
 async function writeJsonlAtomic(file: string, lines: readonly string[]): Promise<void> {
+  if (lines.length === 0) {
+    await rm(file, { force: true });
+    return;
+  }
   const tmp = `${file}.${String(process.pid)}.${randomBytes(4).toString('hex')}.tmp`;
-  const body = lines.length === 0 ? '' : `${lines.join('\n')}\n`;
+  const body = `${lines.join('\n')}\n`;
   try {
     await writeFile(tmp, body, 'utf8');
     await rename(tmp, file);
