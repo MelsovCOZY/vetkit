@@ -15,10 +15,7 @@ export type { EmitScorerOptions, EmitScorerResult } from './emit-scorer.ts';
 export { emitTestFile } from './emit-test.ts';
 export type { EmitTestFileOptions, EmitTestFileResult } from './emit-test.ts';
 
-// ExporterV1's input carries no source-file field (review NOTE: Criterion has none
-// either), so this default name stands in for "the criteria" on a single doExport call; the
-// CLI (packages/cli/src/commands/export.ts) is what groups multiple --criteria files and calls
-// doExport once per file.
+// Label used for the describe block when the caller passes no sourceFile.
 const DEFAULT_CRITERIA_FILE = 'criteria.yaml';
 
 /** Writes one scorer module per criterion plus one test file, all under outDir. */
@@ -27,8 +24,9 @@ export async function doExport(input: {
   cases: Case[];
   lock: Lock | null;
   outDir: string;
+  sourceFile?: string;
 }): Promise<{ files: string[] }> {
-  const { criteria, cases, lock, outDir } = input;
+  const { criteria, cases, lock, outDir, sourceFile = DEFAULT_CRITERIA_FILE } = input;
   const files: string[] = [];
 
   for (const criterion of criteria) {
@@ -39,7 +37,7 @@ export async function doExport(input: {
     files.push(fullPath);
   }
 
-  const test = emitTestFile(DEFAULT_CRITERIA_FILE, cases, criteria, lock, { outDir });
+  const test = emitTestFile(sourceFile, cases, criteria, lock, { outDir });
   const testFullPath = join(outDir, test.path);
   await mkdir(dirname(testFullPath), { recursive: true });
   await writeFile(testFullPath, test.source, 'utf8');
