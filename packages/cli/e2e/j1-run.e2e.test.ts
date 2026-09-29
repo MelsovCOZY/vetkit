@@ -2,7 +2,7 @@
 // judge and its exit code is usable in CI. Runs scripts/smoke-j1.sh, which builds, writes a
 // scratch project and checks every acceptance-criterion verify command.
 //
-// Final cold gate only: skipped unless CEV_E2E=1 (the key comes from AI_GATEWAY_API_KEY or
+// Skipped unless CEV_E2E=1 (the key comes from AI_GATEWAY_API_KEY or
 // the repo .env; see the script). Two live judge requests per run.
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';

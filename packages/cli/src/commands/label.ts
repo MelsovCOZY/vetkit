@@ -1,5 +1,5 @@
 // `vet label`: import human labels from CSV (`--from`) or collect them in a TTY loop
-// (`--tty`), writing `evals/labels/<criterion_id>.csv` (docs/contracts/j3.md "Labels CSV").
+// (`--tty`), writing `evals/labels/<criterion_id>.csv`.
 import { closeSync, existsSync, fsyncSync, openSync, statSync, writeSync } from 'node:fs';
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -150,7 +150,7 @@ const LABEL_FOR_KEY: Readonly<Record<string, LabelValue>> = { p: 'pass', f: 'fai
 async function labelLoop(options: LabelOptions, deps: LabelDeps): Promise<void> {
   const input = deps.input ?? process.stdin;
   const output = deps.output ?? process.stdout;
-  // Guard before any prompt: clack hangs without a TTY (root DECISION C4).
+  // Guard before any prompt: clack hangs without a TTY.
   if (input.isTTY !== true) {
     throw new VetError(
       CEV_ERROR_CODES.NOT_INTERACTIVE,

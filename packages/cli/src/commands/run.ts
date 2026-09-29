@@ -1,7 +1,7 @@
 // `vet run`: load vetkit.config.ts, judge every case (core runEvals) and exit with its code.
 // Under --json stdout carries exactly one JSON document (the runEvals result as-is); warnings
 // and errors go to stderr. SIGINT aborts the run: partial results are still printed, with
-// summary.aborted true, and the exit code is 130 (root DECISION C5).
+// summary.aborted true, and the exit code is 130.
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
@@ -60,7 +60,7 @@ function caseOutcome(verdicts: readonly RunVerdict[]): Outcome {
   return 'pass';
 }
 
-// Bug F3/F4 (gate 7lg AC1): core's exit mapping treats a judge failure (unscored) the same as
+// Core's exit mapping treats a judge failure (unscored) the same as
 // a scored fail, so `--sink` — whose whole point is durably recording an unscored verdict for
 // later drain, not blocking CI on a transient judge outage — still exited 1. With --sink set,
 // an exit of 1 caused only by unscored verdicts (no real scored failure) is downgraded to 0;
@@ -116,10 +116,9 @@ function render(result: RunEvalsResult): string {
   return lines.join('\n');
 }
 
-// evals/cases/pending/ is where promote.ts writes auto-promoted cases; the J1
-// loader's default evals/cases/*.jsonl glob never recurses into it (docs/contracts/j7.md
-// "Promotion"), so a case sitting there is otherwise invisible until `vet cases review`
-// moves it up a level. A missing pending/ directory (the common case before any
+// evals/cases/pending/ is where promote.ts writes auto-promoted cases; the
+// loader's default evals/cases/*.jsonl glob never recurses into it, so a case sitting there is otherwise invisible
+// until `vet cases review` moves it up a level. A missing pending/ directory (the common case before any
 // promotion has happened) counts as 0, not an error.
 // `vet init --out <dir>` writes criteria.yaml and cases/ at the top level of
 // <dir>, with no evals/ subdirectory. evals/ is still the first choice when it exists (the
@@ -144,7 +143,7 @@ async function runCommand(options: RunOptions & Readonly<Record<string, unknown>
   });
   for (const warning of loaded.warnings) log.warn(warning);
   const { config, rootDir } = loaded;
-  // Missing lock → null (the gate then refuses); an invalid one throws (exit 2).
+  // Missing lock → null (`vet run` then refuses); an invalid one throws (exit 2).
   const lock = await readLockOrNull(resolve(rootDir, LOCK_FILE));
   const finishes: RunHookFinish[] = [];
   for (const hook of runHooks) {
@@ -193,7 +192,7 @@ async function runCommand(options: RunOptions & Readonly<Record<string, unknown>
       events: runEvalsEvents,
     });
 
-    // --sink AC1: an exit of 1 from unscored verdicts alone never blocks a --sink run.
+    // An exit of 1 from unscored verdicts alone never blocks a --sink run.
     if (
       options['sink'] !== undefined &&
       result.exitCode === 1 &&

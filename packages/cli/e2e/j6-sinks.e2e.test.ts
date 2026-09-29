@@ -3,7 +3,7 @@
 // error.type with no score. Runs scripts/smoke-j6.sh, which builds, starts docker (collector +
 // Langfuse compose, TEST-ONLY), calls the REAL judge and checks every AC verify command.
 //
-// Final cold gate only: skipped unless CEV_E2E=1 (key from AI_GATEWAY_API_KEY or the repo .env).
+// Skipped unless CEV_E2E=1 (key from AI_GATEWAY_API_KEY or the repo .env).
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';

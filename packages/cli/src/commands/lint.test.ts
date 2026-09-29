@@ -48,7 +48,7 @@ function parseJson<T = unknown>(text: string): T {
 }
 
 // Ground truth from core/src/criteria/lint.ts's LINT_RULES: every rule these fixtures name
-// is 'error' severity except DEEP_INDIRECTION, which is 'warn' (docs/contracts/j2.md:165-170).
+// is 'error' severity except DEEP_INDIRECTION, which is 'warn'.
 const ERROR_SEVERITY_FIXTURES = [
   'compound-level.yaml',
   'computation.yaml',

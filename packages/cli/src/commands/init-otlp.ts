@@ -1,4 +1,4 @@
-// `otlp:` source wiring for `vet init --source` (root design J5). Registers
+// `otlp:` source wiring for `vet init --source`. Registers
 // the `otlp` prefix on the same seam source-jsonl uses (sources.ts): `otlp:<path>` is
 // file-backed (a file or a directory of files, source-otlp's own otlpSource semantics);
 // `otlp::<port>` / `otlp::0` starts an OTLP/HTTP receiver (source-otlp's startReceiver) and

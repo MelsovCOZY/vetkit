@@ -76,8 +76,8 @@ describe('vet init --source', () => {
     expect(doc.criteria.length).toBeLessThan(5);
   });
 
-  // bug (cold gate run 4): exit 1 alone gave no reason on stderr or in --json for why so few
-  // criteria survived; this named the count, the minimum, and the dropped/repaired counts.
+  // The reason for a too-few-criteria exit 1 shows on stderr and in --json: the count, the
+  // minimum, and the dropped/repaired counts.
   test('exits 1 with a stderr reason naming the count, the minimum and the dropped/repaired counts', () => {
     const project = freshProject();
     const out = join(project, 'evals-out');
@@ -146,9 +146,8 @@ describe('vet init --source', () => {
     expect(existsSync(`${out}.tmp-${String(result.pid)}`)).toBe(false);
   });
 
-  // `vet init --out <dir>` used to leave <dir> with no vetkit.config.ts, so a
-  // `vet run` there always failed CONFIG_INVALID even though criteria.yaml and cases/ were
-  // right there at the top level.
+  // `vet init --out <dir>` writes a vetkit.config.ts, so `vet run` there does not fail
+  // CONFIG_INVALID even though criteria.yaml and cases/ sit at the top level.
   test('--out writes a vetkit.config.ts that a `vet run` in that directory can load every case with', () => {
     const project = freshProject();
     const out = join(project, 'evals-out');

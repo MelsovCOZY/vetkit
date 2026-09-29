@@ -5,7 +5,7 @@
 //
 // --for validate: calibration uses core's exported CALIBRATION_MIN_REPEATS (the estimateValidate
 // default). The gauntlet pack sizes depend on their input packs (paddings, injections,
-// constants), so those parts print 'unknown' rather than a guess (bead AC).
+// constants), so those parts print 'unknown' rather than a guess.
 import { resolve } from 'node:path';
 import {
   estimateRun,

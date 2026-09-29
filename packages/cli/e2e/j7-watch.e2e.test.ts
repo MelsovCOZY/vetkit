@@ -1,8 +1,8 @@
 // J7 journey: `vet watch` in fixtures/projects/j7 samples 100
 // replayed traces, judges the sample with the REAL Jev judge (transport from vetkit.config.ts),
 // writes results through the outbox, reports coverage and promotes the injected failing trace.
-// Encodes the gate steps in TypeScript (the collector is an in-test OTLP/HTTP stub; the docker
-// collector variant is scripts/smoke-j7.sh). Final cold gate only: skipped unless CEV_E2E=1.
+// Encodes the journey steps in TypeScript (the collector is an in-test OTLP/HTTP stub; the docker
+// collector variant is scripts/smoke-j7.sh). Skipped unless CEV_E2E=1.
 // The key comes from AI_GATEWAY_API_KEY, else the repo .env via --env-file (never printed).
 import { spawn, spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';

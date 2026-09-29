@@ -3,7 +3,7 @@
 // `vet check --lock` on a project without a lock exits 2. The judge endpoint is a refused
 // connection (CEV_JUDGE_BASE_URL) and the key is a placeholder, so no request leaves the machine.
 //
-// Final cold gate only: skipped unless CEV_E2E=1. Needs `bun run build`.
+// Skipped unless CEV_E2E=1. Needs `bun run build`.
 import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

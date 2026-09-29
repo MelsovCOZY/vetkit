@@ -19,8 +19,8 @@ beforeAll(async () => {
 const N = 2;
 const TRACE = ['0af7651916cd43dd8448eb211c80319c', '4bf92f3577b34da6a3ce929d0e0e4736'];
 
-// The temp project's config: an in-process judge and two fake sinks (adapter objects, option
-// A). Each fake appends the verdicts it receives to the file named by FAKE_<NAME>_OUT; its
+// The temp project's config: an in-process judge and two fake sinks (adapter objects).
+// Each fake appends the verdicts it receives to the file named by FAKE_<NAME>_OUT; its
 // FAKE_<NAME>_MODE is 'down' (every item rejected retryable) or 'throw' (a non-SINK error).
 // The judge writes JUDGE_CALLED on every call; VETKIT_FIXTURE_MODE 'throw' makes it fail and
 // 'slow' makes it wait for the abort after writing VETKIT_FIXTURE_STARTED.
@@ -228,7 +228,7 @@ describe('vet run --sink', () => {
     expect(acked.filter((l) => l['sink'] === 'langfuse/scores')).toHaveLength(0);
     expect(readLines(project.langfuseOut)).toHaveLength(0);
 
-    // The J6 gate property: the collector comes back and a second run drains the backlog.
+    // The collector comes back and a second run drains the backlog.
     const second = runVet(['run', '--sink', 'otel,langfuse', '--json'], project, envFor(project));
     expect(second.status).toBe(0);
     expect(parseJson(second.stdout)).toMatchObject({
@@ -398,14 +398,14 @@ describe('vet run CEV_JUDGE_BASE_URL forced judge failure', () => {
     });
     expect(result.status).toBe(0);
     expect(parseJson(result.stdout)).toMatchObject({ exitCode: 0 });
-    // repro: the run-done line must report the real (downgraded) exit code too.
+    // The run-done line must report the real (downgraded) exit code too.
     expect(result.stderr).toMatch(/run done: 1 verdict, exit 0/);
     // fixtureEvals (shared with run.test.ts) has exactly one case and one criterion.
     const received = readLines(otelOut);
     expect(received).toHaveLength(1);
     for (const v of received) {
       expect(v['status']).toBe('unscored');
-      // AC (root DECISION, supersedes the old JUDGE_TIMEOUT assertion): a refused
+      // A refused
       // connection is JUDGE_UNAVAILABLE, retried on a short fixed budget, never JUDGE_TIMEOUT
       // (reserved for a real deadline).
       expect(v['cause']).toMatchObject({ code: 'JUDGE_UNAVAILABLE' });

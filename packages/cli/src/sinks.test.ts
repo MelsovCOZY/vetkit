@@ -1,4 +1,4 @@
-// Unit tests for declarative sink descriptors (OPEN-9 DECISION): resolveSinks
+// Unit tests for declarative sink descriptors: resolveSinks
 // builds @vetkit/sink-otel / @vetkit/sink-langfuse adapters from a `{kind,*Env}` descriptor,
 // reading the named env vars. Network is always stubbed via the `fetch` option; nothing here
 // makes a live call. The exact-id/prefix matching tests for plain adapter-object refs already

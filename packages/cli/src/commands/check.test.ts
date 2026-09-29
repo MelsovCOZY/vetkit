@@ -1,5 +1,4 @@
-// `vet check --lock|--outbox`. The --lock cases moved here from validate.test.ts
-// when check left validate.ts; validate itself writes the lock each case starts from.
+// `vet check --lock|--outbox`. validate itself writes the lock each case starts from.
 import { appendFile, mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -33,8 +32,6 @@ const CRITERIA_YAML = `criteria:
       traceIds: []
 `;
 const HEADER = 'case_id,criterion_id,label,labeler,labeled_at';
-
-// ---------- fixture project ----------
 
 interface Row {
   readonly id: string;
@@ -221,8 +218,6 @@ async function lockAt(root: string): Promise<Lock> {
   return r;
 }
 
-// ---------- vet check --lock ----------
-
 describe('vet check --lock', () => {
   test('check --lock fresh → exit 0 {stale:false}', async () => {
     const rows = standardRows();
@@ -294,8 +289,6 @@ describe('vet check --lock', () => {
     expect(exitCodeOf(new VetError(CEV_ERROR_CODES.LOCK_STALE, 'stale'))).toBe(1);
   });
 });
-
-// ---------- per-criterion drift ----------
 
 interface Validated {
   readonly root: string;
@@ -446,8 +439,6 @@ describe('vet check --lock per criterion', () => {
     expect(exitCodeOf(error)).toBe(2);
   });
 });
-
-// ---------- vet check --outbox ----------
 
 function verdict(n: number): Verdict {
   return {

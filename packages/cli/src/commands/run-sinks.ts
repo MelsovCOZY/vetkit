@@ -1,8 +1,8 @@
-// `vet run --sink <names>` (J6): after the run, every verdict (partial on SIGINT)
+// `vet run --sink <names>`: after the run, every verdict (partial on SIGINT)
 // is enqueued in the durable outbox under <cacheDir>/outbox, drained to the named sinks and
 // reconciled. The counts merge into the run's result: `sinks.<name> = {accepted, rejected}`
 // for this drain and `outbox = {produced, acknowledged, dead}` as outbox-file totals, which
-// add up across runs so a second run shows the drained backlog (J6 gate). Retained pending
+// add up across runs so a second run shows the drained backlog. Retained pending
 // items only warn on stderr; the exit code stays the run's.
 import { join, resolve } from 'node:path';
 import { createEvents, createOutbox } from '@vetkit/core';
