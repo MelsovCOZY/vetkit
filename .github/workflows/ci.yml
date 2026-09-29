@@ -14,7 +14,7 @@ jobs:
         node: [22, 24, 26]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
@@ -22,7 +22,7 @@ jobs:
           bun-version: '1.4.2'
 
       - name: Set up Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
 
@@ -42,7 +42,7 @@ jobs:
         run: bun run pack
 
       - name: Upload dist-tarballs
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: dist-tarballs-${{ matrix.node }}
           path: dist-tarballs
@@ -55,7 +55,7 @@ jobs:
         node: [22, 24, 26]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
@@ -63,12 +63,12 @@ jobs:
           bun-version: '1.4.2'
 
       - name: Set up Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
 
       - name: Download dist-tarballs
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: dist-tarballs-${{ matrix.node }}
           path: dist-tarballs
