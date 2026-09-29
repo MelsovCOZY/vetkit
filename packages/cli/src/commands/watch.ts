@@ -1,10 +1,9 @@
-// `vet watch`: docs/contracts/j7.md, docs/watch.md. Samples a live OTel stream through the J5
+// `vet watch`: samples a live OTel stream through the
 // receiver (packages/source-otlp startReceiver), judges the sample (runWatch),
 // promotes failures into evals/cases/pending/ (promoteFailure) and prints one
-// coverage summary on exit. The one documented exception to the CLI-wide SIGINT->130 rule
-// (docs/contracts/j7.md "Exit behaviour"): first SIGINT drains once and exits 0, second exits
-// 130 immediately. A receiver bind failure is RECEIVER_BIND (exit 2); an out-of-range --sample
-// (and no vetkit.config.ts watch.sampleRate to fall back to) is WATCH_CONFIG (exit 2).
+// coverage summary on exit. The one exception to the CLI-wide SIGINT->130 rule:
+// first SIGINT drains once and exits 0, second exits 130 immediately. A receiver bind
+// failure is RECEIVER_BIND (exit 2); an out-of-range --sample (and no vetkit.config.ts watch.sampleRate to fall back to) is WATCH_CONFIG (exit 2).
 import { join, resolve } from 'node:path';
 import {
   createOutbox,
@@ -43,8 +42,7 @@ interface WatchOptions extends GlobalOptions {
 // Builds the SourceV1 the loop pulls from and the onRequest callback startReceiver calls per
 // trace: a small queue plus a wake-on-arrival wait, the same shape as the CLI's other
 // receiver-backed source (packages/cli/src/commands/init-otlp.ts's receiverSource, private to
-// that file — this bead's contract keeps the receiver module itself untouched, so the wrapping
-// is duplicated here rather than reaching into that file).
+// that file, so the wrapping is duplicated here rather than exported).
 function queuedReceiverSource(): {
   readonly source: SourceV1;
   readonly onRequest: (trace: NormalizedTrace) => void;
@@ -114,8 +112,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 // Same shape run.ts's private verdictProvenance() builds for `vet run` (picks the six
 // verdict-provenance schema keys off the case's provenance, case.traceId winning): duplicated
-// here rather than imported, since exporting it would mean touching run.ts/index.ts, and
-// this bead's owned paths don't include either.
+// here rather than imported, to keep run.ts's helper private.
 function caseProvenance(evalCase: Case): Verdict['provenance'] | undefined {
   const source = isRecord(evalCase.provenance) ? evalCase.provenance : {};
   const out: NonNullable<Verdict['provenance']> = {};
@@ -195,7 +192,7 @@ async function watchCommand(options: WatchOptions): Promise<void> {
   const outbox = createOutbox({ dir: join(cacheDir, 'outbox') });
   const thresholdFor = (criterionId: string): number =>
     config.thresholds.perCriterion[criterionId] ?? config.thresholds.default;
-  // judgeCase alone never sets `pass` (root DECISION: that pure math is decideVerdict, a
+  // judgeCase alone never sets `pass` (that pure math is decideVerdict, a
   // separate core seam `vet run` calls through its own lock-aware `decide()`); watch has no
   // lock to read calibrated thresholds from, so it calls decideVerdict directly with the
   // config's threshold, the same math run.ts uses when a criterion has no lock entry.
@@ -237,8 +234,7 @@ async function watchCommand(options: WatchOptions): Promise<void> {
   let sigints = 0;
   const onSigint = (): void => {
     sigints += 1;
-    // Second SIGINT: exit 130 immediately, the CLI-wide rule (docs/contracts/j7.md "Exit
-    // behaviour"). The first drains gracefully and the normal return handles the exit-0 path.
+    // Second SIGINT: exit 130 immediately, the CLI-wide rule. The first drains gracefully and the normal return handles the exit-0 path.
     if (sigints >= 2) process.exit(CEV_EXIT.SIGINT);
     void receiver.close().then(() => stopController.abort());
   };

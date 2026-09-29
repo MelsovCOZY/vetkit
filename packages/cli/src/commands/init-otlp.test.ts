@@ -1,5 +1,4 @@
-// Unit + one child-process test for `vet init --source otlp:...` wiring (root
-// acceptance J5). Every receiver test binds an ephemeral port (0) or a freshly-freed one; none
+// Unit + one child-process test for `vet init --source otlp:...` wiring. Every receiver test binds an ephemeral port (0) or a freshly-freed one; none
 // ever binds 4318. otlpSourceFromArg is exercised directly here — no full `generateEvals` run —
 // except the SIGINT test, which spawns the built bin (test-support/build-cli.ts), following
 // run.test.ts's precedent.
@@ -344,10 +343,10 @@ describe('vet init --source otlp:<file> --json summary', () => {
   });
 });
 
-// J5 gate: <out>/summary.json must exist on disk, hold the same
+// <out>/summary.json must exist on disk, hold the same
 // {cases, excluded, dialects, tokens} the --json stdout document carries under `summary`,
 // and excluded must classify by completeness status (content_not_captured, truncated,
-// incomplete_trace), not the old {content_not_captured, no_conversation} pair.
+// incomplete_trace).
 describe('vet init --source otlp: writes <out>/summary.json', () => {
   test('summary.json on disk matches stdout summary, excluded classifies by completeness', () => {
     const project = freshProject();
@@ -406,7 +405,7 @@ function readCases(path: string): Case[] {
     .map((line) => parseJson<Case>(line));
 }
 
-// J5 gate: the five dialect fixtures encode the same conversation in
+// The five dialect fixtures encode the same conversation in
 // different OTel semconv styles; vet init's cases must be identical across all five once
 // per-dialect ids (traceId, provenance.traceIds/traceId/spanId) are deleted, matching a
 // committed golden.
@@ -429,8 +428,8 @@ describe('vet init --source otlp: dialect cases match the golden', () => {
       expect(result.status).toBe(0);
 
       const cases = readCases(join(out, 'cases', 'generated.jsonl'));
-      // sinks correlate on provenance.traceId/spanId
-      // (docs/sinks.md "Correlation"); every OTLP-derived case must carry both, before they
+      // sinks correlate on provenance.traceId/spanId;
+      // every OTLP-derived case must carry both, before they
       // are stripped for the cross-dialect diff below.
       for (const c of cases) {
         const ids = correlationIds(c.provenance);

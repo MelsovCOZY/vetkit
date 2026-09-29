@@ -3,7 +3,7 @@
 // and rejects every fixtures/lint-bad file, and `vet run` loads the generated set. Runs
 // scripts/smoke-j2.sh, which checks every acceptance-criterion verify command.
 //
-// Final cold gate only: skipped unless CEV_E2E=1 (keys come from the environment or the repo
+// Skipped unless CEV_E2E=1 (keys come from the environment or the repo
 // .env; see the script). Counts and structure are asserted, never generated wording.
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -32,7 +32,7 @@ describe.skipIf(process.env['CEV_E2E'] !== '1')(
           timeout: 14 * 60 * 1000,
         });
         const diagnostics = `smoke-j2.sh exited ${String(result.status)}\n--- stdout ---\n${tail(result.stdout)}\n--- stderr ---\n${tail(result.stderr)}`;
-        // The run is the gate's single real pass: always surface the per-AC lines.
+        // The run is the single real pass: always surface the per-criterion lines.
         console.log(diagnostics);
         expect(result.status, diagnostics).toBe(0);
         expect(result.stdout, diagnostics).toContain('smoke-j2: ok');

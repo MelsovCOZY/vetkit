@@ -1,4 +1,4 @@
-// `vet check --lock|--outbox` (moved out of validate.ts). --lock recomputes
+// `vet check --lock|--outbox`. --lock recomputes
 // the lock's content hashes and compares the judge's transport, requested id and release date,
 // listing each stale criterion (wording_changed | model_changed | uncalibrated = absent from the
 // lock); stale exits 1, a missing or pre-v1 lock exits 2. --outbox prints the J6 outbox
@@ -149,7 +149,7 @@ async function checkCommand(options: CheckOptions, deps: ValidateDeps): Promise<
   } else if (outbox !== undefined) {
     emit(outbox, () => outboxText(outbox));
   }
-  // Root exit-code DECISION: stale exits 1 (LOCK_STALE), missing exits 2.
+  // Stale exits 1 (LOCK_STALE), missing exits 2.
   const code = Math.max(lock?.stale === true ? 1 : 0, (outbox?.dead ?? 0) > 0 ? 1 : 0);
   if (code > 0) process.exitCode = code;
 }

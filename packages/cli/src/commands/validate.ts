@@ -1,4 +1,4 @@
-// `vet validate` (docs/contracts/j3.md). validate judges every labelled case
+// `vet validate`. validate judges every labelled case
 // `--repeats` times (min 3) with the cache bypassed, tops the band cases up to 15 repeats,
 // calibrates, runs the eight gauntlets on the held-out cases and writes criteria.lock.json
 // atomically. `vet check` lives in check.ts and reuses loadProject.
@@ -174,8 +174,6 @@ function parseRepeats(raw: string | undefined, events: Events): number {
   return n;
 }
 
-// ---------- generator ----------
-
 function isGenerator(value: unknown): value is GeneratorV1 {
   return (
     typeof value === 'object' &&
@@ -193,8 +191,6 @@ async function resolveGenerator(
   if ('kind' in generator) return generatorFromEndpoint(generator);
   return undefined;
 }
-
-// ---------- gauntlet corpora ----------
 
 interface Corpora {
   readonly injections?: readonly InjectionEntry[];
@@ -244,7 +240,7 @@ async function readCorpus<T>(
     const entries = parsed.value[key] ?? [];
     if (entries.length > 0) return entries;
   }
-  // A missing or empty corpus is skipped, never a pass (review revision 1).
+  // A missing or empty corpus is skipped, never a pass.
   events.diag(
     'warn',
     'GAUNTLET_CORPUS_MISSING',
@@ -277,8 +273,6 @@ async function loadCorpora(dir: string | undefined, events: Events): Promise<Cor
   };
 }
 
-// ---------- repeats ----------
-
 type Repeats = Map<string, JudgeResponse[]>;
 
 function addRepeats(
@@ -299,10 +293,6 @@ function addRepeats(
     into.set(v.caseId, list);
   }
 }
-
-// ---------- judge outage ----------
-
-// ---------- gauntlets ----------
 
 type GauntletMap = Record<keyof GauntletResult, GauntletOutcome>;
 
@@ -435,8 +425,6 @@ async function runGauntlets(
     },
   };
 }
-
-// ---------- validate ----------
 
 function correctedRate(
   criterion: Criterion,
@@ -598,8 +586,8 @@ async function validate(
       if (prior !== undefined) lock.criteria[c.id] = prior;
     }
   }
-  // j3.md: fewer than 100 labels per judged criterion is a refusal; it must not create or
-  // overwrite criteria.lock.json (an empty/stale lock would otherwise un-gate `vet run`).
+  // Fewer than 100 labels per judged criterion is a refusal; it must not create or
+  // overwrite criteria.lock.json (an empty/stale lock would otherwise let `vet run` proceed unchecked).
   const short = judged
     .map((c) => ({ id: c.id, n: labelsOf(c).length }))
     .filter(({ n }) => n < MIN_LABELS);
@@ -652,7 +640,7 @@ async function validate(
     ].join('\n'),
   );
 
-  // j3.md: fewer than 100 labels per judged criterion exits 2 with the count.
+  // Fewer than 100 labels per judged criterion exits 2 with the count.
   if (short.length > 0) {
     throw new VetError(
       CEV_ERROR_CODES.LABELS_TOO_FEW,

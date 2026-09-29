@@ -46,8 +46,6 @@ async function loadCasesOrThrow(dir: string): Promise<Case[]> {
   return loaded.cases;
 }
 
-// --- dedupe ---------------------------------------------------------------------------------
-
 interface DedupeOptions extends CasesOptions {
   readonly write?: boolean;
 }
@@ -83,8 +81,6 @@ async function dedupeCommand(options: DedupeOptions): Promise<void> {
   emit({ duplicates, nearDuplicates, written: write }, () => renderDedupe(duplicates));
 }
 
-// --- quarantine -------------------------------------------------------------------------------
-
 interface QuarantineOptions extends CasesOptions {
   readonly reason: string;
 }
@@ -97,8 +93,6 @@ async function quarantineCommand(id: string, options: QuarantineOptions): Promis
   }
   emit({ id, ...result }, () => `${result.status}: ${id}`);
 }
-
-// --- promote ------------------------------------------------------------------------------
 
 interface PromoteOptions extends CasesOptions {
   readonly cacheDir: string;
@@ -146,8 +140,6 @@ async function promoteCommand(verdictId: string, options: PromoteOptions): Promi
   }
   emit({ promoted }, () => `promoted ${promoted.id}`);
 }
-
-// --- review ---------------------------------------------------------------------------------
 
 interface ReviewOptions extends CasesOptions {
   readonly all?: boolean;
@@ -217,8 +209,6 @@ async function reviewCommand(
   const remaining = await listPendingCases(dir);
   emit({ remaining: remaining.length }, () => `${String(remaining.length)} pending case(s) remain`);
 }
-
-// --- registration -----------------------------------------------------------------------------
 
 function withCasesOption(command: Command): Command {
   return command.option('--cases <dir>', 'cases directory', 'evals/cases');

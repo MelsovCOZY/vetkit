@@ -296,8 +296,8 @@ describe('vet run persists .vet/runs/latest.json', () => {
 
 describe('vet run default criteria/cases paths', () => {
   // `vet init --out <dir>` writes criteria.yaml and cases/ at the top level of <dir>, with no
-  // evals/ subdirectory; `vet run`'s defaults used to look only under evals/, so a run there
-  // always failed to find any cases.
+  // evals/ subdirectory; `vet run` falls back to <rootDir> when evals/ is absent, so a run there
+  // still finds its cases.
   test('falls back to <configDir>/criteria.yaml and <configDir>/cases when evals/ is absent', () => {
     const project = freshProject();
     cpSync(join(project, 'evals', 'criteria.yaml'), join(project, 'criteria.yaml'));

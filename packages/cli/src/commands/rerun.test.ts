@@ -370,7 +370,7 @@ describe('vet rerun --disputed', () => {
     ]);
     await writeLock(root);
     const seen = new Set<string>();
-    // New: cluster A now fails, cluster B now passes (a correlated within-cluster flip).
+    // Rerun: cluster A now fails, cluster B now passes (a correlated within-cluster flip).
     const passByCaseId = new Map([
       [ids[0] ?? '', false],
       [ids[1] ?? '', false],

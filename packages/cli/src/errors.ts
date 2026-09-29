@@ -48,7 +48,7 @@ const CONFIG_EXIT_CODES = new Set([
   'E_UNCALIBRATED',
 ]);
 const INTERNAL_EXIT_CODES = new Set(['E_IO', 'E_NETWORK', 'E_TIMEOUT', 'E_RATE_LIMIT']);
-// User-input and credential codes (docs/contracts/j1.md "Exit codes": 2 = config
+// User-input and credential codes (2 = config
 // error), matched after E_ stripping.
 const INPUT_EXIT_CODES = new Set([
   'CRITERIA_INVALID',
@@ -58,13 +58,13 @@ const INPUT_EXIT_CODES = new Set([
   'LABELS_TOO_FEW',
   'JUDGE_UNAUTHORIZED',
   'OUTBOX_CORRUPT',
-  // J5 (docs/contracts/j5.md "Error codes"): exact entries so SOURCE_EMPTY exits 2 rather than
+  // Exact entries so SOURCE_EMPTY exits 2 rather than
   // falling through to the SOURCE_* warning rule below, and OTLP_PARSE exits 2 rather than 70.
   'SOURCE_EMPTY',
   'OTLP_PARSE',
   // `vet rerun` with no persisted run record (a missing input, like CASE_INVALID).
   'RUN_NOT_FOUND',
-  // J7 (docs/contracts/j7.md "Error codes"): exact entries so `vet watch`'s
+  // Exact entries so `vet watch`'s
   // RECEIVER_BIND (port already in use) and WATCH_CONFIG (--sample outside 0..1) exit 2
   // rather than falling through to the unknown-code INTERNAL (70) fallback below.
   'RECEIVER_BIND',
@@ -88,7 +88,7 @@ function resolveExit(code: string, strict: boolean): Resolved {
   if (INPUT_EXIT_CODES.has(unprefixed)) {
     return { category: 'config', exitCode: EXIT_USAGE, warn: false };
   }
-  // Root exit-code DECISION: a stale lock exits 1 (a missing one exits 2).
+  // A stale lock exits 1 (a missing one exits 2).
   if (unprefixed === 'LOCK_STALE') {
     return { category: 'failed', exitCode: EXIT_FAILED, warn: false };
   }

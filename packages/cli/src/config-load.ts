@@ -1,8 +1,8 @@
-// The CLI's one config loader (root DECISION: shared loader), used by `vet run` and reused by
+// The CLI's one config loader used by `vet run` and reused by
 // later commands. c12 finds and executes vetkit.config.ts; core resolveConfig validates it and
 // applies defaults; the judge is then built here, in the CLI, never in core: an adapter object
 // passes through, and a {kind: 'typesafe-compatible', …} descriptor becomes createJevJudge with
-// its key read from the env var the config names (DECISION: Architecture as presented).
+// its key read from the env var the config names.
 import { dirname, resolve } from 'node:path';
 import { readEnvName, resolveConfig, type ResolvedConfig } from '@vetkit/core';
 import { createJevJudgeFromEndpoint, type JevProviderOptions } from '@vetkit/judge-jev';
@@ -43,7 +43,7 @@ export interface LoadedVetConfig {
 const CONFIG_NAME = 'vetkit';
 const JUDGE_KIND = 'typesafe-compatible';
 const EXTENSIONS = '{ts,mts,cts,js,mjs,cjs,json}';
-// Bug F3/F4 (gate 7lg AC2): a generic override of the judge transport's base URL for this
+// A generic override of the judge transport's base URL for this
 // process, so a test (or an operator) can force a judge failure without touching config.
 // Named CEV_ (no vendor) since it applies to any typesafe-compatible endpoint, not one preset.
 const JUDGE_BASE_URL_ENV = 'CEV_JUDGE_BASE_URL';

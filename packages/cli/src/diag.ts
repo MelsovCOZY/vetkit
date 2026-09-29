@@ -6,7 +6,7 @@
 // also drives a separate, self-contained request count inside exported vitest scorers (see
 // packages/export-vitest/src/templates/scorer.ts.tmpl and emit-test.ts), which never goes
 // through this module at all — this file's exit-handler line is CLI-process-only and vitest
-// workers never surface it (repro).
+// workers never surface it.
 import type { JudgeV1 } from '@vetkit/spec';
 
 type Env = Readonly<Record<string, string | undefined>>;

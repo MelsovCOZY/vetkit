@@ -1,4 +1,4 @@
-// `vet init`: scaffold a runnable example project (root DECISION C9): vetkit.config.ts,
+// `vet init`: scaffold a runnable example project: vetkit.config.ts,
 // evals/criteria.yaml, evals/cases/example.jsonl, and `.vet/` in .gitignore. The judge
 // transport is chosen from the judge-jev presets by which credential env vars are set, so
 // no vendor or key value appears here; only env var names reach the written config.
@@ -39,18 +39,17 @@ interface InitOptions extends GlobalOptions {
   readonly force?: boolean;
   readonly source?: string;
   readonly out?: string;
-  // J5: forwarded to resolveSource as SourceOptions, for otlp::<port>'s
+  // Forwarded to resolveSource as SourceOptions, for otlp::<port>'s
   // receiver mode. Commander hands option values through as strings; the jsonl factory (and
   // any other prefix that ignores SourceOptions) never sees these at all.
   readonly until?: string;
   readonly seconds?: string;
 }
 
-// A criteria.yaml lint drops error-severity criteria (core's lintCriteria); root design
-// (docs/contracts/j2.md "Generation contract") gates the exit code on how many survive.
+// A criteria.yaml lint drops error-severity criteria (core's lintCriteria); the exit code is gated on how many survive.
 const MIN_SURVIVING_CRITERIA = 5;
 
-// bug (cold gate run 4): exit 1 alone said nothing about why. Names the count, the minimum,
+// Explains a too-few-criteria exit 1 (which alone says nothing about why). Names the count, the minimum,
 // and the dropped/repaired counts (generateEvals always sets both), so a `--json` caller and
 // a stderr reader see the same reason.
 function tooFewCriteriaReason(count: number, report: GenerateReport): string {
@@ -136,9 +135,8 @@ async function confirmOverwrite(existing: readonly string[]): Promise<void> {
   if (!/^y(es)?$/i.test(answer.trim())) throw invalid(message);
 }
 
-// AC1: `vet init --out <dir>` left <dir> with criteria.yaml and cases/ but no
-// vetkit.config.ts, so `vet run` there always failed CONFIG_INVALID. Re-exporting the config
-// `vet init` itself just resolved (by relative import) makes <dir> runnable without inlining
+// Without a vetkit.config.ts in <dir>, `vet run` there would fail CONFIG_INVALID.
+// Re-exporting the config `vet init` itself just resolved (by relative import) makes <dir> runnable without inlining
 // its generator/judge (an in-process adapter object can't be serialized) or any credential:
 // keys still come from the env vars the original config names.
 function reexportConfig(configFile: string, out: string): string {
@@ -197,9 +195,8 @@ async function initCommand(options: InitOptions): Promise<void> {
 }
 
 // core's ResolvedConfig['generator'] is a GeneratorEndpoint or core's own structural
-// GeneratorAdapter stand-in (spec has no GeneratorV1 registry entry yet); an adapter object
-// is used as-is here, cast at this boundary, since the two shapes differ structurally
-//.
+// GeneratorAdapter stand-in; an adapter object is used as-is here, cast at this
+// boundary, since the two shapes differ structurally.
 function resolveGenerator(raw: ResolvedConfig['generator']): GeneratorV1 {
   if (raw === undefined) throw invalid('no generator configured');
   if ('specVersion' in raw) {
@@ -295,9 +292,9 @@ async function generateCommand(options: InitOptions & { source: string }): Promi
 
   await writeAtomic(join(out, 'vetkit.config.ts'), reexportConfig(loaded.configFile, out));
 
-  // Additive: only an `otlp:`-sourced run carries a summary (source.id 'otlp/file' or
+  // Only an `otlp:`-sourced run carries a summary (source.id 'otlp/file' or
   // 'otlp/receiver'); every other --source keeps emit()'s existing {criteria, cases, report}
-  // document unchanged. J5 gate: also written to <out>/summary.json, since a
+  // document unchanged. Also written to <out>/summary.json, since a
   // caller scripting on the written directory (not stdout) needs it there too.
   const summary = source.id.startsWith('otlp/')
     ? buildOtlpSummary(collectedTraces, result)

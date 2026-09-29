@@ -1,5 +1,5 @@
-// `vet lock refresh`: re-hashes each criterion's wording with the J3
-// normalisation (loadCriteria's wordingHash) and keeps the lock entry when the normalised
+// `vet lock refresh`: re-hashes each criterion's wording with the
+// wording-hash normalisation (loadCriteria's wordingHash) and keeps the lock entry when the normalised
 // wording is unchanged; a semantic change stays stale with a pointer to `vet validate`.
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -24,7 +24,7 @@ const CRITERIA_YAML = `criteria:
       traceIds: []
 `;
 
-// Same wording after the J3 normalisation: comments, CRLF line ends and a block scalar whose
+// Same wording after the wording-hash normalisation: comments, CRLF line ends and a block scalar whose
 // trailing newline is trimmed.
 const CRITERIA_YAML_REFORMATTED = [
   '# criteria for the support bot',

@@ -1,8 +1,7 @@
 // `vet rerun --disputed`: re-judges only the verdicts from the last `vet run` that
-// are disputed — root DECISION: borderline (|value - threshold| <= the lock's tolerance, already
+// are disputed: borderline (|value - threshold| <= the lock's tolerance, already
 // computed by run.ts decide() as RunVerdict.borderline) or a judge failure (status 'unscored',
-// 'error' or 'infra_failure') — bypassing the cache for exactly those case ids (runJudge,
-// DECISION: core seams named), and writes a new latest run plus a --json run-to-run comparison.
+// 'error' or 'infra_failure') — bypassing the cache for exactly those case ids (runJudge), and writes a new latest run plus a --json run-to-run comparison.
 // A missing run record exits 2 with RUN_NOT_FOUND; an empty disputed set exits 0 and changes
 // nothing (`vet run` owns a full re-run).
 import { resolve } from 'node:path';
@@ -52,7 +51,7 @@ function outcomeOf(v: RunVerdict): Outcome {
 }
 
 // Same shape run.ts's runEvals writes into a RunRecord; duplicated here (that summarising
-// function isn't exported by core, and run.ts isn't an owned path for this bead).
+// function isn't exported by core).
 function summarise(
   cases: readonly Case[],
   criteria: readonly Criterion[],
@@ -93,7 +92,7 @@ function pickModel(verdicts: readonly RunVerdict[], fallback: Verdict['model']):
   return judged?.model ?? fallback;
 }
 
-/** DECISION: borderline (computed against the lock at judge time) or a judge failure. */
+/** Borderline (computed against the lock at judge time) or a judge failure. */
 function isDisputed(v: RunVerdict, hasLock: boolean): boolean {
   if (v.status === 'infra_failure' || v.status === 'error' || v.status === 'unscored') return true;
   if (v.status !== 'ok') return false; // not_applicable (escape/disabled): never disputed
@@ -110,7 +109,7 @@ function mergeVerdict(previous: RunVerdict, rejudged: RunVerdict): RunVerdict {
   return { ...previous, status: 'infra_failure', cause: rejudged.cause };
 }
 
-// Same as run.ts's own loadError (not exported; run.ts isn't an owned path for this bead).
+// Same as run.ts's own loadError (not exported).
 function loadError(
   code: VetError['code'],
   source: string,

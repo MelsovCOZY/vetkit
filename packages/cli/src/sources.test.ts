@@ -1,6 +1,6 @@
 // Unit tests for the `--source` string registry: a bare path or `jsonl:<dir>`
 // both resolve through source-jsonl; other prefixes register via registerSourcePrefix without
-// touching resolveSource's callers (J5 `otlp:`, J6 `langfuse:`), so these tests never assert a
+// touching resolveSource's callers (`otlp:`, `langfuse:`), so these tests never assert a
 // closed set of registered prefixes.
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -75,7 +75,7 @@ describe('resolveSource', () => {
 
   // registerSourcePrefix's validate hook is optional, and
   // resolveSource only runs it when the matched prefix registered one; a prefix with no
-  // validate hook (e.g. J5's `otlp`) gets its rest passed straight to its factory, even when
+  // validate hook (e.g. `otlp`) gets its rest passed straight to its factory, even when
   // rest is not a directory (a port fragment like ':4318', not a filesystem path at all).
   test('a prefix with no validate hook passes a non-directory rest straight to its factory', () => {
     let seenRest: string | undefined;

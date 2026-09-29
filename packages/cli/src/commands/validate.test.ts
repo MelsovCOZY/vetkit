@@ -45,8 +45,6 @@ const CRITERIA_YAML = `criteria:
 `;
 const HEADER = 'case_id,criterion_id,label,labeler,labeled_at';
 
-// ---------- fixture project ----------
-
 interface Row {
   readonly id: string;
   readonly p: number;
@@ -240,8 +238,6 @@ async function lockAt(root: string): Promise<Lock> {
   return r;
 }
 
-// ---------- vet validate ----------
-
 describe('vet validate', () => {
   test('validate --json writes criteria.lock.json and stdout parses (model, datasetHash)', async () => {
     const rows = standardRows();
@@ -313,7 +309,7 @@ describe('vet validate', () => {
     expect(counting.calibrationCalls.get('S-border')).toBe(15);
     expect(counting.calibrationCalls.get('S-p0')).toBe(3);
     expect(counting.calibrationCalls.get('S-f0')).toBe(3);
-    // No generator: paraphrase and polarity never ran (revision 8). The shipped corpora
+    // No generator: paraphrase and polarity never ran. The shipped corpora
     // do run by default; only their pass/fail outcome depends on the mock judge.
     const g = (await lockAt(root)).criteria['tone']?.gauntlet;
     expect(g).toMatchObject({
@@ -617,8 +613,6 @@ describe('vet validate', () => {
   });
 });
 
-// ---------- gate module ----------
-
 describe('gate module with a validate-written lock', () => {
   test('gate module: uncalibrated referenced criterion → exit 2 GATE_UNCALIBRATED with id', async () => {
     const rows = standardRows();
@@ -638,8 +632,6 @@ describe('gate module with a validate-written lock', () => {
     if (!r.ok) expect(exitCodeOf(new VetError(r.code, r.message))).toBe(2);
   });
 });
-
-// ---------- spawned bin: vet run reads the lock and vet validate smoke ----------
 
 interface Spawned {
   readonly stdout: string;
@@ -753,8 +745,6 @@ describe('vet run gate with a lock file (spawned)', () => {
     });
   });
 });
-
-// ---------- judge outage ----------
 
 // The judge answers only for cases whose id is in `answering`; every other call fails with a
 // non-retryable JUDGE_UNAVAILABLE, so the criterion is scored on a small subset.

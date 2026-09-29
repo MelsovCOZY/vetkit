@@ -1,7 +1,7 @@
 // Sink resolution for `vet run --sink <names>`. A configured sink is a bare
-// string, an adapter object built in vetkit.config.ts (option A), or a `{kind,*Env}`
+// string, an adapter object built in vetkit.config.ts or a `{kind,*Env}`
 // descriptor this module resolves into a @vetkit/sink-otel / @vetkit/sink-langfuse adapter
-// by reading the named env vars (OPEN-9 DECISION). A name matches a ref by
+// by reading the named env vars. A name matches a ref by
 // exact id/kind, else by the id's prefix before '/' when exactly one ref has that prefix
 // ('otel' -> 'otel/logs'). A descriptor is named by its `kind` ('otel'), which differs from
 // its built sink's outbox id ('otel/logs'), so `--sink otel/logs` will not match an

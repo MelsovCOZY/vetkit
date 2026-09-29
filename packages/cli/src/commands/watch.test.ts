@@ -290,10 +290,9 @@ describe('vet watch', () => {
     expect(result.stderr).toContain('WATCH_CONFIG');
   });
 
-  // bug: judgeFn never set verdict.provenance, so an otel sink (which dead-letters any
-  // verdict with no correlation id) rejected every enqueued verdict. Reproduces the cold-gate
-  // repro (fixtures/cli/watch + a real otel sink) with a fake collector standing in for the
-  // real OTLP endpoint.
+  // judgeFn must set verdict.provenance: an otel sink dead-letters any verdict with no
+  // correlation id. Uses fixtures/cli/watch and a real otel sink with a fake collector
+  // standing in for the real OTLP endpoint.
   test('every verdict watch enqueues carries provenance: an otel sink acknowledges it, produced == acknowledged', async () => {
     const collector = await fakeOtelCollector();
     try {
