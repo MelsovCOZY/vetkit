@@ -87,10 +87,8 @@ describe('contributor hooks: lefthook installed directly', () => {
   });
 
   it('wires hooks:install to the install script', () => {
-    const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as {
-      scripts: Record<string, string>;
-    };
-    expect(pkg.scripts['hooks:install']).toBe('bun scripts/install-hooks.ts');
+    const text = readFileSync(join(ROOT, 'package.json'), 'utf8');
+    expect(text).toContain('"hooks:install": "bun scripts/install-hooks.ts"');
   });
 });
 
