@@ -1,7 +1,7 @@
-// Fixture project for the J7 gate (scripts/smoke-j7.sh, e2e/j7.e2e.test.ts). Judge: the REAL
+// Fixture project for the J7 journey (scripts/smoke-j7.sh, e2e/j7.e2e.test.ts). Judge: the real
 // Jev judge through the Vercel AI Gateway transport (AI_GATEWAY_API_KEY from the environment).
-// Sinks: `otel` (the collector at J7_COLLECTOR_ENDPOINT, default the J6 gate's mapped port) and
-// `flaky`, a fake sink used by the AC2 step only: VETKIT_FIXTURE_REJECT=<n> makes it reject the
+// Sinks: `otel` (the collector at J7_COLLECTOR_ENDPOINT, default the J6 journey's mapped port) and
+// `flaky`, a fake sink used by the flaky-sink step only: VETKIT_FIXTURE_REJECT=<n> makes it reject the
 // first n items with a retryable rejection, then accept everything (log: VETKIT_FIXTURE_SINK_LOG).
 import { appendFileSync } from 'node:fs';
 

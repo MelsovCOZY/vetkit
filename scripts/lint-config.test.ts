@@ -4,7 +4,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
 
 // NOTE: this is a script, not packages/*/src — the repo-wide "raw JSON.parse is banned,
-// use safeParseJson" rule applies only to packages/*/src (see docs/contracts/j0.md), so
+// use safeParseJson" rule applies only to packages/*/src, so
 // the JSON.parse below (reading .oxlintrc.json) is not itself a violation.
 
 const rootDir = path.resolve(import.meta.dirname, '..');

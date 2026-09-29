@@ -13,7 +13,7 @@ import { pathToFileURL } from 'node:url';
 export const MARKER = '<!-- vetkit-report -->';
 // GitHub rejects comment bodies over 65,536 characters.
 const MAX_BODY = 65_536;
-// Keeps the comment under ~40 lines (bead rubric).
+// Keeps the comment short enough to scan in a PR.
 const MAX_ROWS = 20;
 const MAX_ID = 100;
 const SECRET_NAME = /KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i;

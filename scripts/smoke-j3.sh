@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# J3 slice-gate smoke: import labels, calibrate, write
-# criteria.lock.json and gate on it, against the REAL Jev judge through the vercel preset.
+# J3 smoke: import labels, calibrate, write
+# criteria.lock.json and gate on it, against the real Jev judge through the vercel preset.
 #
 # Projects (all scratch copies; the repo fixtures are never written to):
 #   P1 = fixtures/projects/j3            answer_correct (boolean, reference grader) + answer_quality
@@ -11,7 +11,7 @@
 #                                        needs_reference; no generator and only the constant-output
 #                                        corpus, so the expensive gauntlets are skipped (not the point of P2).
 #   P3 = P1 with CEV_JUDGE_BASE_URL=http://127.0.0.1:9   judge refuses connections (edge case).
-# Labels are a GATE-ONLY synthetic seed (fixtures/projects/j3/seed.mjs), never a shipped path.
+# Labels are a synthetic seed (fixtures/projects/j3/seed.mjs), never a shipped path.
 #
 # Cost: dominated by P1's gauntlets (thousands of judge requests); every vet call runs under
 # CEV_DIAG=1 and the script prints the summed judge request count at the end. The generator
@@ -231,7 +231,7 @@ result "AC2-full: vet run --gate (all P2 criteria) -> exit 2" 2 "$code" "$([ "$c
 # ---------------------------------------------------------------- P3: judge unavailable
 # A refused connection (CEV_JUDGE_BASE_URL=http://127.0.0.1:9) is retried with backoff, so a
 # full `vet validate` outage run would take hours; the edge is checked on one `vet run` case
-# (owner decision (e): cause JUDGE_UNAVAILABLE). The validate-outage edge is NOT RUN here.
+# (cause JUDGE_UNAVAILABLE). The validate-outage edge is NOT RUN here.
 cd "$WORK/p1" || exit 1
 say "P3 vet run with CEV_JUDGE_BASE_URL=http://127.0.0.1:9"
 mkdir onecase

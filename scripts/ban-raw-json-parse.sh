@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Bans raw `JSON.parse(` in packages/*/src. safeParseJson(text, schema) in
-# packages/spec/src/json.ts is the one allowed chokepoint (docs/contracts/j0.md).
+# packages/spec/src/json.ts is the one allowed chokepoint.
 set -euo pipefail
 
 shopt -s nullglob

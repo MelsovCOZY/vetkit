@@ -28,17 +28,13 @@ const TNR_PASS_BAR = 0.8;
 const FLIP_PASS_BAR = 0.05;
 const MEDIAN_KAPPA_NO_GO_BAR = 0.4;
 const ESCAPE_UNANSWERABLE_BAR = 0.3;
-/** Contract AC-2 (docs/contracts/js.md), quoted verbatim. */
+/** The spike's go/no-go rule, quoted verbatim in the report. */
 export const CONTRACT_RULE_TEXT =
   'GO if ≥7 of 10 criteria reach κ ≥ 0.6 with TPR ≥ 0.8 and TNR ≥ 0.8 on ' +
   'the labelled set and the boolean flip rate at threshold is ≤ 5%; AMEND (criteria need ' +
   'wording rules) if 4–6 criteria pass; NO-GO if median κ < 0.4';
 const JEV_RELEASE_DATE = '2026-09-15';
 const JEV_RELEASE_DATE_SOURCE = 'docs/research/fixtures/2026-09-25-gateway-models.json';
-
-// ---------------------------------------------------------------------------
-// Pure metric functions
-// ---------------------------------------------------------------------------
 
 /** Cohen's kappa for two same-length boolean raters. Null when chance agreement is 1 (undefined). */
 export function cohenKappa(a: boolean[], b: boolean[]): number | null {
@@ -191,8 +187,8 @@ export function medianOfDefined(values: (number | null)[]): number | null {
 export type Outcome = 'GO' | 'AMEND' | 'NO-GO' | 'INCONCLUSIVE';
 
 /**
- * Contract GO/AMEND/NO-GO rule (>=7 of 10 criteria passing -> GO,
- * else AMEND), extended per this bead's acceptance criteria with a NO-GO override when c1
+ * GO/AMEND/NO-GO rule (>=7 of 10 criteria passing -> GO,
+ * else AMEND), extended with a NO-GO override when c1
  * accuracy < 0.9 or the median kappa across criteria (undefined kappas excluded) is < 0.4, and
  * INCONCLUSIVE when there are not yet enough human labels to trust the pass count (fewer than 30
  * human-labelled traces or fewer than 300 total label rows). Precedence: INCONCLUSIVE, then the
@@ -229,8 +225,8 @@ export function checkLabels(rows: LabelRow[]): LabelCheck {
 }
 
 // ---------------------------------------------------------------------------
-// Cache-backed P(yes) derivation (no network calls: reuses judge.ts's builders
-// and cacheKey to find the already-fetched response on disk).
+// Cache-backed P(yes) derivation: no network calls, reuses judge.ts's builders and
+// cacheKey to find the already-fetched response on disk.
 // ---------------------------------------------------------------------------
 
 type CachedCall = {
@@ -317,8 +313,8 @@ async function loadCorpus(traces: Trace[], criteria: Criterion[]): Promise<Corpu
 }
 
 // ---------------------------------------------------------------------------
-// Per-criterion table (a): truth = human/auto labels only (baseline-sourced c3
-// truth is reported separately in the baseline block).
+// Per-criterion table: truth = human/auto labels only (baseline-sourced c3 truth is
+// reported separately in the baseline block).
 // ---------------------------------------------------------------------------
 
 export type CriterionRow = {
@@ -425,7 +421,7 @@ function criterionTableMarkdown(rows: CriterionRow[]): string {
 }
 
 // ---------------------------------------------------------------------------
-// Ground-truth block (b): c1 vs the reference-derived auto labels, c2 on the
+// Ground-truth block: c1 vs the reference-derived auto labels, c2 on the
 // 24 unanswerable rows.
 // ---------------------------------------------------------------------------
 
@@ -512,7 +508,7 @@ function groundTruthBlock(
 }
 
 // ---------------------------------------------------------------------------
-// Baseline block (c): Cohen kappa between thresholded Jev c3 and the Gemini
+// Baseline block: Cohen kappa between thresholded Jev c3 and the Gemini
 // faithfulness score, binarised at 0.5 (already the labels.csv `baseline` rows).
 // ---------------------------------------------------------------------------
 
@@ -583,10 +579,6 @@ function fitC3ThresholdAgainstBaseline(
   return scores.length > 0 ? fitThreshold(scores, labels) : null;
 }
 
-// ---------------------------------------------------------------------------
-// Cost block (d)
-// ---------------------------------------------------------------------------
-
 type HaystackCost = { judgePromptTokens: number; judgeCompletionTokens: number };
 
 async function readHaystackCost(haystackDir: string): Promise<HaystackCost> {
@@ -619,10 +611,6 @@ function costBlock(corpus: Corpus, haystack: HaystackCost): string {
   ].join('\n\n');
 }
 
-// ---------------------------------------------------------------------------
-// Limitations paragraph (e)
-// ---------------------------------------------------------------------------
-
 function limitationsParagraph(haystackAggregateFaithfulness: number[]): string {
   const nearCeiling = haystackAggregateFaithfulness.map((f) => f.toFixed(3)).join(', ');
   return [
@@ -642,10 +630,6 @@ function limitationsParagraph(haystackAggregateFaithfulness: number[]): string {
       'catches subtle hallucinations.',
   ].join('\n\n');
 }
-
-// ---------------------------------------------------------------------------
-// main
-// ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
   const labelRows = loadExistingRows(LABELS_PATH);

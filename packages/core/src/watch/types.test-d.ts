@@ -24,7 +24,7 @@ test('InclusionRecord has the exact fields and literal unions documented in j7.m
   expectTypeOf<InclusionRecord['inclusionProbability']>().toEqualTypeOf<number | 'unknown'>();
 });
 
-test('PromotedCase extends Case; provenance reduces to {promotedFrom} since Case["provenance"] is unknown (j7.md Premise)', () => {
+test('PromotedCase extends Case; provenance reduces to {promotedFrom} since Case["provenance"] is unknown (j7.md "Existing behaviour relied on")', () => {
   expectTypeOf<PromotedCase>().toExtend<Case>();
   expectTypeOf<PromotedCase['provenance']>().toEqualTypeOf<{
     promotedFrom: { traceId: string; criterionId: string; verdictId: string; at: string };

@@ -1,4 +1,4 @@
-// GATE-ONLY seed generator for the J3 gate. Never a shipped path.
+// Seed generator for the J3 journey fixtures. Never a shipped path.
 // Rebuilds fixtures/projects/j3/evals/cases/j3.jsonl, fixtures/labels/*.csv and
 // fixtures/gauntlet-fail/{cases,labels}/ from the JS spike corpus (spike/data/traces.jsonl):
 //   pass = a question with its own (correct) answer; fail = the same question with the answer

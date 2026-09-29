@@ -1,9 +1,9 @@
 // J3 journey: import labels, `vet validate` into criteria.lock.json,
-// and gate on it, against the REAL Jev judge. Runs scripts/smoke-j3.sh, which builds, stages the
+// and gate on it, against the real Jev judge. Runs scripts/smoke-j3.sh, which builds, stages the
 // fixture projects (fixtures/projects/j3, fixtures/gauntlet-fail, fixtures/labels) and checks
 // every acceptance-criterion verify command.
 //
-// Final cold gate only: skipped unless CEV_E2E=1 (the key comes from AI_GATEWAY_API_KEY or the
+// Skipped unless CEV_E2E=1 (the key comes from AI_GATEWAY_API_KEY or the
 // repo .env; see the script). Thousands of live judge requests per run (the gauntlets).
 // VETKIT_SMOKE_DIR keeps the scratch projects (validate reports, lock files) for inspection.
 import { spawnSync } from 'node:child_process';

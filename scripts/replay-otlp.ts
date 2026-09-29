@@ -1,5 +1,5 @@
 // Test tool (not product code): replays one OTLP/JSON ExportTraceServiceRequest fixture N times
-// into a running OTLP/HTTP receiver, each copy carrying a distinct trace id (J7).
+// into a running OTLP/HTTP receiver, each copy carrying a distinct trace id.
 // Usage: bun run scripts/replay-otlp.ts <fixture.json> --count 100 --port 4318
 //          [--inject-failure 1] [--sample-rate 0.1] [--seed replay] [--concurrency 8]
 // Trace ids are deterministic: sha256(`<seed>-<i>`) first 16 bytes as hex, so reruns are stable
@@ -15,7 +15,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** First 8 bytes of sha256(traceId) as a big-endian uint64, divided by 2^64 (docs/contracts/j7.md). */
+/** First 8 bytes of sha256(traceId) as a big-endian uint64, divided by 2^64. */
 export function hashToUnit(traceId: string): number {
   const digest = createHash('sha256').update(traceId).digest();
   return Number(digest.readBigUInt64BE(0)) / 2 ** 64;

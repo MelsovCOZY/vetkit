@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# J2 slice-gate smoke: `vet init --source fixtures/traces/` with the
-# REAL generator and REAL Jev judge, then lint the generated file and every lint-bad fixture, then
+# J2 smoke: `vet init --source fixtures/traces/` with the
+# real generator and real Jev judge, then lint the generated file and every lint-bad fixture, then
 # `vet run` on the generated set. Prints one PASS/FAIL line per acceptance-criterion step.
 #
 # Live calls: one init (generator: <= 3 + ceil(traces/20) calls; judge: dedupe only) and one
@@ -81,8 +81,8 @@ vet lint "$OUT/criteria.yaml" >"$WORK/lint-gen.txt" 2>&1
 code=$?
 result "AC2a: vet lint <out>/criteria.yaml" 0 "$code" "$([ "$code" -eq 0 ] && echo 0 || echo 1)" "$(head -1 "$WORK/lint-gen.txt")"
 
-# Step 2b (AC2, AC5): every lint-bad fixture exits 1 and names its rule id. Owner decision:
-# DEEP_INDIRECTION is warn-only, so deep-indirection.yaml exits 0 and still names the rule.
+# Step 2b (AC2, AC5): every lint-bad fixture exits 1 and names its rule id. DEEP_INDIRECTION
+# is warn-only, so deep-indirection.yaml exits 0 and still names the rule.
 count="$(ls "$ROOT"/fixtures/lint-bad/*.yaml | wc -l)"
 result "AC5a: ls fixtures/lint-bad/*.yaml | wc -l >= 10" ">=10" 0 "$([ "$count" -ge 10 ] && echo 0 || echo 1)" "count=$count"
 for f in "$ROOT"/fixtures/lint-bad/*.yaml; do

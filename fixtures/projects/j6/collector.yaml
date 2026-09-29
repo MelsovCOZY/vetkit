@@ -1,6 +1,5 @@
-# OTel collector for the J6 gate (test-only dependency): OTLP/HTTP receiver on 4318,
-# file exporter writing OTLP/JSON to /out/out.json. Stands in for fixtures/otel/collector.yaml,
-# which is outside this gate's owned paths.
+# OTel collector for the J6 journey (test-only dependency): OTLP/HTTP receiver on 4318,
+# file exporter writing OTLP/JSON to /out/out.json.
 receivers:
   otlp:
     protocols:

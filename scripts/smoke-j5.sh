@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# J5 slice-gate smoke: OTel-in end-to-end, exactly the root
-# acceptance J5 verify commands, against IN-PROCESS FAKE generator/judge adapters (the fake
+# J5 smoke: OTel-in end-to-end, against in-process fake generator/judge adapters (the fake
 # config from fixtures/cli/init/vetkit.config.ts, copied into a scratch project dir since
 # `vet init` has no --config flag). No network, no keys: generation quality and judge calls
-# are out of scope (bead Scope: OUT).
+# are out of scope.
 #
 # Sequence: build -> five-dialect golden diff -> tokens check -> incomplete-fixture exclusion
 # counts -> live receiver (ephemeral port, JSON POST, protobuf POST). Every step runs the AC's
@@ -40,11 +39,11 @@ cd "$PROJECT" || exit 1
 vet() { bun "$BIN" "$@"; }
 
 # ---- AC1: five dialects -> identical normalized cases (ids aside) --------------------------
-# Gate DECISION (c): diff against fixtures/otlp/golden/init-cases.jsonl (vet-init Case shape,),
+# Diff against fixtures/otlp/golden/init-cases.jsonl (vet-init Case shape),
 # not golden/cases.jsonl (an unrelated normalized-trace golden). Normalization
 # matches packages/cli/src/commands/init-otlp.test.ts's normalizeCase(): strip .id, .traceId and
 # .provenance.{traceIds,traceId,spanId} (leaving any other provenance keys untouched). Before
-# stripping, every generated case is required every generated case to actually carry
+# stripping, every generated case is required to actually carry
 # .provenance.traceId/.spanId (docs/sinks.md "Correlation") — checked per dialect below.
 DIALECTS="gen_ai-latest gen_ai-legacy openinference openllmetry vercel"
 NORMALIZE='del(.id, .traceId, .provenance.traceIds, .provenance.traceId, .provenance.spanId)'
@@ -76,7 +75,7 @@ result "AC2: jq '.tokens' <out>/summary.json == golden tokens.json total" 0 0 "$
   "<out>/summary.json .tokens=$actual_tokens, golden fixtures/otlp/golden/tokens.json .total=$golden_total"
 
 # ---- AC3: incomplete.json exclusion typing --------------------------------------------------
-# Gate DECISION (a): --out is required by vet init --source; excluded is read from
+# --out is required by vet init --source; excluded is read from
 # <out>/summary.json (top-level .excluded, same document as AC2).
 INCOMPLETE_OUT="$OUT/incomplete"
 rm -rf "$INCOMPLETE_OUT"
@@ -93,7 +92,7 @@ result "AC3: vet init --source otlp:fixtures/otlp/incomplete.json --out <dir> --
   "exit=$incomplete_code, <out>/summary.json .excluded=$excluded_actual"
 
 # ---- AC4: receiver — ephemeral port, protobuf POST 415, JSON POST ok -----------------------
-# Gate DECISION (b): the protobuf probe is posted BEFORE the JSON trace, since --until 1 closes
+# The protobuf probe is posted BEFORE the JSON trace, since --until 1 closes
 # the receiver as soon as that JSON trace is accepted; the listening port is read from stderr
 # (the "listening" line — getLogger().info is stderr-only), not stdout.
 RECV_OUT="$OUT/receiver"

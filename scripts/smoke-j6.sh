@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# J6 slice-gate smoke: `vet run --sink otel,langfuse` end to end.
-# REAL Jev judge through the vercel preset, a REAL OTel collector (docker, file exporter, TEST-ONLY
+# J6 smoke: `vet run --sink otel,langfuse` end to end.
+# Real Jev judge through the vercel preset, a real OTel collector (docker, file exporter, TEST-ONLY
 # dependency) and, when LANGFUSE_* keys exist, a real Langfuse project. Every AC verify command is
 # run as written except where the recorded deviation below says otherwise.
 #
@@ -9,9 +9,9 @@
 #    never land in the repo;
 #  - `vet` loads only *.jsonl cases, so the case in evals/cases/otel-fixture.json (array, the AC's
 #    jq target) is mirrored to fixtures/projects/j6/evals/cases/otel-fixture.jsonl;
-#  - the contrib image reads /etc/otelcol-contrib/config.yaml (not /etc/otelcol/config.yaml as the bead plan says);
-#  - the collector config lives at fixtures/projects/j6/collector.yaml (fixtures/otel/ is not an
-#    owned path of this gate); the trace id/span id are asserted against evals/cases/otel-fixture.json.
+#  - the contrib image reads /etc/otelcol-contrib/config.yaml (not /etc/otelcol/config.yaml);
+#  - the collector config lives at fixtures/projects/j6/collector.yaml;
+#    the trace id/span id are asserted against evals/cases/otel-fixture.json.
 #
 # Live calls: judge ~2 real requests (AC1 case, collector-down case); the judge-failure run hits a
 # refused connection. Keys come from AI_GATEWAY_API_KEY, else VETKIT_ENV_FILE (default repo .env)

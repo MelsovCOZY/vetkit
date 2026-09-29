@@ -14,8 +14,8 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
 
-// NOTE: this is a script, not packages/*/src — the repo-wide "raw JSON.parse is banned,
-// use safeParseJson" rule applies only to packages/*/src (see docs/contracts/j0.md).
+// This is a script, not packages/*/src: the repo-wide "raw JSON.parse is banned,
+// use safeParseJson" rule applies only to packages/*/src.
 // tsconfig.base.json documents the isolatedDeclarations requirement with a JSONC comment,
 // so reads here strip comments by hand before JSON.parse.
 function stripJsonComments(text: string): string {
@@ -300,10 +300,9 @@ function runTypecheckIn(cwd: string): { status: number | null; stdout: string; s
 }
 
 describe("bun run typecheck on an unbuilt tree reports cross-package errors correctly", () => {
-  // packages/spec/src/index.ts is currently a placeholder with no exports (real exports
-  // land later), so the temp type is reachable via "@vetkit/spec" only by
-  // temporarily re-exporting it from that public entry, the same way a real consumer
-  // would import a type — never via a package.json edit (out of scope for this bead).
+  // The temp type is reachable via "@vetkit/spec" only by temporarily re-exporting it
+  // from that public entry, the same way a real consumer would import a type; never
+  // via a package.json edit.
   // This plants into the isolated temp copy of the workspace, never the real
   // packages/spec/src or packages/core/src.
   function plantCrossPackageFiles(dir: string, value: string): void {

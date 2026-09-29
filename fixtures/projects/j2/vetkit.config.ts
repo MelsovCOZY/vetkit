@@ -1,8 +1,8 @@
-// Config fixture for the J2 gate: the REAL generator and the
-// REAL Jev judge (Vercel preset). Only env var NAMES appear here; keys come from the environment.
+// Config fixture for the J2 journey: the real generator and the
+// real Jev judge (Vercel preset). Only env var NAMES appear here; keys come from the environment.
 //
-// The AC names anthropic/claude-sonnet-5 on the Vercel gateway. The gate run overrides that with
-// the metered Gemini key (owner rule): VETKIT_J2_GENERATOR=gateway selects the AC's generator.
+// The default generator is anthropic/claude-sonnet-5 on the Vercel gateway. A run can override it
+// with a metered Gemini key; VETKIT_J2_GENERATOR=gateway selects the gateway generator.
 const gateway = process.env['VETKIT_J2_GENERATOR'] === 'gateway';
 
 export default {

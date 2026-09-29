@@ -1,6 +1,6 @@
 # The enabled criteria of evals/criteria.yaml, for `vet check --lock --criteria`: a disabled
 # criterion has no lock entry by design, and `vet check --lock` reports it as a stale wordingHash
-# (finding in the gate report), so the fresh/stale checks run on this file instead.
+# (a known finding), so the fresh/stale checks run on this file instead.
 criteria:
   - id: answer_correct
     type: boolean

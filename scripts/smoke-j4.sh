@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# J4 slice-gate smoke: `vet export --to vitest` on the J4 seed,
+# J4 smoke: `vet export --to vitest` on the J4 seed,
 # vitest runs the emitted files unchanged, parity with `vet run --json`, and a cached rerun with
-# zero judge requests. REAL Jev judge through the vercel preset.
+# zero judge requests. Real Jev judge through the vercel preset.
 #
 # Live calls: N cases x 1 judge request in the `vet run` warm-up; the vitest runs hit the shared
 # cache. The scratch project (under <repo>/.vet, gitignored, so `vetkit` and `vitest` resolve)
@@ -56,7 +56,7 @@ result "step1: vet run --json (warm cache, >=3 ok verdicts)" "$code" "$?" \
 if [ "$FAILED" -ne 0 ]; then say "FAILED (judge did not score; later steps skipped)"; exit 1; fi
 # A failing case makes `vet run` exit 1 by design; only the verdicts matter here.
 
-# AC1: export writes the scorers and the test file (owner decision: <criteria file>.evals.test.ts).
+# AC1: export writes the scorers and the test file (<criteria file>.evals.test.ts).
 vet export --to vitest >export.out 2>export.err
 code=$?
 ls evals/vitest/scorers evals/vitest/*.test.ts >ls.out 2>&1

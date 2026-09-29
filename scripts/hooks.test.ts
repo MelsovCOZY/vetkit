@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 // Proves the git hook chain: core.hooksPath stays
 // .beads/hooks (bd-managed), an advisory `bun x lefthook run <hook>` line runs after
 // the BEADS markers (never installed via `lefthook install`, never gates on its exit
-// code — CI is the gate per the root DECISION resolving OPEN-3), and the pre-existing
+// code: CI is the gate), and the pre-existing
 // graphify post-commit block still rebuilds graphify-out/graph.json (AST-only, no LLM)
 // within 60s of a commit touching packages/*/src/*.ts.
 //
@@ -55,8 +55,8 @@ describe('git hook chain: bd markers + advisory lefthook', () => {
       const appended = text.slice(endIdx + END_MARKER.length);
       expect(appended).toContain(`lefthook run ${hookName}`);
 
-      // Advisory only: lefthook's exit code must never be propagated (root DECISION
-      // resolving OPEN-3 — CI is the gate, not local hooks).
+      // Advisory only: lefthook's exit code must never be propagated
+      // (CI is the gate, not local hooks).
       expect(appended.trim().endsWith('exit 0')).toBe(true);
     },
   );
@@ -98,7 +98,7 @@ describe('git hook chain: bd markers + advisory lefthook', () => {
         const graphPath = join(clonePath, 'graphify-out', 'graph.json');
         const baselineMtimeMs = existsSync(graphPath) ? statSync(graphPath).mtimeMs : 0;
 
-        // Fixture commit touching packages/*/src/*.ts, per the acceptance criterion.
+        // Fixture commit touching packages/*/src/*.ts.
         writeFileSync(
           join(clonePath, 'packages/spec/src/__hooktest__.ts'),
           'export function hookTestSymbol(): number {\n  return 42;\n}\n',
@@ -127,8 +127,8 @@ describe('git hook chain: bd markers + advisory lefthook', () => {
         expect(hooksList.stdout).toMatch(/pre-commit:\s*installed/);
         expect(hooksList.stdout).toMatch(/pre-push:\s*installed/);
 
-        // The detached post-commit rebuild (graphify's own block, not owned by this
-        // bead) is AST-only and no-LLM; poll up to the 60s acceptance bound.
+        // The detached post-commit rebuild (graphify's own block) is AST-only
+        // and no-LLM; poll up to a 60s bound.
         const deadline = Date.now() + 60_000;
         let rebuilt = false;
         while (Date.now() < deadline) {
@@ -140,9 +140,9 @@ describe('git hook chain: bd markers + advisory lefthook', () => {
         }
         expect(rebuilt).toBe(true);
 
-        // NOTE: graphify-out's *initial* freshness (criterion 3 — `graphify update .`
-        // having been run once against packages/* source) is a manual check per the
-        // approved contract, not asserted here; this only proves the chain rebuilds.
+        // graphify-out's *initial* freshness (`graphify update .` having been run once
+        // against packages/* source) is a manual check, not asserted here; this only
+        // proves the chain rebuilds.
         const query = spawnSync('graphify', ['query', 'hookTestSymbol'], {
           cwd: clonePath,
           encoding: 'utf8',

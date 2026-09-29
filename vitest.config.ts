@@ -48,9 +48,8 @@ const packageProjects = readdirSync('packages', { withFileTypes: true })
       // The cli tests spawn packages/cli/dist/bin.js; build its workspace chain once per
       // run here, before any worker starts, instead of from inside the tests.
       globalSetup: entry.name === 'cli' ? [cliGlobalSetup] : [],
-      // The named verify command for generated type tests (e.g. generated.test-d.ts)
-      // needs this enabled per-package, or vitest reports "No test files found" and
-      // exits 0 without type-checking anything.
+      // Type tests (e.g. generated.test-d.ts) need this enabled per package, or vitest
+      // reports "No test files found" and exits 0 without type-checking anything.
       typecheck: {
         enabled: true,
         include: ['**/*.test-d.ts'],
@@ -67,9 +66,9 @@ export default defineConfig({
     alias: packageAliases,
   },
   test: {
-    // Empty `packages/*` projects (no tests yet - each package's own bead adds them)
+    // Empty `packages/*` projects (no tests yet)
     // must not fail the run; scripts/spike below always have test files, so this is
-    // a safety net for the packages-only case, not something exercised today.
+    // a safety net for the packages-only case.
     passWithNoTests: true,
     restoreMocks: true,
     clearMocks: true,
@@ -99,10 +98,10 @@ export default defineConfig({
           include: ['spike/**/*.test.ts'],
         },
       },
-      // Final-gate smokes against the real Jev endpoint. Opt-in only: without
+      // Smokes against the real Jev endpoint. Opt-in only: without
       // CEV_E2E=1, `bun run test` must not collect e2e/** (or packages/*/e2e/**) at
       // all (the fetch guard in vitest.setup.ts already lets CEV_E2E=1 tests
-      // through). Gate smokes can take minutes, hence the long timeout.
+      // through). These smokes can take minutes, hence the long timeout.
       ...(process.env.CEV_E2E === '1'
         ? [
             {

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# J7 slice-gate smoke: `vet watch` end to end against the REAL Jev
-# judge (config transport: Vercel AI Gateway) and a REAL OpenTelemetry Collector (docker image
-# otel/opentelemetry-collector-contrib, J6 gate recipe), traffic from scripts/replay-otlp.ts.
+# J7 smoke: `vet watch` end to end against the real Jev
+# judge (config transport: Vercel AI Gateway) and a real OpenTelemetry Collector (docker image
+# otel/opentelemetry-collector-contrib, as in the J6 smoke), traffic from scripts/replay-otlp.ts.
 # Runs in a scratch copy of fixtures/projects/j7 so the fixture stays clean.
 #
 # Steps: build -> collector up -> port-busy edge (exit 2 names the port) -> run A (AC1 + AC3, sink
@@ -15,7 +15,7 @@ ROOT="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
 BIN="$ROOT/packages/cli/dist/bin.js"
 PROJECT="${VETKIT_SMOKE_DIR:-${TMPDIR:-/tmp}/vetkit-smoke-j7}"
 ENV_FILE="${VETKIT_ENV_FILE:-$ROOT/.env}"
-# The AC names port 4318; when another process already holds it, the bead allows 4319.
+# Default watch port is 4318; when another process already holds it, 4319 is used.
 if [ -z "${J7_WATCH_PORT:-}" ]; then
   if ss -ltn 2>/dev/null | grep -q '127.0.0.1:4318 \|\*:4318 \|\[::\]:4318 '; then J7_WATCH_PORT=4319; else J7_WATCH_PORT=4318; fi
 fi
@@ -53,7 +53,7 @@ say "building"
   bun run build >/dev/null
 ) || { say "build failed" >&2; exit 1; }
 
-# ---- collector (J6 gate recipe): otlp/http in, file exporter out --------------------------
+# ---- collector (as in the J6 smoke): otlp/http in, file exporter out --------------------------
 COLLECTOR_DIR="$PROJECT-collector"
 rm -rf "$PROJECT" "$COLLECTOR_DIR"
 mkdir -p "$COLLECTOR_DIR/out"
@@ -92,7 +92,7 @@ cd "$PROJECT" || exit 1
 export J7_COLLECTOR_ENDPOINT="http://127.0.0.1:$COLLECTOR_PORT"
 TODAY="$(date -u +%F)"
 
-# hashToUnit per docs/contracts/j7.md, recomputed independently of the product.
+# hashToUnit as the sampler defines it, recomputed independently of the product.
 sampled_expected() { # <traceIds json file> <rate>
   node -e '
     const { createHash } = require("node:crypto");
@@ -162,7 +162,7 @@ result "AC1e0: judge unscored == 0 (a throttled run is a judge outage, not a pro
 result "AC1e: every sampled trace judged (summary.judged == sampled)" 0 0 \
   "$([ "$(jq .judged watch.json)" = "$s" ] && echo 0 || echo 1)" "judged=$(jq .judged watch.json) real-judge calls"
 
-# AC3: promotion. Decision (c): pending/ path.
+# AC3: promotion. Promoted files land under pending/.
 PROMOTED="evals/cases/pending/promoted-$TODAY.jsonl"
 jq -e '.provenance.promotedFrom.traceId' "$PROMOTED" >/dev/null 2>&1
 result "AC3a: jq -e '.provenance.promotedFrom.traceId' $PROMOTED" 0 $? $?

@@ -1,5 +1,5 @@
 #!/bin/sh
-# J0 slice-gate smoke: proves a clean `git clone` of HEAD
+# J0 smoke: proves a clean `git clone` of HEAD
 # builds, packs and installs on the local consumer matrix.
 #
 # Sequence: git clone HEAD into a mktemp dir (never `git worktree add`) -> in the clone,
@@ -10,10 +10,8 @@
 # no @types/bun, `npx vet --version` prints 0.0.0) -> print `smoke-j0: ok`.
 #
 # CI-only, not run locally: this script and its consumer-matrix step only prove Node 22
-# (the local toolchain: PREMISE `node --version` -> v22.23.2). The ci.yml matrix job
-# additionally runs the same two steps on Node 24 and 26; that repeat needs an actual CI
-# run and is not exercised by this script (PREMISE: the repo has no git remote yet, so
-# CI has never run).
+# (the local toolchain, v22). The ci.yml matrix job additionally runs the same two steps
+# on Node 24 and 26; that repeat needs an actual CI run and is not exercised by this script.
 #
 # Usage: sh scripts/smoke-j0.sh
 set -eu

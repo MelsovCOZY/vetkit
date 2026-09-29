@@ -1,4 +1,4 @@
-// J3 gate project. Judge: the real Jev alias through the vercel
+// J3 project. Judge: the real Jev alias through the vercel
 // preset. Generator: an OpenAI-compatible chat model on the same gateway key, used only for
 // the paraphrase and polarity gauntlets (Jev cannot generate text). Override the model with
 // CEV_J3_GENERATOR_MODEL; without a generator those two gauntlets are `skipped`.
