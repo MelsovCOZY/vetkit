@@ -376,7 +376,9 @@ describe('gauntletMasterKey', () => {
       const inputs = [
         { id: 'dup', text: '  user: q?\nassistant:  GOOD only one sentence here.\n' },
       ];
-      const judge = fakeJudge((s) => (norm(s) === norm(cases[0]?.input.state) ? YES : ESCAPE));
+      const judge = fakeJudge((s) =>
+        norm(s) === norm(cases[0]?.input.state ?? '') ? YES : ESCAPE,
+      );
       const out = await gauntletMasterKey(CRITERION, judge, cases, { inputs });
       expect(out.failedInputs).toEqual([]);
     });
