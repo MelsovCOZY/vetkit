@@ -204,7 +204,7 @@ describe('createLangfuseSource', () => {
   });
 
   test('case: empty page — no observations yields no traces and a single request', async () => {
-    const fetch = vi.fn(async () => jsonResponse(200, { data: [], meta: {} }));
+    const fetch = vi.fn(async (_url: string) => jsonResponse(200, { data: [], meta: {} }));
 
     const source = createLangfuseSource({
       baseUrlEnv: BASE_URL_ENV,
@@ -297,6 +297,38 @@ describe('createLangfuseSource', () => {
     const traces = await collect(source.doRead({}));
 
     expect(traces[0]?.messages.map((m) => m.role)).toEqual(['system', 'user', 'assistant']);
+  });
+
+  test('case: limit above the v2 cap of 1000 is clamped to 1000', async () => {
+    const fetch = vi.fn(async (_url: string) => jsonResponse(200, { data: [], meta: {} }));
+    const source = createLangfuseSource({
+      baseUrlEnv: BASE_URL_ENV,
+      publicKeyEnv: PUBLIC_KEY_ENV,
+      secretKeyEnv: SECRET_KEY_ENV,
+      limit: 5000,
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      fetch: fetch as unknown as typeof globalThis.fetch,
+    });
+
+    await collect(source.doRead({}));
+
+    expect(fetch.mock.calls[0]?.[0]).toContain('limit=1000');
+  });
+
+  test.each([0, -3])('case: limit %i falls back to the default of 50', async (limit) => {
+    const fetch = vi.fn(async (_url: string) => jsonResponse(200, { data: [], meta: {} }));
+    const source = createLangfuseSource({
+      baseUrlEnv: BASE_URL_ENV,
+      publicKeyEnv: PUBLIC_KEY_ENV,
+      secretKeyEnv: SECRET_KEY_ENV,
+      limit,
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      fetch: fetch as unknown as typeof globalThis.fetch,
+    });
+
+    await collect(source.doRead({}));
+
+    expect(fetch.mock.calls[0]?.[0]).toContain('limit=50');
   });
 
   test('case: auth — a 401 yields VetError SOURCE_AUTH thrown at first read, not an empty iterator', async () => {
