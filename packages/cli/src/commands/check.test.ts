@@ -313,6 +313,52 @@ async function validated(): Promise<Validated> {
   return { root, events, judge };
 }
 
+describe('vet check --lock with a disabled criterion', () => {
+  const DISABLED = `  - id: legacy
+    type: boolean
+    instructions: Is the reply short?
+    escape: The reply has no discernible length.
+    polarity: pass_when_true
+    channel: quality
+    enabled: false
+    provenance:
+      traceIds: []
+`;
+
+  async function withDisabled(): Promise<{ root: string; deps: ValidateDeps }> {
+    const rows = standardRows();
+    const root = await project(rows);
+    await writeFile(join(root, 'evals', 'criteria.yaml'), CRITERIA_YAML + DISABLED);
+    const events = createEvents();
+    const { judge } = countingJudge(rows, events);
+    const deps = depsFor(root, judge, events);
+    await vet(['validate'], deps);
+    stdout = [];
+    return { root, deps };
+  }
+
+  test('a fresh lock is not stale and never lists the disabled criterion', async () => {
+    const { deps } = await withDisabled();
+    await vet(['check', '--lock'], deps);
+
+    expect(report()).toMatchObject({ stale: false, reasons: [], staleCriteria: [] });
+    expect(process.exitCode ?? 0).toBe(0);
+  });
+
+  test('an enabled criterion still goes stale on wording drift, the disabled one stays unlisted', async () => {
+    const { root, deps } = await withDisabled();
+    const file = join(root, 'evals', 'criteria.yaml');
+    await writeFile(file, (await readFile(file, 'utf8')).replace('polite?', 'courteous?'));
+    await vet(['check', '--lock'], deps);
+
+    expect(report()).toMatchObject({
+      stale: true,
+      staleCriteria: [{ id: 'tone', reasons: ['wording_changed'] }],
+    });
+    expect(process.exitCode).toBe(1);
+  });
+});
+
 describe('vet check --lock per criterion', () => {
   test('fresh lock lists no stale criteria', async () => {
     const { root, events, judge } = await validated();
