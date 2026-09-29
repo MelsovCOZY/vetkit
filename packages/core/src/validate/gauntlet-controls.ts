@@ -377,9 +377,14 @@ function truncatedTurn(turn: string): string | undefined {
 /** A cut prefix shorter than this has no meaningful content left to judge. */
 const MIN_PROBE_WORDS = 3;
 
+/** A reference token that identifies the answer: it has a digit or at least 4 letters. */
+const isSignificantToken = (token: string): boolean =>
+  /\d/u.test(token) || (token.match(/\p{L}/gu) ?? []).length >= 4;
+
 /**
- * The prefix of `cut` that ends before the first occurrence of the reference answer, matched with
- * the reference comparison's normaliser. Undefined when fewer than MIN_PROBE_WORDS words remain.
+ * The prefix of `cut` that ends before the earliest occurrence of the full reference answer or of
+ * any significant reference token (a whole word after the reference comparison's normaliser).
+ * Undefined when fewer than MIN_PROBE_WORDS words remain.
  */
 function cutBeforeReference(cut: string, reference: string): string | undefined {
   const target = normalizeText(reference);
@@ -387,10 +392,19 @@ function cutBeforeReference(cut: string, reference: string): string | undefined 
   if (target === '') return cut;
   const slice = (from: number, to: number): string =>
     normalizeText(words.slice(from, to).join(' '));
+  const tokens = new Set(target.split(' ').filter(isSignificantToken));
+  const tokenAt = words.findIndex((word) =>
+    normalizeText(word)
+      .split(' ')
+      .some((t) => tokens.has(t)),
+  );
   const end = words.findIndex((_, k) => slice(0, k + 1).includes(target));
-  if (end === -1) return cut;
   let start = end;
-  while (start > 0 && !slice(start, end + 1).includes(target)) start -= 1;
+  if (end !== -1) {
+    while (start > 0 && !slice(start, end + 1).includes(target)) start -= 1;
+  }
+  if (tokenAt !== -1 && (start === -1 || tokenAt < start)) start = tokenAt;
+  if (start === -1) return cut;
   return start < MIN_PROBE_WORDS ? undefined : words.slice(0, start).join(' ');
 }
 
