@@ -110,7 +110,7 @@ describe('nearDuplicateClusters', () => {
   });
 
   test('texts over 8k characters are compared on their first 8k with a diag note', () => {
-    const long = 'lorem ipsum dolor sit amet '.repeat(400);
+    const long = 'lorem ipsum dolor sit amet '.repeat(301);
     const cases = [mkCase('l-1', `${long} alpha`), mkCase('l-2', `${long} omega`)];
     const result = nearDuplicateClusters(cases, OPTS);
     expect(result.clusters).toHaveLength(1);
@@ -122,7 +122,8 @@ describe('nearDuplicateClusters', () => {
       caseId: 'l-2',
       code: 'truncated_for_edit_similarity',
     });
-  });
+    // The 8000-char cap is fixed, so the 8000x8000 Levenshtein cannot shrink; allow for v8 coverage under load.
+  }, 20_000);
 
   test('warn-only: emits exactly one cases.near_duplicates event with the cluster count', () => {
     const events: NearDuplicateEvent[] = [];
