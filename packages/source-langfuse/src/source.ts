@@ -53,6 +53,7 @@ function decodeInput(input: unknown): unknown {
 const MAX_RETRIES = 3;
 const MAX_RETRY_AFTER_MS = 60_000;
 const DEFAULT_LIMIT = 50;
+const MAX_LIMIT = 1000; // the v2 endpoint rejects a larger limit
 
 function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -65,7 +66,11 @@ function retryAfterMs(headerValue: string | null): number {
 }
 
 export function createLangfuseSource(options: CreateLangfuseSourceOptions): SourceV1 {
-  const { baseUrlEnv, publicKeyEnv, secretKeyEnv, limit = DEFAULT_LIMIT } = options;
+  const { baseUrlEnv, publicKeyEnv, secretKeyEnv } = options;
+  const limit =
+    options.limit !== undefined && options.limit > 0
+      ? Math.min(options.limit, MAX_LIMIT)
+      : DEFAULT_LIMIT;
   const doFetch = options.fetch ?? globalThis.fetch;
   const sleep = options.sleep ?? defaultSleep;
 
@@ -128,6 +133,7 @@ export function createLangfuseSource(options: CreateLangfuseSourceOptions): Sour
 
   async function* doRead(opts: { signal?: AbortSignal }): AsyncGenerator<NormalizedTrace> {
     const { baseUrl, authHeader } = credentials();
+    // Buffered: one trace's observations can span pages, so no trace is complete until the last page.
     const byTrace = new Map<string, LangfuseObservation[]>();
     let cursor: string | null | undefined;
     do {
