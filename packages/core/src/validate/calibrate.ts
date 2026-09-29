@@ -16,6 +16,8 @@ const KAPPA_FLOOR = 0.6;
 /** The API rounds probabilities to 2 decimals, so no tolerance can be finer than this. */
 const TOLERANCE_FLOOR = 0.02;
 const UNSTABLE_AT = 0.25;
+/** Share of labelled cases allowed to fall short of the scored-repeat floor before calibration is not credible. */
+const SHORT_CASES_ABOVE = 0.1;
 const ECE_BINS = 10;
 const EPS = 1e-9;
 
@@ -412,11 +414,13 @@ export function calibrate(
   const reasons: LockReason[] = [];
 
   const known: FitRow[] = [];
-  let tooFewRepeats = false;
+  let shortCases = 0;
+  let labelled = 0;
   for (const { caseId, label } of labels) {
     if (label === 'unknown') continue;
     const vs = values.get(caseId) ?? [];
-    if (vs.length < CALIBRATION_MIN_REPEATS) tooFewRepeats = true;
+    labelled += 1;
+    if (vs.length < CALIBRATION_MIN_REPEATS) shortCases += 1;
     if (vs.length === 0) continue;
     known.push({
       caseId,
@@ -443,9 +447,9 @@ export function calibrate(
   if (heldPos < CLASS_FLOOR || heldNeg < CLASS_FLOOR) addReason(reasons, 'class_too_small');
 
   const tolerance = repeatTolerance(values);
-  if (tooFewRepeats || tolerance === undefined || tolerance >= UNSTABLE_AT) {
-    addReason(reasons, 'unstable');
-  }
+  if (tolerance === undefined || tolerance >= UNSTABLE_AT) addReason(reasons, 'unstable');
+  // A few unscored verdicts are tolerated; instability is a spread, never a shortfall.
+  if (shortCases > labelled * SHORT_CASES_ABOVE) addReason(reasons, 'too_few_repeats');
 
   const threshold = fitThreshold(
     train.map((r) => r.value),

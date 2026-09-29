@@ -341,8 +341,8 @@ describe('repeat tolerance and band cases', () => {
     const result = run([
       ...cleanTrain(25),
       ...rows('heldOut', 30, 'pass', 0.9),
-      ...rows('heldOut', 19, 'fail', 0.1),
-      ...rows('heldOut', 10, 'fail', [0.1, 0.1]),
+      ...rows('heldOut', 14, 'fail', 0.1),
+      ...rows('heldOut', 15, 'fail', [0.1, 0.1]),
     ]);
     expect(result.reasons).not.toContain('unstable');
     expect(result.reasons).toContain('too_few_repeats');
