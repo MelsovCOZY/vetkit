@@ -150,7 +150,20 @@ describe('git hook chain: bd markers + advisory lefthook (fou.13)', () => {
         expect(query.status, query.stderr).toBe(0);
         expect(query.stdout).toContain('hookTestSymbol');
       } finally {
-        rmSync(clonePath, { recursive: true, force: true });
+        // The detached post-commit graphify rebuild (started above, still running
+        // in the background) can still be writing files under clonePath (e.g.
+        // graphify-out/graph.html, GRAPH_REPORT.md, manifest.json) even after
+        // graph.json's mtime has advanced past baselineMtimeMs, since the rebuild
+        // writes its outputs sequentially rather than atomically as one unit. A
+        // plain recursive rmSync can then race a new/changing directory entry and
+        // fail with ENOTEMPTY. Retry with backoff instead of waiting on the
+        // detached child (its pid is not available to this process).
+        rmSync(clonePath, {
+          recursive: true,
+          force: true,
+          maxRetries: 10,
+          retryDelay: 100,
+        });
       }
     },
     90_000,
