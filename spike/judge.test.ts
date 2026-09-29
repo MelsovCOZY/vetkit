@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import type { Trace } from './corpus.ts';
 import type { Criterion } from './propose.ts';
 import {
@@ -16,9 +15,14 @@ import {
   runJudge,
 } from './judge.ts';
 
-const RESPONSE_FIXTURE_PATH = fileURLToPath(
-  new URL('../fixtures/research/2026-09-25-gateway-systemone-response-run1.json', import.meta.url),
-);
+// The fields extractMeta reads, in the shape of a real gateway System One response.
+const RESPONSE_FIXTURE = {
+  model: 'typesafe-ai/jev',
+  usage: { input_tokens: 446, output_tokens: 74 },
+  provider_metadata: {
+    gateway: { routing: { finalProvider: 'typesafe-ai' }, marketCost: '0.000018732' },
+  },
+};
 
 function trace(overrides: Partial<Trace> = {}): Trace {
   return {
@@ -158,12 +162,9 @@ describe('cacheKey (unit)', () => {
   });
 });
 
-describe('extractMeta (unit, real gateway response fixture)', () => {
+describe('extractMeta (unit, gateway response shape)', () => {
   test('reads model, finalProvider, usage and marketCost from the fixture shape', async () => {
-    const raw = await readFile(RESPONSE_FIXTURE_PATH, 'utf8');
-    const response = JSON.parse(raw);
-
-    const meta = extractMeta(response);
+    const meta = extractMeta(RESPONSE_FIXTURE);
 
     expect(meta.model).toBe('typesafe-ai/jev');
     expect(meta.finalProvider).toBe('typesafe-ai');

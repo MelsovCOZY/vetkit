@@ -25,6 +25,9 @@ coverage/
 *.tsbuildinfo
 .tsbuild/
 
+# local research material: never tracked
+.research/
+
 # docs/: only the product docs are tracked
 docs/*
 !docs/.gitkeep

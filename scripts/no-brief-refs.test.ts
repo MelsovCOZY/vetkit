@@ -15,6 +15,7 @@ const BRIEF_REF_PATTERNS: readonly RegExp[] = [
   /\b(?:[A-Z]{2,4}|[Jj]ev|eval-quality) brief\b/,
   new RegExp(['toolchain', 'brief(?!\\.md)'].join('-')),
   new RegExp(['docs', '(?:research|INDEX)'].join('/')),
+  new RegExp(['fixtures', 'research'].join('/')),
 ];
 
 // Instruction files, the tracker's own export, the knowledge-graph output and agent settings may
@@ -96,6 +97,7 @@ describe('research-brief references in shipped files', () => {
 
   it('flags a path into the removed research directory or its index', () => {
     const cases = [
+      `${['fixtures', 'research'].join('/')}/2026-09-25-x.json`,
       `${['docs', 'research'].join('/')}/2026-09-25-x.md`,
       `see ${['docs', 'INDEX'].join('/')}.md`,
     ];
