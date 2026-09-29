@@ -127,10 +127,17 @@ function caseProvenance(evalCase: Case): Verdict['provenance'] | undefined {
   return Object.keys(out).length === 0 ? undefined : out;
 }
 
-function renderSummary(summary: CoverageSummary, promotedSkipped: number): string {
+export function renderSummary(summary: CoverageSummary, promotedSkipped: number): string {
+  const outage =
+    summary.unscored > 0
+      ? [
+          `judge outage: ${summary.unscoredCauses.join(' / ')} x ${String(summary.unscored)}; unscored ${String(summary.unscored)} sampled trace(s), failing traces may have been missed`,
+        ]
+      : [];
   return [
     `seen ${String(summary.seen)}, sampled ${String(summary.sampled)}, judged ${String(summary.judged)}`,
     `promoted ${String(summary.promoted)} (skipped ${String(promotedSkipped)}), produced ${String(summary.produced)}, acknowledged ${String(summary.acknowledged)}`,
+    ...outage,
   ].join('\n');
 }
 
