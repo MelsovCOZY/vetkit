@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# J1 slice-gate smoke: judge one case with `vet run` against the
-# REAL Jev judge through the vercel preset, and check every acceptance-criterion verify command.
+# J1 smoke: judge one case with `vet run` against the
+# real Jev judge through the vercel preset, and check every acceptance-criterion verify command.
 #
 # Sequence: build the workspace -> write a scratch project (one boolean criterion with an
 # escape, one refund case, vetkit.config.ts on preset vercel) -> run each AC step and print
@@ -75,7 +75,7 @@ criteria:
       traceIds: []
 EOF
 
-# The refund transcript from docs/research/fixtures/2026-09-25-gateway-systemone-request.json.
+# The refund transcript from the recorded gateway System One request fixture.
 PASS_CASE="$(jq -c '{id: "one", input: {state: .state}, provenance: null, tags: []}' \
   "$ROOT/docs/research/fixtures/2026-09-25-gateway-systemone-request.json")"
 FAIL_CASE='{"id":"one","input":{"state":"User: Can I get a refund for my order #4411?\nAssistant: No. Order #4411 is outside the return window, so I cannot issue or promise any refund."},"provenance":null,"tags":[]}'

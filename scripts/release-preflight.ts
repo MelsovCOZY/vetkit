@@ -5,10 +5,10 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkVersionSync, findForbiddenStrings } from './pack.ts';
 
-// Release-blocker checks named in docs/contracts/j0.md: npm < 11.5.1 cannot do OIDC
+// Release-blocker checks: npm < 11.5.1 cannot do OIDC
 // trusted publishing, a stale bun.lock ships the wrong version, and a packed tarball
 // must not leak workspace:/catalog:/bun-only references. checkVersionSync and
-// findForbiddenStrings are j0-4's (scripts/pack.ts), reused rather than reimplemented.
+// findForbiddenStrings live in scripts/pack.ts and are reused here.
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PACKAGES_DIR = join(ROOT, 'packages');

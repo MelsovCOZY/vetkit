@@ -27,9 +27,7 @@ export type LabelRow = {
 
 export const CSV_HEADER = 'traceId,criterionId,label,source,labelledAt,baseline';
 
-// Ported from ~/Projects/haystack-hypothesis/src/probe/eval_judge.py `_ABSTENTION`.
-// Python's `\w*` is Unicode-aware by default; JS `\w` is ASCII-only, so the Kazakh
-// suffix wildcard is ported as `\p{L}*` (with the `u` flag) instead.
+// The Kazakh suffix wildcard is `\p{L}*` (with the `u` flag) because JS `\w` is ASCII-only.
 const ABSTENTION_RE =
   /no evidence|no information|not enough information|insufficient information|cannot (?:be )?found?|not (?:mentioned|found|provided|available)|does not (?:say|contain|mention)|нет (?:информации|данных|сведений|подтверждени)|не (?:найден|указан|упоминается)|недостаточно (?:информации|данных)|(?:ақпарат|мәлімет|дерек)\p{L}* жоқ|табылмады|көрсетілмеген/iu;
 

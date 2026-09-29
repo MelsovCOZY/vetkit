@@ -1,4 +1,4 @@
-# J3 gate criteria. thin_class is disabled here: it is validated in fixtures/gauntlet-fail/,
+# J3 criteria. thin_class is disabled here: it is validated in fixtures/gauntlet-fail/,
 # and stays declared so `vet label --from fixtures/labels/` accepts fixtures/labels/thin-class.csv.
 criteria:
   - id: answer_correct

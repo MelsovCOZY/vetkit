@@ -108,10 +108,9 @@ describe('root package.json', () => {
   });
 });
 
-// The original J0 contract packages: a floor, not a ceiling (docs/contracts/j0.md — this test
-// globs packages/*/package.json, it does not hard-code the package list). Later beads add more
-// packages under packages/*; each new one is picked up by the dynamic describe.each below
-// without another edit here.
+// The original J0 contract packages: a floor, not a ceiling (this test
+// globs packages/*/package.json, it does not hard-code the package list). Packages added
+// under packages/* are picked up by the dynamic describe.each below without another edit here.
 const MIN_PACKAGE_NAMES = [
   'spec',
   'core',

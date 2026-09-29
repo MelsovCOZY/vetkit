@@ -1,6 +1,6 @@
 // J4 journey: `vet export --to vitest` emits files vitest runs
 // unchanged, agreeing with `vet run` on every case, and a second run hits the shared cache.
-// Runs scripts/smoke-j4.sh against the REAL Jev judge. Skipped unless CEV_E2E=1.
+// Runs scripts/smoke-j4.sh against the real Jev judge. Skipped unless CEV_E2E=1.
 import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';

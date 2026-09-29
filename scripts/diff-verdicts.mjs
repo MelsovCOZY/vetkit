@@ -2,8 +2,7 @@
 // diff-verdicts.mjs: diffs `vet run --json`'s per-case/criterion `pass` verdicts
 // against the vitest JSON reporter's output for the same emitted tests, keying on the
 // `${caseId} · ${criterionId}` name @vetkit/export-vitest's emitTestFile embeds in every test
-// (vitest reporter docs $1).
-// A skipped vitest test (an uncalibrated lock, or an incomplete trace) is not a verdict
+// // A skipped vitest test (an uncalibrated lock, or an incomplete trace) is not a verdict
 // disagreement (judge failures stay separate from incorrect answers) and is excluded from
 // the diff. Plain Node ESM, no dependencies, so CI can run it without the workspace built.
 import { readFileSync } from 'node:fs';
@@ -14,7 +13,7 @@ const NAME_SEPARATOR = ' · ';
 // passed to `test`/`test.skip`) and `ancestorTitles` (the enclosing `describe` names);
 // `fullName` is only `[...ancestorTitles, title].join(' ')` -- space-joined, never ' > ' --
 // so splitting fullName corrupts the id whenever a describe name shares no ' > ' boundary
-// (cold gate evidence: parsed case id 'iteria.yaml s0'). emitTestFile puts the whole
+// (a real failure parsed the case id as 'iteria.yaml s0'). emitTestFile puts the whole
 // '<caseId> · <criterionId>' name in `title` alone, so `title` is enough on its own.
 function parseKey(title) {
   const withoutReason = title.replace(/\s*\([^)]*\)\s*$/, '');

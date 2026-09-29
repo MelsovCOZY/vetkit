@@ -9,7 +9,7 @@ const PACKAGES_DIR = join(ROOT, 'packages');
 const TARBALL_DIR = join(ROOT, 'dist-tarballs');
 const LOCK_PATH = join(ROOT, 'bun.lock');
 
-// Matches the release-blocker checks in docs/contracts/j0.md: a packed tarball must
+// Release-blocker checks: a packed tarball must
 // contain no unresolved workspace/catalog protocol, no Bun-only type packages, and
 // no Bun-runtime import.
 const FORBIDDEN_PATTERN = /workspace:|catalog:|bun-types|from "bun"/;

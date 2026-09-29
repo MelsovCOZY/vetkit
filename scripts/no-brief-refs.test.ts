@@ -7,8 +7,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 // A numbered or acronym-named reference to a research brief points at a document that a reader
-// without docs/INDEX.md cannot resolve, and it goes stale. State the reason inline; where a source is
-// genuinely needed, name the brief by file path (docs/research/<dated file>.md §n).
+// without docs/INDEX.md cannot resolve, and it goes stale. State the reason inline instead.
 const BRIEF_REF_PATTERNS: readonly RegExp[] = [
   /\b[Bb]rief ?[0-9]+\b/,
   /\bbrief §/,
