@@ -3,7 +3,7 @@
 // model, all speaking the `/v1/systemone` dialect; plus the cloudflare preset, whose
 // REST run endpoint and envelope live in cloudflare.ts). Plain fetch only — the
 // @typesafe-ai/sdk peer stays optional and unused here.
-import { VetError, type JudgeV1, type Question } from '@vetkit/spec';
+import { VetError, type JudgeV1, type Question, type RequestFormat } from '@vetkit/spec';
 import { createCloudflareTransport } from './cloudflare.ts';
 import { normalise } from './normalise.ts';
 import { JEV_PRESETS, type JevPresetName, type JevProviderOptions } from './presets.ts';
@@ -24,6 +24,7 @@ export type CreateJevJudgeOptions = (
 ) & {
   readonly apiKey: string;
   readonly providerOptions?: JevProviderOptions;
+  readonly requestFormat?: RequestFormat;
   readonly fetch?: typeof fetch;
   readonly deadlineMs?: number;
 };
@@ -339,6 +340,7 @@ export function createJevJudge(opts: CreateJevJudgeOptions): JudgeV1 {
       pinned,
       transport,
       model,
+      ...(opts.requestFormat === 'fenced-v1' ? { requestFormat: opts.requestFormat } : {}),
     },
     async doJudge(req) {
       validateRequest(req.state, req.questions);
@@ -415,6 +417,7 @@ export interface JevEndpoint {
   readonly model?: string;
   readonly accountId?: string;
   readonly apiKeyEnv?: string;
+  readonly requestFormat?: RequestFormat;
 }
 
 function isPresetName(name: string): name is JevPresetName {
@@ -432,14 +435,19 @@ function invalidEndpoint(message: string): VetError {
  */
 export function createJevJudgeFromEndpoint(
   endpoint: JevEndpoint,
-  extra: { readonly apiKey: string; readonly providerOptions?: JevProviderOptions },
+  extra: {
+    readonly apiKey: string;
+    readonly providerOptions?: JevProviderOptions;
+    readonly fetch?: typeof fetch;
+  },
 ): JudgeV1 {
-  const { preset, baseURL, model } = endpoint;
+  const { preset, baseURL, model, requestFormat } = endpoint;
+  const format = requestFormat === undefined ? {} : { requestFormat };
   if (preset === undefined) {
     if (baseURL === undefined || model === undefined) {
       throw invalidEndpoint('judge endpoint needs a preset, or a baseURL and a model');
     }
-    return createJevJudge({ baseURL, model, ...extra });
+    return createJevJudge({ baseURL, model, ...format, ...extra });
   }
   if (!isPresetName(preset)) {
     throw invalidEndpoint(
@@ -454,6 +462,7 @@ export function createJevJudgeFromEndpoint(
       preset,
       accountId: endpoint.accountId,
       ...(endpoint.apiKeyEnv === undefined ? {} : { apiKeyEnv: endpoint.apiKeyEnv }),
+      ...format,
       ...extra,
     });
   }
@@ -461,6 +470,7 @@ export function createJevJudgeFromEndpoint(
     preset,
     ...(baseURL === undefined ? {} : { baseURL }),
     ...(model === undefined ? {} : { model }),
+    ...format,
     ...extra,
   });
 }

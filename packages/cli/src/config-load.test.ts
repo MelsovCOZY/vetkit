@@ -235,6 +235,32 @@ const REQUEST = {
   questions: { q: { type: 'boolean', instructions: 'is it?' } },
 } as const;
 
+describe('loadVetConfig requestFormat', () => {
+  const endpoint = { kind: 'typesafe-compatible', preset: 'vercel', apiKeyEnv: 'RF_KEY' };
+
+  test.each([
+    [{ requestFormat: 'fenced-v1' }, 'fenced-v1'],
+    [{ requestFormat: 'raw' }, undefined],
+    [{}, undefined],
+  ])('judge %j yields capabilities.requestFormat %s', async (extra, expected) => {
+    vi.stubEnv('RF_KEY', 'k');
+    const cwd = await project({
+      'vetkit.config.ts': descriptorConfig({ ...endpoint, ...extra }),
+    });
+    const loaded = await loadVetConfig({ cwd });
+    expect(loaded.judge.capabilities.requestFormat).toBe(expected);
+  });
+
+  test('an unset key keeps requestFormat on the offline judge', async () => {
+    vi.stubEnv('RF_KEY', '');
+    const cwd = await project({
+      'vetkit.config.ts': descriptorConfig({ ...endpoint, requestFormat: 'fenced-v1' }),
+    });
+    const loaded = await loadVetConfig({ cwd, requireCredentials: false });
+    expect(loaded.judge.capabilities.requestFormat).toBe('fenced-v1');
+  });
+});
+
 describe('loadVetConfig CEV_DIAG judge counter', () => {
   test('with CEV_DIAG=1 every doJudge call on the loaded judge is counted', async () => {
     const cwd = await project({ 'vetkit.config.ts': ANSWERING_CONFIG });
