@@ -107,7 +107,7 @@ describe('emitTestFile', () => {
     expect(source).toContain('c1 · helpful (uncalibrated)');
   });
 
-  test('a missing lock entry (never calibrated) becomes test.skip with reason uncalibrated', () => {
+  test('a missing lock entry (no entry for this criterion) runs a real test, not test.skip', () => {
     const { source } = emitTestFile(
       'evals/criteria.yaml',
       [makeCase()],
@@ -115,10 +115,11 @@ describe('emitTestFile', () => {
       lock({}),
       { outDir: freshOutDir() },
     );
-    expect(source).toContain('c1 · helpful (uncalibrated)');
+    expect(source).toMatch(/test\(['"`]c1 · helpful['"`]/);
+    expect(source).not.toContain('test.skip(');
   });
 
-  test('a null lock (never validated) becomes test.skip with reason uncalibrated', () => {
+  test('a null lock (no lock file at all) runs a real test, not test.skip', () => {
     const { source } = emitTestFile(
       'evals/criteria.yaml',
       [makeCase()],
@@ -126,7 +127,8 @@ describe('emitTestFile', () => {
       null,
       { outDir: freshOutDir() },
     );
-    expect(source).toContain('c1 · helpful (uncalibrated)');
+    expect(source).toMatch(/test\(['"`]c1 · helpful['"`]/);
+    expect(source).not.toContain('test.skip(');
   });
 
   test('a content_not_captured case becomes test.skip for a content-dependent criterion', () => {
@@ -195,8 +197,11 @@ describe('emitTestFile', () => {
       });
       expect(source).toContain('c2 · helpful (content_not_captured)');
       expect(source).not.toContain('c2 · latency (content_not_captured)');
-      expect(source).toContain('c1 · tone (uncalibrated)');
-      expect(source).toContain('c2 · tone (uncalibrated)');
+      // tone has no lock entry at all: c1 (complete trace) now runs for real instead of being
+      // skipped as uncalibrated; c2 is still skipped, but for content_not_captured (tone is
+      // content-dependent by default), not uncalibrated.
+      expect(source).toMatch(/test\(['"`]c1 · tone['"`]/);
+      expect(source).toContain('c2 · tone (content_not_captured)');
       writeFileSync(join(dir, path), source, 'utf8');
 
       const tsconfig = {

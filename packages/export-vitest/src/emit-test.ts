@@ -91,7 +91,7 @@ function skipReason(
   caseStatus: CompletenessStatus,
 ): string | undefined {
   const entry = lock?.criteria[criterion.id];
-  if ((entry?.status ?? 'uncalibrated') === 'uncalibrated') return 'uncalibrated';
+  if (entry?.status === 'uncalibrated') return 'uncalibrated';
   if (caseStatus !== 'ok' && criterion.contentDependent !== false) return caseStatus;
   return undefined;
 }
