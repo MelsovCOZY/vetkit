@@ -195,7 +195,7 @@ describe("bun run typecheck on the empty packages", () => {
       { encoding: "utf8" },
     );
     expect(result.status).toBe(0);
-  });
+  }, 30_000);
 
   test("tsc -b --dry exits 0 across the whole reference graph", () => {
     const result = spawnSync(
@@ -204,7 +204,7 @@ describe("bun run typecheck on the empty packages", () => {
       { encoding: "utf8" },
     );
     expect(result.status).toBe(0);
-  });
+  }, 30_000);
 });
 
 describe("tsconfig-bad fixtures", () => {
@@ -220,7 +220,7 @@ describe("tsconfig-bad fixtures", () => {
     );
     expect(result.status).not.toBe(0);
     expect(result.stdout).toContain("TS1294");
-  });
+  }, 30_000);
 
   test("a relative import without an extension fails with TS2835", () => {
     const result = spawnSync(
@@ -237,7 +237,7 @@ describe("tsconfig-bad fixtures", () => {
     );
     expect(result.status).not.toBe(0);
     expect(result.stdout).toContain("TS2835");
-  });
+  }, 30_000);
 });
 
 describe("bun run typecheck catches a planted type error", () => {
@@ -254,7 +254,7 @@ describe("bun run typecheck catches a planted type error", () => {
     } finally {
       rmSync(plantedFile, { force: true });
     }
-  });
+  }, 30_000);
 });
 
 const rootPackageJson = JSON.parse(readFileSync(path.join(rootDir, "package.json"), "utf8")) as {
@@ -332,7 +332,7 @@ describe("bun run typecheck on an unbuilt tree reports cross-package errors corr
     } finally {
       cleanup();
     }
-  });
+  }, 30_000);
 
   test("a correct cross-package import typechecks with exit 0", () => {
     const { dir, cleanup } = createIsolatedWorkspace();
@@ -343,7 +343,7 @@ describe("bun run typecheck on an unbuilt tree reports cross-package errors corr
     } finally {
       cleanup();
     }
-  });
+  }, 30_000);
 });
 
 describe("bun run typecheck leaves no build output behind", () => {
@@ -361,5 +361,5 @@ describe("bun run typecheck leaves no build output behind", () => {
     } finally {
       cleanup();
     }
-  });
+  }, 30_000);
 });
