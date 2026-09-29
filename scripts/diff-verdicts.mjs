@@ -10,9 +10,14 @@ import { readFileSync } from 'node:fs';
 
 const NAME_SEPARATOR = ' · ';
 
-function parseKey(fullName) {
-  const nameOnly = fullName.slice(fullName.lastIndexOf(' > ') + 3);
-  const withoutReason = nameOnly.replace(/\s*\([^)]*\)\s*$/, '');
+// Real vitest 5 JSON reporter `assertionResults` entries carry `title` (the literal name
+// passed to `test`/`test.skip`) and `ancestorTitles` (the enclosing `describe` names);
+// `fullName` is only `[...ancestorTitles, title].join(' ')` -- space-joined, never ' > ' --
+// so splitting fullName corrupts the id whenever a describe name shares no ' > ' boundary
+// (cold gate evidence: parsed case id 'iteria.yaml s0'). emitTestFile puts the whole
+// '<caseId> · <criterionId>' name in `title` alone, so `title` is enough on its own.
+function parseKey(title) {
+  const withoutReason = title.replace(/\s*\([^)]*\)\s*$/, '');
   const sep = withoutReason.indexOf(NAME_SEPARATOR);
   if (sep === -1) return undefined;
   return {
@@ -40,7 +45,7 @@ function loadVitestVerdicts(path) {
   for (const suite of data.testResults ?? []) {
     for (const result of suite.assertionResults ?? []) {
       if (result.status !== 'passed' && result.status !== 'failed') continue;
-      const key = parseKey(result.fullName);
+      const key = parseKey(result.title);
       if (key === undefined) continue;
       map.set(keyOf(key.caseId, key.criterionId), result.status === 'passed');
     }
