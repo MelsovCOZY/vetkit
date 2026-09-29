@@ -413,6 +413,27 @@ describe('emitScorer', () => {
     await expect(scorer({ input: '', output: '' })).rejects.toThrow();
   });
 
+  // mol-aq4.18: the emitted scorer's metadata carries the verdict's cacheHit through, so a
+  // caller (the emitted test file's afterAll) can count real judge requests without a diag
+  // wrapper.
+  test('metadata.cacheHit reflects the verdict for a real request and a cache hit', async () => {
+    const { mod } = await emitAndLoad(booleanCriterion(), lockEntry());
+    const real = await mod
+      .createScorer({ __judge: booleanJudge(0.9) })
+      .scorer({ input: '', output: '' });
+    expect(real.metadata['cacheHit']).toBe(false);
+
+    const cached = await mod
+      .createScorer({
+        __judge: async () => ({
+          ...okVerdict('helpful', { type: 'boolean', probability: 0.9 }),
+          cacheHit: true,
+        }),
+      })
+      .scorer({ input: '', output: '' });
+    expect(cached.metadata['cacheHit']).toBe(true);
+  });
+
   test('throws CRITERIA_INVALID for a malformed criterion', () => {
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     expect(() => emitScorer({ id: 'bad' } as Criterion, undefined)).toThrow(

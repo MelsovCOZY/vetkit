@@ -154,6 +154,45 @@ describe('emitTestFile', () => {
     expect(source).toMatch(/test\(['"`]c1 · latency['"`]/);
   });
 
+  // mol-aq4.18: CEV_TRACE_HTTP=1 prints 'judge.requests: <N>' once per emitted test file, via
+  // an afterAll counting real (non-cache-hit) judge requests across its own tests.
+  test('emits an afterAll that prints judge.requests only under CEV_TRACE_HTTP', () => {
+    const { source } = emitTestFile(
+      'evals/criteria.yaml',
+      [makeCase()],
+      [booleanCriterion()],
+      lock({ helpful: lockEntry() }),
+      { outDir: freshOutDir() },
+    );
+    expect(source).toContain('afterAll');
+    expect(source).toMatch(/afterAll\([\s\S]*CEV_TRACE_HTTP[\s\S]*judge\.requests/);
+    expect(source).toContain("import { afterAll, describe, expect, test } from 'vitest';");
+  });
+
+  test('a real test counts a real request, not a cache hit, toward httpRequestCount', () => {
+    const { source } = emitTestFile(
+      'evals/criteria.yaml',
+      [makeCase()],
+      [booleanCriterion()],
+      lock({ helpful: lockEntry() }),
+      { outDir: freshOutDir() },
+    );
+    expect(source).toContain('httpRequestCount');
+    expect(source).toMatch(/cacheHit'?\]?\s*===\s*false/);
+  });
+
+  test('zero cases still emits the afterAll (reporting 0), not a crash', () => {
+    const { source } = emitTestFile(
+      'evals/criteria.yaml',
+      [],
+      [booleanCriterion()],
+      lock({ helpful: lockEntry() }),
+      { outDir: freshOutDir() },
+    );
+    expect(source).toContain('afterAll');
+    expect(source).toContain('httpRequestCount');
+  });
+
   test('duplicate basenames are hash-suffixed, stable per criteriaFile path', () => {
     const outDir = freshOutDir();
     const criteria = [booleanCriterion()];
