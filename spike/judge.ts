@@ -2,7 +2,14 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadEnv, readJsonl, sha256, withConcurrency, writeJsonl } from './lib/index.ts';
+import {
+  loadEnv,
+  readJsonl,
+  renderInstructions,
+  sha256,
+  withConcurrency,
+  writeJsonl,
+} from './lib/index.ts';
 import type { Trace } from './corpus.ts';
 import type { Criterion } from './propose.ts';
 
@@ -64,10 +71,7 @@ export function buildQuestions(
 ): Record<string, ChoiceQuestion> {
   const questions: Record<string, ChoiceQuestion> = {};
   for (const c of criteria) {
-    const instructions =
-      c.id === 'c1'
-        ? c.instructions.replace('{{reference}}', trace.reference ?? 'not available')
-        : c.instructions;
+    const instructions = renderInstructions(c, trace);
     questions[c.id] = {
       type: 'choice',
       instructions,
