@@ -17,6 +17,7 @@ import {
   VetError,
   type Case,
   type Criterion,
+  type GauntletDetail,
   type GauntletOutcome,
   type GauntletResult,
   type JudgeResponse,
@@ -113,6 +114,52 @@ export interface LockCriterionInput {
   readonly calibration: CalibrationResult;
   /** A missing key is recorded as skipped. */
   readonly gauntlet: Partial<Record<keyof GauntletResult, GauntletOutcome>>;
+  /** Why master_key / injection failed; ids and counts only, never case or payload text. */
+  readonly gauntletDetail?: {
+    /** `MasterKeyResult.failedInputs`: fixed entry ids and `truncation:<caseId>`. */
+    readonly masterKeyFailedInputs?: readonly string[];
+    readonly injectionFamilies?: Families;
+  };
+}
+
+const TRUNCATION_PREFIX = 'truncation:';
+
+const byText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+type Families = Readonly<Record<string, { flips: number; n: number } | undefined>>;
+
+/** Failed master-key ids as `{kind, caseId}`, sorted; fixed corpus entries are kind `fixed`. */
+export function masterKeyFailures(ids: readonly string[]): { kind: string; caseId: string }[] {
+  return [...new Set(ids)]
+    .map((id) =>
+      id.startsWith(TRUNCATION_PREFIX)
+        ? { kind: 'truncation', caseId: id.slice(TRUNCATION_PREFIX.length) }
+        : { kind: 'fixed', caseId: id },
+    )
+    .toSorted((a, b) => byText(a.kind, b.kind) || byText(a.caseId, b.caseId));
+}
+
+/** Injection families with at least one flip, sorted by family. */
+export function flippedFamilies(
+  families: Families | undefined,
+): { family: string; flips: number; trials: number }[] {
+  return Object.entries(families ?? {})
+    .flatMap(([family, f]) =>
+      f !== undefined && f.flips > 0 ? [{ family, flips: f.flips, trials: f.n }] : [],
+    )
+    .toSorted((a, b) => byText(a.family, b.family));
+}
+
+function gauntletDetailOf(
+  detail: LockCriterionInput['gauntletDetail'],
+): GauntletDetail | undefined {
+  const masterKeyFailed = masterKeyFailures(detail?.masterKeyFailedInputs ?? []);
+  const injectionFlips = flippedFamilies(detail?.injectionFamilies);
+  if (masterKeyFailed.length === 0 && injectionFlips.length === 0) return undefined;
+  return {
+    ...(masterKeyFailed.length === 0 ? {} : { masterKeyFailed }),
+    ...(injectionFlips.length === 0 ? {} : { injectionFlips }),
+  };
 }
 
 export interface LockInputs {
@@ -147,6 +194,7 @@ function entryFor(
   const code = criterion.grader?.kind === 'code';
   const outcome = (key: keyof GauntletResult): GauntletOutcome =>
     code ? 'skipped' : (input?.gauntlet[key] ?? 'skipped');
+  const detail = code ? undefined : gauntletDetailOf(input?.gauntletDetail);
   const gauntlet: GauntletResult = {
     paraphrase: outcome('paraphrase'),
     polarity: outcome('polarity'),
@@ -177,6 +225,7 @@ function entryFor(
     ...(cal?.ece === undefined ? {} : { ece: cal.ece }),
     ...(cal?.tolerance === undefined ? {} : { tolerance: cal.tolerance }),
     gauntlet,
+    ...(detail === undefined ? {} : { gauntletDetail: detail }),
     // The judge outage replaces the data-shape reasons its unscored verdicts would otherwise produce.
     reasons: unavailable ? ['judge_unavailable'] : REASON_ORDER.filter((r) => reasons.has(r)),
     ...(cal === undefined ? {} : { languages: [...cal.languages] }),

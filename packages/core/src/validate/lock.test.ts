@@ -577,18 +577,18 @@ describe('checkLock', () => {
   });
 });
 
-describe('buildLock gauntlet detail', () => {
-  const withDetail = (detail: NonNullable<LockCriterionInput['detail']>): LockInputs =>
-    inputs({
-      results: {
-        'answers-question': {
-          calibration: calibration(),
-          gauntlet: { ...ALL_PASS, injection: 'fail', master_key: 'fail' },
-          detail,
-        },
+const withDetail = (detail: NonNullable<LockCriterionInput['gauntletDetail']>): LockInputs =>
+  inputs({
+    results: {
+      'answers-question': {
+        calibration: calibration(),
+        gauntlet: { ...ALL_PASS, injection: 'fail', master_key: 'fail' },
+        gauntletDetail: detail,
       },
-    });
+    },
+  });
 
+describe('buildLock gauntlet detail', () => {
   test('records failing master_key inputs as sorted {kind, caseId} without text', () => {
     const e = entryOf(
       buildLock(

@@ -23,6 +23,7 @@ export type {
   Case,
   Criterion,
   GauntletOutcome,
+  GauntletDetail,
   GauntletResult,
   Answer as IrAnswer,
   Lock,
