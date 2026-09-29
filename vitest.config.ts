@@ -77,7 +77,7 @@ export default defineConfig({
     setupFiles: [setupFile],
     coverage: {
       provider: 'v8',
-      // Applies only to coverage runs (`vitest run --coverage`); `bun run test` does not collect coverage.
+      // Enforced by `bun run test`, which runs with --coverage.
       thresholds: { lines: 83, branches: 76, functions: 82, statements: 82 },
     },
     projects: [

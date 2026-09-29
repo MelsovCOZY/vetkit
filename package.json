@@ -14,7 +14,7 @@
     "knip": "knip",
     "fmt": "oxfmt --check .",
     "fmt:write": "oxfmt .",
-    "test": "vitest run",
+    "test": "vitest run --coverage",
     "build": "bun run --filter './packages/*' build",
     "pack": "bun scripts/pack.ts",
     "version": "changeset version && bun install --no-frozen-lockfile",
