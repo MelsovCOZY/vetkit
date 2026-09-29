@@ -4,7 +4,14 @@
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createEvents, loadCriteria, readLock, resolveConfig } from '@vetkit/core';
+import {
+  computeNormalizedWordingHash,
+  createEvents,
+  loadCriteria,
+  readLock,
+  resolveConfig,
+  wordingOf,
+} from '@vetkit/core';
 import { safeParseJson, VetError, type JudgeV1, type Lock } from '@vetkit/spec';
 import { Command } from 'commander';
 import { afterEach, describe, expect, test, vi } from 'vitest';
@@ -175,6 +182,17 @@ async function lockAt(root: string): Promise<Lock> {
   return r;
 }
 
+async function withNormalizedHash(root: string): Promise<void> {
+  const loaded = await loadCriteria(join(root, 'evals', 'criteria.yaml'));
+  if (!loaded.ok || loaded.criteria[0] === undefined) throw new Error('fixture invalid');
+  const lock = await lockAt(root);
+  const entry = lock.criteria['tone'];
+  if (entry === undefined) throw new Error('no entry');
+  const normalizedWordingHash = computeNormalizedWordingHash(wordingOf(loaded.criteria[0]));
+  const next = { ...lock, criteria: { tone: { ...entry, normalizedWordingHash } } };
+  await writeFile(join(root, 'criteria.lock.json'), `${JSON.stringify(next, null, 2)}\n`);
+}
+
 describe('vet lock refresh', () => {
   test('whitespace/comment-only edit → entry refreshed, threshold kept, exit 0', async () => {
     const root = await project();
@@ -234,5 +252,73 @@ describe('vet lock refresh', () => {
 
     expect(exitCodeOf(error)).toBe(2);
     expect(VetError.isInstance(error) && error.message).toContain('unsupported lockVersion');
+  });
+
+  describe('in-sentence whitespace edits', () => {
+    const SPACED = CRITERIA_YAML.replace('Is the reply polite?', 'Is  the   reply polite?');
+
+    test('absorbed when normalizedWordingHash matches: wordingHash updated in place, exit 0', async () => {
+      const root = await project();
+      await withNormalizedHash(root);
+      await writeFile(join(root, 'evals', 'criteria.yaml'), SPACED);
+      await vet(['lock', 'refresh'], depsFor(root));
+
+      expect(report()).toMatchObject({ refreshed: [], refreshedWhitespace: ['tone'], stale: [] });
+      expect(process.exitCode ?? 0).toBe(0);
+      const loaded = await loadCriteria(join(root, 'evals', 'criteria.yaml'));
+      if (!loaded.ok) throw new Error('spaced criteria invalid');
+      const entry = (await lockAt(root)).criteria['tone'];
+      expect(entry?.wordingHash).toBe(loaded.criteria[0]?.wordingHash);
+      expect(entry).toMatchObject({ status: 'calibrated', threshold: 0.42, tolerance: 0.03 });
+      expect(entry?.normalizedWordingHash).toBeDefined();
+    });
+
+    test('text output says refreshed (whitespace only)', async () => {
+      const root = await project();
+      await withNormalizedHash(root);
+      await writeFile(join(root, 'evals', 'criteria.yaml'), SPACED);
+      configureOutput({ json: false, quiet: false });
+      const spy = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+        stdout.push(String(chunk));
+        return true;
+      });
+      const program = new Command();
+      program.exitOverride().option('--json');
+      registerLock(program, depsFor(root));
+      try {
+        await program.parseAsync(['node', 'vet', 'lock', 'refresh']);
+      } finally {
+        spy.mockRestore();
+      }
+      expect(stdout.join('')).toContain('tone: refreshed (whitespace only)');
+    });
+
+    test('a word change is not absorbed even when the field is present', async () => {
+      const root = await project();
+      await withNormalizedHash(root);
+      const lockPath = join(root, 'criteria.lock.json');
+      const before = await readFile(lockPath, 'utf8');
+      await writeFile(
+        join(root, 'evals', 'criteria.yaml'),
+        CRITERIA_YAML.replace('Is the reply polite?', 'Is the reply rude?'),
+      );
+      await vet(['lock', 'refresh'], depsFor(root));
+
+      expect(report()).toMatchObject({ refreshedWhitespace: [], stale: [{ id: 'tone' }] });
+      expect(process.exitCode).toBe(1);
+      expect(await readFile(lockPath, 'utf8')).toBe(before);
+    });
+
+    test('an old lock without the field reports stale as before, lock untouched', async () => {
+      const root = await project();
+      const lockPath = join(root, 'criteria.lock.json');
+      const before = await readFile(lockPath, 'utf8');
+      await writeFile(join(root, 'evals', 'criteria.yaml'), SPACED);
+      await vet(['lock', 'refresh'], depsFor(root));
+
+      expect(report()).toMatchObject({ refreshedWhitespace: [], stale: [{ id: 'tone' }] });
+      expect(process.exitCode).toBe(1);
+      expect(await readFile(lockPath, 'utf8')).toBe(before);
+    });
   });
 });

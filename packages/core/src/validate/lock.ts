@@ -26,7 +26,7 @@ import {
   type LockReason,
 } from '@vetkit/spec';
 import { computeWordingHash } from '../criteria/load.ts';
-import { wordingOf } from '../criteria/wording.ts';
+import { computeNormalizedWordingHash, wordingOf } from '../criteria/wording.ts';
 import type { Events } from '../events.ts';
 import type { GatePolicy } from '../gate.ts';
 import { referenceRequirement } from '../judge/reference.ts';
@@ -168,6 +168,7 @@ function entryFor(
 
   return {
     wordingHash: criterion.wordingHash,
+    normalizedWordingHash: computeNormalizedWordingHash(wordingOf(criterion)),
     status,
     ...(cal?.threshold === undefined ? {} : { threshold: cal.threshold }),
     ...(cal?.tpr === undefined ? {} : { tpr: cal.tpr }),
