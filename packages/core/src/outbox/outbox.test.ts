@@ -364,6 +364,7 @@ describe('createOutbox', () => {
       sink: 'fake',
       sent: 0,
       acknowledged: 0,
+      skipped: 0,
       retried: 0,
       dead: 0,
       pending: 0,
