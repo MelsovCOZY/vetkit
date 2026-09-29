@@ -2,7 +2,13 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FENCED_V1_PREAMBLE, renderState } from '@vetkit/core';
-import { CEV_ERROR_CODES, validateJson, verdictSchema, VetError } from '@vetkit/spec';
+import {
+  CEV_ERROR_CODES,
+  safeParseJson,
+  validateJson,
+  verdictSchema,
+  VetError,
+} from '@vetkit/spec';
 import { describe, expect, test } from 'vitest';
 import { judgeOne } from './index.ts';
 
@@ -104,7 +110,9 @@ describe('judgeOne', () => {
     const { root, callsFile } = await project('fenced-v1');
     await judgeOne({ criterion, state }, { configPath: join(root, 'vetkit.config.ts'), env: {} });
     const [line] = (await readFile(`${callsFile}.states`, 'utf8')).split('\n');
-    const sent = JSON.parse(line ?? '""') as string;
+    const parsed = safeParseJson<string>(line ?? '""', { type: 'string' });
+    if (!parsed.ok) throw parsed.error;
+    const sent = parsed.value;
     expect(sent.startsWith(FENCED_V1_PREAMBLE)).toBe(true);
     expect(sent).toBe(renderState(state, 'fenced-v1'));
   });

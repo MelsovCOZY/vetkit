@@ -117,10 +117,15 @@ describe('vet estimate', () => {
       const fenced = parseJson(
         runVet(['estimate', '--for', target, '--json'], fencedProject()).stdout,
       );
-      const tokens = (doc: Record<string, unknown>): number =>
-        (target === 'run'
-          ? doc['inputTokens']
-          : (doc['base'] as Record<string, number>)['inputTokens']) as number;
+      const tokens = (doc: Record<string, unknown>): number => {
+        const holder = target === 'run' ? doc : doc['base'];
+        const value =
+          typeof holder === 'object' && holder !== null && 'inputTokens' in holder
+            ? holder.inputTokens
+            : undefined;
+        if (typeof value !== 'number') throw new Error('no inputTokens in estimate output');
+        return value;
+      };
       expect(tokens(fenced)).toBeGreaterThan(tokens(raw));
     },
   );
