@@ -2,6 +2,7 @@
 
 export { computeWordingHash, loadCriteria } from './criteria/load.ts';
 export type { CriteriaIssue, LoadCriteriaResult, WordingFields } from './criteria/load.ts';
+export { wordingOf } from './criteria/wording.ts';
 export {
   formatCriteriaDocument,
   markUncalibrated,

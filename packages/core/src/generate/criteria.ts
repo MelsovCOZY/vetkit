@@ -6,6 +6,7 @@
 // and report, never dropped silently here.
 import { type Criterion, criterionSchema, type GeneratorV1, validateJson } from '@vetkit/spec';
 import { computeWordingHash } from '../criteria/load.ts';
+import { wordingOf } from '../criteria/wording.ts';
 import { lintCriteria, type LintIssue } from '../criteria/lint.ts';
 import type { Events } from '../events.ts';
 import type { FailureMode } from './failure-modes.ts';
@@ -71,7 +72,7 @@ function slug(name: string): string {
 
 function build(draft: Draft, mode: FailureMode, id: string, generator: string): Criterion {
   const checkable = classify(mode) ?? (draft.checkable === 'none' ? undefined : draft.checkable);
-  return {
+  const criterion: Criterion = {
     id,
     type: 'boolean',
     instructions: draft.instructions,
@@ -79,13 +80,10 @@ function build(draft: Draft, mode: FailureMode, id: string, generator: string): 
     polarity: draft.polarity,
     channel: draft.channel,
     provenance: { traceIds: [...mode.exampleTraceIds], generator },
-    wordingHash: computeWordingHash({
-      type: 'boolean',
-      instructions: draft.instructions,
-      escape: draft.escape,
-    }),
+    wordingHash: '',
     ...(checkable === undefined ? {} : { checkable }),
   };
+  return { ...criterion, wordingHash: computeWordingHash(wordingOf(criterion)) };
 }
 
 function lintErrors(candidate: Criterion): LintIssue[] {
