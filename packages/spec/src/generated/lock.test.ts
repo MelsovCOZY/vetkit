@@ -152,6 +152,7 @@ type ExpectedReason =
   | 'language_limited'
   | 'score_not_gateable'
   | 'reference_missing'
+  | 'judge_unavailable'
   | 'paraphrase'
   | 'polarity'
   | 'injection'
@@ -214,5 +215,7 @@ describe('Lock type', () => {
     expectTypeOf<LockCriterion['ece']>().toEqualTypeOf<number | undefined>();
     expectTypeOf<LockCriterion['tolerance']>().toEqualTypeOf<number | undefined>();
     expectTypeOf<LockCriterion['languages']>().toEqualTypeOf<string[] | undefined>();
+    expectTypeOf<LockCriterion['unscored']>().toEqualTypeOf<number | undefined>();
+    expectTypeOf<LockCriterion['unscoredCauses']>().toEqualTypeOf<string[] | undefined>();
   });
 });

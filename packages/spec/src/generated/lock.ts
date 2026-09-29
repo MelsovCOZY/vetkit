@@ -10,6 +10,7 @@ export type LockReason =
   | 'language_limited'
   | 'score_not_gateable'
   | 'reference_missing'
+  | 'judge_unavailable'
   | 'paraphrase'
   | 'polarity'
   | 'injection'
@@ -46,6 +47,8 @@ export interface LockCriterion {
   reasons: LockReason[];
   languages?: string[];
   labelCount: number;
+  unscored?: number;
+  unscoredCauses?: string[];
 }
 export interface GauntletResult {
   paraphrase: GauntletOutcome;

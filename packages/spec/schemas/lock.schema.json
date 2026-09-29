@@ -57,6 +57,7 @@
         "language_limited",
         "score_not_gateable",
         "reference_missing",
+        "judge_unavailable",
         "paraphrase",
         "polarity",
         "injection",
@@ -81,7 +82,9 @@
         "gauntlet": { "$ref": "#/$defs/GauntletResult" },
         "reasons": { "type": "array", "items": { "$ref": "#/$defs/LockReason" } },
         "languages": { "type": "array", "items": { "type": "string" } },
-        "labelCount": { "type": "integer", "minimum": 0 }
+        "labelCount": { "type": "integer", "minimum": 0 },
+        "unscored": { "type": "integer", "minimum": 0 },
+        "unscoredCauses": { "type": "array", "items": { "type": "string" } }
       },
       "required": ["wordingHash", "status", "gauntlet", "reasons", "labelCount"],
       "additionalProperties": false

@@ -55,10 +55,59 @@ const REASON_ORDER: readonly LockReason[] = [
   'language_limited',
   'score_not_gateable',
   'reference_missing',
+  'judge_unavailable',
   ...GAUNTLET_KEYS,
 ];
 
+/** Unscored fraction above which the lock blames the judge instead of the data (mol-q4q.22). */
+const UNAVAILABLE_ABOVE = 0.1;
+
+export interface Unscored {
+  readonly count: number;
+  readonly total: number;
+  readonly causes: string[];
+}
+
+/** Code of a verdict cause: a bare code string or `{code}`; never the rest of the cause. */
+function causeCode(cause: unknown): string {
+  if (typeof cause === 'string') return cause;
+  if (typeof cause === 'object' && cause !== null) {
+    const code = (cause as { code?: unknown }).code;
+    if (typeof code === 'string') return code;
+  }
+  return 'UNKNOWN';
+}
+
+/** Unscored verdicts of one criterion: count, total, and the sorted distinct cause codes. */
+export function unscoredOf(
+  criterionId: string,
+  verdicts: readonly {
+    readonly criterionId: string;
+    readonly status: string;
+    readonly cause?: unknown;
+  }[],
+): Unscored {
+  const own = verdicts.filter((v) => v.criterionId === criterionId);
+  const failed = own.filter((v) => v.status !== 'ok');
+  return {
+    count: failed.length,
+    total: own.length,
+    causes: [...new Set(failed.map((v) => causeCode(v.cause)))].toSorted(),
+  };
+}
+
+/** True when more than 10% of a criterion's verdicts are unscored. */
+export function judgeUnavailable(unscored: Unscored | undefined): boolean {
+  return (
+    unscored !== undefined &&
+    unscored.total > 0 &&
+    unscored.count / unscored.total > UNAVAILABLE_ABOVE
+  );
+}
+
 export interface LockCriterionInput {
+  /** Unscored verdict tally; over 10% unscored replaces the data-shape reasons with judge_unavailable. */
+  readonly unscored?: Unscored;
   readonly calibration: CalibrationResult;
   /** A missing key is recorded as skipped. */
   readonly gauntlet: Partial<Record<keyof GauntletResult, GauntletOutcome>>;
@@ -88,6 +137,7 @@ function entryFor(
   pinned: boolean,
 ): LockCriterion {
   const cal = input?.calibration;
+  const unavailable = judgeUnavailable(input?.unscored);
   const reasons = new Set<LockReason>(cal?.reasons ?? []);
   const labelCount = cal?.labelCount ?? 0;
   if (labelCount < MIN_LABELS) reasons.add('too_few_labels');
@@ -109,6 +159,7 @@ function entryFor(
   if (criterion.type === 'score') reasons.add('score_not_gateable');
   if (!referenceRequirement(criterion, [...cases]).ok) reasons.add('reference_missing');
 
+  if (unavailable) reasons.add('judge_unavailable');
   const blocking = [...reasons].filter((r) => r !== 'language_limited');
   const ok = cal?.status === 'calibrated' && blocking.length === 0;
   let status: LockCriterion['status'] = 'uncalibrated';
@@ -123,9 +174,13 @@ function entryFor(
     ...(cal?.ece === undefined ? {} : { ece: cal.ece }),
     ...(cal?.tolerance === undefined ? {} : { tolerance: cal.tolerance }),
     gauntlet,
-    reasons: REASON_ORDER.filter((r) => reasons.has(r)),
+    // The judge outage replaces the data-shape reasons its unscored verdicts would otherwise produce.
+    reasons: unavailable ? ['judge_unavailable'] : REASON_ORDER.filter((r) => reasons.has(r)),
     ...(cal === undefined ? {} : { languages: [...cal.languages] }),
     labelCount,
+    ...(input?.unscored === undefined || input.unscored.count === 0
+      ? {}
+      : { unscored: input.unscored.count, unscoredCauses: [...input.unscored.causes] }),
   };
 }
 
