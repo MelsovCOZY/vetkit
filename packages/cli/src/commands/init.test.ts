@@ -289,4 +289,25 @@ describe('vet init --source generator usage', () => {
     expect(result.stdout).toContain(PRICE_IN);
     expect(result.stdout).toContain(PRICE_OUT);
   });
+
+  test('CEV_DIAG=1 still writes the generator diag line once when generation throws after a success', () => {
+    const project = projectWithGeneratorUsage(true);
+    const file = join(project, 'vetkit.config.ts');
+    writeFileSync(
+      file,
+      readFileSync(file, 'utf8').replace(
+        'async doGenerate(req: GenerateRequest) {',
+        "async doGenerate(req: GenerateRequest) {\n    fixtureCalls += 1;\n    if (fixtureCalls > 1) throw new Error('generator exploded');",
+      ).replace('const generator = {', 'let fixtureCalls = 0;\nconst generator = {'),
+    );
+    const result = metered(project, { CEV_DIAG: '1' });
+    expect(result.status).toBe(70);
+    const lines = result.stderr.split('\n').filter((l) => l.startsWith('{"diag":{"generator"'));
+    expect(lines).toHaveLength(1);
+    expect(diagGenerator(result.stderr)).toMatchObject({
+      calls: 2,
+      inputTokens: 10,
+      outputTokens: 4,
+    });
+  });
 });
