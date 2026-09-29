@@ -327,6 +327,21 @@ function firstSentence(text: string): string {
   return sentence?.[0] ?? trimmed.split('\n')[0] ?? '';
 }
 
+const normalise = (text: string): string => text.replace(/\s+/g, ' ').trim();
+
+/**
+ * The truncated final turn: the first sentence, or (when that removes nothing) the first half of
+ * its words. Undefined when no truncation can remove content.
+ */
+function truncatedTurn(turn: string): string | undefined {
+  const whole = normalise(turn);
+  const sentence = firstSentence(turn);
+  if (normalise(sentence) !== whole) return sentence;
+  const words = whole.split(' ');
+  if (words.length < 2) return undefined;
+  return words.slice(0, Math.ceil(words.length / 2)).join(' ');
+}
+
 function hasEscape(criterion: Criterion): boolean {
   return criterion.type !== 'score' && (criterion.escape ?? '') !== '';
 }
@@ -340,19 +355,28 @@ export async function gauntletMasterKey(
   if (!hasEscape(criterion)) {
     return { result: 'fail', reasons: ['master_key'], reason: 'no_escape', failedInputs: [] };
   }
-  const fixed = options.inputs.map((entry) => ({
-    id: entry.id,
-    case: {
-      id: `master-key:${entry.id}`,
-      input: { state: entry.text.replaceAll(RUBRIC_PLACEHOLDER, criterion.instructions) },
-      provenance: {},
-      tags: [],
-    } satisfies Case,
-  }));
-  const truncations = knownPassCases.map((c) => {
+  const sources = new Set(knownPassCases.map((c) => normalise(c.input.state)));
+  const fixed = options.inputs
+    .filter(
+      (entry) =>
+        !sources.has(normalise(entry.text.replaceAll(RUBRIC_PLACEHOLDER, criterion.instructions))),
+    )
+    .map((entry) => ({
+      id: entry.id,
+      case: {
+        id: `master-key:${entry.id}`,
+        input: { state: entry.text.replaceAll(RUBRIC_PLACEHOLDER, criterion.instructions) },
+        provenance: {},
+        tags: [],
+      } satisfies Case,
+    }));
+  const truncations = knownPassCases.flatMap((c) => {
     const { before, turn, after } = finalTurn(c);
+    const cut = truncatedTurn(turn);
+    if (cut === undefined) return [];
     const id = `truncation:${c.id}`;
-    return { id, case: withState(c, id, `${before}${firstSentence(turn)}${after}`) };
+    const probe = withState(c, id, `${before}${cut}${after}`);
+    return sources.has(normalise(probe.input.state)) ? [] : [{ id, case: probe }];
   });
   const inputs = [...fixed, ...truncations];
   const repeats = Math.max(MASTER_KEY_MIN_REPEATS, options.repeats ?? MASTER_KEY_MIN_REPEATS);
