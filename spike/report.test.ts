@@ -158,43 +158,68 @@ describe('decideOutcome', () => {
 
   test('7 passing criteria with c1 accuracy >= 0.9 and median kappa >= 0.4 -> GO', () => {
     expect(
-      decideOutcome({ ...enoughLabels, c1Accuracy: 0.95, passCount: 7, medianKappa: highMedianKappa }),
+      decideOutcome({
+        ...enoughLabels,
+        c1Accuracy: 0.95,
+        passCount: 7,
+        medianKappa: highMedianKappa,
+      }),
     ).toBe('GO');
   });
 
   test('6 passing criteria -> AMEND', () => {
     expect(
-      decideOutcome({ ...enoughLabels, c1Accuracy: 0.95, passCount: 6, medianKappa: highMedianKappa }),
+      decideOutcome({
+        ...enoughLabels,
+        c1Accuracy: 0.95,
+        passCount: 6,
+        medianKappa: highMedianKappa,
+      }),
     ).toBe('AMEND');
   });
 
   test('4 passing criteria (AMEND lower boundary) -> AMEND', () => {
     expect(
-      decideOutcome({ ...enoughLabels, c1Accuracy: 0.95, passCount: 4, medianKappa: highMedianKappa }),
+      decideOutcome({
+        ...enoughLabels,
+        c1Accuracy: 0.95,
+        passCount: 4,
+        medianKappa: highMedianKappa,
+      }),
     ).toBe('AMEND');
   });
 
   test('3 passing criteria with median kappa 0.5 -> AMEND (median at/above the 0.4 bar)', () => {
-    expect(decideOutcome({ ...enoughLabels, c1Accuracy: 0.95, passCount: 3, medianKappa: 0.5 })).toBe(
-      'AMEND',
-    );
+    expect(
+      decideOutcome({ ...enoughLabels, c1Accuracy: 0.95, passCount: 3, medianKappa: 0.5 }),
+    ).toBe('AMEND');
   });
 
   test('5 passing criteria with median kappa 0.35 -> NO-GO (median below 0.4 overrides pass count)', () => {
-    expect(decideOutcome({ ...enoughLabels, c1Accuracy: 0.95, passCount: 5, medianKappa: 0.35 })).toBe(
-      'NO-GO',
-    );
+    expect(
+      decideOutcome({ ...enoughLabels, c1Accuracy: 0.95, passCount: 5, medianKappa: 0.35 }),
+    ).toBe('NO-GO');
   });
 
   test('c1 accuracy below 0.9 overrides an otherwise-passing count -> NO-GO', () => {
     expect(
-      decideOutcome({ ...enoughLabels, c1Accuracy: 0.85, passCount: 8, medianKappa: highMedianKappa }),
+      decideOutcome({
+        ...enoughLabels,
+        c1Accuracy: 0.85,
+        passCount: 8,
+        medianKappa: highMedianKappa,
+      }),
     ).toBe('NO-GO');
   });
 
   test('c1 accuracy 0.89 -> NO-GO even with 8 criteria passing', () => {
     expect(
-      decideOutcome({ ...enoughLabels, c1Accuracy: 0.89, passCount: 8, medianKappa: highMedianKappa }),
+      decideOutcome({
+        ...enoughLabels,
+        c1Accuracy: 0.89,
+        passCount: 8,
+        medianKappa: highMedianKappa,
+      }),
     ).toBe('NO-GO');
   });
 
@@ -223,19 +248,19 @@ describe('decideOutcome', () => {
   });
 });
 
-describe('checkLabels', () => {
-  function row(overrides: Partial<LabelRow>): LabelRow {
-    return {
-      traceId: 't1',
-      criterionId: 'c1',
-      label: 'yes',
-      source: 'auto',
-      labelledAt: '2026-09-25T00:00:00.000Z',
-      baseline: '',
-      ...overrides,
-    };
-  }
+function row(overrides: Partial<LabelRow>): LabelRow {
+  return {
+    traceId: 't1',
+    criterionId: 'c1',
+    label: 'yes',
+    source: 'auto',
+    labelledAt: '2026-09-25T00:00:00.000Z',
+    baseline: '',
+    ...overrides,
+  };
+}
 
+describe('checkLabels', () => {
   test('counts distinct human-labelled traces separately from total rows', () => {
     const rows: LabelRow[] = [
       row({ traceId: 't1', source: 'human' }),

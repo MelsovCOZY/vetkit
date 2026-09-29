@@ -5,7 +5,6 @@ import { fileURLToPath } from 'node:url';
 import { readJsonl, writeJsonl } from './lib/index.ts';
 
 const VARIANTS = ['bm25', 'embedding', 'hybrid', 'hybrid-norerank'] as const;
-type Variant = (typeof VARIANTS)[number];
 
 export type GoldenRow = {
   id: string;
@@ -59,7 +58,7 @@ export function buildTraces(
   const traces: Trace[] = [];
 
   for (const variant of Object.keys(reports)) {
-    const report = reports[variant]!;
+    const report = reports[variant];
     for (const row of report.per_question) {
       const goldenRow = goldenById.get(row.id);
       if (!goldenRow) {
@@ -100,7 +99,8 @@ export function buildTraces(
 }
 
 async function main(): Promise<void> {
-  const haystackDir = process.env.HAYSTACK_HYPOTHESIS_DIR ?? join(homedir(), 'Projects', 'haystack-hypothesis');
+  const haystackDir =
+    process.env.HAYSTACK_HYPOTHESIS_DIR ?? join(homedir(), 'Projects', 'haystack-hypothesis');
   const spikeDataDir = fileURLToPath(new URL('./data/', import.meta.url));
 
   const golden = await readJsonl<GoldenRow>(join(haystackDir, 'golden', 'golden.jsonl'));
@@ -108,7 +108,7 @@ async function main(): Promise<void> {
     await readFile(join(spikeDataDir, 'corpus-text.json'), 'utf8'),
   );
 
-  const reports: Record<Variant, Report> = {} as Record<Variant, Report>;
+  const reports: Record<string, Report> = {};
   for (const variant of VARIANTS) {
     const report: Report = JSON.parse(
       await readFile(join(haystackDir, 'report', `eval-${variant}.json`), 'utf8'),

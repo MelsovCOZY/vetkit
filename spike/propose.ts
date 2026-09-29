@@ -47,17 +47,26 @@ export const FIXED_CRITERIA: readonly Criterion[] = [
 
 export type LintResult = { ok: true } | { ok: false; rule: string };
 
-const LINT_RULES: { rule: string; fails: (c: { instructions: string; escape: string }) => boolean }[] = [
+const LINT_RULES: {
+  rule: string;
+  fails: (c: { instructions: string; escape: string }) => boolean;
+}[] = [
   { rule: 'missing escape option', fails: (c) => !c.escape || c.escape.trim().length === 0 },
   {
     rule: 'double negative',
     fails: (c) =>
-      (c.instructions.match(/\b(not|never|none|neither|nor|isn't|doesn't|didn't|won't|cannot|can't)\b/gi) ?? [])
-        .length >= 2,
+      (
+        c.instructions.match(
+          /\b(not|never|none|neither|nor|isn't|doesn't|didn't|won't|cannot|can't)\b/gi,
+        ) ?? []
+      ).length >= 2,
   },
   {
     rule: 'asks Jev to count, compute or reason about dates',
-    fails: (c) => /\b(count|calculate|compute|how many|sum of|total number|date|day of the week)\b/i.test(c.instructions),
+    fails: (c) =>
+      /\b(count|calculate|compute|how many|sum of|total number|date|day of the week)\b/i.test(
+        c.instructions,
+      ),
   },
   { rule: 'instructions over 200 characters', fails: (c) => c.instructions.length > 200 },
 ];
@@ -78,12 +87,17 @@ export function sampleTraces(traces: Trace[], n: number = SAMPLE_SIZE): Trace[] 
   const step = traces.length / n;
   const picked: Trace[] = [];
   for (let i = 0; i < n; i++) {
-    picked.push(traces[Math.floor(i * step)]!);
+    picked.push(traces[Math.floor(i * step)]);
   }
   return picked;
 }
 
-function summarizeTraceForPrompt(t: Trace): { traceId: string; lang: string; question: string; answer: string } {
+function summarizeTraceForPrompt(t: Trace): {
+  traceId: string;
+  lang: string;
+  question: string;
+  answer: string;
+} {
   return { traceId: t.traceId, lang: t.lang, question: t.question, answer: t.answer };
 }
 
@@ -190,21 +204,31 @@ const DEFAULT_GENERATOR_MODEL = 'anthropic/claude-sonnet-5';
 /** Wraps spike/lib's gatewayFetch as a GeneratorCall against the gateway's chat/completions dialect. */
 export function makeGeneratorCall(model: string): GeneratorCall {
   return async ({ schemaName, jsonSchema, messages }) => {
-    const response = (await gatewayFetch(
+    const response = await gatewayFetch<{
+      model?: string;
+      choices?: { message?: { content?: string } }[];
+    }>(
       '/v1/chat/completions',
       {
         model,
         messages,
-        response_format: { type: 'json_schema', json_schema: { name: schemaName, strict: true, schema: jsonSchema } },
+        response_format: {
+          type: 'json_schema',
+          json_schema: { name: schemaName, strict: true, schema: jsonSchema },
+        },
       },
       { timeoutMs: 60_000 },
-    )) as { model?: string; choices?: { message?: { content?: string } }[] };
+    );
 
     const content = response.choices?.[0]?.message?.content;
     if (typeof content !== 'string') {
-      throw new Error(`propose.ts: generator response for ${schemaName} missing choices[0].message.content`);
+      throw new Error(
+        `propose.ts: generator response for ${schemaName} missing choices[0].message.content`,
+      );
     }
-    console.log(`propose.ts: generator call ${schemaName} served by model ${response.model ?? '(unknown)'}`);
+    console.log(
+      `propose.ts: generator call ${schemaName} served by model ${response.model ?? '(unknown)'}`,
+    );
     return JSON.parse(content);
   };
 }
@@ -275,7 +299,11 @@ export async function proposeCriteria(traces: Trace[], call: GeneratorCall): Pro
   const sample = sampleTraces(traces);
 
   let failureModesReply = FailureModesReplyZ.parse(
-    await call({ schemaName: FAILURE_MODES_SCHEMA.name, jsonSchema: FAILURE_MODES_SCHEMA.schema, messages: failureModePrompt(sample) }),
+    await call({
+      schemaName: FAILURE_MODES_SCHEMA.name,
+      jsonSchema: FAILURE_MODES_SCHEMA.schema,
+      messages: failureModePrompt(sample),
+    }),
   );
   let failureModes = failureModesReply.failureModes;
 
@@ -292,7 +320,11 @@ export async function proposeCriteria(traces: Trace[], call: GeneratorCall): Pro
   }
 
   const criteriaReply = CriteriaReplyZ.parse(
-    await call({ schemaName: CRITERIA_SCHEMA.name, jsonSchema: CRITERIA_SCHEMA.schema, messages: criteriaPrompt(failureModes) }),
+    await call({
+      schemaName: CRITERIA_SCHEMA.name,
+      jsonSchema: CRITERIA_SCHEMA.schema,
+      messages: criteriaPrompt(failureModes),
+    }),
   );
 
   const survivors: Criterion[] = [];
@@ -317,7 +349,13 @@ export async function proposeCriteria(traces: Trace[], call: GeneratorCall): Pro
       if (!lint.ok) continue;
     }
 
-    survivors.push({ id: '', name: current.name, instructions: current.instructions, escape: current.escape, provenance: current.provenanceTraceIds });
+    survivors.push({
+      id: '',
+      name: current.name,
+      instructions: current.instructions,
+      escape: current.escape,
+      provenance: current.provenanceTraceIds,
+    });
   }
 
   if (survivors.length < NEEDED_GENERATED) {
@@ -327,7 +365,11 @@ export async function proposeCriteria(traces: Trace[], call: GeneratorCall): Pro
   return survivors.slice(0, NEEDED_GENERATED).map((c, i) => ({ ...c, id: `c${i + 4}` }));
 }
 
-export function handleShortfall(err: ShortfallError, log: (msg: string) => void, exit: (code: number) => void): void {
+export function handleShortfall(
+  err: ShortfallError,
+  log: (msg: string) => void,
+  exit: (code: number) => void,
+): void {
   log(err.message);
   exit(1);
 }
@@ -343,14 +385,22 @@ async function main(): Promise<void> {
     generated = await proposeCriteria(traces, call);
   } catch (err) {
     if (err instanceof ShortfallError) {
-      handleShortfall(err, console.error, process.exit);
+      handleShortfall(
+        err,
+        (msg) => console.error(msg),
+        (code) => process.exit(code),
+      );
       return;
     }
     throw err;
   }
 
   const criteria = [...FIXED_CRITERIA, ...generated];
-  await writeFile(join(spikeDataDir, 'criteria.json'), `${JSON.stringify(criteria, null, 2)}\n`, 'utf8');
+  await writeFile(
+    join(spikeDataDir, 'criteria.json'),
+    `${JSON.stringify(criteria, null, 2)}\n`,
+    'utf8',
+  );
   console.log(`propose.ts: wrote ${criteria.length} criteria to spike/data/criteria.json`);
 }
 

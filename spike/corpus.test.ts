@@ -11,20 +11,41 @@ function wordCount(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
 
+function report(variant: string, rows: Report['per_question']): Record<string, Report> {
+  return { [variant]: { variant, per_question: rows, failed: [] } };
+}
+
 describe('buildTraces (unit, fixtures only)', () => {
   const golden: GoldenRow[] = [
-    { id: 'en01-f1', lang: 'en', question: 'Q1?', relevant_doc_ids: ['doc1.pdf'], reference_answer: 'answer one', hops: 1 },
-    { id: 'un-en-01', lang: 'en', question: 'Unanswerable?', relevant_doc_ids: [], reference_answer: null, hops: 1 },
+    {
+      id: 'en01-f1',
+      lang: 'en',
+      question: 'Q1?',
+      relevant_doc_ids: ['doc1.pdf'],
+      reference_answer: 'answer one',
+      hops: 1,
+    },
+    {
+      id: 'un-en-01',
+      lang: 'en',
+      question: 'Unanswerable?',
+      relevant_doc_ids: [],
+      reference_answer: null,
+      hops: 1,
+    },
   ];
   const corpusText = { 'doc1.pdf': 'the text of doc one' };
 
-  function report(variant: string, rows: Report['per_question']): Record<string, Report> {
-    return { [variant]: { variant, per_question: rows, failed: [] } };
-  }
-
   test('throws naming the retrieved id when its text is missing from the corpus', () => {
     const reports = report('bm25', [
-      { id: 'en01-f1', lang: 'en', answer: 'a1', trace_id: 't1', retrieved_ids: ['missing.pdf'], scores: { faithfulness: 1, context_relevance: 1 } },
+      {
+        id: 'en01-f1',
+        lang: 'en',
+        answer: 'a1',
+        trace_id: 't1',
+        retrieved_ids: ['missing.pdf'],
+        scores: { faithfulness: 1, context_relevance: 1 },
+      },
     ]);
 
     expect(() => buildTraces(golden, reports, corpusText)).toThrow(/missing\.pdf/);
@@ -32,18 +53,32 @@ describe('buildTraces (unit, fixtures only)', () => {
 
   test('marks a row unanswerable when its golden relevant_doc_ids is empty, with a null reference', () => {
     const reports = report('bm25', [
-      { id: 'un-en-01', lang: 'en', answer: 'I do not know', trace_id: 't2', retrieved_ids: [], scores: { faithfulness: 1, context_relevance: 1 } },
+      {
+        id: 'un-en-01',
+        lang: 'en',
+        answer: 'I do not know',
+        trace_id: 't2',
+        retrieved_ids: [],
+        scores: { faithfulness: 1, context_relevance: 1 },
+      },
     ]);
 
     const [trace] = buildTraces(golden, reports, corpusText);
 
-    expect(trace!.unanswerable).toBe(true);
-    expect(trace!.reference).toBeNull();
+    expect(trace.unanswerable).toBe(true);
+    expect(trace.reference).toBeNull();
   });
 
   test('builds an answerable trace with resolved contexts, baseline scores and camelCased ids', () => {
     const reports = report('hybrid', [
-      { id: 'en01-f1', lang: 'en', answer: 'The answer is one.', trace_id: 'lf-trace-1', retrieved_ids: ['doc1.pdf'], scores: { faithfulness: 0.9, context_relevance: 0.8 } },
+      {
+        id: 'en01-f1',
+        lang: 'en',
+        answer: 'The answer is one.',
+        trace_id: 'lf-trace-1',
+        retrieved_ids: ['doc1.pdf'],
+        scores: { faithfulness: 0.9, context_relevance: 0.8 },
+      },
     ]);
 
     const [trace] = buildTraces(golden, reports, corpusText);
@@ -67,7 +102,14 @@ describe('buildTraces (unit, fixtures only)', () => {
 
   test('throws naming the golden id when a report row has no matching golden entry', () => {
     const reports = report('bm25', [
-      { id: 'no-such-id', lang: 'en', answer: 'a', trace_id: 't3', retrieved_ids: [], scores: { faithfulness: 1, context_relevance: 1 } },
+      {
+        id: 'no-such-id',
+        lang: 'en',
+        answer: 'a',
+        trace_id: 't3',
+        retrieved_ids: [],
+        scores: { faithfulness: 1, context_relevance: 1 },
+      },
     ]);
 
     expect(() => buildTraces(golden, reports, corpusText)).toThrow(/no-such-id/);
@@ -106,7 +148,10 @@ describe('generated spike/data/traces.jsonl (integration, real haystack-hypothes
 
   test('reference is null only for unanswerable rows', async () => {
     const raw = await readFile(TRACES_PATH, 'utf8');
-    const rows = raw.trim().split('\n').map((line) => JSON.parse(line));
+    const rows = raw
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
 
     for (const row of rows) {
       if (row.unanswerable) {
@@ -119,11 +164,14 @@ describe('generated spike/data/traces.jsonl (integration, real haystack-hypothes
 
   test('a known Cyrillic reference answer survives the extraction round trip', async () => {
     const raw = await readFile(TRACES_PATH, 'utf8');
-    const rows = raw.trim().split('\n').map((line) => JSON.parse(line));
+    const rows = raw
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
 
     const row = rows.find((r) => r.goldenId === 'ru01-f2');
     expect(row).toBeDefined();
-    expect(row!.reference).toBe('3,2 миллиона тонн');
+    expect(row?.reference).toBe('3,2 миллиона тонн');
   });
 });
 
@@ -136,7 +184,7 @@ describe('generated spike/data/corpus-text.json (integration, produced by extrac
     expect(keys).toHaveLength(48);
 
     for (const key of keys) {
-      expect(wordCount(corpusText[key]!)).toBeGreaterThanOrEqual(50);
+      expect(wordCount(corpusText[key])).toBeGreaterThanOrEqual(50);
     }
   });
 });

@@ -17,7 +17,10 @@ import {
 } from './judge.ts';
 
 const RESPONSE_FIXTURE_PATH = fileURLToPath(
-  new URL('../docs/research/fixtures/2026-09-25-gateway-systemone-response-run1.json', import.meta.url),
+  new URL(
+    '../docs/research/fixtures/2026-09-25-gateway-systemone-response-run1.json',
+    import.meta.url,
+  ),
 );
 
 function trace(overrides: Partial<Trace> = {}): Trace {
@@ -30,7 +33,12 @@ function trace(overrides: Partial<Trace> = {}): Trace {
     unanswerable: false,
     question: 'In what year was the Velmoor Water Authority founded?',
     answer: 'The Velmoor Water Authority was founded in 1974 [1].',
-    contexts: [{ docId: 'en_01_velmoor_water_authority.pdf', text: 'Velmoor Water Authority: founded 1974.' }],
+    contexts: [
+      {
+        docId: 'en_01_velmoor_water_authority.pdf',
+        text: 'Velmoor Water Authority: founded 1974.',
+      },
+    ],
     reference: 'The Velmoor Water Authority was founded in 1974.',
     baseline: { faithfulness: 0.9, context_relevance: 0.9, judgeModel: 'gemini-3.1-pro-preview' },
     retrievedIds: ['en_01_velmoor_water_authority.pdf'],
@@ -43,7 +51,8 @@ const CRITERIA: Criterion[] = [
   {
     id: 'c1',
     name: 'answer_correct',
-    instructions: 'The reference answer for this case is: {{reference}}. Does the answer state the same fact?',
+    instructions:
+      'The reference answer for this case is: {{reference}}. Does the answer state the same fact?',
     escape: 'reference not comparable',
     provenance: null,
   },
@@ -56,11 +65,19 @@ const CRITERIA: Criterion[] = [
   },
 ];
 
-function choiceAnswer(choice: string): { type: 'choice'; choice: string; confidence: number; probabilities: Record<string, number> } {
+function choiceAnswer(choice: string): {
+  type: 'choice';
+  choice: string;
+  confidence: number;
+  probabilities: Record<string, number>;
+} {
   return { type: 'choice', choice, confidence: 0.9, probabilities: { [choice]: 0.9 } };
 }
 
-function stubResponse(body: unknown, init: { status?: number; headers?: Record<string, string> } = {}): Response {
+function stubResponse(
+  body: unknown,
+  init: { status?: number; headers?: Record<string, string> } = {},
+): Response {
   return new Response(JSON.stringify(body), { status: init.status ?? 200, headers: init.headers });
 }
 
@@ -70,9 +87,10 @@ describe('buildState (unit)', () => {
     const state = buildState(t);
 
     expect(state).toContain(t.question);
-    expect(state).toContain(t.contexts[0]!.text);
+    expect(state).toContain(t.contexts[0].text);
     expect(state).toContain(t.answer);
-    expect(state).not.toContain(t.reference!);
+    expect(t.reference).toBeTruthy();
+    expect(state).not.toContain(t.reference ?? '');
     expect(state).not.toContain('0.9');
   });
 });
@@ -82,18 +100,19 @@ describe('buildQuestions (unit)', () => {
     const t = trace();
     const questions = buildQuestions(CRITERIA, t);
 
-    expect(questions.c1!.instructions).toContain(t.reference!);
-    expect(questions.c1!.instructions).not.toContain('{{reference}}');
-    expect(questions.c2!.instructions).toBe(CRITERIA[1]!.instructions);
+    expect(t.reference).toBeTruthy();
+    expect(questions.c1.instructions).toContain(t.reference ?? '');
+    expect(questions.c1.instructions).not.toContain('{{reference}}');
+    expect(questions.c2.instructions).toBe(CRITERIA[1].instructions);
   });
 
   test('sends every criterion as a 3-way choice with the criterion escape label as the third option', () => {
     const t = trace();
     const questions = buildQuestions(CRITERIA, t);
 
-    expect(questions.c2!.type).toBe('choice');
-    expect(Object.keys(questions.c2!.criteria)).toEqual(['yes', 'no', 'escape']);
-    expect(questions.c2!.criteria.escape).toBe('unclear');
+    expect(questions.c2.type).toBe('choice');
+    expect(Object.keys(questions.c2.criteria)).toEqual(['yes', 'no', 'escape']);
+    expect(questions.c2.criteria.escape).toBe('unclear');
   });
 
   test('request body matches the gateway fixture field names (instructions, type, criteria)', () => {
@@ -109,14 +128,19 @@ describe('buildQuestions (unit)', () => {
     expect(body.model).toBe('typesafe-ai/jev');
     expect(body.questions.c1).toHaveProperty('instructions');
     expect(body.questions.c1).toHaveProperty('type');
-    expect(body.providerOptions.gateway).toEqual({ only: ['typesafe-ai'], zeroDataRetention: true });
+    expect(body.providerOptions.gateway).toEqual({
+      only: ['typesafe-ai'],
+      zeroDataRetention: true,
+    });
   });
 });
 
 describe('cacheKey (unit)', () => {
   test('changes when the repeat index changes, so repeats never collide', () => {
     const state = 'same state';
-    const questions = { c1: { type: 'choice', instructions: 'x', criteria: { yes: 'y', no: 'n', escape: 'e' } } };
+    const questions = {
+      c1: { type: 'choice', instructions: 'x', criteria: { yes: 'y', no: 'n', escape: 'e' } },
+    };
 
     const k0 = cacheKey(state, questions, 0, MODEL);
     const k1 = cacheKey(state, questions, 1, MODEL);
@@ -126,7 +150,9 @@ describe('cacheKey (unit)', () => {
 
   test('is stable for identical inputs', () => {
     const state = 'same state';
-    const questions = { c1: { type: 'choice', instructions: 'x', criteria: { yes: 'y', no: 'n', escape: 'e' } } };
+    const questions = {
+      c1: { type: 'choice', instructions: 'x', criteria: { yes: 'y', no: 'n', escape: 'e' } },
+    };
 
     expect(cacheKey(state, questions, 0, MODEL)).toBe(cacheKey(state, questions, 0, MODEL));
   });
@@ -159,22 +185,33 @@ describe('callSystemOne (unit, fetch stubbed)', () => {
   });
 
   test('sends an AbortSignal.timeout-bounded request with the bearer key', async () => {
-    fetchSpy.mockResolvedValue(stubResponse({ model: MODEL, answers: {}, usage: {}, provider_metadata: { gateway: {} } }));
+    fetchSpy.mockResolvedValue(
+      stubResponse({ model: MODEL, answers: {}, usage: {}, provider_metadata: { gateway: {} } }),
+    );
 
     await callSystemOne('https://gw.example', 'test-key', { model: MODEL }, {});
 
-    const [url, init] = fetchSpy.mock.calls[0]!;
+    const [url, init] = fetchSpy.mock.calls[0] ?? [];
     expect(String(url)).toContain('/typesafe/v1/systemone');
-    expect(String((init?.headers as Record<string, string> | undefined)?.authorization)).toBe('Bearer test-key');
+    expect(new Headers(init?.headers).get('authorization')).toBe('Bearer test-key');
     expect(init?.signal).toBeInstanceOf(AbortSignal);
   });
 
   test('retries once after a 429 then succeeds, without a second retry', async () => {
     fetchSpy
-      .mockResolvedValueOnce(stubResponse({ error: 'rate limited' }, { status: 429, headers: { 'retry-after': '1' } }))
-      .mockResolvedValueOnce(stubResponse({ model: MODEL, answers: {}, usage: {}, provider_metadata: { gateway: {} } }));
+      .mockResolvedValueOnce(
+        stubResponse({ error: 'rate limited' }, { status: 429, headers: { 'retry-after': '1' } }),
+      )
+      .mockResolvedValueOnce(
+        stubResponse({ model: MODEL, answers: {}, usage: {}, provider_metadata: { gateway: {} } }),
+      );
 
-    const result = await callSystemOne('https://gw.example', 'test-key', { model: MODEL }, { sleep: async () => {} });
+    const result = await callSystemOne(
+      'https://gw.example',
+      'test-key',
+      { model: MODEL },
+      { sleep: async () => {} },
+    );
 
     expect(fetchSpy).toHaveBeenCalledTimes(2);
     expect(result.ok).toBe(true);
@@ -183,7 +220,12 @@ describe('callSystemOne (unit, fetch stubbed)', () => {
   test('a persistent 500 fails after exactly one retry, never throwing', async () => {
     fetchSpy.mockResolvedValue(stubResponse({ error: 'boom' }, { status: 500 }));
 
-    const result = await callSystemOne('https://gw.example', 'test-key', { model: MODEL }, { sleep: async () => {} });
+    const result = await callSystemOne(
+      'https://gw.example',
+      'test-key',
+      { model: MODEL },
+      { sleep: async () => {} },
+    );
 
     expect(fetchSpy).toHaveBeenCalledTimes(2);
     expect(result).toEqual({ ok: false, cause: 'http 500' });
@@ -210,15 +252,36 @@ describe('judgeOne (unit, fetch + disk cache stubbed)', () => {
         model: MODEL,
         answers: { c1: choiceAnswer('yes'), c2: choiceAnswer('escape') },
         usage: { input_tokens: 100, output_tokens: 5 },
-        provider_metadata: { gateway: { routing: { finalProvider: 'typesafe-ai' }, marketCost: '0.00001' } },
+        provider_metadata: {
+          gateway: { routing: { finalProvider: 'typesafe-ai' }, marketCost: '0.00001' },
+        },
       }),
     );
 
-    const outcome = await judgeOne(trace(), 0, CRITERIA, cacheDir, { base: 'https://gw.example', apiKey: 'k' });
+    const outcome = await judgeOne(trace(), 0, CRITERIA, cacheDir, {
+      base: 'https://gw.example',
+      apiKey: 'k',
+    });
 
     expect(outcome.rows).toEqual([
-      { traceId: 'bm25:en01-f1', criterionId: 'c1', repeat: 0, noul: true, model: MODEL, provider: 'typesafe-ai', status: 'ok' },
-      { traceId: 'bm25:en01-f1', criterionId: 'c2', repeat: 0, noul: null, model: MODEL, provider: 'typesafe-ai', status: 'ok' },
+      {
+        traceId: 'bm25:en01-f1',
+        criterionId: 'c1',
+        repeat: 0,
+        noul: true,
+        model: MODEL,
+        provider: 'typesafe-ai',
+        status: 'ok',
+      },
+      {
+        traceId: 'bm25:en01-f1',
+        criterionId: 'c2',
+        repeat: 0,
+        noul: null,
+        model: MODEL,
+        provider: 'typesafe-ai',
+        status: 'ok',
+      },
     ]);
     expect(outcome.networkCall).toBe(true);
   });
@@ -233,7 +296,10 @@ describe('judgeOne (unit, fetch + disk cache stubbed)', () => {
       }),
     );
 
-    const outcome = await judgeOne(trace(), 0, CRITERIA, cacheDir, { base: 'https://gw.example', apiKey: 'k' });
+    const outcome = await judgeOne(trace(), 0, CRITERIA, cacheDir, {
+      base: 'https://gw.example',
+      apiKey: 'k',
+    });
 
     expect(outcome.rows.find((r) => r.criterionId === 'c2')).toEqual({
       traceId: 'bm25:en01-f1',
@@ -273,9 +339,15 @@ describe('judgeOne (unit, fetch + disk cache stubbed)', () => {
       }),
     );
 
-    const first = await judgeOne(trace(), 0, CRITERIA, cacheDir, { base: 'https://gw.example', apiKey: 'k' });
+    const first = await judgeOne(trace(), 0, CRITERIA, cacheDir, {
+      base: 'https://gw.example',
+      apiKey: 'k',
+    });
     fetchSpy.mockClear();
-    const second = await judgeOne(trace(), 0, CRITERIA, cacheDir, { base: 'https://gw.example', apiKey: 'k' });
+    const second = await judgeOne(trace(), 0, CRITERIA, cacheDir, {
+      base: 'https://gw.example',
+      apiKey: 'k',
+    });
 
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(second.networkCall).toBe(false);
@@ -294,7 +366,10 @@ describe('judgeOne (unit, fetch + disk cache stubbed)', () => {
 
     await judgeOne(trace(), 0, CRITERIA, cacheDir, { base: 'https://gw.example', apiKey: 'k' });
     fetchSpy.mockClear();
-    const outcome = await judgeOne(trace(), 1, CRITERIA, cacheDir, { base: 'https://gw.example', apiKey: 'k' });
+    const outcome = await judgeOne(trace(), 1, CRITERIA, cacheDir, {
+      base: 'https://gw.example',
+      apiKey: 'k',
+    });
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(outcome.networkCall).toBe(true);
@@ -321,7 +396,9 @@ describe('runJudge (integration, fetch stubbed, real second-run cache proof)', (
         model: MODEL,
         answers: { c1: choiceAnswer('yes'), c2: choiceAnswer('no') },
         usage: { input_tokens: 10, output_tokens: 1 },
-        provider_metadata: { gateway: { routing: { finalProvider: 'typesafe-ai' }, marketCost: '0.00001' } },
+        provider_metadata: {
+          gateway: { routing: { finalProvider: 'typesafe-ai' }, marketCost: '0.00001' },
+        },
       }),
     );
     const traces = [trace(), trace({ traceId: 'bm25:en02-f1', goldenId: 'en02-f1' })];
@@ -362,13 +439,17 @@ describe('runJudge (integration, fetch stubbed, real second-run cache proof)', (
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const t = trace();
 
-    await runJudge([t], CRITERIA, cacheDir, { base: 'https://gw.example', apiKey: 'super-secret-key', concurrency: 1 });
+    await runJudge([t], CRITERIA, cacheDir, {
+      base: 'https://gw.example',
+      apiKey: 'super-secret-key',
+      concurrency: 1,
+    });
 
     const allOutput = [...logSpy.mock.calls, ...errSpy.mock.calls].flat().join(' ');
     expect(allOutput).not.toContain('super-secret-key');
     expect(allOutput).not.toContain('Authorization');
     expect(allOutput).not.toContain(t.question);
-    expect(allOutput).not.toContain(t.contexts[0]!.text);
+    expect(allOutput).not.toContain(t.contexts[0].text);
 
     logSpy.mockRestore();
     errSpy.mockRestore();
@@ -386,7 +467,12 @@ describe('runJudge (integration, fetch stubbed, real second-run cache proof)', (
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     const traces = [trace(), trace({ traceId: 'bm25:en02-f1', goldenId: 'en02-f1' })];
 
-    await runJudge(traces, CRITERIA, cacheDir, { base: 'https://gw.example', apiKey: 'k', concurrency: 2, repeats: 1 });
+    await runJudge(traces, CRITERIA, cacheDir, {
+      base: 'https://gw.example',
+      apiKey: 'k',
+      concurrency: 2,
+      repeats: 1,
+    });
 
     const lines = logSpy.mock.calls.flat().map(String);
     expect(lines.some((line) => line.startsWith('2/2 calls'))).toBe(true);
