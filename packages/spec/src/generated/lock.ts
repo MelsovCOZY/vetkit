@@ -7,6 +7,7 @@ export type LockReason =
   | 'single_class_heldout'
   | 'class_too_small'
   | 'unstable'
+  | 'too_few_repeats'
   | 'language_limited'
   | 'score_not_gateable'
   | 'reference_missing'

@@ -325,6 +325,30 @@ describe('repeat tolerance and band cases', () => {
     expect(result.reasons).toContain('unstable');
   });
 
+  test('one case short of scored repeats is not unstable and does not block calibration', () => {
+    const result = run([
+      ...cleanTrain(25),
+      ...rows('heldOut', 30, 'pass', 0.9),
+      ...rows('heldOut', 29, 'fail', 0.1),
+      ...rows('heldOut', 1, 'fail', [0.1, 0.1]),
+    ]);
+    expect(result.reasons).not.toContain('unstable');
+    expect(result.reasons).not.toContain('too_few_repeats');
+    expect(result.status).toBe('calibrated');
+  });
+
+  test('many cases short of scored repeats report too_few_repeats, never unstable', () => {
+    const result = run([
+      ...cleanTrain(25),
+      ...rows('heldOut', 30, 'pass', 0.9),
+      ...rows('heldOut', 14, 'fail', 0.1),
+      ...rows('heldOut', 15, 'fail', [0.1, 0.1]),
+    ]);
+    expect(result.reasons).not.toContain('unstable');
+    expect(result.reasons).toContain('too_few_repeats');
+    expect(result.status).toBe('uncalibrated');
+  });
+
   test('bandCases includes means at exactly threshold ± tolerance and excludes just outside', () => {
     const values = new Map([
       ['lo-edge', [0.7, 0.7, 0.7]],
