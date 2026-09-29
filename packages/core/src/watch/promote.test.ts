@@ -78,6 +78,22 @@ describe('promoteFailure', () => {
     });
   });
 
+  test("dh8.7: keeps the case's existing provenance fields (traceIds) alongside promotedFrom", async () => {
+    const verdict = failingVerdict();
+    expect(promoteFailure(verdict, evalCase(), dir, { now: NOW })).toBe(true);
+
+    const text = await pendingFileText();
+    const parsed = safeParseJson<Case>(text.split('\n').filter((l) => l !== '')[0] ?? '', {});
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.value).toMatchObject({
+      provenance: {
+        traceIds: ['trace-abc'],
+        promotedFrom: { traceId: 'trace-abc', criterionId: 'k-1' },
+      },
+    });
+  });
+
   test('a verdict with no id is never promoted (dh8.5: no random-id fallback)', async () => {
     const noId: Verdict = {
       caseId: 'case-orig',

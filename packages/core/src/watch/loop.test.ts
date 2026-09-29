@@ -548,4 +548,40 @@ describe('runWatch', () => {
     expect(summary.produced).toBeGreaterThan(0);
     expect(summary.acknowledged).toBe(summary.produced);
   });
+
+  // bug classified-evals-mol-dh8.7: judgeOne's infra_failure sentinel (built when the judge
+  // itself throws) carried no provenance at all, so a correlation-requiring sink dead-lettered
+  // it just like dh8.6's ordinary verdicts did.
+  test("judge throw: the infra_failure verdict carries the judged case's provenance.traceId, so a correlation-requiring sink acknowledges it (dh8.7)", async () => {
+    const t = trace('trace-throw');
+    const outbox = createOutbox({ dir: join(dir, 'outbox') });
+
+    const summary = await runWatch({
+      source: finiteSource([t]),
+      sampler: createSampler({ sampleRate: 1, inclusionPath: join(dir, 'inclusion.jsonl') }),
+      judge: throwingJudge,
+      criteria: defaultCriteria,
+      outbox,
+      sinks: [correlationRequiringSink()],
+      options: watchOptions({ sampleRate: 1 }),
+      signal: new AbortController().signal,
+    });
+
+    expect(summary.judged).toBe(1);
+    expect(summary.produced).toBeGreaterThan(0);
+    expect(summary.acknowledged).toBe(summary.produced);
+
+    const pendingText = await readFile(join(dir, 'outbox', 'pending.jsonl'), 'utf8');
+    const pending = pendingText
+      .split('\n')
+      .filter((l) => l !== '')
+      .map((l) => {
+        const parsed = safeParseJson<{ verdict: Verdict }>(l, {});
+        if (!parsed.ok) throw parsed.error;
+        return parsed.value;
+      });
+    expect(pending).toHaveLength(1);
+    expect(pending[0]?.verdict.status).toBe('infra_failure');
+    expect(readTraceId(pending[0]?.verdict.provenance)).toBe('trace-throw');
+  });
 });

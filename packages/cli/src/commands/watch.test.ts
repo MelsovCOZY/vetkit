@@ -1,5 +1,6 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createServer as createHttpServer } from 'node:http';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -119,6 +120,50 @@ async function postTrace(port: number, traceId: string): Promise<void> {
   if (!res.ok) throw new Error(`postTrace failed: ${String(res.status)}`);
 }
 
+// dh8.7: patches a freshProject() copy's vetkit.config.ts (the checked-in fixture stays
+// untouched) to add a `sinks: [{kind:'otel',endpoint}]` descriptor, so `--sink otel` resolves
+// to a real @vetkit/sink-otel adapter pointed at this test's own fake collector.
+function withOtelSink(project: string, endpoint: string): void {
+  const configPath = join(project, 'vetkit.config.ts');
+  const text = readFileSync(configPath, 'utf8');
+  const marker = 'export default { judge };';
+  if (!text.includes(marker)) {
+    throw new Error(`fixture vetkit.config.ts no longer ends with ${marker}; update withOtelSink`);
+  }
+  const patched = text.replace(
+    marker,
+    `export default { judge, sinks: [{ kind: 'otel' as const, endpoint: ${JSON.stringify(endpoint)} }] };`,
+  );
+  writeFileSync(configPath, patched);
+}
+
+interface FakeCollector {
+  readonly url: string;
+  close(): Promise<void>;
+}
+
+// A minimal OTLP/HTTP logs collector: accepts any request body and answers 200 with an empty
+// body (createOtelSink's rejectedCount treats that as zero rejections — every entry accepted).
+function fakeOtelCollector(): Promise<FakeCollector> {
+  const server = createHttpServer((req, res) => {
+    req.resume();
+    req.on('end', () => {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end();
+    });
+  });
+  return new Promise((resolvePromise) => {
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      const port = typeof address === 'object' && address !== null ? address.port : 0;
+      resolvePromise({
+        url: `http://127.0.0.1:${String(port)}/v1/logs`,
+        close: () => new Promise((r) => server.close(() => r())),
+      });
+    });
+  });
+}
+
 function outboxPendingPath(project: string): string {
   return join(project, '.vet', 'outbox', 'pending.jsonl');
 }
@@ -137,8 +182,7 @@ interface SpawnedWatch {
   waitForJudged(): Promise<void>;
 }
 
-function spawnWatch(args: readonly string[], mode: string): SpawnedWatch {
-  const project = freshProject();
+function spawnWatch(args: readonly string[], mode: string, project = freshProject()): SpawnedWatch {
   const child = spawn(process.execPath, [binPath, 'watch', ...args], {
     cwd: project,
     env: fixtureEnv(mode),
@@ -244,4 +288,47 @@ describe('vet watch', () => {
     expect(result.status).toBe(2);
     expect(result.stderr).toContain('WATCH_CONFIG');
   });
+
+  // dh8.7 bug: judgeFn never set verdict.provenance, so an otel sink (which dead-letters any
+  // verdict with no correlation id) rejected every enqueued verdict. Reproduces the cold-gate
+  // repro (fixtures/cli/watch + a real otel sink) with a fake collector standing in for the
+  // real OTLP endpoint.
+  test('every verdict watch enqueues carries provenance: an otel sink acknowledges it, produced == acknowledged', async () => {
+    const collector = await fakeOtelCollector();
+    try {
+      const project = freshProject();
+      withOtelSink(project, collector.url);
+      const w = spawnWatch(
+        ['--sample', '1', '--port', '0', '--json', '--sink', 'otel'],
+        'fail',
+        project,
+      );
+      const port = await w.waitForPort();
+      await postTrace(port, 'aaaa1111bbbb2222cccc3333dddd4444');
+      await w.waitForJudged();
+      w.kill();
+      const code = await w.exited;
+
+      expect(code).toBe(0);
+      expect(parseJson(w.getStdout())).toMatchObject({ judged: 1 });
+      const summary = safeParseJson<{ produced: number; acknowledged: number }>(w.getStdout(), {
+        type: 'object',
+        properties: { produced: { type: 'number' }, acknowledged: { type: 'number' } },
+      });
+      expect(summary.ok).toBe(true);
+      if (!summary.ok) return;
+      expect(summary.value.produced).toBeGreaterThan(0);
+      expect(summary.value.acknowledged).toBe(summary.value.produced);
+
+      const checked = runVet(['check', '--outbox', '--json'], project, fixtureEnv('fail'));
+      expect(checked.status).toBe(0);
+      expect(parseJson(checked.stdout)).toMatchObject({
+        produced: summary.value.produced,
+        acknowledged: summary.value.produced,
+        dead: 0,
+      });
+    } finally {
+      await collector.close();
+    }
+  }, 20_000);
 });

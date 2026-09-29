@@ -23,6 +23,10 @@ function isEnoent(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: unknown }).code === 'ENOENT';
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 async function listTopLevelJsonl(
   dir: string,
   exclude: ReadonlySet<string> = new Set(),
@@ -260,6 +264,7 @@ export async function promoteVerdict(
     ...evalCase,
     id: `promoted-${evalCase.traceId}-${verdict.criterionId}`,
     provenance: {
+      ...(isRecord(evalCase.provenance) ? evalCase.provenance : {}),
       promotedFrom: {
         traceId: evalCase.traceId,
         criterionId: verdict.criterionId,

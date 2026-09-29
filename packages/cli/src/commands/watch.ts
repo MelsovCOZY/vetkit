@@ -99,6 +99,34 @@ async function bindReceiver(port: number): Promise<{ receiver: Receiver; source:
   return { receiver, source };
 }
 
+const PROV_KEYS = [
+  'traceId',
+  'spanId',
+  'responseId',
+  'observationId',
+  'dialect',
+  'schemaUrl',
+] as const;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+// Same shape run.ts's private verdictProvenance() builds for `vet run` (picks the six
+// verdict-provenance schema keys off the case's provenance, case.traceId winning): duplicated
+// here rather than imported, since exporting it would mean touching run.ts/index.ts, and
+// this bead's owned paths don't include either.
+function caseProvenance(evalCase: Case): Verdict['provenance'] | undefined {
+  const source = isRecord(evalCase.provenance) ? evalCase.provenance : {};
+  const out: NonNullable<Verdict['provenance']> = {};
+  for (const key of PROV_KEYS) {
+    const value = source[key];
+    if (typeof value === 'string') out[key] = value;
+  }
+  if (evalCase.traceId !== undefined) out.traceId = evalCase.traceId;
+  return Object.keys(out).length === 0 ? undefined : out;
+}
+
 function renderSummary(summary: CoverageSummary, promotedSkipped: number): string {
   return [
     `seen ${String(summary.seen)}, sampled ${String(summary.sampled)}, judged ${String(summary.judged)}`,
@@ -167,7 +195,9 @@ async function watchCommand(options: WatchOptions): Promise<void> {
   const judgeFn: JudgeCaseFn = async ({ case: c, criteria: caseCriteria, signal }) => {
     const verdicts = await judgeCase({ judge, case: c, criteria: caseCriteria, signal });
     const byId = new Map(caseCriteria.map((crit) => [crit.id, crit]));
+    const provenance = caseProvenance(c);
     return verdicts.map((v) => {
+      const withProvenance = provenance === undefined ? v : { ...v, provenance };
       const crit = byId.get(v.criterionId);
       if (
         crit === undefined ||
@@ -175,9 +205,9 @@ async function watchCommand(options: WatchOptions): Promise<void> {
         v.status !== 'ok' ||
         v.answer === undefined
       ) {
-        return v;
+        return withProvenance;
       }
-      return { ...v, ...decideVerdict(v, crit, thresholdFor(v.criterionId)) };
+      return { ...withProvenance, ...decideVerdict(v, crit, thresholdFor(v.criterionId)) };
     });
   };
 
