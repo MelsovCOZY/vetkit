@@ -258,4 +258,10 @@ describe('agent tooling is untracked', () => {
   it('keeps lefthook.yml', () => {
     expect(existsSync(join(ROOT, 'lefthook.yml'))).toBe(true);
   });
+
+  it('oxfmt pre-commit hook tolerates unsupported staged files with --no-error-on-unmatched-pattern', () => {
+    const config = readFileSync(join(ROOT, 'lefthook.yml'), 'utf8');
+    expect(config).toContain('--no-error-on-unmatched-pattern');
+    expect(config).toMatch(/oxfmt:[\s\S]*?--no-error-on-unmatched-pattern/);
+  });
 });

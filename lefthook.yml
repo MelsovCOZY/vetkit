@@ -6,4 +6,4 @@ pre-commit:
       run: bun x oxlint --type-aware {staged_files}
     oxfmt:
       glob: '*.{js,ts,jsx,tsx,json,md}'
-      run: bun x oxfmt --check {staged_files}
+      run: bun x oxfmt --check --no-error-on-unmatched-pattern {staged_files}
