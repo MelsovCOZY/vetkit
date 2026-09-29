@@ -179,6 +179,23 @@ describe('createOtelSink', () => {
     expect(attr(rec, 'gen_ai.evaluation.score.label')).toBeUndefined();
   });
 
+  test('unscored: error.type is the cause code, not the status, when a cause is present', async () => {
+    const { fetch, calls } = fakeFetch();
+    const sink = createOtelSink({ endpoint: 'http://collector:4318', fetch });
+    const ack = await sink.doWrite(
+      [
+        without(
+          verdict({ status: 'unscored', cause: { code: 'JUDGE_UNAVAILABLE', status: 0 } }),
+          'answer',
+        ),
+      ],
+      {},
+    );
+    expect(ack.accepted).toEqual(['v-1']);
+    const rec = records(calls[0])[0];
+    expect(attr(rec, 'error.type')).toEqual({ stringValue: 'JUDGE_UNAVAILABLE' });
+  });
+
   test('uncorrelated: no traceId and no responseId is rejected and nothing is sent', async () => {
     const { fetch, calls } = fakeFetch();
     const sink = createOtelSink({ endpoint: 'http://collector:4318', fetch });
