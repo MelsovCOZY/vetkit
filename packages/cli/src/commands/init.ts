@@ -29,6 +29,7 @@ import {
 } from '@vetkit/spec';
 import type { Command } from 'commander';
 import { loadVetConfig } from '../config-load.ts';
+import { diagEnabled } from '../diag.ts';
 import { generatorFromEndpoint } from '../generators.ts';
 import { CEV_EXIT, emit, getLogger, isInteractive, prompt, type GlobalOptions } from '../output.ts';
 import { resolveSource, type SourceOptions } from '../sources.ts';
@@ -206,6 +207,65 @@ function resolveGenerator(raw: ResolvedConfig['generator']): GeneratorV1 {
   return generatorFromEndpoint(raw, { env: process.env });
 }
 
+const PRICE_INPUT_ENV = 'CEV_GENERATOR_PRICE_INPUT_PER_MTOK';
+const PRICE_OUTPUT_ENV = 'CEV_GENERATOR_PRICE_OUTPUT_PER_MTOK';
+const TOKENS_PER_MTOK = 1_000_000;
+
+// What the generator spent over one `vet init`: token totals are null until a call reports usage.
+interface GeneratorUsageTotals {
+  readonly calls: number;
+  readonly inputTokens: number | null;
+  readonly outputTokens: number | null;
+  readonly estimatedUsd: number | null;
+}
+
+// A non-negative finite number from the named env var, or undefined. A bad value is warned about
+// by variable name only, never echoed.
+function readPrice(env: Env, name: string, warn: (message: string) => void): number | undefined {
+  const raw = env[name];
+  if (raw === undefined || raw.trim() === '') return undefined;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0) {
+    warn(`${name} is not a non-negative number; ignoring it`);
+    return undefined;
+  }
+  return value;
+}
+
+// Counts doGenerate calls and sums the usage each one reports. Prices come only from the env.
+function meterGenerator(
+  generator: GeneratorV1,
+  env: Env,
+  warn: (message: string) => void,
+): { generator: GeneratorV1; totals: () => GeneratorUsageTotals } {
+  const priceIn = readPrice(env, PRICE_INPUT_ENV, warn);
+  const priceOut = readPrice(env, PRICE_OUTPUT_ENV, warn);
+  let calls = 0;
+  let input: number | null = null;
+  let output: number | null = null;
+  const metered: GeneratorV1 = {
+    ...generator,
+    async doGenerate(req) {
+      calls += 1;
+      const result = await generator.doGenerate(req);
+      const usage = result.usage;
+      if (usage?.inputTokens !== undefined) input = (input ?? 0) + usage.inputTokens;
+      if (usage?.outputTokens !== undefined) output = (output ?? 0) + usage.outputTokens;
+      return result;
+    },
+  };
+  const totals = (): GeneratorUsageTotals => ({
+    calls,
+    inputTokens: input,
+    outputTokens: output,
+    estimatedUsd:
+      priceIn === undefined || priceOut === undefined || input === null || output === null
+        ? null
+        : (input * priceIn + output * priceOut) / TOKENS_PER_MTOK,
+  });
+  return { generator: metered, totals };
+}
+
 async function ensureOutAvailable(out: string, force: boolean): Promise<void> {
   if (force || !existsSync(out)) return;
   const entries = await readdir(out);
@@ -274,7 +334,10 @@ async function generateCommand(options: InitOptions & { source: string }): Promi
   const loaded = await loadVetConfig({ cwd: process.cwd() });
   const log = getLogger();
   for (const warning of loaded.warnings) log.warn(warning);
-  const generator = resolveGenerator(loaded.config.generator);
+  const meter = meterGenerator(resolveGenerator(loaded.config.generator), process.env, (m) =>
+    log.warn(m),
+  );
+  const generator = meter.generator;
 
   const controller = new AbortController();
   const onSigint = (): void => controller.abort();
@@ -288,6 +351,9 @@ async function generateCommand(options: InitOptions & { source: string }): Promi
     );
   } finally {
     process.off('SIGINT', onSigint);
+    if (diagEnabled(process.env)) {
+      process.stderr.write(`${JSON.stringify({ diag: { generator: meter.totals() } })}\n`);
+    }
   }
 
   await writeAtomic(join(out, 'vetkit.config.ts'), reexportConfig(loaded.configFile, out));
@@ -307,7 +373,9 @@ async function generateCommand(options: InitOptions & { source: string }): Promi
     ? tooFewCriteriaReason(result.criteria.length, result.report)
     : undefined;
   if (reason !== undefined) log.error(reason);
-  const doc = summary === undefined ? { ...result } : { ...result, summary };
+  const usage = meter.totals();
+  const doc =
+    summary === undefined ? { ...result, generator: usage } : { ...result, generator: usage, summary };
   emit(
     reason === undefined ? doc : { ...doc, reason },
     () =>
@@ -329,6 +397,10 @@ export function registerInit(program: Command): Command {
     .option('--force', 'overwrite existing scaffold or --out files')
     .option('--until <n>', 'stop a streaming --source (e.g. otlp::<port>) after n traces')
     .option('--seconds <s>', 'stop a streaming --source (e.g. otlp::<port>) after s seconds')
+    .addHelpText(
+      'after',
+      `\nGenerator spend: set ${PRICE_INPUT_ENV} and ${PRICE_OUTPUT_ENV} (USD per million tokens) to get generator.estimatedUsd in --json; both are required.`,
+    )
     .action(async (_options: unknown, command: Command) => {
       const options = command.optsWithGlobals<InitOptions>();
       if (options.source === undefined) {
