@@ -4,8 +4,8 @@
 // transport with no row (custom baseURL, in-process adapter) prints cost 'unknown'.
 //
 // --for validate: calibration uses core's exported CALIBRATION_MIN_REPEATS (the estimateValidate
-// default). The gauntlet pack sizes depend on their input packs (paddings, injections,
-// constants), so those parts print 'unknown' rather than a guess.
+// default) and position-swap calls come from the criteria. The length/padding and control pack
+// sizes are not in the config, so those parts print 'unknown' with a reason rather than a guess.
 import { resolve } from 'node:path';
 import {
   estimateRun,
@@ -62,7 +62,7 @@ function renderValidate(est: ValidateEstimate): string[] {
   const lines = renderRun(est.base).map((line) => `run ${line}`);
   for (const part of [...est.parts, { name: 'total', ...est.total }]) {
     lines.push(
-      `${part.name}: calls ${num(part.calls)}, input tokens ${num(part.inputTokens)}, cost ${cost(part.cost)}, minutes ${num(part.minutes, 1)}`,
+      `${part.name}: calls ${num(part.calls)}, input tokens ${num(part.inputTokens)}, cost ${cost(part.cost)}, minutes ${num(part.minutes, 1)}${'reason' in part && part.reason !== undefined ? ` (${part.reason})` : ''}`,
     );
   }
   return lines;
