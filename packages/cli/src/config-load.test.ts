@@ -240,8 +240,9 @@ describe('loadVetConfig requestFormat', () => {
 
   test.each([
     [{ requestFormat: 'fenced-v1' }, 'fenced-v1'],
-    [{ requestFormat: 'raw' }, undefined],
-    [{}, undefined],
+    [{ requestFormat: 'raw' }, 'raw'],
+    // Default switched to fenced-v1 after the request-format A/B.
+    [{}, 'fenced-v1'],
   ])('judge %j yields capabilities.requestFormat %s', async (extra, expected) => {
     vi.stubEnv('RF_KEY', 'k');
     const cwd = await project({

@@ -302,11 +302,11 @@ interface Validated {
   readonly judge: JudgeV1;
 }
 
-async function validated(): Promise<Validated> {
+async function validated(opts: { requestFormat?: 'raw' | 'fenced-v1' } = {}): Promise<Validated> {
   const rows = standardRows();
   const root = await project(rows);
   const events = createEvents();
-  const { judge } = countingJudge(rows, events);
+  const { judge } = countingJudge(rows, events, opts);
   await vet(['validate'], depsFor(root, judge, events));
   stdout = [];
   return { root, events, judge };
@@ -406,7 +406,8 @@ describe('vet check --lock per criterion', () => {
   });
 
   test('requestFormat drift is reported and marks every criterion model_changed', async () => {
-    const { root, events, judge } = await validated();
+    // Default switched to fenced-v1 after the request-format A/B; the lock is written under raw.
+    const { root, events, judge } = await validated({ requestFormat: 'raw' });
     const fenced = {
       ...judge,
       capabilities: { ...judge.capabilities, requestFormat: 'fenced-v1' as const },
@@ -419,6 +420,15 @@ describe('vet check --lock per criterion', () => {
       staleCriteria: [{ id: 'tone', reasons: ['model_changed'] }],
     });
     expect(process.exitCode).toBe(1);
+  });
+
+  test('an old raw lock (no requestFormat) is stale under the fenced-v1 default', async () => {
+    const { root, events, judge } = await validated({ requestFormat: 'raw' });
+    const { requestFormat: _raw, ...capabilities } = judge.capabilities;
+    const unset = { ...judge, capabilities };
+    await vet(['check', '--lock'], depsFor(root, unset, events));
+
+    expect(report()).toMatchObject({ stale: true, reasons: ['requestFormat'] });
   });
 
   test('a criterion absent from the lock → exit 1 with uncalibrated', async () => {

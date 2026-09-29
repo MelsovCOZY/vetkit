@@ -43,6 +43,7 @@ export {
   verdictSchema,
 } from './generated/schemas.ts';
 
+export { DEFAULT_REQUEST_FORMAT } from './ports/judge.ts';
 export type { Answer, JudgeResponse, JudgeV1, Question, RequestFormat } from './ports/judge.ts';
 
 export { defineExporter } from './ports/exporter.ts';

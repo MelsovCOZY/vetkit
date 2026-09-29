@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { Case, Criterion } from '@vetkit/spec';
+import type { Case, Criterion, RequestFormat } from '@vetkit/spec';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { loadCases } from './cases/load.ts';
 import { loadCriteria } from './criteria/load.ts';
@@ -41,23 +41,30 @@ beforeAll(async () => {
   cases = k.cases;
 });
 
-function expectedTokens(evalCase: Case): number {
-  const req = buildRequest(evalCase, criteria);
+function expectedTokens(evalCase: Case, requestFormat?: RequestFormat): number {
+  const req = buildRequest(evalCase, criteria, { requestFormat });
   return Math.ceil((req.state.length + JSON.stringify(req.questions).length) / 4);
 }
 
 describe('estimateRun', () => {
   it('counts one call per case and chars/4 input tokens over state + questions', async () => {
-    const est = await estimateRun({ criteria, cases, model: MODEL });
+    // Default switched to fenced-v1 after the request-format A/B; this measures the raw size.
+    const est = await estimateRun({ criteria, cases, model: MODEL, requestFormat: 'raw' });
     expect(est.cases).toBe(2);
     expect(est.criteria).toBe(3);
     expect(est.calls).toBe(2);
     expect(est.cacheHits).toBe(0);
-    expect(est.inputTokens).toBe(cases.reduce((sum, c) => sum + expectedTokens(c), 0));
+    expect(est.inputTokens).toBe(cases.reduce((sum, c) => sum + expectedTokens(c, 'raw'), 0));
+  });
+
+  it('an unset request format is measured as fenced-v1', async () => {
+    const unset = await estimateRun({ criteria, cases, model: MODEL });
+    const fenced = await estimateRun({ criteria, cases, model: MODEL, requestFormat: 'fenced-v1' });
+    expect(unset.inputTokens).toBe(fenced.inputTokens);
   });
 
   it('measures state size after fenced-v1 rendering', async () => {
-    const raw = await estimateRun({ criteria, cases, model: MODEL });
+    const raw = await estimateRun({ criteria, cases, model: MODEL, requestFormat: 'raw' });
     const fenced = await estimateRun({ criteria, cases, model: MODEL, requestFormat: 'fenced-v1' });
     expect(fenced.inputTokens).toBeGreaterThan(raw.inputTokens);
   });
