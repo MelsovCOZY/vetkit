@@ -6,10 +6,26 @@ const doWrite = (): Promise<SinkAck> => Promise.resolve({ accepted: [], rejected
 
 test('SinkV1, SinkAck and defineSink are importable from the @vetkit/spec index', () => {
   expectTypeOf(defineSink).toEqualTypeOf<(x: SinkV1) => SinkV1>();
+});
+
+// SinkAck gains an optional first-class skipped outcome, replacing the reason-prefix
+// convention on rejections. The pin below is updated because the ack shape changed on purpose.
+test('SinkAck is { accepted; rejected; skipped? } with skipped as id + reason pairs', () => {
   expectTypeOf<SinkAck>().toEqualTypeOf<{
     accepted: string[];
     rejected: Array<{ id: string; reason: string; retryable: boolean }>;
+    skipped?: Array<{ id: string; reason: string }>;
   }>();
+  expectTypeOf<SinkAck['rejected'][number]>().toEqualTypeOf<{
+    id: string;
+    reason: string;
+    retryable: boolean;
+  }>();
+});
+
+test('an ack without skipped is still a SinkAck', () => {
+  const ack: SinkAck = { accepted: ['a'], rejected: [] };
+  expectTypeOf(ack).toMatchTypeOf<SinkAck>();
 });
 
 test('Verdict.provenance.traceId reads as string | undefined', () => {

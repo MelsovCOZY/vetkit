@@ -30,6 +30,21 @@ describe('defineSink', () => {
     expect(defineSink(sink)).toBe(sink);
   });
 
+  test('a sink may report skipped ids with reasons in its ack, alongside accepted and rejected', async () => {
+    const sink = defineSink(
+      makeSink({
+        doWrite: () =>
+          Promise.resolve({
+            accepted: ['a'],
+            rejected: [{ id: 'b', reason: 'boom', retryable: true }],
+            skipped: [{ id: 'c', reason: 'unscored:no_answer' }],
+          }),
+      }),
+    );
+    const ack = await sink.doWrite([], {});
+    expect(ack.skipped).toEqual([{ id: 'c', reason: 'unscored:no_answer' }]);
+  });
+
   test("rejects specVersion 'v0' with E_ADAPTER_SPEC_VERSION naming the id", () => {
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const sink = { ...makeSink(), specVersion: 'v0' } as unknown as SinkV1;
