@@ -274,6 +274,10 @@ describe('vet run --sink (mol-yxn.7)', () => {
     );
     expect(result.status).toBe(0);
     expect(parseJson(result.stdout)).toMatchObject({ exitCode: 0 });
+    // mol-yxn.21: the pretty "run done" line must show the --sink-downgraded exit code
+    // (0), not the pre-override code core decided (1), on stderr.
+    expect(result.stderr).toMatch(/run done: 2 verdicts, exit 0/);
+    expect(result.stderr).not.toMatch(/run done:.*exit 1/);
     const received = readLines(project.otelOut);
     expect(received).toHaveLength(N);
     for (const v of received) {
@@ -290,6 +294,8 @@ describe('vet run --sink (mol-yxn.7)', () => {
     );
     expect(result.status).toBe(1);
     expect(parseJson(result.stdout)).toMatchObject({ exitCode: 1 });
+    // Unchanged case: a genuine scored failure still shows exit 1 on the run-done line too.
+    expect(result.stderr).toMatch(/run done: 2 verdicts, exit 1/);
   }, 60_000);
 
   test('missing', () => {
@@ -392,6 +398,8 @@ describe('vet run CEV_JUDGE_BASE_URL forced judge failure (bug F3/F4, gate 7lg A
     });
     expect(result.status).toBe(0);
     expect(parseJson(result.stdout)).toMatchObject({ exitCode: 0 });
+    // mol-yxn.21 repro: the run-done line must report the real (downgraded) exit code too.
+    expect(result.stderr).toMatch(/run done: 1 verdict, exit 0/);
     // fixtureEvals (shared with run.test.ts) has exactly one case and one criterion.
     const received = readLines(otelOut);
     expect(received).toHaveLength(1);
