@@ -91,9 +91,8 @@ export const JEV_PRESETS: Record<'typesafe' | 'vercel' | 'openrouter' | 'cloudfl
     },
   },
   openrouter: {
-    // UNVERIFIED: OpenRouter's TypeSafe-compatible /api/v1/systemone path is documented
-    // by OpenRouter but has not been probed; treat as unverified until an e2e run
-    // exercises it.
+    // Verified: probed live on 2026-09-29 through /api/v1/systemone; the pinned model
+    // (typesafe/jev-1.13-20260917) resolved.
     baseURL: 'https://openrouter.ai/api',
     defaultModel: 'typesafe/jev-1.13',
     pinned: true,

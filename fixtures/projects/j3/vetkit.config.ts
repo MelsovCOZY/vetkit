@@ -2,12 +2,21 @@
 // preset. Generator: an OpenAI-compatible chat model on the same gateway key, used only for
 // the paraphrase and polarity gauntlets (Jev cannot generate text). Override the model with
 // CEV_J3_GENERATOR_MODEL; without a generator those two gauntlets are `skipped`.
+// Judge transport: CEV_SMOKE_JUDGE=vercel (default) or openrouter.
+const smokeJudge = process.env['CEV_SMOKE_JUDGE'] ?? 'vercel';
+if (smokeJudge !== 'vercel' && smokeJudge !== 'openrouter') {
+  throw new Error(`CEV_SMOKE_JUDGE must be vercel or openrouter, got "${smokeJudge}"`);
+}
+const onVercel = smokeJudge === 'vercel';
+
 export default {
   judge: {
     kind: 'typesafe-compatible',
-    preset: 'vercel',
-    apiKeyEnv: 'AI_GATEWAY_API_KEY',
-    providerOptions: { gateway: { zeroDataRetention: true, only: ['typesafe-ai'] } },
+    preset: smokeJudge,
+    apiKeyEnv: onVercel ? 'AI_GATEWAY_API_KEY' : 'OPENROUTER_API_KEY',
+    ...(onVercel
+      ? { providerOptions: { gateway: { zeroDataRetention: true, only: ['typesafe-ai'] } } }
+      : {}),
   },
   generator: {
     kind: 'openai-compatible',

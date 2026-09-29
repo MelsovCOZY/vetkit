@@ -5,6 +5,13 @@
 // first n items with a retryable rejection, then accept everything (log: VETKIT_FIXTURE_SINK_LOG).
 import { appendFileSync } from 'node:fs';
 
+// Judge transport: CEV_SMOKE_JUDGE=vercel (default) or openrouter.
+const smokeJudge = process.env['CEV_SMOKE_JUDGE'] ?? 'vercel';
+if (smokeJudge !== 'vercel' && smokeJudge !== 'openrouter') {
+  throw new Error(`CEV_SMOKE_JUDGE must be vercel or openrouter, got "${smokeJudge}"`);
+}
+const onVercel = smokeJudge === 'vercel';
+
 let rejectLeft = Number(process.env['VETKIT_FIXTURE_REJECT'] ?? '0');
 const logPath = process.env['VETKIT_FIXTURE_SINK_LOG'];
 
@@ -37,9 +44,11 @@ const flaky = {
 export default {
   judge: {
     kind: 'typesafe-compatible',
-    preset: 'vercel',
-    apiKeyEnv: 'AI_GATEWAY_API_KEY',
-    providerOptions: { gateway: { zeroDataRetention: true, only: ['typesafe-ai'] } },
+    preset: smokeJudge,
+    apiKeyEnv: onVercel ? 'AI_GATEWAY_API_KEY' : 'OPENROUTER_API_KEY',
+    ...(onVercel
+      ? { providerOptions: { gateway: { zeroDataRetention: true, only: ['typesafe-ai'] } } }
+      : {}),
   },
   sinks: [
     { kind: 'otel', endpoint: process.env['J7_COLLECTOR_ENDPOINT'] ?? 'http://127.0.0.1:4320' },
