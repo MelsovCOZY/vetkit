@@ -32,6 +32,7 @@ export {
 } from './cases/edit.ts';
 export type { DuplicatePair, PendingCase, QuarantineResult, ReviewOptions } from './cases/edit.ts';
 
+export { FENCED_V1_PREAMBLE, fenceNonce, renderState } from './judge/format.ts';
 export { gradeCode, referenceRequirement, renderReference } from './judge/reference.ts';
 export type { GradeCodeResult, ReferenceRequirementResult } from './judge/reference.ts';
 

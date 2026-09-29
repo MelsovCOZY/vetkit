@@ -1,3 +1,4 @@
+import { safeParseJson } from '@vetkit/spec';
 import { describe, expect, test } from 'vitest';
 import { FENCED_V1_PREAMBLE, fenceNonce, renderState } from './format.ts';
 
@@ -32,6 +33,9 @@ describe('renderState', () => {
     expect(lines.filter((l) => l.startsWith('<<<VETKIT_CASE_BEGIN '))).toHaveLength(1);
     expect(lines.filter((l) => l.startsWith('<<<VETKIT_CASE_END '))).toHaveLength(1);
     expect(lines[2]).not.toContain('<<<');
-    expect(JSON.parse(lines[2] ?? '')).toBe(hostile);
+    expect(safeParseJson<string>(lines[2] ?? '', { type: 'string' })).toEqual({
+      ok: true,
+      value: hostile,
+    });
   });
 });
