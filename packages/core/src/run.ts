@@ -440,8 +440,10 @@ function summarise(
   };
   for (const evalCase of cases) {
     const outcomes = verdicts.filter((v) => v.caseId === evalCase.id).map(outcome);
+    // A case with no verdicts at all (e.g. the gate refused before any judge call) was never
+    // scored — it must not default to "passed", or summary.passed drifts from results: [].
     if (outcomes.includes('failed')) summary.failed += 1;
-    else if (outcomes.includes('unscored')) summary.unscored += 1;
+    else if (outcomes.length === 0 || outcomes.includes('unscored')) summary.unscored += 1;
     else summary.passed += 1;
   }
   for (const criterion of criteria) {
