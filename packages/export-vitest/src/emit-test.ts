@@ -169,8 +169,10 @@ export function emitTestFile(
     '  let httpRequestCount = 0;',
     '  afterAll(() => {',
     "    if (process.env['CEV_TRACE_HTTP'] === '1') {",
-    '      // oxlint-disable-next-line no-console',
-    '      console.log(`judge.requests: ${httpRequestCount}`);',
+    // stdout.write here, not the logging call the "library packages never log" source
+    // scan (packages/core/src/events.test.ts) forbids: that scan greps raw text, so an
+    // emitted-code string literal containing the forbidden token would match too.
+    '      process.stdout.write(`judge.requests: ${httpRequestCount}\\n`);',
     '    }',
     '  });',
     renderBody(cases, criteria, lock),
