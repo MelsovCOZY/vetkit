@@ -39,7 +39,7 @@ describe('buildSpanTree', () => {
     expect(tree.roots.map((n) => n.span.spanId)).toEqual(['a', 'b']);
   });
 
-  test('a child starting 200 ms before its parent keeps its parent (OTEL-5)', () => {
+  test('a child starting 200 ms before its parent keeps its parent', () => {
     const tree = buildSpanTree([span('child', 'parent', 0), span('parent', undefined, 200)]);
 
     expect(tree.roots.map((n) => n.span.spanId)).toEqual(['parent']);

@@ -1,10 +1,9 @@
-// Per-trace normaliser: cascades through `dialects` in the order given, picks
-// the first whose detect() matches any span, then walks the tree causally (parent before child,
-// then SpanTree's existing start-time sibling order) to
-// concatenate LLM-span messages and sum tokens once per qualifying span — a nested LLM span is
-// never rolled into an ancestor's total (root acceptance J5, "tokens not double-counted").
-// Dialect modules (gen_ai, gen_ai_legacy, openinference, openllmetry, vercel) and the default
-// cascade order are owned by their own modules: this module only consumes DialectV1, it never imports one.
+// Per-trace normaliser: cascades through `dialects` in the order given, picks the first whose
+// detect() matches any span, then walks the tree causally (parent before child, then
+// SpanTree's start-time sibling order) to concatenate LLM-span messages and sum tokens once
+// per qualifying span — a nested LLM span is never rolled into an ancestor's total, so tokens
+// are not double-counted. Dialect modules and the default cascade order live in their own
+// modules: this module only consumes DialectV1, it never imports one.
 
 import type { Message, NormalizedTrace, Span } from '@vetkit/spec';
 import { assessCompleteness } from '../completeness/index.ts';

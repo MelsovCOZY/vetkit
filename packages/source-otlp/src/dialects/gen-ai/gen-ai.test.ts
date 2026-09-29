@@ -2,8 +2,7 @@
 // conventions — genAiDialect (latest gen_ai.input.messages/output.messages/system_instructions)
 // and genAiLegacyDialect (legacy indexed gen_ai.prompt.{n}/completion.{n} attributes and the
 // gen_ai.content.prompt/completion span events). Cascade, detection order and completeness
-// flags are owned elsewhere; this file only exercises the two dialects
-// in isolation.
+// flags live elsewhere; this file only exercises the two dialects in isolation.
 
 import { describe, expect, test } from 'vitest';
 import type { AnyValue, OtlpEvent, OtlpSpan } from '../../reader/index.ts';
@@ -198,8 +197,8 @@ describe('genAiDialect.extractMessages: tool_call parts round-trip', () => {
   });
 });
 
-describe('genAiDialect.extractMessages: reasoning parts are dropped (root DECISION)', () => {
-  // Root DECISION: the trace IR MessagePart set is text{content} / tool_call /
+describe('genAiDialect.extractMessages: reasoning parts are dropped', () => {
+  // The trace IR MessagePart set is text{content} / tool_call /
   // tool_call_response{id?,response} / parse_error{detail}; reasoning parts are DROPPED, not
   // downgraded to text.
   test('a reasoning part is dropped, sibling parts in the same message survive', () => {

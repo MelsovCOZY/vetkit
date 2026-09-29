@@ -1,8 +1,8 @@
-// DialectV1: the pure attribute-mapping contract each OTLP GenAI convention
-// module implements. Detection order, message concatenation and token summation are cascade
+// DialectV1: the pure attribute-mapping contract each OTLP GenAI convention module
+// implements. Detection order, message concatenation and token summation are cascade
 // concerns that live in ./index.ts; a dialect only ever answers questions about one span.
-// Dialect modules themselves (gen_ai, gen_ai_legacy, openinference, openllmetry, vercel) are
-// out of scope here — this bead consumes DialectV1, it does not implement one.
+// The dialect modules themselves (gen_ai, gen_ai_legacy, openinference, openllmetry, vercel)
+// live under ../dialects.
 
 import type { Message } from '@vetkit/spec';
 import type { OtlpResource, OtlpSpan } from '../reader/index.ts';
@@ -10,8 +10,8 @@ import type { SpanTree } from '../reader/tree.ts';
 
 export interface DialectV1 {
   readonly name: 'gen_ai' | 'gen_ai_legacy' | 'openinference' | 'openllmetry' | 'vercel';
-  // The dialect module's pinned semconv/spec commit; absent when a dialect does not track one
-  //. normalizeTrace reads it as NormalizedTrace.dialectVersion.
+  // The dialect module's pinned semconv/spec commit; absent when a dialect does not track one.
+  // normalizeTrace reads it as NormalizedTrace.dialectVersion.
   readonly specCommit?: string;
   detect(span: OtlpSpan, resource: OtlpResource): boolean;
   isLlmSpan(span: OtlpSpan): boolean;

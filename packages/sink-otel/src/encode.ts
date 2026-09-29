@@ -1,5 +1,5 @@
-// Pure Verdict -> OTLP/JSON encoding for the gen_ai.evaluation.result event (docs/sinks.md
-// "otel"). Built by hand: there is no SDK emission API for this event, and the OTLP/JSON
+// Pure Verdict -> OTLP/JSON encoding for the gen_ai.evaluation.result event.
+// Built by hand: there is no SDK emission API for this event, and the OTLP/JSON
 // shape (hex ids, lowerCamelCase, string int64s) is small enough to own
 // (https://opentelemetry.io/docs/specs/otlp/).
 import type { Verdict } from '@vetkit/spec';
@@ -43,7 +43,7 @@ export interface OtlpLogRecord {
 
 export type CorrelationProblem = 'no correlation id' | 'invalid correlation id';
 
-// The correlation rule (docs/sinks.md "Correlation"): trace/span ids from provenance, else
+// The correlation rule: trace/span ids from provenance, else
 // gen_ai.response.id; with neither, the verdict cannot be placed.
 export function correlationProblem(verdict: Verdict): CorrelationProblem | undefined {
   const { traceId, spanId, responseId } = verdict.provenance ?? {};

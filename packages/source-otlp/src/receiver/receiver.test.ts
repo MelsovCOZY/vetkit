@@ -1,4 +1,4 @@
-// Unit tests for the OTLP/HTTP receiver (root acceptance J5). Every test binds
+// Unit tests for the OTLP/HTTP receiver. Every test binds
 // port 0 (ephemeral) and talks to the server over real loopback fetch; port 4318 is never bound
 // here. Cross-request traceId dedupe is not this module's job (it
 // lives in the CLI's otlpSourceFromArg, tested in packages/cli/src/commands/init-otlp.test.ts).

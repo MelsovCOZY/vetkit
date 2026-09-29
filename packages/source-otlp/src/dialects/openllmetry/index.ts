@@ -2,13 +2,12 @@
 // llm.completions.{n} attributes, the gen_ai.prompt.{n}/gen_ai.completion.{n} legacy form that
 // traceloop's genainormalizerprocessor also emits, and the JSON-string traceloop.entity.input/
 // traceloop.entity.output attributes on workflow/task spans, onto Message[]/usage per DialectV1
-//. Detection order, cross-span token summation and completeness flags belong to
+// DialectV1. Detection order, cross-span token summation and completeness flags belong to
 // the normalize cascade; this module only ever answers questions about one span, and never reads another
 // dialect's keys (no cross-dialect fallbacks).
 //
-// The indexed-attribute reader below is intentionally duplicated per dialect
-// (note: "read via the shared indexed-attribute helper duplicated locally — no cross-dialect
-// import"), rather than imported from a sibling dialects/* module.
+// The indexed-attribute reader below is intentionally duplicated per dialect (no
+// cross-dialect import), rather than imported from a sibling dialects/* module.
 
 import {
   safeParseJson,
@@ -22,7 +21,7 @@ import type { AnyValue, OtlpSpan } from '../../reader/index.ts';
 import type { DialectV1 } from '../../normalize/dialect.ts';
 
 // The conventions this table was mapped from are unreleased (gen-ai-dev manifest) and renames
-// are queued in changelog.d (RISK note on the bead) — pinned here rather than assumed stable.
+// are queued in changelog.d — pinned here rather than assumed stable.
 const SPEC_COMMIT =
   'traceloop/openllmetry semconv manifest gen-ai-dev/1.42.0-dev (github.com/traceloop/openllmetry issue #3515)';
 
@@ -62,7 +61,7 @@ function jsonToParts(value: unknown): MessagePart[] {
 
 // Absent content -> no parts (caller decides whether the message itself is still emitted).
 // A string is read as plain text unless it looks like JSON, in which case it is parsed and
-// validated through the Message-part schema (Edge cases: malformed JSON -> a parse_error part,
+// validated through the Message-part schema (malformed JSON -> a parse_error part,
 // contentState still 'captured' since the attribute was present). A structured (non-string)
 // attribute value (already-parsed by the OTLP reader's arrayValue/kvlistValue flattening) is
 // validated as-is, without a JSON.parse step.

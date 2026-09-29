@@ -1,15 +1,16 @@
-// gen_ai dialect: two DialectV1 objects (packages/source-otlp/src/normalize/
-// dialect.ts) for the OTel GenAI semantic conventions —
+// gen_ai dialect: two DialectV1 objects (../../normalize/dialect.ts)
+// for the OTel GenAI semantic conventions —
 //   genAiDialect       (name: 'gen_ai')        the latest attribute-based convention
 //   genAiLegacyDialect (name: 'gen_ai_legacy')  the deprecated indexed/event-based convention
 // Detection order, token single-counting and completeness flags are cascade concerns owned by
 // the normalize cascade; this module only ever answers questions about one span, and each dialect
 // reads only its own attribute keys — never the other's (no cross-dialect fallback).
 //
-// PREMISE (web, raw doc fetched 2026-09-25, gen-ai-events.md;
-// https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md).
-// The manifest at that commit is unreleased/Development (`gen-ai-dev/1.42.0-dev`), so the
-// attribute table is pinned here rather than to a tagged release (the attribute names may still change).
+// The attribute table was read from the raw docs (gen-ai-events.md;
+// https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md)
+// fetched 2026-09-25. The manifest at that commit is unreleased/Development
+// (`gen-ai-dev/1.42.0-dev`), so the table is pinned here rather than to a tagged release (the
+// attribute names may still change).
 
 import type { Message, MessagePart } from '@vetkit/spec';
 import { safeParseJson, validateJson, type JsonSchema } from '@vetkit/spec';
@@ -31,7 +32,7 @@ function operationName(span: OtlpSpan): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
-// Shared by both dialects (root acceptance criteria): operation.name in the LLM set, or — when
+// Shared by both dialects: operation.name in the LLM set, or — when
 // operation.name is absent — the span name starts with one of those operation names
 // (instrumentations commonly name spans "{operation_name} {model}"). An operation.name that is
 // present but outside the set (e.g. execute_tool, embeddings) is authoritative and decides the
@@ -47,8 +48,6 @@ function mapRole(role: unknown, fallback: Message['role']): Message['role'] {
   return KNOWN_ROLES[role] ?? fallback;
 }
 
-// -- JSON-string / structured attribute parsing -----------------------------------------------
-//
 // gen_ai.input.messages / output.messages / system_instructions arrive either as a JSON string
 // (parse through the safeParseJson chokepoint) or already structured (an OTLP arrayValue is
 // flattened to a real array by the reader, validated with the same schema via validateJson).
@@ -90,7 +89,7 @@ const RAW_MESSAGES_SCHEMA: JsonSchema = {
 // array of {role, parts} messages.
 const RAW_PARTS_ARRAY_SCHEMA: JsonSchema = { type: 'array', items: RAW_PART_SCHEMA };
 
-// Root DECISION: the trace IR MessagePart set is text{content} / tool_call /
+// Design choice: the trace IR MessagePart set is text{content} / tool_call /
 // tool_call_response{id?,response} / parse_error{detail} — no 'reasoning' variant, unlike the
 // upstream semconv draft, and reasoning parts are DROPPED (never downgraded to text). Any other
 // unmapped part kind (not in the semconv table at all) still downgrades to a text part rather
@@ -164,8 +163,6 @@ function parseSystemInstructions(value: AnyValue | undefined): Message[] {
   const parts = mapParts(validated.value);
   return parts.length > 0 ? [{ role: 'system', parts }] : [];
 }
-
-// -- genAiDialect (latest) ----------------------------------------------------------------------
 
 const LATEST_CONTENT_KEYS = [
   'gen_ai.input.messages',
@@ -250,8 +247,6 @@ export const genAiDialect: DialectV1 = {
   contentState: contentStateLatest,
 };
 
-// -- genAiLegacyDialect ---------------------------------------------------------------------------
-
 const LEGACY_INDEX_RE = /^gen_ai\.(prompt|completion)\.(\d+)\.(role|content|tool_call_id)$/;
 // gen_ai.{prompt,completion}.{n}.tool_calls.{i}.{id,name,arguments} — an assistant turn's
 // own tool call(s), indexed the same way llm.output_messages.*.message.tool_calls is in the
@@ -333,7 +328,7 @@ function legacyIndexedMessages(
     .map(([, entry]) => {
       const parts: MessagePart[] = [];
       // A tool_call_id marks this entry as a tool turn responding to a call; its content is the
-      // response, never a sibling text part (Scope: not `entry.content ?? ''` duplicated as text).
+      // response, never a sibling text part (never `entry.content ?? ''` duplicated as text).
       if (entry.toolCallId !== undefined) {
         parts.push({
           type: 'tool_call_response',
@@ -384,7 +379,7 @@ function legacyEventBody(value: AnyValue | undefined, fallbackRole: Message['rol
 }
 
 // gen_ai.content.prompt / gen_ai.content.completion span events carry the messages as a JSON
-// body under gen_ai.prompt / gen_ai.completion respectively (PREMISE gen-ai-events.md).
+// body under gen_ai.prompt / gen_ai.completion respectively (see gen-ai-events.md).
 function legacyEventMessages(span: OtlpSpan): Message[] {
   const messages: Message[] = [];
   for (const event of span.events) {

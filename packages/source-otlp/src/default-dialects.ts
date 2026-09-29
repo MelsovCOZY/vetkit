@@ -1,7 +1,7 @@
-// DEFAULT_DIALECT_ORDER: the five merged dialect modules, imported by
-// fixed path in the Langfuse cascade order — gen_ai (latest), gen_ai legacy, OpenInference,
-// OpenLLMetry, Vercel. otlpSource() (src/index.ts) falls back to this list only when
-// opts.dialects is undefined; an explicit [] still means "detect nothing".
+// DEFAULT_DIALECT_ORDER: the five dialect modules, imported by fixed path in the Langfuse
+// cascade order — gen_ai (latest), gen_ai legacy, OpenInference, OpenLLMetry, Vercel.
+// otlpSource() (src/index.ts) falls back to this list only when opts.dialects is undefined;
+// an explicit [] still means "detect nothing".
 
 import { genAiDialect, genAiLegacyDialect } from './dialects/gen-ai/index.ts';
 import { openinferenceDialect } from './dialects/openinference/index.ts';

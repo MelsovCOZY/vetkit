@@ -1,4 +1,4 @@
-// Named re-exports only — no `export *` (oxc/no-barrel-file). The OtlpSource port lands here.
+// Named re-exports only — no `export *` (oxc/no-barrel-file).
 import { readFile } from 'node:fs/promises';
 import { extname } from 'node:path';
 import {
@@ -50,10 +50,10 @@ export interface OtlpSourceOptions {
   onDiag?: (d: OtlpDiag) => void;
 }
 
-// otlpSource: a SourceV1 over a fixed list of OTLP/JSON files. Grouping spans
-// into per-trace SpanTrees and cascading through `opts.dialects` is the only job. `opts.dialects`
-// undefined falls back to DEFAULT_DIALECT_ORDER; an explicit `[]` still means every
-// trace normalises to 'unknown'. `opts.listen` (a receiver) is explicitly out of scope.
+// otlpSource: a SourceV1 over a fixed list of OTLP/JSON files. It groups spans into per-trace
+// SpanTrees and cascades through `opts.dialects`. `opts.dialects` undefined falls back to
+// DEFAULT_DIALECT_ORDER; an explicit `[]` still means every trace normalises to 'unknown'.
+// A receiver (`opts.listen`) is not supported here.
 export function otlpSource(opts: OtlpSourceOptions): SourceV1 {
   const dialects = opts.dialects ?? DEFAULT_DIALECT_ORDER;
   const files = opts.files ?? [];

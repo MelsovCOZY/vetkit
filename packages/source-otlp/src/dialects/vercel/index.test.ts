@@ -1,6 +1,6 @@
 // vercelDialect tests. Spans are built inline; shared cross-dialect fixtures
-// belong to the golden corpus. The outer+inner cascade test exercises the real (unmodified) normalizeTrace
-// from ../../normalize/index.ts to prove isLlmSpan alone prevents double counting.
+// belong to the golden corpus. The outer+inner cascade test exercises the real (unmodified)
+// normalizeTrace from ../../normalize/index.ts to prove isLlmSpan alone prevents double counting.
 
 import { describe, expect, test } from 'vitest';
 import { buildSpanTree } from '../../reader/tree.ts';
