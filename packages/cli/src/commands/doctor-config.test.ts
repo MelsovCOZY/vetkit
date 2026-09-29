@@ -227,17 +227,17 @@ describe('vet doctor --config (text)', () => {
   });
 });
 
-describe('vet doctor sink descriptor credentials', () => {
-  function sinkRow(stdout: string): unknown {
-    const doc = parseJson(stdout);
-    if (typeof doc !== 'object' || doc === null || !('checks' in doc) || !Array.isArray(doc.checks)) {
-      throw new Error('doctor --json output has no checks');
-    }
-    return doc.checks.find(
-      (c: unknown) => typeof c === 'object' && c !== null && 'name' in c && c.name === 'sink credentials',
-    );
+function sinkRow(stdout: string): unknown {
+  const doc = parseJson(stdout);
+  if (typeof doc !== 'object' || doc === null || !('checks' in doc) || !Array.isArray(doc.checks)) {
+    throw new Error('doctor --json output has no checks');
   }
+  return doc.checks.find(
+    (c: unknown) => typeof c === 'object' && c !== null && 'name' in c && c.name === 'sink credentials',
+  );
+}
 
+describe('vet doctor sink descriptor credentials', () => {
   test('--json carries the warn row naming the unset variable; the exit code stays 0', async () => {
     const cwd = await project({ 'vetkit.config.ts': SINK_CONFIG });
     const run = await doctor(['--config', '--json'], cwd, { DOCTOR_JUDGE_KEY: SECRET });
