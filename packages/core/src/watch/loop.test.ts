@@ -628,7 +628,13 @@ describe('runWatch', () => {
       }),
     ]);
 
-    expect(summary).toMatchObject({ seen: 20, sampled: 10, judged: 10, produced: 10, acknowledged: 10 });
+    expect(summary).toMatchObject({
+      seen: 20,
+      sampled: 10,
+      judged: 10,
+      produced: 10,
+      acknowledged: 10,
+    });
     expect(await inclusionLineCount(inclusionPath)).toBe(20);
   });
 
