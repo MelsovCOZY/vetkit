@@ -211,11 +211,16 @@ function fieldOf(value: unknown, key: string): unknown {
 // fetchImpl itself failing (DNS, ECONNREFUSED, socket reset) before any signal
 // fired; the caller tells these apart via `signal.aborted` and only reaches this
 // helper for the latter. It classifies the failure with the underlying error's
-// own `code` (Node/Bun system errors) or else its class name — never the raw
-// message — so no URL or response body ever reaches VetErrorDetails.hint.
+// own `code` (Node/Bun system errors), falling back to a wrapped cause's `code`
+// (Node/undici's real fetch failure is a TypeError('fetch failed') whose own
+// `code` is unset, nesting the useful system error one level down at `.cause`;
+// mol-0nw.30) and then the class name — never the raw message — so no URL or
+// response body ever reaches VetErrorDetails.hint.
 function networkErrorHint(cause: unknown): string {
   const code = fieldOf(cause, 'code');
   if (typeof code === 'string' && code !== '') return code;
+  const nestedCode = fieldOf(fieldOf(cause, 'cause'), 'code');
+  if (typeof nestedCode === 'string' && nestedCode !== '') return nestedCode;
   return cause instanceof Error ? cause.name : 'unknown';
 }
 

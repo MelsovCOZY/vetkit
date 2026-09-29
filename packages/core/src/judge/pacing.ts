@@ -77,20 +77,15 @@ function limiterError(last: VetError, attempts: number, extra?: string): VetErro
 // HTTP 429/5xx, which carries retryAfterMs/no hint) means the endpoint itself is unreachable,
 // not merely asking for patience; retrying it on the full AIMD backoff (up to maxBackoffMs,
 // maxRetries) can run for minutes for something that will not resolve in that window
-// (mol-0nw.30). It gets a short, fixed retry budget instead, and gives up as JUDGE_TIMEOUT
-// (no details, matching the "gave up waiting" signal JUDGE_TIMEOUT already carries elsewhere)
-// rather than staying JUDGE_UNAVAILABLE.
+// (mol-0nw.30). It gets a short, fixed retry budget instead, but still exhausts as
+// JUDGE_UNAVAILABLE with its hint intact via limiterError, same as any other retryable
+// failure — bug 0nw.29's AC ("refused connection gives JUDGE_UNAVAILABLE"); JUDGE_TIMEOUT
+// stays reserved for a real deadline.
 const NETWORK_UNREACHABLE_MAX_RETRIES = 2;
 const NETWORK_UNREACHABLE_MAX_BACKOFF_MS = 2_000;
 
 function isNetworkUnreachable(error: VetError): boolean {
   return error.details?.hint !== undefined;
-}
-
-function timeoutError(last: VetError, attempts: number): VetError {
-  return new VetError('JUDGE_TIMEOUT', `${last.message} (after ${attempts} attempts)`, {
-    cause: { error: last, attempts },
-  });
 }
 
 export function createLimiter(opts: LimiterOptions = {}): Limiter {
@@ -209,7 +204,7 @@ export function createLimiter(opts: LimiterOptions = {}): Limiter {
         : maxRetries;
       if (attempts > effectiveMaxRetries) {
         release();
-        throw networkUnreachable ? timeoutError(error, attempts) : limiterError(error, attempts);
+        throw limiterError(error, attempts);
       }
       const effectiveMaxBackoffMs = networkUnreachable
         ? Math.min(maxBackoffMs, NETWORK_UNREACHABLE_MAX_BACKOFF_MS)
@@ -220,9 +215,7 @@ export function createLimiter(opts: LimiterOptions = {}): Limiter {
       const remaining = totalBudgetMs - (now() - start);
       if (wait > remaining) {
         release();
-        throw networkUnreachable
-          ? timeoutError(error, attempts)
-          : limiterError(error, attempts, `retry budget exhausted (suggested wait ${wait}ms)`);
+        throw limiterError(error, attempts, `retry budget exhausted (suggested wait ${wait}ms)`);
       }
       streak = 0;
       pausedUntil = Math.max(pausedUntil, now() + wait);
