@@ -405,7 +405,10 @@ describe('vet run CEV_JUDGE_BASE_URL forced judge failure (bug F3/F4, gate 7lg A
     expect(received).toHaveLength(1);
     for (const v of received) {
       expect(v['status']).toBe('unscored');
-      expect(v['cause']).toBe('JUDGE_TIMEOUT');
+      // mol-0nw.29 AC (root DECISION, supersedes the old JUDGE_TIMEOUT assertion): a refused
+      // connection is JUDGE_UNAVAILABLE, retried on a short fixed budget, never JUDGE_TIMEOUT
+      // (reserved for a real deadline).
+      expect(v['cause']).toMatchObject({ code: 'JUDGE_UNAVAILABLE' });
       expect(v['answer']).toBeUndefined();
     }
   }, 60_000);
