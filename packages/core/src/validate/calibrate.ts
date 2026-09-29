@@ -9,7 +9,7 @@ import { clusteredSE, clusterKeys } from './clusters.ts';
 /** Held-out floor per class (vetkit choice). */
 const CLASS_FLOOR = 30;
 const MIN_LABELS = 100;
-/** Judge repeats per labelled case that J3 calibration needs (fewer marks the criterion). */
+/** Judge repeats per labelled case that calibration needs (fewer marks the criterion). */
 export const CALIBRATION_MIN_REPEATS = 3;
 /** Per-language Cohen κ floor (vetkit choice). */
 const KAPPA_FLOOR = 0.6;

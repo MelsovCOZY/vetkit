@@ -1,4 +1,4 @@
-// Typed run events + a diag channel. Library packages never log (root DECISION, OPEN-4):
+// Typed run events + a diag channel. Library packages never log:
 // they emit here and the host (the CLI, a test, another tool) decides what to render.
 // Payloads carry ids, counters and sizes only, never prompt/state/answer text.
 

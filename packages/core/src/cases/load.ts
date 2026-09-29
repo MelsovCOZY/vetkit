@@ -1,6 +1,6 @@
 // Loads every *.jsonl file in a cases directory into validated Case[]. Each non-blank
 // line goes through the spec chokepoint (safeParseJson + caseSchema). Failures are data,
-// never throws (DECISION: Code conventions), and carry the file and 1-based line number.
+// never throws, and carry the file and 1-based line number.
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
@@ -43,7 +43,7 @@ function describeCause(cause: unknown): string | undefined {
 
 // vet cases quarantine moves a case's line into <dir>/quarantine.jsonl; excluding
 // it here is what makes `vet run` (which loads cases through this same function) skip
-// quarantined cases, without run.ts (not an owned path for that bead) needing a change.
+// quarantined cases.
 const QUARANTINE_FILE = 'quarantine.jsonl';
 
 export async function loadCases(dir: string): Promise<LoadCasesResult> {

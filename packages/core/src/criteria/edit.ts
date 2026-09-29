@@ -1,6 +1,5 @@
 // Secondary criteria actions: disable/enable, delete and revalidate. YAML edits go
-// through the yaml Document API so comments and order survive (DECISION: Code conventions: one
-// parser, IR-first), never string replacement. Lock edits are pure (Lock in, Lock out); the caller
+// through the yaml Document API so comments and order survive, never string replacement. Lock edits are pure (Lock in, Lock out); the caller
 // writes the result through writeLockAtomic, so wordingHash and datasetHash stay as validate wrote
 // them. `enabled` is not part of the wording hash: disabling never stales the lock.
 import { CEV_ERROR_CODES, type Lock } from '@vetkit/spec';

@@ -1,5 +1,3 @@
-// docs/contracts/j7.md "Promotion".
-//
 // promoteFailure is called directly as loop.ts's `onVerdict` (RunWatchInput.onVerdict:
 // `(verdict: Verdict, evalCase: Case) => boolean | void`) — synchronous, one
 // verdict at a time. That is why this module writes with sync fs calls
@@ -8,11 +6,10 @@
 // satisfy onVerdict's synchronous contract, and the loop checks `onVerdict(v, c) === true`
 // without awaiting it.
 //
-// `evalCase` (the bead's acceptance-criteria text calls this second parameter `trace`) is the
-// Case the failing verdict was judged against, carrying the `traceId` this module needs.
-// `verdict.id` is exactly the id `outbox.enqueue` assigned that verdict (fixed loop.ts
-// to thread it through onVerdict): a verdict with no id is never promoted here — synthesizing
-// one would silently mismatch whatever the outbox actually wrote for it.
+// `evalCase` is the Case the failing verdict was judged against, carrying the `traceId` this
+// module needs. `verdict.id` is exactly the id `outbox.enqueue` assigned that verdict: a
+// verdict with no id is never promoted here — synthesizing one would silently mismatch whatever
+// the outbox actually wrote for it.
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { safeParseJson, type Case, type JsonSchema, type Verdict } from '@vetkit/spec';
@@ -43,8 +40,8 @@ const ID_LINE_SCHEMA: JsonSchema = {
 };
 
 // Best-effort dedupe read through the one JSON.parse chokepoint (safeParseJson): a corrupt
-// or non-matching line is skipped rather than thrown (this is a dedupe check, not the J1
-// loader's validation).
+// or non-matching line is skipped rather than thrown (this is a dedupe check, not
+// case-loader validation).
 function existingIds(file: string): Set<string> {
   const ids = new Set<string>();
   if (!existsSync(file)) return ids;

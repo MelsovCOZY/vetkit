@@ -1,5 +1,4 @@
-// Named re-exports only — no `export *` (oxc/no-barrel-file, docs/contracts/j0.md
-// DECISION: Code conventions).
+// Named re-exports only — no `export *` (oxc/no-barrel-file).
 
 export { computeWordingHash, loadCriteria } from './criteria/load.ts';
 export type { CriteriaIssue, LoadCriteriaResult, WordingFields } from './criteria/load.ts';
@@ -286,8 +285,7 @@ export type { RunRecord } from './run-record.ts';
 export { DEFAULT_GAUNTLET_CORPORA } from './validate/corpora.ts';
 export type { DefaultCorpora } from './validate/corpora.ts';
 
-// J7 (docs/contracts/j7.md): additive per root DECISION —
-// packages/cli/src/commands/watch.ts needs these and had no exported path to reach them.
+// Watch: exported for packages/cli/src/commands/watch.ts.
 export { runWatch } from './watch/loop.ts';
 export type { CoverageSummary, JudgeCaseFn, RunWatchInput, RunWatchOptions } from './watch/loop.ts';
 export { createSampler, hashToUnit } from './watch/sampler.ts';

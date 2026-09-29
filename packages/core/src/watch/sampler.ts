@@ -1,10 +1,9 @@
-// docs/contracts/j7.md "Sampling rule" / "Inclusion log".
-// Pure hashToUnit + a small factory (DECISION: code conventions, no class).
+// Pure hashToUnit + a small factory, no class.
 //
 // The inclusion record is appended with fs.appendFileSync (one small JSONL line per decide()
 // call): decide() is synchronous by contract, and a crash right after the sampling decision
 // must still leave the record on disk, so an async, batched appender (packages/core/src/outbox/
-// files.ts's appendLines) is not used here — see docs/watch.md and the bead's Approach note.
+// files.ts's appendLines) is not used here.
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { dirname } from 'node:path';

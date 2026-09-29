@@ -1,7 +1,6 @@
-// Lints Criterion[] against Jev's documented weak spots before any network call
-// (docs/research/2026-09-25-jev-eval-generation-brief.md §4-§5;
-// docs/research/2026-09-26-eval-quality-brief.md §4 item 11). Pure: no I/O, no node: imports. Rules are ASCII regex heuristics, so
-// non-English wording is not checked (documented limitation).
+// Lints Criterion[] against Jev's documented weak spots before any network call.
+// Pure: no I/O, no node: imports. Rules are ASCII regex heuristics, so non-English wording is
+// not checked (documented limitation).
 import type { Criterion } from '@vetkit/spec';
 
 export type LintSeverity = 'error' | 'warn';

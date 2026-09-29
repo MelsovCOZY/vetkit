@@ -3,7 +3,7 @@
 // to the judge (renderReference) or is graded by a pure
 // string/number comparison instead of the judge (gradeCode). referenceRequirement is the rule
 // the lock writer consults to decide whether a checkable criterion may reach calibrated.
-// Pure functions throughout (DECISION: Code conventions) — none of these ever throw.
+// Pure functions throughout — none of these ever throw.
 import type { Case, Criterion } from '@vetkit/spec';
 
 const REFERENCE_NOTE =
@@ -21,7 +21,7 @@ function valueText(value: unknown): string {
   return JSON.stringify(value);
 }
 
-// Never place this output anywhere but a question's `instructions` (§4 item 10): the reference
+// Never place this output anywhere but a question's `instructions`: the reference
 // answer must never enter `state`, the channel the judged output — and only the judged output —
 // can reach.
 export function renderReference(criterion: Criterion, evalCase: Case): string | null {

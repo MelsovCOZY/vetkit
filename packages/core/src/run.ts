@@ -1,13 +1,12 @@
-// runEvals: the pipeline `vet run` calls — load criteria and cases, judge every case (runJudge,
-// DECISION: core seams named), apply thresholds with polarity and tolerance bands, summarise and
-// decide the exit code (gate.ts). Library code emits typed events and never logs.
+// runEvals: the pipeline `vet run` calls — load criteria and cases, judge every case (runJudge),
+// apply thresholds with polarity and tolerance bands, summarise and decide the exit code
+// (gate.ts). Library code emits typed events and never logs.
 //
-// Pass semantics (DECISION: escape and pass semantics): boolean criteria come back as a 3-way
-// choice {yes, no, escape}; p = P(yes), P(escape) >= escapeThreshold gives not_applicable,
+// Pass semantics: boolean criteria come back as a 3-way choice {yes, no, escape}; p = P(yes), P(escape) >= escapeThreshold gives not_applicable,
 // pass = p >= threshold (pass_when_true) or 1-p >= threshold (pass_when_false). Choice passes when
-// P(passWhen) = Σ p over the passWhen labels >= threshold (1 − P for pass_when_false). Score passes when the expected level E >= threshold (max − E
-// for pass_when_false). Only boolean and choice criteria gate;
-// code-graded criteria never reach the judge.
+// P(passWhen) = Σ p over the passWhen labels >= threshold (1 − P for pass_when_false).
+// Score passes when the expected level E >= threshold (max − E for pass_when_false). Only
+// boolean and choice criteria gate; code-graded criteria never reach the judge.
 import {
   CEV_ERROR_CODES,
   VetError,
@@ -61,7 +60,7 @@ export interface RunSummary {
   byCriterion: Record<string, CriterionSummary>;
 }
 
-/** One event on the gej bus (./events.ts), as a tagged union over EventMap. */
+/** One event on the event bus (./events.ts), as a tagged union over EventMap. */
 export type RunEvent = {
   readonly [K in keyof EventMap]: { readonly name: K; readonly payload: EventMap[K] };
 }[keyof EventMap];
@@ -184,7 +183,7 @@ function badResponseResult(): DecideVerdictResult {
  * non-code-graded) verdict — boolean, choice and score, incl. pass_when_false and the
  * EPSILON-banded borderline. No Case/Lock args: decide() resolves those into threshold/
  * tolerance before calling this. Exported so emitted scorer modules (export-vitest) call the
- * same math instead of duplicating it (root ledger DECISION).
+ * same math instead of duplicating it.
  */
 export function decideVerdict(
   verdict: Verdict,
@@ -469,7 +468,7 @@ function summarise(
 export interface RunEvalsInput {
   readonly config: RunConfig;
   readonly signal?: AbortSignal;
-  /** Parsed lock, or null when none exists (lock reading lands in J3). */
+  /** Parsed lock, or null when none exists. */
   readonly lock?: Lock | null;
   readonly limiter?: Limiter;
   readonly events?: Events;

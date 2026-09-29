@@ -60,7 +60,7 @@ export interface EstimatePart {
 }
 
 export interface EstimateValidateInput extends EstimateRunInput {
-  /** Judge repeats per labelled case (J3 calibration); defaults to CALIBRATION_MIN_REPEATS. */
+  /** Judge repeats per labelled case (calibration); defaults to CALIBRATION_MIN_REPEATS. */
   readonly repeats?: number;
   /** Variants per case in each gauntlet pack; an absent size → that part is 'unknown'. */
   readonly gauntletPackSizes?: { readonly bias?: number; readonly controls?: number };

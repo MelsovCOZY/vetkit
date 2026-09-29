@@ -143,7 +143,7 @@ describe('extractCases', () => {
   });
 });
 
-// J5 gate: extractCases must classify excluded traces by statusForTrace's
+// extractCases must classify excluded traces by statusForTrace's
 // completeness status, at the same priority (content_not_captured > truncated >
 // incomplete_trace), instead of only ever reporting content_not_captured/no_conversation.
 describe('extractCases: completeness-status exclusion', () => {
@@ -296,8 +296,8 @@ describe('extractCases: includeIncomplete', () => {
   });
 });
 
-// sinks correlate verdicts on Verdict.provenance.traceId/spanId
-// (docs/sinks.md "Correlation"), copied from Case.provenance by the caller. extractCases must set
+// sinks correlate verdicts on Verdict.provenance.traceId/spanId,
+// copied from Case.provenance by the caller. extractCases must set
 // both whenever the NormalizedTrace has them: traceId unconditionally (every NormalizedTrace has
 // one), spanId only for the llm-kind span whose messageRange covers the final assistant message
 // (the span the conversation/LLM output came from) — never a non-llm span covering the same range.

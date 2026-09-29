@@ -1,7 +1,7 @@
 // Human labels: `evals/labels/<criterion_id>.csv` with columns
-// case_id,criterion_id,label,labeler,labeled_at (docs/contracts/j3.md "Labels CSV").
-// A plain CSV so any spreadsheet can produce them. Failures are data, never throws
-// (DECISION: Code conventions); each carries the file and the 1-based line.
+// case_id,criterion_id,label,labeler,labeled_at.
+// A plain CSV so any spreadsheet can produce them. Failures are data, never throws;
+// each carries the file and the 1-based line.
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { CEV_ERROR_CODES, validateJson, type CevErrorCode, type JsonSchema } from '@vetkit/spec';

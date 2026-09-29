@@ -1,6 +1,6 @@
 // Judge pacing: one shared, adaptive (AIMD) in-flight limiter for run, validate and watch.
-// The transport never sleeps; it surfaces
-// `details.retryable` / `details.retryAfterMs` on VetError and this limiter owns every wait.
+// The transport never sleeps; it surfaces `details.retryable` / `details.retryAfterMs` on
+// VetError and this limiter owns every wait.
 //
 // A retryable failure sets a shared `pausedUntil` that gates ALL acquisitions, halves the
 // ceiling (min 1), releases the failing call's slot and re-queues it. Ten consecutive
@@ -79,11 +79,10 @@ function limiterError(last: VetError, attempts: number, extra?: string): VetErro
 // A connection-level failure (details.hint set: ECONNREFUSED, DNS, reset — never a plain
 // HTTP 429/5xx, which carries retryAfterMs/no hint) means the endpoint itself is unreachable,
 // not merely asking for patience; retrying it on the full AIMD backoff (up to maxBackoffMs,
-// maxRetries) can run for minutes for something that will not resolve in that window
-//. It gets a short, fixed retry budget instead, but still exhausts as
-// JUDGE_UNAVAILABLE with its hint intact via limiterError, same as any other retryable
-// failure (a refused connection gives JUDGE_UNAVAILABLE); JUDGE_TIMEOUT
-// stays reserved for a real deadline.
+// maxRetries) can run for minutes for something that will not resolve in that window. It
+// gets a short, fixed retry budget instead, but still exhausts as JUDGE_UNAVAILABLE with its
+// hint intact via limiterError, like any other retryable failure; JUDGE_TIMEOUT stays
+// reserved for a real deadline.
 const NETWORK_UNREACHABLE_MAX_RETRIES = 2;
 const NETWORK_UNREACHABLE_MAX_BACKOFF_MS = 2_000;
 

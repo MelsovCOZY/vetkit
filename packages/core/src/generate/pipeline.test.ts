@@ -1,4 +1,4 @@
-// Tests for generateEvals (the J2 pipeline: failure modes → criteria → Jev dedupe → lint →
+// Tests for generateEvals (the pipeline: failure modes → criteria → Jev dedupe → lint →
 // cases). extractCases and dedupeCriteria have their own test files (cases.test.ts,
 // dedupe.test.ts).
 import { mkdtemp, readdir, rm, writeFile, mkdir } from 'node:fs/promises';
@@ -398,7 +398,7 @@ describe('generateEvals', () => {
   });
 
   describe('with a fake generator that behaves like the observed model', () => {
-    // Observed (final cold gate, F-J2): the first failure-mode call names one mode, and the
+    // Observed: the first failure-mode call names one mode, and the
     // criteria call words its question as an absence ("Is ... missing ...?"), which
     // INVERTED_BOOLEAN rejects. Only a top-up call and a repair re-draft recover.
     const OBSERVED_MODES = [

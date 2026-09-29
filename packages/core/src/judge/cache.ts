@@ -1,6 +1,6 @@
 // Content-addressed verdict cache: one `<key>.json` file per judged case under a directory
 // (default `.vet/cache`, from config). A reproducibility aid, not a determinism guarantee
-// (root RISK, measured 2026-09-25: Jev answers drift run to run). Entries hold only the
+// (Jev answers drift run to run). Entries hold only the
 // normalised answers, usage and model identity — never the transport's raw response body.
 import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';

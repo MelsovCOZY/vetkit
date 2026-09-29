@@ -15,8 +15,7 @@ import {
 import { buildRequest, cacheKey } from './judge/request.ts';
 import { CALIBRATION_MIN_REPEATS } from './validate/calibrate.ts';
 
-// fixtures/projects/j1 is absent on this base; the criteria fixture project stands in for it:
-// three criteria (boolean, choice, score) and two cases.
+// The criteria fixture project: three criteria (boolean, choice, score) and two cases.
 const criteriaFile = fileURLToPath(
   new URL('../../../fixtures/criteria/valid.yaml', import.meta.url),
 );

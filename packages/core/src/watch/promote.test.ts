@@ -1,4 +1,3 @@
-// docs/contracts/j7.md "Promotion".
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -30,10 +29,8 @@ function evalCase(overrides: Partial<Case> = {}): Case {
   };
 }
 
-// the real onVerdict call site now always hands promoteFailure a verdict whose `id`
-// is exactly what outbox.enqueue assigned it — so every fixture here has a real id, same as
-// production, rather than relying on a synthesized fallback (an earlier randomUUID
-// stand-in, dropped now that the real id is always available).
+// the real onVerdict call site always hands promoteFailure a verdict whose `id` is exactly
+// what outbox.enqueue assigned it, so every fixture here has a real id, same as production.
 function failingVerdict(overrides: Partial<Verdict> = {}): Verdict {
   return {
     id: 'verdict-1',
@@ -158,7 +155,7 @@ describe('promoteFailure', () => {
   });
 });
 
-describe('promoted cases and the J1 case loader', () => {
+describe('promoted cases and the case loader', () => {
   test('roundtrip: loadCases pointed directly at the pending dir loads the promoted case', async () => {
     promoteFailure(failingVerdict(), evalCase(), dir, { now: NOW });
     const result = await loadCases(join(dir, 'pending'));
