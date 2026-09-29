@@ -25,7 +25,11 @@
       "description": "User-declared map from name to endpoint or adapter object; the only way a string judge/generator resolves.",
       "type": "object",
       "additionalProperties": {
-        "anyOf": [{ "$ref": "#/$defs/judgeEndpoint" }, { "$ref": "#/$defs/adapterRef" }]
+        "anyOf": [
+          { "$ref": "#/$defs/judgeEndpoint" },
+          { "$ref": "#/$defs/generatorEndpoint" },
+          { "$ref": "#/$defs/adapterRef" }
+        ]
       }
     },
     "sources": {

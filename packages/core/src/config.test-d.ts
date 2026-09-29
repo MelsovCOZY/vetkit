@@ -53,3 +53,15 @@ test('VetkitConfig accepts string | endpoint | adapter for judge and requires ju
   expectTypeOf<JudgeV1>().toExtend<VetkitConfig['judge']>();
   expectTypeOf<{ cacheDir: string }>().not.toExtend<VetkitConfig>();
 });
+
+test('a registry value can be a generator endpoint carrying structured', () => {
+  type Entry = NonNullable<VetkitConfig['registry']>[string];
+  expectTypeOf<GeneratorEndpoint>().toExtend<Entry>();
+  expectTypeOf<{
+    kind: string;
+    baseURL: string;
+    apiKeyEnv: string;
+    model: string;
+    structured: 'json_object';
+  }>().toExtend<Entry>();
+});

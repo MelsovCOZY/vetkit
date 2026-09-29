@@ -109,6 +109,9 @@ export const configSchema: JsonSchema = {
             $ref: '#/$defs/judgeEndpoint',
           },
           {
+            $ref: '#/$defs/generatorEndpoint',
+          },
+          {
             $ref: '#/$defs/adapterRef',
           },
         ],

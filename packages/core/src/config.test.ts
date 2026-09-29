@@ -41,6 +41,8 @@ function fakeJudge(): JudgeV1 {
   };
 }
 
+const doJudge = (): Promise<never> => Promise.reject(new Error('not called'));
+
 function issuesOf(fn: () => unknown): ConfigIssue[] {
   try {
     fn();
@@ -374,5 +376,83 @@ describe('describeConfig', () => {
   it('describes an adapter-object judge by id', () => {
     const { config } = resolveConfig({ judge: fakeJudge() });
     expect(describeConfig(config).join('\n')).toContain('fake-judge');
+  });
+});
+
+describe('registry entries and roles', () => {
+  const plain = {
+    kind: 'openai-compatible',
+    baseURL: 'https://gen.example/v1',
+    apiKeyEnv: 'MY_GEN_KEY',
+    model: 'gen-model',
+  } as const;
+
+  it('reaches the generator with structured on for a registry-named generator', () => {
+    const entry = { ...plain, structured: 'json_object' } as const;
+    const { config } = resolveConfig({ ...minimal, generator: 'gen', registry: { gen: entry } });
+    expect(config.generator).toEqual(entry);
+    expect(config.generator !== undefined && 'structured' in config.generator).toBe(true);
+  });
+
+  it('validateConfig rejects an unknown structured value in a registry entry', () => {
+    const issues = validateConfig({
+      ...minimal,
+      registry: { gen: { ...plain, structured: 'tool' } },
+    });
+    expect(issues.length).toBeGreaterThan(0);
+    expect(issues.some((i) => i.pointer.startsWith('/registry'))).toBe(true);
+  });
+
+  it('accepts a plain endpoint from the registry in either role', () => {
+    const asGenerator = resolveConfig({
+      judge: judgeEndpoint,
+      generator: 'shared',
+      registry: { shared: plain },
+    });
+    expect(asGenerator.config.generator).toEqual(plain);
+    const asJudge = resolveConfig({ judge: 'shared', registry: { shared: plain } });
+    expect(asJudge.config.judge).toEqual(plain);
+  });
+
+  it.each([
+    ['preset', { ...plain, preset: 'some-preset' }],
+    ['accountId', { ...plain, accountId: 'acct' }],
+    ['providerOptions', { ...plain, providerOptions: { a: 1 } }],
+  ])('rejects a registry entry carrying %s used as the generator', (field, entry) => {
+    const issues = issuesOf(() =>
+      resolveConfig({ ...minimal, generator: 'jent', registry: { jent: entry } }),
+    );
+    const issue = issues.find((i) => i.pointer.includes('generator'));
+    expect(issue?.message).toContain('jent');
+    expect(issue?.message).toContain(field);
+  });
+
+  it('rejects a registry entry carrying structured used as the judge', () => {
+    const entry = { ...plain, structured: 'prompt' } as const;
+    const issues = issuesOf(() => resolveConfig({ judge: 'gent', registry: { gent: entry } }));
+    const issue = issues.find((i) => i.pointer.includes('judge'));
+    expect(issue?.message).toContain('gent');
+    expect(issue?.message).toContain('structured');
+  });
+
+  it('rejects a judge adapter object registered and used as the generator', () => {
+    const { specVersion, id, capabilities } = fakeJudge();
+    const issues = issuesOf(() =>
+      resolveConfig({
+        ...minimal,
+        generator: 'j',
+        registry: { j: { specVersion, id, capabilities, doJudge } },
+      }),
+    );
+    expect(issues.map((i) => i.pointer)).toContain('/generator');
+  });
+
+  it('parses old registries of judge endpoints and adapter refs unchanged', () => {
+    const judge = fakeJudge();
+    const { config } = resolveConfig({
+      judge: 'a',
+      registry: { a: judgeEndpoint, b: { ...judgeEndpoint, preset: 'p' }, c: judge },
+    });
+    expect(config.judge).toEqual(judgeEndpoint);
   });
 });

@@ -24,7 +24,7 @@ export interface ConfigDoc {
    * User-declared map from name to endpoint or adapter object; the only way a string judge/generator resolves.
    */
   registry?: {
-    [k: string]: JudgeEndpoint | AdapterRef;
+    [k: string]: JudgeEndpoint | GeneratorEndpoint | AdapterRef;
   };
   /**
    * Trace sources: opaque names or source adapter objects.
