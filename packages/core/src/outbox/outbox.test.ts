@@ -109,6 +109,13 @@ describe('backoffDelay', () => {
 
 const skipAll: Handler = (batch) => ({
   accepted: [],
+  rejected: [],
+  skipped: batch.map((v) => ({ id: v.id ?? '', reason: 'unscored:infra_failure' })),
+});
+
+// The retired reason-prefix convention: this is now an ordinary non-retryable rejection.
+const prefixRejectAll: Handler = (batch) => ({
+  accepted: [],
   rejected: batch.map((v) => ({
     id: v.id ?? '',
     reason: 'skipped:unscored:infra_failure',
@@ -206,7 +213,12 @@ describe('createOutbox', () => {
     );
     await outbox.enqueue(verdicts(10));
     await outbox.drain([sink]);
-    expect(await outbox.reconcile()).toEqual({ produced: 10, acknowledged: 10, dead: 0 });
+    expect(await outbox.reconcile()).toEqual({
+      produced: 10,
+      acknowledged: 10,
+      dead: 0,
+      skipped: 0,
+    });
   });
 
   test('reconcile-dead', async () => {
@@ -219,7 +231,12 @@ describe('createOutbox', () => {
     }));
     await outbox.enqueue(verdicts(10));
     await outbox.drain([sink]);
-    expect(await outbox.reconcile()).toEqual({ produced: 10, acknowledged: 7, dead: 3 });
+    expect(await outbox.reconcile()).toEqual({
+      produced: 10,
+      acknowledged: 7,
+      dead: 3,
+      skipped: 0,
+    });
   });
 
   test('reconcile two sinks, one unreachable', async () => {
@@ -238,6 +255,7 @@ describe('createOutbox', () => {
       produced: 4,
       acknowledged: 0,
       dead: 0,
+      skipped: 0,
     });
   });
 
@@ -256,7 +274,7 @@ describe('createOutbox', () => {
     down = false;
     const [second] = await outbox.drain([sink]);
     expect(second).toMatchObject({ acknowledged: 2, pending: 0 });
-    expect(await outbox.reconcile()).toEqual({ produced: 2, acknowledged: 2, dead: 0 });
+    expect(await outbox.reconcile()).toEqual({ produced: 2, acknowledged: 2, dead: 0, skipped: 0 });
   });
 
   test('a thrown non-retryable SINK_ error dead-letters the batch', async () => {
@@ -346,6 +364,7 @@ describe('createOutbox', () => {
       sink: 'fake',
       sent: 0,
       acknowledged: 0,
+      skipped: 0,
       retried: 0,
       dead: 0,
       pending: 0,
@@ -389,7 +408,7 @@ describe('createOutbox', () => {
     const sink = fakeSink(acceptAll);
     await outbox.drain([sink]);
     expect(sink.calls[0]).toHaveLength(1);
-    expect(await outbox.reconcile()).toEqual({ produced: 1, acknowledged: 1, dead: 0 });
+    expect(await outbox.reconcile()).toEqual({ produced: 1, acknowledged: 1, dead: 0, skipped: 0 });
   });
 
   test('lock busy', async () => {
@@ -421,18 +440,53 @@ describe('createOutbox', () => {
   });
 
   describe('skipped acks and per-item targets', () => {
-    test('a skipped: rejection is a terminal ack, never dead-lettered', async () => {
+    test('a skipped ack is terminal and counted as skipped, never retried or dead-lettered', async () => {
       const outbox = createOutbox(opts());
       await outbox.enqueue(verdicts(2));
-      const [result] = await outbox.drain([fakeSink(skipAll)]);
-      expect(result?.dead).toBe(0);
+      const first = fakeSink(skipAll);
+      const [result] = await outbox.drain([first]);
+      expect(first.calls).toHaveLength(1);
+      expect(result).toMatchObject({
+        acknowledged: 2,
+        skipped: 2,
+        dead: 0,
+        retried: 0,
+        pending: 0,
+      });
       expect(await lines('dead.jsonl')).toEqual([]);
       expect(await lines('acked.jsonl')).toHaveLength(2);
-      expect(await outbox.reconcile()).toEqual({ produced: 2, acknowledged: 2, dead: 0 });
+      expect(await outbox.reconcile()).toEqual({
+        produced: 2,
+        acknowledged: 2,
+        dead: 0,
+        skipped: 2,
+      });
       // Terminal: a second drain does not resend it.
       const again = fakeSink(skipAll);
       await outbox.drain([again]);
       expect(again.calls).toHaveLength(0);
+    });
+
+    test('a skipped: reason prefix on a rejection no longer means skipped: it dead-letters', async () => {
+      const outbox = createOutbox(opts());
+      await outbox.enqueue(verdicts(2));
+      const [result] = await outbox.drain([fakeSink(prefixRejectAll)]);
+      expect(result).toMatchObject({ acknowledged: 0, skipped: 0, dead: 2 });
+      expect(await outbox.reconcile()).toMatchObject({ acknowledged: 0, skipped: 0, dead: 2 });
+    });
+
+    test('accepted and skipped ids in one batch both resolve, with skipped a subset of acknowledged', async () => {
+      const outbox = createOutbox(opts());
+      await outbox.enqueue(verdicts(3));
+      const [result] = await outbox.drain([
+        fakeSink((b) => ({
+          accepted: [b[0]?.id ?? ''],
+          rejected: [],
+          skipped: b.slice(1).map((v) => ({ id: v.id ?? '', reason: 'unscored:no_answer' })),
+        })),
+      ]);
+      expect(result).toMatchObject({ acknowledged: 3, skipped: 2, dead: 0 });
+      expect(await outbox.reconcile()).toMatchObject({ acknowledged: 3, skipped: 2 });
     });
 
     test('skipped by one sink and accepted by another reconciles as acknowledged', async () => {
@@ -443,6 +497,7 @@ describe('createOutbox', () => {
         produced: 2,
         acknowledged: 2,
         dead: 0,
+        skipped: 2,
       });
     });
 
@@ -457,8 +512,14 @@ describe('createOutbox', () => {
         produced: 2,
         acknowledged: 2,
         dead: 0,
+        skipped: 0,
       });
-      expect(await outbox.reconcile()).toEqual({ produced: 2, acknowledged: 2, dead: 0 });
+      expect(await outbox.reconcile()).toEqual({
+        produced: 2,
+        acknowledged: 2,
+        dead: 0,
+        skipped: 0,
+      });
     });
 
     test('drain does not send an item to a sink outside its targets', async () => {
@@ -477,6 +538,7 @@ describe('createOutbox', () => {
         produced: 1,
         acknowledged: 0,
         dead: 0,
+        skipped: 0,
       });
     });
   });

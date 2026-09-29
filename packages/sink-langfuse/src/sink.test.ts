@@ -154,7 +154,7 @@ describe('createLangfuseSink doWrite', () => {
     expect(calls[0]?.body).not.toHaveProperty('observationId');
   });
 
-  it('unscored: a verdict with status != ok is not posted and is rejected', async () => {
+  it('unscored: a verdict with status != ok is not posted and is reported skipped, not rejected', async () => {
     const { fetch, calls } = fakeFetch(ok);
     const ack = await sink(fetch).doWrite(
       [verdict({ id: 'v-bad', status: 'infra_failure' }), verdict()],
@@ -162,9 +162,8 @@ describe('createLangfuseSink doWrite', () => {
     );
     expect(calls).toHaveLength(1);
     expect(ack.accepted).toEqual(['v-1']);
-    expect(ack.rejected).toEqual([
-      { id: 'v-bad', reason: 'skipped:unscored:infra_failure', retryable: false },
-    ]);
+    expect(ack.rejected).toEqual([]);
+    expect(ack.skipped).toEqual([{ id: 'v-bad', reason: 'unscored:infra_failure' }]);
   });
 
   it('no correlation id: a verdict without traceId is not posted', async () => {

@@ -27,11 +27,14 @@ export interface OutboxOptions {
 }
 
 // `sink` is SinkV1.id. For a per-sink summary, rejected = dead + pending.
+// acknowledged counts every resolved item, skipped ones included; skipped is the subset a sink
+// declined on purpose.
 export interface DrainResult {
   readonly sink: string;
   // Items passed to doWrite, counting resends and split retries.
   readonly sent: number;
   readonly acknowledged: number;
+  readonly skipped: number;
   // Items resent after a backoff wait.
   readonly retried: number;
   readonly dead: number;
@@ -42,6 +45,8 @@ export interface DrainResult {
 export interface ReconcileResult {
   readonly produced: number;
   readonly acknowledged: number;
+  // The acknowledged ids at least one targeted sink skipped on purpose.
+  readonly skipped: number;
   readonly dead: number;
 }
 
@@ -107,9 +112,6 @@ const deadSchema: JsonSchema = {
 };
 
 const MAX_ATTEMPTS = 3;
-// A sink declines a verdict on purpose by rejecting it, non-retryable, with a reason starting
-// with this prefix (the SinkAck shape has no skipped field). It is a terminal ack, not dead.
-const SKIPPED_PREFIX = 'skipped:';
 
 function checkVerdict(line: PendingLine): VetError | undefined {
   const res = validateJson<Verdict>(line.verdict, verdictSchema);
@@ -234,6 +236,7 @@ export function createOutbox(opts: OutboxOptions): Outbox {
     }
     const inBatch = new Set(batch.map((p) => p.id));
     const accepted = new Set(ack.accepted.filter((id) => inBatch.has(id)));
+    const skipped = new Set((ack.skipped ?? []).filter((s) => inBatch.has(s.id)).map((s) => s.id));
     const rejected = new Map(ack.rejected.filter((r) => inBatch.has(r.id)).map((r) => [r.id, r]));
     const out: BatchOutcome = {
       accepted: [...accepted],
@@ -244,13 +247,15 @@ export function createOutbox(opts: OutboxOptions): Outbox {
     };
     for (const p of batch) {
       if (accepted.has(p.id)) continue;
+      if (skipped.has(p.id)) {
+        out.skipped.push(p.id);
+        continue;
+      }
       const r = rejected.get(p.id);
       if (r === undefined) {
         // Unlisted: an idempotent sink can take it again; a non-idempotent one never does.
         if (sink.capabilities.idempotent) out.retry.push(p);
         else out.dead.push({ id: p.id, reason: 'unacknowledged by non-idempotent sink' });
-      } else if (!r.retryable && r.reason.startsWith(SKIPPED_PREFIX)) {
-        out.skipped.push(p.id);
       } else if (r.retryable) {
         out.retry.push(p);
       } else {
@@ -263,6 +268,7 @@ export function createOutbox(opts: OutboxOptions): Outbox {
   async function drainSink(sink: SinkV1, pending: PendingLine[]): Promise<DrainResult> {
     let sent = 0;
     let acknowledged = 0;
+    let skipped = 0;
     let retried = 0;
     let dead = 0;
     let queue = pending;
@@ -286,12 +292,13 @@ export function createOutbox(opts: OutboxOptions): Outbox {
         sent += outcome.sent;
         // A skipped item is a terminal ack, counted with the accepted ones.
         acknowledged += outcome.accepted.length + outcome.skipped.length;
+        skipped += outcome.skipped.length;
         dead += outcome.dead.length;
         next.push(...outcome.retry);
       }
       queue = next;
     }
-    return { sink: sink.id, sent, acknowledged, retried, dead, pending: queue.length };
+    return { sink: sink.id, sent, acknowledged, skipped, retried, dead, pending: queue.length };
   }
 
   return {
@@ -343,17 +350,22 @@ export function createOutbox(opts: OutboxOptions): Outbox {
         ...new Set([...acked, ...deadLines].map((l) => l.sink)),
       ];
       const ackedBy = new Set(acked.map((l) => `${l.sink}\u0000${l.id}`));
+      const skippedBy = new Set(
+        acked.filter((l) => l.skipped === true).map((l) => `${l.sink}\u0000${l.id}`),
+      );
       const deadBy = new Set(deadLines.map((l) => `${l.sink}\u0000${l.id}`));
       let acknowledged = 0;
+      let skipped = 0;
       let dead = 0;
       for (const { id, targets } of pending) {
         const sinks = targets ?? configured;
         if (sinks.some((s) => deadBy.has(`${s}\u0000${id}`))) dead++;
         else if (sinks.length > 0 && sinks.every((s) => ackedBy.has(`${s}\u0000${id}`))) {
           acknowledged++;
+          if (sinks.some((s) => skippedBy.has(`${s}\u0000${id}`))) skipped++;
         }
       }
-      return { produced: pending.length, acknowledged, dead };
+      return { produced: pending.length, acknowledged, skipped, dead };
     },
   };
 }

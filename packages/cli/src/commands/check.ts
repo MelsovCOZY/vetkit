@@ -2,7 +2,7 @@
 // the lock's content hashes and compares the judge's transport, requested id and release date,
 // listing each stale criterion (wording_changed | model_changed | uncalibrated = absent from the
 // lock); stale exits 1, a missing or pre-v1 lock exits 2. --outbox prints the J6 outbox
-// reconciliation {produced, acknowledged, dead}; a dead-lettered verdict exits 1. With both
+// reconciliation {produced, acknowledged, skipped, dead}; a dead-lettered verdict exits 1. With both
 // flags both sections print and the exit code is the larger one.
 import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -128,7 +128,7 @@ function lockText(report: LockCheckReport): string {
 }
 
 function outboxText(r: ReconcileResult): string {
-  return `outbox: ${String(r.produced)} produced, ${String(r.acknowledged)} acknowledged, ${String(r.dead)} dead`;
+  return `outbox: ${String(r.produced)} produced, ${String(r.acknowledged)} acknowledged (${String(r.skipped)} skipped), ${String(r.dead)} dead`;
 }
 
 async function checkCommand(options: CheckOptions, deps: ValidateDeps): Promise<void> {

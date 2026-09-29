@@ -477,13 +477,8 @@ const sink = (id: string, skip: boolean): SinkV1 => ({
   doWrite: (batch) =>
     Promise.resolve({
       accepted: skip ? [] : batch.map((v) => v.id ?? ''),
-      rejected: skip
-        ? batch.map((v) => ({
-            id: v.id ?? '',
-            reason: 'skipped:unscored:infra_failure',
-            retryable: false,
-          }))
-        : [],
+      rejected: [],
+      skipped: skip ? batch.map((v) => ({ id: v.id ?? '', reason: 'unscored:infra_failure' })) : [],
     }),
 });
 
@@ -497,7 +492,7 @@ describe('vet check --outbox', () => {
     await seedOutbox(join(root, config.cacheDir, 'outbox'), true);
     await vet(['check', '--outbox'], depsFor(root, judge, events));
 
-    expect(report()).toEqual({ produced: 3, acknowledged: 1, dead: 1 });
+    expect(report()).toEqual({ produced: 3, acknowledged: 1, dead: 1, skipped: 0 });
     // A dead-lettered verdict never reached its sink.
     expect(process.exitCode).toBe(1);
   });
@@ -511,10 +506,9 @@ describe('vet check --outbox', () => {
     const { judge } = countingJudge([], events);
     await vet(['check', '--outbox', dir], depsFor(dir, judge, events));
 
-    expect(report()).toEqual({ produced: 2, acknowledged: 2, dead: 0 });
+    expect(report()).toEqual({ produced: 2, acknowledged: 2, dead: 0, skipped: 2 });
     expect(process.exitCode ?? 0).toBe(0);
   });
-
   test('outbox: --outbox <dir> with every verdict acknowledged → exit 0', async () => {
     const dir = join(await mkdtemp(join(tmpdir(), 'vetkit-check-outbox-')), 'outbox');
     await seedOutbox(dir, false);
@@ -522,7 +516,7 @@ describe('vet check --outbox', () => {
     const { judge } = countingJudge([], events);
     await vet(['check', '--outbox', dir], depsFor(dir, judge, events));
 
-    expect(report()).toEqual({ produced: 3, acknowledged: 3, dead: 0 });
+    expect(report()).toEqual({ produced: 3, acknowledged: 3, dead: 0, skipped: 0 });
     expect(process.exitCode ?? 0).toBe(0);
   });
 

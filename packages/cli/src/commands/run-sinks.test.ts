@@ -21,7 +21,8 @@ const TRACE = ['0af7651916cd43dd8448eb211c80319c', '4bf92f3577b34da6a3ce929d0e0e
 
 // The temp project's config: an in-process judge and two fake sinks (adapter objects).
 // Each fake appends the verdicts it receives to the file named by FAKE_<NAME>_OUT; its
-// FAKE_<NAME>_MODE is 'down' (every item rejected retryable) or 'throw' (a non-SINK error).
+// FAKE_<NAME>_MODE is 'down' (every item rejected retryable), 'skip' (every item skipped on
+// purpose) or 'throw' (a non-SINK error).
 // The judge writes JUDGE_CALLED on every call; VETKIT_FIXTURE_MODE 'throw' makes it fail and
 // 'slow' makes it wait for the abort after writing VETKIT_FIXTURE_STARTED.
 const CONFIG = `import { appendFileSync, writeFileSync } from 'node:fs';
@@ -89,6 +90,13 @@ function fakeSink(name, id) {
     async doWrite(batch) {
       const sinkMode = env['FAKE_' + name + '_MODE'];
       if (sinkMode === 'throw') throw new TypeError('fake sink bug');
+      if (sinkMode === 'skip') {
+        return {
+          accepted: [],
+          rejected: [],
+          skipped: batch.map((v) => ({ id: v.id, reason: 'unscored:no_answer' })),
+        };
+      }
       if (sinkMode === 'down') {
         return {
           accepted: [],
@@ -235,6 +243,27 @@ describe('vet run --sink', () => {
       outbox: { produced: 2 * N, acknowledged: 2 * N },
     });
     expect(second.stderr).not.toMatch(/verdicts pending/);
+  }, 60_000);
+
+  test('a sink that skips on purpose is counted as skipped, not rejected, and never left pending', () => {
+    const project = freshProject();
+    const result = runVet(
+      ['run', '--sink', 'otel,langfuse', '--json'],
+      project,
+      envFor(project, { FAKE_LANGFUSE_MODE: 'skip' }),
+    );
+    expect(result.status).toBe(0);
+    expect(result.stderr).not.toMatch(/verdicts pending/);
+    expect(parseJson(result.stdout)).toMatchObject({
+      sinks: {
+        otel: { accepted: N, skipped: 0, rejected: 0 },
+        langfuse: { accepted: 0, skipped: N, rejected: 0 },
+      },
+      outbox: { produced: N, acknowledged: N, skipped: N, dead: 0 },
+    });
+    expect(readLines(project.langfuseOut)).toHaveLength(0);
+    const outbox = join(project.dir, '.vet', 'outbox');
+    expect(readLines(join(outbox, 'dead.jsonl'))).toHaveLength(0);
   }, 60_000);
 
   test('unknown sink name', () => {
