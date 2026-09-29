@@ -326,6 +326,9 @@ function configSource(fields: Record<string, string>): string {
   return `export default {\n${body}\n};\n`;
 }
 
+const LANGFUSE_DESCRIPTOR = `{ kind: 'langfuse', baseUrlEnv: 'LF_BASE_URL', publicKeyEnv: 'LF_PUBLIC_KEY', secretKeyEnv: 'LF_SECRET_KEY' }`;
+const LANGFUSE_SINKS = `[${LANGFUSE_DESCRIPTOR}]`;
+
 const OK_HEALTH = () => vi.fn(async () => jsonResponse(200, { name: 'jev' }));
 
 describe('runDoctor with a resolved config (--config)', () => {
@@ -449,6 +452,59 @@ describe('runDoctor with a resolved config (--config)', () => {
     });
     expect(statusOf(warn.checks, 'sink credentials').status).toBe('warn');
     expect(statusOf(warn.checks, 'sink credentials').detail).toContain('my-sink');
+  });
+
+  test('a sink descriptor with an unset *Env variable is a warn row naming it, exit code unchanged', async () => {
+    const cwd = await configProject(configSource({ judge: INLINE_JUDGE, sinks: LANGFUSE_SINKS }));
+    const result = await runDoctor({
+      ...BASE,
+      cwd,
+      config: true,
+      env: { LF_BASE_URL: 'https://lf.example.test', LF_PUBLIC_KEY: 'fake-lf-public-9999' },
+      fetchImpl: OK_HEALTH(),
+    });
+    const row = statusOf(result.checks, 'sink credentials');
+    expect(row.status).toBe('warn');
+    expect(row.detail).toContain('LF_SECRET_KEY=<unset>');
+    expect(row.detail).not.toContain('LF_PUBLIC_KEY=<unset>');
+    expect(JSON.stringify(result)).not.toContain('fake-lf-public-9999');
+    expect(result.exitCode).toBe(0);
+  });
+
+  test('every unset variable across descriptors is named in the warn row', async () => {
+    const cwd = await configProject(
+      configSource({
+        judge: INLINE_JUDGE,
+        sinks: `[{ kind: 'otel', endpoint: 'https://otel.example.test', headersEnv: 'OTEL_HDRS' }, ${LANGFUSE_DESCRIPTOR}]`,
+      }),
+    );
+    const result = await runDoctor({ ...BASE, cwd, config: true, env: {}, fetchImpl: OK_HEALTH() });
+    const row = statusOf(result.checks, 'sink credentials');
+    expect(row.status).toBe('warn');
+    for (const name of ['OTEL_HDRS', 'LF_BASE_URL', 'LF_PUBLIC_KEY', 'LF_SECRET_KEY']) {
+      expect(row.detail).toContain(`${name}=<unset>`);
+    }
+  });
+
+  test('all descriptor variables set: a pass row naming the descriptor and its variables, not "supply their own credentials"', async () => {
+    const cwd = await configProject(configSource({ judge: INLINE_JUDGE, sinks: LANGFUSE_SINKS }));
+    const result = await runDoctor({
+      ...BASE,
+      cwd,
+      config: true,
+      env: {
+        LF_BASE_URL: 'https://lf.example.test',
+        LF_PUBLIC_KEY: 'fake-lf-public-9999',
+        LF_SECRET_KEY: 'fake-lf-secret-8888',
+      },
+      fetchImpl: OK_HEALTH(),
+    });
+    const row = statusOf(result.checks, 'sink credentials');
+    expect(row.status).toBe('pass');
+    expect(row.detail).toContain('langfuse');
+    expect(row.detail).toContain('LF_SECRET_KEY=<set>');
+    expect(row.detail).not.toContain('supply their own credentials');
+    expect(JSON.stringify(result)).not.toContain('fake-lf-secret-8888');
   });
 
   test('a set credential is never printed in full in any config-derived row', async () => {
