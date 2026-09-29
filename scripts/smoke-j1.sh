@@ -22,6 +22,14 @@ ENV_FILE="${VETKIT_ENV_FILE:-$ROOT/.env}"
 BIN="$ROOT/packages/cli/dist/bin.js"
 FAILED=0
 
+# Judge transport: CEV_SMOKE_JUDGE=vercel (default) or openrouter.
+JUDGE="${CEV_SMOKE_JUDGE:-vercel}"
+case "$JUDGE" in
+  vercel) KEY_ENV=AI_GATEWAY_API_KEY ;;
+  openrouter) KEY_ENV=OPENROUTER_API_KEY ;;
+  *) printf 'smoke-j1: CEV_SMOKE_JUDGE must be vercel or openrouter, got "%s"\n' "$JUDGE" >&2; exit 2 ;;
+esac
+
 say() { printf 'smoke-j1: %s\n' "$*"; }
 result() { # <label> <expected> <observed-exit> <ok 0|1> [detail]
   local status=PASS
@@ -30,9 +38,9 @@ result() { # <label> <expected> <observed-exit> <ok 0|1> [detail]
 }
 
 ENV_ARGS=()
-if [ -z "${AI_GATEWAY_API_KEY:-}" ]; then
+if [ -z "${!KEY_ENV:-}" ]; then
   if [ ! -f "$ENV_FILE" ]; then
-    say "AI_GATEWAY_API_KEY is unset and $ENV_FILE does not exist" >&2
+    say "$KEY_ENV is unset and $ENV_FILE does not exist" >&2
     exit 1
   fi
   ENV_ARGS=("--env-file=$ENV_FILE")
@@ -51,13 +59,18 @@ mkdir -p "$PROJECT/evals/cases"
 cd "$PROJECT" || exit 1
 say "project $PROJECT"
 
-cat >vetkit.config.ts <<'EOF'
+if [ "$JUDGE" = vercel ]; then
+  JUDGE_OPTS="providerOptions: { gateway: { zeroDataRetention: true, only: ['typesafe-ai'] } },"
+else
+  JUDGE_OPTS=""
+fi
+cat >vetkit.config.ts <<EOF
 export default {
   judge: {
     kind: 'typesafe-compatible',
-    preset: 'vercel',
-    apiKeyEnv: 'AI_GATEWAY_API_KEY',
-    providerOptions: { gateway: { zeroDataRetention: true, only: ['typesafe-ai'] } },
+    preset: '$JUDGE',
+    apiKeyEnv: '$KEY_ENV',
+    $JUDGE_OPTS
   },
   thresholds: { default: 0.5, perCriterion: {} },
 };
@@ -82,9 +95,9 @@ FAIL_CASE='{"id":"one","input":{"state":"User: Can I get a refund for my order #
 printf '%s\n' "$PASS_CASE" >evals/cases/one.jsonl
 
 # Edge: missing key -> exit 2, CONFIG_INVALID naming the env var (no request, no key printed).
-env -u AI_GATEWAY_API_KEY bun "$BIN" run --json >out0.json 2>err0.txt
+env -u "$KEY_ENV" bun "$BIN" run --json >out0.json 2>err0.txt
 code=$?
-result "missing key: vet run --json" 2 "$code" "$([ "$code" -eq 2 ] && grep -q AI_GATEWAY_API_KEY err0.txt out0.json && echo 0 || echo 1)" "names AI_GATEWAY_API_KEY"
+result "missing key: vet run --json" 2 "$code" "$([ "$code" -eq 2 ] && grep -q "$KEY_ENV" err0.txt out0.json && echo 0 || echo 1)" "names $KEY_ENV"
 
 # AC1: verdict JSON with a resolved model, pinned recorded, status ok.
 vet run --json >out1.json 2>err1.txt
@@ -115,7 +128,7 @@ result "AC2b: CEV_DIAG=1 diag channel reports judge.requests == 0" 0 "$code" "$d
   "$(grep '^{"diag"' err2.txt | head -1)"
 # Supplementary zero-network check: with a bogus key any real request would fail with 401,
 # so an ok cached verdict proves the second run did not reach the judge.
-AI_GATEWAY_API_KEY=vetkit-smoke-invalid-key bun "$BIN" run --json >out2b.json 2>/dev/null
+env "$KEY_ENV=vetkit-smoke-invalid-key" bun "$BIN" run --json >out2b.json 2>/dev/null
 code=$?
 jq -e '.results[0].cacheHit == true and .results[0].status == "ok"' out2b.json >/dev/null
 result "AC2c: rerun with a bogus key is still ok from cache (no network)" 0 "$code" "$?"
