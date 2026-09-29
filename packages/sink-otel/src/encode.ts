@@ -94,11 +94,27 @@ function scoreAttributes(verdict: Verdict): OtlpAttribute[] {
   ];
 }
 
+function causeCode(cause: unknown): string | undefined {
+  if (typeof cause === 'string') return cause;
+  if (typeof cause === 'object' && cause !== null) {
+    const code = (cause as { code?: unknown }).code;
+    if (typeof code === 'string') return code;
+  }
+  return undefined;
+}
+
+// The verdict's error.type (OTel semconv): the cause's error class when present — a string
+// cause used directly, or an object cause's `.code` (packages/core/src/judge/request.ts
+// causeOf) — else the status, for a cause with no code (e.g. 'escape', 'aborted') or none.
+export function errorType(verdict: Verdict): string {
+  return causeCode(verdict.cause) ?? verdict.status;
+}
+
 export function verdictToLogRecord(verdict: Verdict, nowMs: number = Date.now()): OtlpLogRecord {
   const provenance = verdict.provenance ?? {};
   const attributes: OtlpAttribute[] = [str(ATTR.name, verdict.criterionId)];
   if (verdict.status === 'ok') attributes.push(...scoreAttributes(verdict));
-  else attributes.push(str(ATTR.errorType, verdict.status));
+  else attributes.push(str(ATTR.errorType, errorType(verdict)));
   if (provenance.responseId !== undefined) {
     attributes.push(str(ATTR.responseId, provenance.responseId));
   }
