@@ -104,6 +104,11 @@ describe('agent tooling is untracked', () => {
     expect(ignore).toContain('graphify-out/');
   });
 
+  it('ignores .codex/', () => {
+    const ignore = readFileSync(join(ROOT, '.gitignore'), 'utf8').split('\n');
+    expect(ignore).toContain('.codex/');
+  });
+
   it('has no graphify merge driver line in .gitattributes', () => {
     expect(readFileSync(join(ROOT, '.gitattributes'), 'utf8')).not.toContain('graphify');
   });
