@@ -102,6 +102,21 @@ sampled_expected() { # <traceIds json file> <rate>
   ' "$1" "$2"
 }
 
+# Sends the one SIGINT itself, then waits a bounded time for the exit; never relies on a manual
+# signal. Sets WCODE (exit code, 124 when the process had to be killed) and WSTOP_S (seconds).
+STOP_TIMEOUT="${J7_STOP_TIMEOUT:-180}"
+stop_watch() { # <pid>
+  kill -INT "$1" 2>/dev/null
+  WSTOP_S=0
+  while kill -0 "$1" 2>/dev/null && [ "$WSTOP_S" -lt "$STOP_TIMEOUT" ]; do sleep 1; WSTOP_S=$((WSTOP_S + 1)); done
+  if kill -0 "$1" 2>/dev/null; then
+    kill -KILL "$1" 2>/dev/null; wait "$1" 2>/dev/null; WCODE=124
+    say "FAIL watch did not exit within ${STOP_TIMEOUT}s of SIGINT (killed)"; FAILED=1
+  else
+    wait "$1"; WCODE=$?
+  fi
+}
+
 wait_listening() { # <log file>
   for _ in $(seq 1 60); do grep -q '"listening"' "$1" 2>/dev/null && return 0; sleep 0.5; done
   return 1
@@ -124,13 +139,12 @@ WATCH_PID=$!
 wait_listening watch.err || { say "watch never listened" >&2; cat watch.err | head -5 >&2; exit 1; }
 bun run "$ROOT/scripts/replay-otlp.ts" "$FIXTURE_TRACE" --count 100 --port "$WATCH_PORT" --inject-failure 1 >replay.json
 rcode=$?
-kill -INT "$WATCH_PID"
-wait "$WATCH_PID"
-wcode=$?
+stop_watch "$WATCH_PID"
+wcode=$WCODE
 WATCH_PID=
 INJECTED="$(jq -r '.injected[0]' replay.json)"
 result "replay: 100 traces POSTed, none refused" 0 "$rcode" "$([ "$(jq '.sent' replay.json)" = 100 ] && echo 0 || echo 1)"
-result "watch exits 0 on first SIGINT" 0 "$wcode" 0 "summary: $(jq -c . watch.json 2>/dev/null | head -c 300)"
+result "watch exits 0 on first SIGINT (within ${WSTOP_S}s)" 0 "$wcode" "$([ "$wcode" -eq 0 ] && echo 0 || echo 1)" "summary: $(jq -c . watch.json 2>/dev/null | head -c 300)"
 
 jq -e . watch.json >/dev/null
 result "AC1a: coverage summary on stdout parses as JSON" 0 $? $?
@@ -169,12 +183,11 @@ vet watch --sample 0.1 --sink flaky --json --port "$WATCH_PORT" >watch-b.json 2>
 WATCH_PID=$!
 wait_listening watch-b.err || { say "watch B never listened" >&2; exit 1; }
 bun run "$ROOT/scripts/replay-otlp.ts" "$FIXTURE_TRACE" --count 100 --port "$WATCH_PORT" --seed b >replay-b.json
-kill -INT "$WATCH_PID"
-wait "$WATCH_PID"
-wcode=$?
+stop_watch "$WATCH_PID"
+wcode=$WCODE
 WATCH_PID=
 unset VETKIT_FIXTURE_REJECT VETKIT_FIXTURE_SINK_LOG
-result "run B: watch exits 0" 0 "$wcode" 0 "summary: $(jq -c . watch-b.json 2>/dev/null | head -c 300)"
+result "run B: watch exits 0" 0 "$wcode" "$([ "$wcode" -eq 0 ] && echo 0 || echo 1)" "summary: $(jq -c . watch-b.json 2>/dev/null | head -c 300)"
 vet check --outbox --json >check-b.json 2>/dev/null
 code=$?
 jq -e '.produced == .acknowledged and .produced > 0' check-b.json >/dev/null

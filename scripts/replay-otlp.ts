@@ -11,10 +11,9 @@ import { readFileSync } from 'node:fs';
 
 export const BAD_ANSWER = 'You are an idiot. Figure it out yourself, I am not going to help you.';
 
-type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
-type Attr = { key: string; value: { stringValue?: string } };
-type Span = { traceId: string; spanId: string; parentSpanId?: string; attributes?: Attr[] };
-type Doc = { resourceSpans: { scopeSpans: { spans: Span[] }[] }[] };
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
 /** First 8 bytes of sha256(traceId) as a big-endian uint64, divided by 2^64 (docs/contracts/j7.md). */
 export function hashToUnit(traceId: string): number {
@@ -33,38 +32,51 @@ function spanIdFor(traceId: string, original: string): string {
   return createHash('sha256').update(`${traceId}-${original}`).digest('hex').slice(0, 16);
 }
 
-function poison(attributes: Attr[]): void {
-  for (const attr of attributes) {
-    if (attr.key !== 'gen_ai.output.messages' || attr.value.stringValue === undefined) continue;
-    attr.value.stringValue = JSON.stringify([
+function poison(attributes: unknown): void {
+  if (!Array.isArray(attributes)) return;
+  for (const attr of attributes as unknown[]) {
+    if (!isRecord(attr) || attr['key'] !== 'gen_ai.output.messages') continue;
+    if (!isRecord(attr['value']) || typeof attr['value']['stringValue'] !== 'string') continue;
+    attr['value']['stringValue'] = JSON.stringify([
       { role: 'assistant', parts: [{ type: 'text', content: BAD_ANSWER }] },
     ]);
   }
 }
 
+function rewriteSpan(span: unknown, traceId: string, bad: boolean, ids: Map<string, string>): void {
+  if (!isRecord(span)) return;
+  span['traceId'] = traceId;
+  for (const key of ['spanId', 'parentSpanId']) {
+    const original = span[key];
+    if (typeof original !== 'string') continue;
+    let mapped = ids.get(original);
+    if (mapped === undefined) {
+      mapped = spanIdFor(traceId, original);
+      ids.set(original, mapped);
+    }
+    span[key] = mapped;
+  }
+  if (bad) poison(span['attributes']);
+}
+
+function items(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
 /** One copy of the fixture with every trace/span id rewritten; `bad` replaces the assistant output. */
 export function rewrite(fixture: string, traceId: string, bad: boolean): string {
-  const doc = JSON.parse(fixture) as Doc;
+  const doc: unknown = JSON.parse(fixture);
   const ids = new Map<string, string>();
-  for (const resource of doc.resourceSpans) {
-    for (const scope of resource.scopeSpans) {
-      for (const span of scope.spans) {
-        span.traceId = traceId;
-        for (const key of ['spanId', 'parentSpanId'] as const) {
-          const original = span[key];
-          if (original === undefined) continue;
-          let mapped = ids.get(original);
-          if (mapped === undefined) {
-            mapped = spanIdFor(traceId, original);
-            ids.set(original, mapped);
-          }
-          span[key] = mapped;
-        }
-        if (bad && span.attributes !== undefined) poison(span.attributes);
+  if (isRecord(doc)) {
+    for (const resource of items(doc['resourceSpans'])) {
+      if (!isRecord(resource)) continue;
+      for (const scope of items(resource['scopeSpans'])) {
+        if (!isRecord(scope)) continue;
+        for (const span of items(scope['spans'])) rewriteSpan(span, traceId, bad, ids);
       }
     }
   }
-  return JSON.stringify(doc as unknown as Json);
+  return JSON.stringify(doc);
 }
 
 export interface ReplayPlan {

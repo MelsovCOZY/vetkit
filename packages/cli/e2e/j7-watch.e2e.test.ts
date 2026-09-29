@@ -7,7 +7,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
-import { createServer as createNetServer, type AddressInfo } from 'node:net';
+import { createServer as createNetServer, type Server as NetServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,11 +22,30 @@ const TRACE_FIXTURE = join(ROOT, 'fixtures/otlp/gen_ai-latest.json');
 const ENV_FILE = process.env['VETKIT_ENV_FILE'] ?? join(ROOT, '.env');
 const RATE = 0.1;
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function record(text: string): Record<string, unknown> {
+  const value: unknown = JSON.parse(text);
+  if (!isRecord(value)) throw new Error('expected a JSON object');
+  return value;
+}
+
+function items(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function portOf(server: NetServer | Server): number {
+  const address = server.address();
+  return typeof address === 'object' && address !== null ? address.port : 0;
+}
+
 function freePort(): Promise<number> {
   return new Promise((resolve) => {
     const server = createNetServer();
     server.listen(0, '127.0.0.1', () => {
-      const { port } = server.address() as AddressInfo;
+      const port = portOf(server);
       server.close(() => resolve(port));
     });
   });
@@ -80,14 +99,14 @@ async function watchOnce(
   expect(replayed.failures).toBe(0);
   child.kill('SIGINT');
   const code = await exited;
-  return { code, summary: JSON.parse(stdout) as Record<string, unknown>, replayed };
+  return { code, summary: record(stdout), replayed };
 }
 
 function lines(path: string): Record<string, unknown>[] {
   return readFileSync(path, 'utf8')
     .split('\n')
     .filter((l) => l !== '')
-    .map((l) => JSON.parse(l) as Record<string, unknown>);
+    .map((l) => record(l));
 }
 
 function check(cwd: string): { produced: number; acknowledged: number; dead: number } {
@@ -95,7 +114,12 @@ function check(cwd: string): { produced: number; acknowledged: number; dead: num
     cwd,
     encoding: 'utf8',
   });
-  return JSON.parse(result.stdout) as { produced: number; acknowledged: number; dead: number };
+  const doc = record(result.stdout);
+  return {
+    produced: Number(doc['produced']),
+    acknowledged: Number(doc['acknowledged']),
+    dead: Number(doc['dead']),
+  };
 }
 
 describe.skipIf(process.env['CEV_E2E'] !== '1')('J7: vet watch against the real judge', () => {
@@ -114,18 +138,16 @@ describe.skipIf(process.env['CEV_E2E'] !== '1')('J7: vet watch against the real 
       req.on('data', (chunk: Buffer) => (body += chunk.toString()));
       req.on('end', () => {
         if (req.url === '/v1/logs') {
-          const doc = JSON.parse(body) as {
-            resourceLogs?: { scopeLogs?: { logRecords?: unknown[] }[] }[];
-          };
-          for (const r of doc.resourceLogs ?? [])
-            for (const s of r.scopeLogs ?? []) received += s.logRecords?.length ?? 0;
+          for (const r of items(record(body)['resourceLogs']))
+            for (const sc of items(isRecord(r) ? r['scopeLogs'] : undefined))
+              received += items(isRecord(sc) ? sc['logRecords'] : undefined).length;
         }
         res.setHeader('content-type', 'application/json');
         res.end('{}');
       });
     });
     await new Promise<void>((r) => collector.listen(0, '127.0.0.1', r));
-    collectorUrl = `http://127.0.0.1:${String((collector.address() as AddressInfo).port)}`;
+    collectorUrl = `http://127.0.0.1:${String(portOf(collector))}`;
   });
 
   afterAll(() => {
@@ -153,9 +175,11 @@ describe.skipIf(process.env['CEV_E2E'] !== '1')('J7: vet watch against the real 
 
     const today = new Date().toISOString().slice(0, 10);
     const promoted = lines(join(project, `evals/cases/pending/promoted-${today}.jsonl`));
-    const promotedIds = promoted.map(
-      (c) => (c['provenance'] as { promotedFrom: { traceId: string } }).promotedFrom.traceId,
-    );
+    const promotedIds = promoted.map((c) => {
+      const provenance = c['provenance'];
+      const from = isRecord(provenance) ? provenance['promotedFrom'] : undefined;
+      return isRecord(from) ? from['traceId'] : undefined;
+    });
     expect(promotedIds).toContain(run.replayed.injected[0]);
 
     const outbox = check(project);

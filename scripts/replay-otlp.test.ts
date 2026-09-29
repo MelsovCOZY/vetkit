@@ -1,9 +1,32 @@
+import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
-import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { hashToUnit as coreHashToUnit } from '@vetkit/core';
 import { BAD_ANSWER, hashToUnit, plan, replay, rewrite, traceIdFor } from './replay-otlp.ts';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function items(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+/** Every span of an OTLP/JSON document, as records. */
+function spansOf(text: string): Record<string, unknown>[] {
+  const doc: unknown = JSON.parse(text);
+  const out: Record<string, unknown>[] = [];
+  if (!isRecord(doc)) return out;
+  for (const resource of items(doc['resourceSpans'])) {
+    if (!isRecord(resource)) continue;
+    for (const scope of items(resource['scopeSpans'])) {
+      if (!isRecord(scope)) continue;
+      for (const span of items(scope['spans'])) if (isRecord(span)) out.push(span);
+    }
+  }
+  return out;
+}
 
 const FIXTURE = join(import.meta.dirname, '../fixtures/otlp/gen_ai-latest.json');
 
@@ -23,8 +46,7 @@ describe('replay-otlp', () => {
     expect(traceIdFor('replay', 0)).toMatch(/^[0-9a-f]{32}$/);
   });
 
-  it('rewrites trace and span ids consistently and poisons only the assistant output', async () => {
-    const { readFileSync } = await import('node:fs');
+  it('rewrites trace and span ids consistently and poisons only the assistant output', () => {
     const raw = readFileSync(FIXTURE, 'utf8');
     const id = traceIdFor('x', 1);
     const good = rewrite(raw, id, false);
@@ -32,14 +54,12 @@ describe('replay-otlp', () => {
     expect(good).not.toContain(BAD_ANSWER);
     expect(bad).toContain(BAD_ANSWER);
     expect(good).not.toContain('00000000000000000000000000000001');
-    const spans = JSON.parse(good).resourceSpans[0].scopeSpans[0].spans as {
-      traceId: string;
-      spanId: string;
-      parentSpanId?: string;
-    }[];
-    const ids = new Set(spans.map((s) => s.spanId));
-    expect(spans.every((s) => s.traceId === id)).toBe(true);
-    expect(spans.every((s) => s.parentSpanId === undefined || ids.has(s.parentSpanId))).toBe(true);
+    const spans = spansOf(good);
+    const ids = new Set(spans.map((s) => s['spanId']));
+    expect(spans.every((s) => s['traceId'] === id)).toBe(true);
+    expect(spans.every((s) => s['parentSpanId'] === undefined || ids.has(s['parentSpanId']))).toBe(
+      true,
+    );
   });
 
   it('POSTs count distinct traces to /v1/traces', async () => {
@@ -50,14 +70,13 @@ describe('replay-otlp', () => {
       let body = '';
       req.on('data', (chunk: Buffer) => (body += chunk.toString()));
       req.on('end', () => {
-        seen.push(
-          `${req.url ?? ''} ${(JSON.parse(body) as { resourceSpans: { scopeSpans: { spans: { traceId: string }[] }[] }[] }).resourceSpans[0]?.scopeSpans[0]?.spans[0]?.traceId ?? ''}`,
-        );
+        seen.push(`${req.url ?? ''} ${String(spansOf(body)[0]?.['traceId'])}`);
         res.end('{}');
       });
     });
     await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
-    const port = (server.address() as AddressInfo).port;
+    const address = server.address();
+    const port = typeof address === 'object' && address !== null ? address.port : 0;
     const result = await replay({
       fixture: FIXTURE,
       count: 12,
