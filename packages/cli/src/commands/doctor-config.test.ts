@@ -233,7 +233,8 @@ function sinkRow(stdout: string): unknown {
     throw new Error('doctor --json output has no checks');
   }
   return doc.checks.find(
-    (c: unknown) => typeof c === 'object' && c !== null && 'name' in c && c.name === 'sink credentials',
+    (c: unknown) =>
+      typeof c === 'object' && c !== null && 'name' in c && c.name === 'sink credentials',
   );
 }
 
