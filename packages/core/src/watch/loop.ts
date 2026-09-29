@@ -12,7 +12,14 @@
 // never buffers unboundedly (RISK note); `judge` itself is invoked through the shared J1 pacing
 // limiter (judge/pacing.ts) so watch, run and validate pace against the same Retry-After state
 // (UX brief C1).
-import type { Case, Criterion, SinkV1, SourceV1, Verdict } from '@vetkit/spec';
+import {
+  VetError,
+  type Case,
+  type Criterion,
+  type SinkV1,
+  type SourceV1,
+  type Verdict,
+} from '@vetkit/spec';
 import { extractCases } from '../generate/cases.ts';
 import { partitionCases, type ExclusionStatus } from '../judge/completeness.ts';
 import { createLimiter } from '../judge/pacing.ts';
@@ -63,8 +70,8 @@ export interface RunWatchInput {
 export interface CoverageSummary {
   readonly seen: number;
   readonly sampled: number;
-  /** Sampled cases the judge answered (no verdict came back status 'unscored'); a thrown judge is
-   * still recorded as an infra_failure verdict and counted here. */
+  /** Sampled cases the judge answered (no verdict came back status 'unscored' or
+   * 'infra_failure'; a thrown judge is recorded as infra_failure and counted under `unscored`). */
   readonly judged: number;
   /** Sampled cases with at least one status 'unscored' verdict (judge outage: failures may be missed). */
   readonly unscored: number;
@@ -94,8 +101,10 @@ function causeCode(cause: unknown): string {
   return typeof code === 'string' && CODE_SHAPE.test(code) ? code : 'UNKNOWN';
 }
 
-function causeOf(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+/** Cause of a thrown judge: the CevError code if present, else JUDGE_UNAVAILABLE; never the
+ * raw message (dh8.10). */
+function thrownCause(err: unknown): { readonly code: string } {
+  return { code: VetError.isInstance(err) ? err.code : 'JUDGE_UNAVAILABLE' };
 }
 
 const PROV_KEYS = [
@@ -139,7 +148,7 @@ function withAssignedId(v: Verdict, id: string | undefined): Verdict {
 
 function infraFailureVerdict(
   caseId: string,
-  cause: string,
+  cause: { readonly code: string },
   provenance: Verdict['provenance'],
 ): Verdict {
   return {
@@ -233,9 +242,9 @@ export async function runWatch(input: RunWatchInput): Promise<CoverageSummary> {
       // Edge case: "Abort during a judge call → the in-flight call is aborted via the signal,
       // its verdict is 'infra_failure:aborted' and NOT enqueued (nothing to write back)."
       if (perCall.aborted) return;
-      verdicts = [infraFailureVerdict(evalCase.id, causeOf(err), caseProvenance(evalCase))];
+      verdicts = [infraFailureVerdict(evalCase.id, thrownCause(err), caseProvenance(evalCase))];
     }
-    const failed = verdicts.filter((v) => v.status === 'unscored');
+    const failed = verdicts.filter((v) => v.status === 'unscored' || v.status === 'infra_failure');
     if (failed.length === 0) {
       judged += 1;
     } else {

@@ -3,6 +3,8 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  CEV_ERROR_CODES,
+  VetError,
   safeParseJson,
   type Case,
   type Criterion,
@@ -360,7 +362,9 @@ describe('runWatch', () => {
       signal: new AbortController().signal,
     });
 
-    expect(summary.judged).toBe(1);
+    expect(summary.judged).toBe(0);
+    expect(summary.unscored).toBe(1);
+    expect(summary.unscoredCauses).toEqual(['JUDGE_UNAVAILABLE']);
     const pendingText = await readFile(join(dir, 'outbox', 'pending.jsonl'), 'utf8');
     const pending = pendingText
       .split('\n')
@@ -372,7 +376,8 @@ describe('runWatch', () => {
       });
     expect(pending).toHaveLength(1);
     expect(pending[0]?.verdict.status).toBe('infra_failure');
-    expect(pending[0]?.verdict.cause).toBe('judge exploded');
+    expect(pending[0]?.verdict.cause).toEqual({ code: 'JUDGE_UNAVAILABLE' });
+    expect(JSON.stringify(pending[0]?.verdict.cause)).not.toContain('judge exploded');
   });
 
   test('backpressure: maxInFlight=1 and 50 instantly-yielded traces write all 50 inclusion records and skip none', async () => {
@@ -569,7 +574,9 @@ describe('runWatch', () => {
       signal: new AbortController().signal,
     });
 
-    expect(summary.judged).toBe(1);
+    // dh8.10: a thrown judge is unscored, not judged (was pinned as judged 1).
+    expect(summary.judged).toBe(0);
+    expect(summary.unscored).toBe(1);
     expect(summary.produced).toBeGreaterThan(0);
     expect(summary.acknowledged).toBe(summary.produced);
 
@@ -735,5 +742,52 @@ describe('runWatch', () => {
       signal: new AbortController().signal,
     });
     expect(summary).toMatchObject({ judged: 1, unscored: 0, unscoredCauses: [] });
+  });
+
+  test('3 of 12 sampled throw a CevError JUDGE_UNAVAILABLE: judged 9, unscored 3, causes [JUDGE_UNAVAILABLE], no raw message (dh8.10)', async () => {
+    const traces = Array.from({ length: 12 }, (_, i) => trace(`trace-down-${String(i)}`));
+    const downIds = new Set(traces.slice(0, 3).map((t) => t.traceId));
+    const flakyJudge: JudgeCaseFn = async ({ case: c, criteria }) => {
+      if (c.traceId !== undefined && downIds.has(c.traceId)) {
+        throw new VetError(CEV_ERROR_CODES.JUDGE_UNAVAILABLE, 'secret transport detail');
+      }
+      return criteria.map((crit) => okVerdict(c.id, crit.id));
+    };
+    const outbox = createOutbox({ dir: join(dir, 'outbox') });
+
+    const summary = await runWatch({
+      source: finiteSource(traces),
+      sampler: createSampler({ sampleRate: 1, inclusionPath: join(dir, 'inclusion.jsonl') }),
+      judge: flakyJudge,
+      criteria: defaultCriteria,
+      outbox,
+      sinks: [fakeSink()],
+      options: watchOptions({ sampleRate: 1 }),
+      signal: new AbortController().signal,
+    });
+
+    expect(summary.sampled).toBe(12);
+    expect(summary.judged).toBe(9);
+    expect(summary.unscored).toBe(3);
+    expect(summary.unscoredCauses).toEqual(['JUDGE_UNAVAILABLE']);
+    const pendingText = await readFile(join(dir, 'outbox', 'pending.jsonl'), 'utf8');
+    expect(pendingText).not.toContain('secret transport detail');
+  });
+
+  test('a thrown CevError keeps its own code as the cause (dh8.10)', async () => {
+    const outbox = createOutbox({ dir: join(dir, 'outbox') });
+    const summary = await runWatch({
+      source: finiteSource([trace('trace-code')]),
+      sampler: createSampler({ sampleRate: 1, inclusionPath: join(dir, 'inclusion.jsonl') }),
+      judge: () => {
+        throw new VetError(CEV_ERROR_CODES.JUDGE_TIMEOUT, 'slow');
+      },
+      criteria: defaultCriteria,
+      outbox,
+      sinks: [fakeSink()],
+      options: watchOptions({ sampleRate: 1 }),
+      signal: new AbortController().signal,
+    });
+    expect(summary.unscoredCauses).toEqual(['JUDGE_TIMEOUT']);
   });
 });
