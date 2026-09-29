@@ -10,7 +10,12 @@ import { promisify } from 'node:util';
 import { gunzip } from 'node:zlib';
 import type { NormalizedTrace } from '@vetkit/spec';
 import { DEFAULT_DIALECT_ORDER } from '../default-dialects.ts';
-import { groupByTraceId, normalizeTrace, type DialectV1 } from '../normalize/index.ts';
+import {
+  groupByTraceId,
+  normalizeTrace,
+  type DialectV1,
+  type OtlpDiag,
+} from '../normalize/index.ts';
 import { readOtlpJson } from '../reader/index.ts';
 import { buildSpanTree } from '../reader/tree.ts';
 
@@ -23,6 +28,8 @@ export interface StartReceiverOptions {
   readonly host?: string;
   readonly onRequest: (trace: NormalizedTrace) => void;
   readonly dialects?: readonly DialectV1[];
+  // Receives the warnings raised while normalizing each posted trace.
+  readonly onDiag?: (d: OtlpDiag) => void;
 }
 
 export interface Receiver {
@@ -81,6 +88,7 @@ async function handleRequest(
   res: ServerResponse,
   onRequest: (trace: NormalizedTrace) => void,
   dialects: readonly DialectV1[],
+  onDiag?: (d: OtlpDiag) => void,
 ): Promise<void> {
   if (req.method !== 'POST' || req.url !== '/v1/traces') {
     req.resume();
@@ -119,7 +127,7 @@ async function handleRequest(
 
   for (const group of groupByTraceId(result.resourceSpans)) {
     const tree = buildSpanTree(group.spans);
-    onRequest(normalizeTrace(tree, group.resource, dialects, undefined, group.traceId));
+    onRequest(normalizeTrace(tree, group.resource, dialects, onDiag, group.traceId));
   }
   respondJson(res, 200, { partialSuccess: {} });
 }
@@ -130,7 +138,7 @@ export function startReceiver(opts: StartReceiverOptions): Promise<Receiver> {
   const dialects = opts.dialects ?? DEFAULT_DIALECT_ORDER;
   return new Promise((resolvePromise, rejectPromise) => {
     const server = createServer((req, res) => {
-      handleRequest(req, res, opts.onRequest, dialects).catch(() => {
+      handleRequest(req, res, opts.onRequest, dialects, opts.onDiag).catch(() => {
         res.destroy();
       });
     });

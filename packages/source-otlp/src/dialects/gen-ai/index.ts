@@ -21,12 +21,14 @@ import { reportUnknownRole } from '../unknown-role.ts';
 const SPEC_COMMIT = 'gen-ai-dev/1.42.0-dev';
 
 const LLM_OPERATIONS = ['chat', 'text_completion', 'generate_content'] as const;
-const KNOWN_ROLES: Record<string, Message['role']> = {
-  user: 'user',
-  assistant: 'assistant',
-  system: 'system',
-  tool: 'tool',
-};
+// A Map, not an object literal: roles come from untrusted traces, and a plain-object lookup
+// would resolve names like 'constructor' or 'toString' through Object.prototype.
+const KNOWN_ROLES: ReadonlyMap<string, Message['role']> = new Map([
+  ['user', 'user'],
+  ['assistant', 'assistant'],
+  ['system', 'system'],
+  ['tool', 'tool'],
+]);
 
 function operationName(span: OtlpSpan): string | undefined {
   const value = span.attributes['gen_ai.operation.name'];
@@ -52,13 +54,9 @@ function reporterFor(span: OtlpSpan, onDiag?: (d: OtlpDiag) => void): RoleReport
   return (role, mappedTo) => reportUnknownRole(onDiag, span.spanId, role, mappedTo);
 }
 
-function mapRole(
-  role: unknown,
-  fallback: Message['role'],
-  report?: RoleReporter,
-): Message['role'] {
+function mapRole(role: unknown, fallback: Message['role'], report?: RoleReporter): Message['role'] {
   if (typeof role !== 'string') return fallback;
-  const known = KNOWN_ROLES[role];
+  const known = KNOWN_ROLES.get(role);
   if (known === undefined) report?.(role, fallback);
   return known ?? fallback;
 }

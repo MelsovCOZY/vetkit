@@ -92,6 +92,7 @@ function receiverSource(port: number, options: SourceOptions): SourceV1 {
     const receiver = await startReceiver({
       port,
       host: '127.0.0.1',
+      onDiag: writeSourceDiag,
       onRequest: (trace) => {
         if (seen.has(trace.traceId)) return;
         seen.add(trace.traceId);
