@@ -1,21 +1,23 @@
 # Spike report: Jev vs ground truth, Jev vs the Gemini judge
 
-## (a) Per-criterion table (human/auto labels as truth)
+PROVISIONAL (model-labelled)
+
+## (a) Per-criterion table (human > model > auto labels as truth)
 
 | c | n | κ | α | threshold | TPR | TNR | flip% | escape% | verdict |
 |---|---|---|---|---|---|---|---|---|---|
-| c1 | 456 | 1.000 | 1.000 | 0.373 | 1.000 | 1.000 | 0.7% | 5.3% | pass |
+| c1 | 456 | 1.000 | 1.000 | 0.373 | 1.000 | 1.000 | 0.7% | 0.0% | pass |
 | c2 | 456 | 0.000 | -0.024 | 0.000 | 1.000 | 0.000 | 0.0% | 0.0% | fail |
-| c3 | 456 | n/a | n/a | n/a | n/a | n/a | 0.0% | 0.0% | pending |
-| c4 | 456 | n/a | n/a | n/a | n/a | n/a | 0.0% | 0.0% | pending |
-| c5 | 456 | n/a | n/a | n/a | n/a | n/a | 0.0% | 0.0% | pending |
-| c6 | 456 | n/a | n/a | n/a | n/a | n/a | 0.0% | 0.0% | pending |
-| c7 | 456 | n/a | n/a | n/a | n/a | n/a | 0.0% | 0.0% | pending |
-| c8 | 456 | n/a | n/a | n/a | n/a | n/a | 0.0% | 0.0% | pending |
-| c9 | 456 | n/a | n/a | n/a | n/a | n/a | 0.0% | 0.0% | pending |
-| c10 | 456 | n/a | n/a | n/a | n/a | n/a | 0.0% | 0.0% | pending |
+| c3 | 30 | n/a | n/a | 0.760 | 1.000 | n/a | 7.7% | 13.3% | not evaluable (single-class truth) |
+| c4 | 30 | n/a | n/a | 0.743 | n/a | 0.962 | 7.7% | 13.3% | not evaluable (single-class truth) |
+| c5 | 30 | n/a | n/a | 0.793 | 1.000 | n/a | 3.8% | 13.3% | not evaluable (single-class truth) |
+| c6 | 30 | n/a | n/a | 0.503 | n/a | 0.933 | 6.7% | 50.0% | not evaluable (single-class truth) |
+| c7 | 30 | n/a | n/a | 0.313 | n/a | 0.952 | 4.8% | 30.0% | not evaluable (single-class truth) |
+| c8 | 30 | n/a | n/a | 0.100 | n/a | 0.944 | 5.6% | 40.0% | not evaluable (single-class truth) |
+| c9 | 30 | n/a | n/a | 0.800 | n/a | 0.967 | 3.3% | 0.0% | not evaluable (single-class truth) |
+| c10 | 30 | n/a | n/a | 0.180 | n/a | 0.800 | 20.0% | 83.3% | not evaluable (single-class truth) |
 
-c3's truth is the Gemini baseline, not a human/auto label, so it has no row-fitted stats here and is reported separately in block (c); c4-c10 have no truth yet (pending). c2's auto label is a *correctness* judgment (abstained-when-it-should, or didn't-when-it-shouldn't), which flips sign between answerable and unanswerable rows, so its raw P(yes)-vs-label kappa above is not directly comparable to c1's; see block (b) for the c2 accuracy computed only on the unambiguous (golden-unanswerable) subset.
+Truth is human > model > auto; n is the number of labelled traces per criterion. This run has 264 model-labelled rows over 51 traces and 0 human-labelled rows, so c3-c10 rows rest on model labels. For c4-c10 a yes label means the problem is present. Gemini baseline scores are not truth and are reported in block (c). c2's auto label is a *correctness* judgment (abstained-when-it-should, or didn't-when-it-shouldn't), which flips sign between answerable and unanswerable rows, so its raw P(yes)-vs-label kappa above is not directly comparable to c1's; see block (b) for the c2 accuracy computed only on the unambiguous (golden-unanswerable) subset.
 
 ## (b) Ground-truth block
 
@@ -23,11 +25,11 @@ c3's truth is the Gemini baseline, not a human/auto label, so it has no row-fitt
 
 | slice | n | accuracy | TPR | TNR |
 |---|---|---|---|---|
-| all | 432 | 1.000 | 1.000 | 1.000 |
-| variant:bm25 | 108 | 1.000 | 1.000 | n/a |
-| variant:embedding | 108 | 1.000 | 1.000 | n/a |
-| variant:hybrid | 108 | 1.000 | 1.000 | n/a |
-| variant:hybrid-norerank | 108 | 1.000 | 1.000 | 1.000 |
+| all | 456 | 1.000 | 1.000 | 1.000 |
+| variant:bm25 | 114 | 1.000 | 1.000 | n/a |
+| variant:embedding | 114 | 1.000 | 1.000 | n/a |
+| variant:hybrid | 114 | 1.000 | 1.000 | n/a |
+| variant:hybrid-norerank | 114 | 1.000 | 1.000 | 1.000 |
 
 ### c2 abstains_when_unanswerable on the golden-unanswerable rows
 
@@ -35,7 +37,7 @@ c3's truth is the Gemini baseline, not a human/auto label, so it has no row-fitt
 |---|---|---|---|---|
 | unanswerable | 24 | 0.792 | 1.000 | 0.000 |
 
-## (c) Baseline block (Jev c3 vs the Gemini judge, binarised at 0.5)
+## (c) Baseline block (Jev c3 vs the Gemini judge, binarised at 0.5; plus vs model labels)
 
 | slice | n | κ |
 |---|---|---|
@@ -43,6 +45,12 @@ c3's truth is the Gemini baseline, not a human/auto label, so it has no row-fitt
 | lang:en | 152 | 0.000 |
 | lang:ru | 152 | 0.000 |
 | lang:kk | 152 | 0.198 |
+
+Jev c3 vs the model-labelled c3 truth (thresholded at the c3 threshold fitted in table (a)):
+
+| slice | n | κ |
+|---|---|---|
+| model labels | 26 | n/a |
 
 ## (d) Cost
 
@@ -56,7 +64,9 @@ The c4-c10 generator was openai/gpt-5-mini (free-tier gateway, 4 calls); its usa
 
 Contexts are whole source documents (55-344 words) rebuilt offline from corpus/*.pdf|docx, not the 120-word chunks the pipeline actually retrieved by; the local Langfuse instance runs in v4 events-only mode and /api/public/traces returned 404 (probed 2026-09-25), so the judged unit is whole-document context, not the retrieved chunk.
 
-Human labels: this run has 0 human-labelled rows (labelled traces still pending). With a single labeller once that lands, Krippendorff alpha reduces to plain agreement between the human and the judge; a second labeller is out of scope of this spike.
+Labels: this run has 0 human-labelled traces (0 rows) and 51 model-labelled traces (264 rows); truth precedence is human, then model, then auto. Model labels stand in for a human labeller, so any decision drawn from them is provisional. With a single labeller, Krippendorff alpha reduces to plain agreement between the labeller and the judge; a second labeller is out of scope of this spike.
+
+Not evaluable: c3, c4, c5, c6, c7, c8, c9, c10 - the labelled sample has no positive cases (or no negative cases) for them, so truth is single-class and kappa is undefined; they are excluded from the median-kappa rule and cannot count toward the pass count.
 
 Jev is reached only through the gateway alias typesafe-ai/jev (TypeSafe registration is closed); the served model id recorded on every verdict is that alias, release_date 2026-09-15 per docs/research/fixtures/2026-09-25-gateway-models.json; `pinned: false`.
 
@@ -70,4 +80,4 @@ Extended per this bead's acceptance criteria with a NO-GO override when c1 accur
 
 Precedence: INCONCLUSIVE (fewer than 30 human-labelled traces or 300 total label rows) first; then c1 accuracy < 0.9 -> NO-GO; then median kappa < 0.4 -> NO-GO; then >=7 criteria passing -> GO; otherwise AMEND.
 
-Decision: INCONCLUSIVE
+Decision: AMEND PROVISIONAL (model-labelled)
