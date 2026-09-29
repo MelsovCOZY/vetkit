@@ -4,9 +4,7 @@ import { describe, expect, test } from 'vitest';
 import { safeParseJson, VetError, type Question } from '@vetkit/spec';
 import { normalise } from './normalise.ts';
 
-// Loads a copy of a docs/research/fixtures/*.json file from this package's own
-// fixtures/ (packages/judge-jev/fixtures/), never docs/research/fixtures/ directly
-// (bead scope: fixtures/ is this bead's own owned-path copy). safeParseJson is the
+// Loads a JSON fixture from this package's own fixtures/ directory. safeParseJson is the
 // one JSON.parse chokepoint (packages/spec/src/json.ts); an empty schema `{}`
 // matches any JSON value, so this is parsing, not validation — normalise() does its
 // own schema validation on the value this returns.
@@ -55,9 +53,9 @@ function probabilitySum(probabilities: Record<string, number>): number {
   return Object.values(probabilities).reduce((sum, value) => sum + value, 0);
 }
 
-// Mirrors docs/research/fixtures/2026-09-25-gateway-systemone-request.json's
-// `questions` map, translated into the IR `Question` shape (noul -> boolean) —
-// this is what `requested.questions` carries in the real j1-2 call.
+// Mirrors the gateway request fixture's `questions` map, translated into the IR
+// `Question` shape (noul -> boolean); this is what `requested.questions` carries in a
+// real call.
 const REQUESTED_QUESTIONS: Record<string, Question> = {
   promised_refund: {
     type: 'boolean',
@@ -117,7 +115,7 @@ describe('normalise() — run1 fixture (vercel preset)', () => {
 
   test('provider comes from provider_metadata.gateway.routing.finalProvider, not resolvedProvider', () => {
     // This fixture's own resolvedProvider is "digitalocean" while finalProvider is
-    // "typesafe-ai" (root ledger PREMISE) — asserting the field name, not just a value,
+    // "typesafe-ai" — asserting the field name, not just a value,
     // so a future fixture edit that removes the disagreement doesn't silently pass.
     const rawGateway = asMutableRecord(
       asMutableRecord(asMutableRecord(run1)['provider_metadata'])['gateway'],

@@ -1,7 +1,7 @@
-// Hand-written verbatim from docs/contracts/j1.md "Ports" section. These are TS-only
+// Hand-written port types. These are TS-only
 // shapes (the wire adapter, not the IR): every judge transport implements JudgeV1 and
 // returns a JudgeResponse; Question/Answer are keyed per-criterion inside one doJudge
-// call (the one-request-per-case rule, docs/contracts/j1.md "One-request-per-case rule").
+// call (the one-request-per-case rule).
 
 export type Question =
   | { type: 'boolean'; instructions: string }

@@ -1,7 +1,6 @@
-// Generator port: any chat model that drafts text or structured output (docs/contracts/j2.md
-// "Ports"). The structured strategy is read from the declared capability, never detected at
+// Generator port: any chat model that drafts text or structured output. The structured strategy is read from the declared capability, never detected at
 // runtime; callers re-validate `value` against the requested schema. defineGenerator checks
-// specVersion only (root DECISION 2026-09-28): no defineAdapter, no freeze, no marker.
+// specVersion only: no defineAdapter, no freeze, no marker.
 
 import type { JsonSchema } from '../json.ts';
 import { assertSpecVersion } from '../registry.ts';

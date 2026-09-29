@@ -2,10 +2,9 @@
 // dialect (noul/choice/score answers, snake_case wire fields) — transport.ts appends
 // that suffix to every preset's baseURL. The gateway's `/v1/evaluate` dialect
 // (boolean/probability answers, camelCase fields) and OpenRouter's `/alpha/decisions`
-// are a different dialect entirely and are out of scope here (docs/contracts/j1.md
-// "Ports"; root ledger PREMISE, live probe 2026-09-26).
+// are a different dialect entirely and are out of scope here.
 //
-// model.pinned (docs/contracts/j1.md "Ports", DECISION pinning honesty): Vercel is an
+// model.pinned: Vercel is an
 // alias only, so it is pinned:false; so is Cloudflare Workers AI (no version is
 // selectable); TypeSafe direct and OpenRouter each serve one
 // fixed build, so they are pinned:true. Cloudflare speaks its own REST run endpoint
@@ -27,14 +26,14 @@ export interface JevCredentialEnv {
 
 export type JevEnv = Readonly<Record<string, string | undefined>>;
 
-// Per-transport health probe (root ledger RISK "OpenRouter/Cloudflare health endpoints
-// differ"): each preset gets its own probe rather than one shared shape.
+// Per-transport health probe: OpenRouter and Cloudflare health endpoints differ, so each
+// preset gets its own probe rather than one shared shape.
 export interface JevHealthEndpoint {
   readonly method: 'GET' | 'HEAD';
   readonly url: (env: JevEnv) => string;
 }
 
-// A price row for one transport (root DECISION: the per-transport price table lives here, as
+// A price row for one transport (the per-transport price table lives here, as
 // data with its source, never in logic). USD per 1M tokens; `asOf` is printed with estimates.
 export interface JevPricing {
   readonly inputPerMTok: number;
@@ -71,9 +70,8 @@ export const JEV_PRESETS: Record<'typesafe' | 'vercel' | 'openrouter' | 'cloudfl
     baseURL: 'https://ai-gateway.vercel.sh/typesafe',
     defaultModel: 'typesafe-ai/jev',
     pinned: false,
-    // PREMISE VERIFIED (probe 2026-09-25): honoured by the gateway ("ZDR requested:
-    // all 1 attempts support ZDR") and pins provider selection to typesafe-ai so the
-    // judge never silently hops hosts (root ledger DECISION).
+    // Verified against the live gateway ("ZDR requested: all 1 attempts support ZDR");
+    // pins provider selection to typesafe-ai so the judge never silently hops hosts.
     providerOptions: {
       gateway: { zeroDataRetention: true, only: ['typesafe-ai'] },
     },
@@ -93,9 +91,9 @@ export const JEV_PRESETS: Record<'typesafe' | 'vercel' | 'openrouter' | 'cloudfl
     },
   },
   openrouter: {
-    // UNVERIFIED (contract RISK): OpenRouter's TypeSafe-compatible /api/v1/systemone
-    // path is documented by OpenRouter but not probed here; treat as unverified until
-    // the J3/J6 e2e exercises it.
+    // UNVERIFIED: OpenRouter's TypeSafe-compatible /api/v1/systemone path is documented
+    // by OpenRouter but has not been probed; treat as unverified until an e2e run
+    // exercises it.
     baseURL: 'https://openrouter.ai/api',
     defaultModel: 'typesafe/jev-1.13',
     pinned: true,
@@ -111,7 +109,7 @@ export const JEV_PRESETS: Record<'typesafe' | 'vercel' | 'openrouter' | 'cloudfl
     },
   },
   cloudflare: {
-    // UNVERIFIED (bead RISK): the {result, success, errors} REST envelope is taken from
+    // UNVERIFIED: the {result, success, errors} REST envelope is taken from
     // Cloudflare's docs and has not been exercised with a real token yet.
     baseURL: 'https://api.cloudflare.com/client/v4',
     defaultModel: 'typesafe/jev',
@@ -138,8 +136,7 @@ export const JEV_PRESETS: Record<'typesafe' | 'vercel' | 'openrouter' | 'cloudfl
 
 export type JevPresetName = keyof typeof JEV_PRESETS;
 
-// Tie-break order when credentials for more than one preset are set (root ledger RISK
-// "amends TYPESAFE_API_KEY is not set...").
+// Tie-break order when credentials for more than one preset are set.
 export const JEV_CREDENTIAL_PRIORITY: readonly JevPresetName[] = [
   'vercel',
   'openrouter',

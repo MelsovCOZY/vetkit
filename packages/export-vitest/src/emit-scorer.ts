@@ -1,5 +1,4 @@
-// emitScorer: renders one criterion into an Evalite-compatible vitest scorer module
-// (docs/contracts/j4.md "Emitted file shapes"). The emitted module calls the real judge
+// emitScorer: renders one criterion into an Evalite-compatible vitest scorer module. The emitted module calls the real judge
 // through the caller's vetkitPackage at test time; nothing here calls a judge or reads
 // process.env, and no fixture or secret is baked into the rendered source.
 import { readFileSync } from 'node:fs';

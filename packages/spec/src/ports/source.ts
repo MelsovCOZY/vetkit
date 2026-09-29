@@ -1,6 +1,6 @@
 // Source port: reads traces from an observability backend or file into the NormalizedTrace
-// IR (docs/contracts/j2.md "Ports"). Mirrors SinkV1: a hand-written port interface with no
-// kind field. defineSource checks specVersion only (root DECISION 2026-09-28): no
+// IR. Mirrors SinkV1: a hand-written port interface with no
+// kind field. defineSource checks specVersion only: no
 // defineAdapter, no freeze, no marker, no id-shape check.
 
 import type { NormalizedTrace } from '../generated/index.ts';

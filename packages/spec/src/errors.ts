@@ -1,7 +1,6 @@
 // Errors carry a Symbol.for marker + string code + cause + static isInstance,
 // never `instanceof` across packages (module copies get their own VetError
 // class, but Symbol.for is a single global registry, so the marker survives).
-// docs/research/2026-09-25-typescript-practices-and-boilerplates-brief.md §4.
 
 export const CEV_ERROR_CODES = {
   E_CONFIG: 'E_CONFIG',
@@ -16,9 +15,8 @@ export const CEV_ERROR_CODES = {
   E_RATE_LIMIT: 'E_RATE_LIMIT',
   E_UNPINNED_LOCK: 'E_UNPINNED_LOCK',
   E_UNCALIBRATED: 'E_UNCALIBRATED',
-  // J1 contract (docs/contracts/j1.md "Error codes"), plus JUDGE_UNAUTHORIZED and
-  // INPUT_TOO_LARGE: unprefixed codes for the judge
-  // port, config/IR validation and the gate. None of the twelve E_* codes above move.
+  // Unprefixed codes for the judge port, config/IR validation and the gate, including
+  // JUDGE_UNAUTHORIZED and INPUT_TOO_LARGE. The E_* codes above are kept as they are.
   CONFIG_INVALID: 'CONFIG_INVALID',
   CRITERIA_INVALID: 'CRITERIA_INVALID',
   CASE_INVALID: 'CASE_INVALID',
@@ -29,7 +27,7 @@ export const CEV_ERROR_CODES = {
   CACHE_IO: 'CACHE_IO',
   JUDGE_UNAUTHORIZED: 'JUDGE_UNAUTHORIZED',
   INPUT_TOO_LARGE: 'INPUT_TOO_LARGE',
-  // J3: calibration labels, lock staleness, the gate's refusal reasons, and
+  // Calibration labels, lock staleness, the gate's refusal reasons, and
   // the two CLI conditions resolveExit maps to exit codes 2 and 3.
   LABELS_TOO_FEW: 'LABELS_TOO_FEW',
   LOCK_STALE: 'LOCK_STALE',
@@ -39,7 +37,7 @@ export const CEV_ERROR_CODES = {
   UNSCORED_ONLY: 'UNSCORED_ONLY',
   // a malformed labels row, exit 2 naming file:line.
   LABELS_INVALID: 'LABELS_INVALID',
-  // J6 contract (docs/contracts/j6.md "Error codes"): sink write outcomes and the outbox's
+  // Sink write outcomes and the outbox's
   // corrupt-file config error. OUTBOX_CORRUPT is thrown, never a doWrite rejection.
   SINK_REJECTED: 'SINK_REJECTED',
   SINK_UNREACHABLE: 'SINK_UNREACHABLE',
@@ -48,15 +46,14 @@ export const CEV_ERROR_CODES = {
   OUTBOX_CORRUPT: 'OUTBOX_CORRUPT',
   // `vet run --sink` names a sink that vetkit.config.ts does not configure (exit 2).
   CONFIG_UNKNOWN_SINK: 'CONFIG_UNKNOWN_SINK',
-  // J2 contract (root DECISION on o8i gaps): source reads, trace validation and
-  // generator outcomes. GENERATOR_CAPABILITY is a declared-strategy mismatch, never a
-  // silent downgrade (docs/contracts/j2.md "Generation contract").
+  // Source reads, trace validation and generator outcomes. GENERATOR_CAPABILITY is a
+  // declared-strategy mismatch, never a silent downgrade.
   SOURCE_UNREADABLE: 'SOURCE_UNREADABLE',
   TRACE_INVALID: 'TRACE_INVALID',
   GENERATOR_UNAVAILABLE: 'GENERATOR_UNAVAILABLE',
   GENERATOR_BAD_OUTPUT: 'GENERATOR_BAD_OUTPUT',
   GENERATOR_CAPABILITY: 'GENERATOR_CAPABILITY',
-  // J5 contract (docs/contracts/j5.md "Error codes"): an OTLP body that is not an
+  // An OTLP body that is not an
   // ExportTraceServiceRequest, a non-JSON body at the receiver (HTTP 415), and a source that
   // produced 0 traces.
   OTLP_PARSE: 'OTLP_PARSE',
@@ -64,7 +61,7 @@ export const CEV_ERROR_CODES = {
   SOURCE_EMPTY: 'SOURCE_EMPTY',
   // `vet rerun` finds no persisted run record (<cacheDir>/runs/latest.json) to re-judge from; exits 2 (cli errors.ts).
   RUN_NOT_FOUND: 'RUN_NOT_FOUND',
-  // the Langfuse source (packages/source-langfuse). A 401/403 from the Langfuse
+  // The Langfuse source: a 401/403 from the Langfuse
   // API, or a missing credential, thrown at first read (SOURCE_ prefix -> cli errors.ts
   // resolveExit's existing sinkSource rule, no CLI change needed). SOURCE_UNREACHABLE is a
   // 429 exhausted after 3 retries, or any other non-OK response.
@@ -74,7 +71,7 @@ export const CEV_ERROR_CODES = {
   // --require-lock` (no criteria.lock.json); both exit 2 (cli errors.ts EXPORT_* rule).
   EXPORT_TARGET_UNKNOWN: 'EXPORT_TARGET_UNKNOWN',
   EXPORT_NO_LOCK: 'EXPORT_NO_LOCK',
-  // J7 contract (docs/contracts/j7.md "Error codes"): `vet watch`'s receiver bind
+  // `vet watch`'s receiver bind
   // failure and an out-of-range --sample. Both exit 2 (cli errors.ts).
   RECEIVER_BIND: 'RECEIVER_BIND',
   WATCH_CONFIG: 'WATCH_CONFIG',
@@ -82,8 +79,7 @@ export const CEV_ERROR_CODES = {
 
 export type CevErrorCode = (typeof CEV_ERROR_CODES)[keyof typeof CEV_ERROR_CODES];
 
-// Additive detail bag for the judge/gate/cache paths:
-// carried through the constructor's `options.details`, never required, never replacing
+// Additive detail bag for the judge/gate/cache paths, carried through the constructor's `options.details`, never required, never replacing
 // `cause`.
 export interface VetErrorDetails {
   readonly retryable?: boolean;

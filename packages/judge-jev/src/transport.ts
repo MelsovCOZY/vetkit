@@ -2,8 +2,7 @@
 // transports (typesafe | vercel | openrouter presets or a fully custom baseURL +
 // model, all speaking the `/v1/systemone` dialect; plus the cloudflare preset, whose
 // REST run endpoint and envelope live in cloudflare.ts). Plain fetch only — the
-// @typesafe-ai/sdk peer stays optional and unused here (docs/contracts/j1.md
-// "Ports"; root ledger DECISION: access layer).
+// @typesafe-ai/sdk peer stays optional and unused here.
 import { VetError, type JudgeV1, type Question } from '@vetkit/spec';
 import { createCloudflareTransport } from './cloudflare.ts';
 import { normalise } from './normalise.ts';
@@ -111,8 +110,8 @@ function questionCharLength(question: Question): number {
   return question.instructions.length + question.criteria.join('').length;
 }
 
-// Pre-flight limits, checked before any I/O (docs/contracts/j1.md "Edge cases";
-// TypeSafe limits: 2-10 score levels, at most 255 choice options, 32k state tokens).
+// Pre-flight limits, checked before any I/O.
+// TypeSafe limits: 2-10 score levels, at most 255 choice options, 32k state tokens.
 function validateRequest(state: string, questions: Record<string, Question>): void {
   let longestQuestionChars = 0;
   for (const question of Object.values(questions)) {
@@ -149,8 +148,7 @@ function redactApiKeyString(value: string, apiKey: string): string {
 
 // Deep-redacts the literal API key out of any diagnostic value before it is
 // attached to a thrown VetError (message, details or cause chain) — the key must
-// never leak, including through a server-echoed body or a network error's message
-// (root ledger DECISION: Code conventions; contract R2).
+// never leak, including through a server-echoed body or a network error's message.
 function redactDeep(
   value: unknown,
   apiKey: string,
@@ -297,7 +295,7 @@ async function toJudgeError(
 // Races the fetch call against the deadline/caller signal so a fetch stub (or a real
 // implementation that ignores AbortSignal) can't hang the whole-call deadline; the
 // real `signal` is still handed to `fetchImpl` so a real fetch aborts its own socket
-// too (contract R3: AbortSignal.any, one code path, no controller+timer fallback).
+// too (AbortSignal.any, one code path, no controller+timer fallback).
 function fetchWithAbort(
   fetchImpl: typeof fetch,
   url: string,

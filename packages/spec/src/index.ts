@@ -1,5 +1,4 @@
-// Named re-exports only — no `export *` (oxc/no-barrel-file, docs/contracts/j0.md
-// DECISION: Code conventions).
+// Named re-exports only — no `export *` (oxc/no-barrel-file).
 
 export { CEV_ERROR_CODES, VetError } from './errors.ts';
 export type { CevErrorCode } from './errors.ts';

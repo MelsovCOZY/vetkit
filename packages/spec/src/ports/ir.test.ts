@@ -2,10 +2,8 @@ import { describe, expect, test } from 'vitest';
 import { traceSchema } from '../generated/schemas.ts';
 import { validateJson } from '../json.ts';
 
-// trace.schema.json cases (AC3). AC3 names packages/spec/schemas/ir.test.ts; the
-// orchestrator assigned this bead packages/spec/src/ports/ir.test.ts instead. Validating
-// through the generated traceSchema constant keeps this file inside the tsc project and
-// off raw JSON.parse.
+// trace.schema.json cases. Validating through the generated traceSchema constant keeps
+// this file inside the tsc project and off raw JSON.parse.
 
 const completeness = { contentCaptured: true, truncated: false, missingParents: false };
 

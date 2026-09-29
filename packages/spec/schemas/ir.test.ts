@@ -77,7 +77,7 @@ const model = {
 
 describe('criterion.schema.json', () => {
   // Question.type 'noul' is the TypeSafe wire name; the IR names the same question
-  // 'boolean' (docs/contracts/j1.md: "adapters map boolean↔TypeSafe noul at the wire edge").
+  // 'boolean'; adapters map boolean↔TypeSafe noul at the wire edge.
   const booleanCriterion = {
     id: 'promised_refund',
     type: 'boolean',
@@ -172,8 +172,7 @@ describe('criterion.schema.json', () => {
     expect(result.ok).toBe(false);
   });
 
-  // Contract amendment: Criterion.passWhen (choice only) and
-  // Criterion.escapeThreshold (0..1, default 0.5), docs/contracts/j1.md IR section.
+  // Criterion.passWhen (choice only) and Criterion.escapeThreshold (0..1, default 0.5).
   test('accepts a choice criterion with passWhen and escapeThreshold', () => {
     const result = parseIr(
       JSON.stringify({ ...choiceCriterion, passWhen: ['helpful'], escapeThreshold: 0.7 }),
@@ -201,8 +200,7 @@ describe('criterion.schema.json', () => {
     expect(result.ok).toBe(false);
   });
 
-  // contentDependent?: boolean, metadata excluded from
-  // wordingHash (docs/contracts/j1.md).
+  // contentDependent is an optional boolean; metadata is excluded from wordingHash.
   test('accepts a boolean criterion with contentDependent:false', () => {
     const result = parseIr(
       JSON.stringify({ ...booleanCriterion, contentDependent: false }),
@@ -213,7 +211,7 @@ describe('criterion.schema.json', () => {
   });
 
   // Rejected by contentDependent's own `{"type":"boolean"}` constraint, not by
-  // additionalProperties (contract revision 3).
+  // additionalProperties.
   test('rejects contentDependent when it is not a boolean', () => {
     const result = parseIr(
       JSON.stringify({ ...booleanCriterion, contentDependent: 'yes' }),

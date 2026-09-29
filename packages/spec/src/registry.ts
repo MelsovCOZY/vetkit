@@ -1,5 +1,4 @@
-// Registry mechanics for adapter objects (docs/research/2026-09-25-bun-and-library-architecture-brief.md
-// §2.1). The registry itself is stateless: defineAdapter only marks and validates one adapter;
+// Registry mechanics for adapter objects. The registry itself is stateless: defineAdapter only marks and validates one adapter;
 // core keeps its own id -> adapter map keyed by kind + id.
 
 import { CEV_ERROR_CODES, VetError } from './errors.ts';

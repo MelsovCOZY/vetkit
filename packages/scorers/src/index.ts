@@ -1,5 +1,4 @@
-// Named re-exports only — no `export *` (oxc/no-barrel-file, docs/contracts/j0.md
-// DECISION: Code conventions).
+// Named re-exports only — no `export *` (oxc/no-barrel-file).
 
 export { createScorer } from './scorer.ts';
 export type { CreateScorerOptions, ScorerCase, ScorerMetadata, ScorerResult } from './scorer.ts';

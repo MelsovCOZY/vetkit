@@ -1,7 +1,7 @@
 // promptfoo `javascript` assertion function: (output, context) => GradingResult. This module
 // owns its own GradingResult (below) — the copy in fixtures/promptfoo-grading-result.d.ts is a
 // test-only fixture promptfoo.test.ts asserts shape against; production code never imports it
-// (this package has zero dependency on the promptfoo package, bead AC).
+// (this package has zero dependency on the promptfoo package).
 import type { VerdictCache } from '@vetkit/core';
 import type { Criterion, JudgeV1 } from '@vetkit/spec';
 import { judgeOne, probabilityOf } from './judge-one.ts';
