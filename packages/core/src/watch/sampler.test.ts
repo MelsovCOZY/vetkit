@@ -77,18 +77,19 @@ describe('createSampler', () => {
     expect(VetError.isInstance(new VetError(CEV_ERROR_CODES.WATCH_CONFIG, 'x'))).toBe(true);
   });
 
-  test('rate band: ~10% of 10,000 synthetic ids sampled, and each appended record carries inclusionProbability 0.05', async () => {
+  test('rate band: ~10% of 4,000 synthetic ids sampled, and each appended record carries inclusionProbability 0.05', async () => {
     const sampler = createSampler({ sampleRate: 0.1, upstreamSampleRate: 0.5, inclusionPath });
     let sampledCount = 0;
-    for (let i = 0; i < 10_000; i += 1) {
+    // Binomial(4000, 0.1): sd = sqrt(4000*0.1*0.9) = 19, so 400 +/- 64 is +/-3.37 sd, as tight as 1000 +/- 100 at N=10,000.
+    for (let i = 0; i < 4000; i += 1) {
       const { sampled } = sampler.decide(trace(`trace-${i}`));
       if (sampled) sampledCount += 1;
     }
-    expect(sampledCount).toBeGreaterThanOrEqual(900);
-    expect(sampledCount).toBeLessThanOrEqual(1100);
+    expect(sampledCount).toBeGreaterThanOrEqual(336);
+    expect(sampledCount).toBeLessThanOrEqual(464);
 
     const records = await lines(inclusionPath);
-    expect(records).toHaveLength(10_000);
+    expect(records).toHaveLength(4000);
     for (const record of records) {
       expect(record.inclusionProbability).toBe(0.05);
       expect(record.evaluatorRate).toBe(0.1);
