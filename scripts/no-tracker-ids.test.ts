@@ -11,6 +11,8 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const TRACKER_ID_PATTERNS: readonly RegExp[] = [
   /(?<![a-z])mol-[a-z0-9]{2,4}(\.[0-9]+)?/,
   /\b(dh8|pij|yxn|aq4|q4q|p4a|0nw|76a|fou|vv7)\.[0-9]+\b/,
+  /\bvet-[a-z0-9]{3}\.[0-9]+\b/,
+  /\bvet-(dh8|pij|yxn|aq4|q4q|p4a|0nw|76a|fou|vv7|d4m|d0i)\b/,
   new RegExp(['classified', 'evals', ''].join('-')),
   /\bbug F[0-9]+/,
   /\b(DECISION|CLAIM)\b[^\n]{0,20}\bturn\s+[0-9]+/,
