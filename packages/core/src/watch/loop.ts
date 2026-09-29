@@ -63,7 +63,13 @@ export interface RunWatchInput {
 export interface CoverageSummary {
   readonly seen: number;
   readonly sampled: number;
+  /** Sampled cases the judge answered (no verdict came back status 'unscored'); a thrown judge is
+   * still recorded as an infra_failure verdict and counted here. */
   readonly judged: number;
+  /** Sampled cases with at least one status 'unscored' verdict (judge outage: failures may be missed). */
+  readonly unscored: number;
+  /** Distinct cause codes (never messages or bodies) behind `unscored`, sorted. */
+  readonly unscoredCauses: string[];
   readonly promoted: number;
   readonly produced: number;
   readonly acknowledged: number;
@@ -77,6 +83,16 @@ const DEFAULT_JUDGE_TIMEOUT_MS = 30_000;
 const DEFAULT_DRAIN_TIMEOUT_MS = 30_000;
 const DRAIN_INTERVAL_MS = 2000;
 const DRAIN_PENDING_THRESHOLD = 50;
+
+const CODE_SHAPE = /^[A-Z][A-Z0-9_]*$/;
+
+/** Code of a verdict cause: a bare code string or `{code}`; anything else is 'UNKNOWN', so a
+ * free-text message never reaches the summary. */
+function causeCode(cause: unknown): string {
+  const code =
+    typeof cause === 'string' ? cause : isRecord(cause) ? (cause as { code?: unknown }).code : '';
+  return typeof code === 'string' && CODE_SHAPE.test(code) ? code : 'UNKNOWN';
+}
 
 function causeOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -146,6 +162,8 @@ export async function runWatch(input: RunWatchInput): Promise<CoverageSummary> {
   let seen = 0;
   let sampled = 0;
   let judged = 0;
+  let unscored = 0;
+  const unscoredCauses = new Set<string>();
   let promoted = 0;
   const excluded: Record<ExclusionStatus, number> = {
     content_not_captured: 0,
@@ -217,7 +235,13 @@ export async function runWatch(input: RunWatchInput): Promise<CoverageSummary> {
       if (perCall.aborted) return;
       verdicts = [infraFailureVerdict(evalCase.id, causeOf(err), caseProvenance(evalCase))];
     }
-    judged += 1;
+    const failed = verdicts.filter((v) => v.status === 'unscored');
+    if (failed.length === 0) {
+      judged += 1;
+    } else {
+      unscored += 1;
+      for (const v of failed) unscoredCauses.add(causeCode(v.cause));
+    }
     const ids = await serializeOutbox(() => outbox.enqueue(verdicts));
     const withIds = verdicts.map((v, i) => withAssignedId(v, ids[i]));
     pendingSinceDrain += withIds.length;
@@ -296,6 +320,8 @@ export async function runWatch(input: RunWatchInput): Promise<CoverageSummary> {
     seen,
     sampled,
     judged,
+    unscored,
+    unscoredCauses: [...unscoredCauses].toSorted(),
     promoted,
     produced: reconciled.produced,
     acknowledged: reconciled.acknowledged,

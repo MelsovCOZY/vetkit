@@ -157,6 +157,8 @@ result "AC1c: sampled count == #ids with hashToUnit < 0.1" 0 0 "$([ "$s" = "$wan
 result "AC1d: summary.seen == 100 and summary.sampled == recomputed" 0 0 \
   "$([ "$(jq .seen watch.json)" = 100 ] && [ "$(jq .sampled watch.json)" = "$want" ] && echo 0 || echo 1)"
 
+result "AC1e0: judge unscored == 0 (a throttled run is a judge outage, not a promotion failure)" 0 0 \
+  "$([ "$(jq '.unscored // 0' watch.json)" = 0 ] && echo 0 || echo 1)" "unscored=$(jq -c '[.unscored,.unscoredCauses]' watch.json)"
 result "AC1e: every sampled trace judged (summary.judged == sampled)" 0 0 \
   "$([ "$(jq .judged watch.json)" = "$s" ] && echo 0 || echo 1)" "judged=$(jq .judged watch.json) real-judge calls"
 
