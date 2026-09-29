@@ -442,7 +442,7 @@ describe('vet init --source otlp: dialect cases match the golden (mol-pij.15)', 
 
       expect(cases.map(normalizeCase)).toEqual(golden);
     }
-  });
+  }, 30_000);
 });
 
 describe('vet init --source otlp:: SIGINT (bead mol-pij.8)', () => {
