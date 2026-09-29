@@ -375,7 +375,9 @@ async function generateCommand(options: InitOptions & { source: string }): Promi
   if (reason !== undefined) log.error(reason);
   const usage = meter.totals();
   const doc =
-    summary === undefined ? { ...result, generator: usage } : { ...result, generator: usage, summary };
+    summary === undefined
+      ? { ...result, generator: usage }
+      : { ...result, generator: usage, summary };
   emit(
     reason === undefined ? doc : { ...doc, reason },
     () =>

@@ -1,12 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import {
-  cpSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  writeFileSync,
-} from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -249,7 +242,7 @@ describe('vet init --source generator usage', () => {
   test('estimatedUsd prices the totals when both per-million-token env prices are set', () => {
     const result = metered(projectWithGeneratorUsage(true), { [PRICE_IN]: '2', [PRICE_OUT]: '8' });
     const { generator } = parseJson<MeteredDoc>(result.stdout);
-    const expected = ((generator.calls * 10 * 2) + (generator.calls * 4 * 8)) / 1_000_000;
+    const expected = (generator.calls * 10 * 2 + generator.calls * 4 * 8) / 1_000_000;
     expect(generator.estimatedUsd).toBeCloseTo(expected, 12);
   });
 
@@ -295,10 +288,12 @@ describe('vet init --source generator usage', () => {
     const file = join(project, 'vetkit.config.ts');
     writeFileSync(
       file,
-      readFileSync(file, 'utf8').replace(
-        'async doGenerate(req: GenerateRequest) {',
-        "async doGenerate(req: GenerateRequest) {\n    fixtureCalls += 1;\n    if (fixtureCalls > 1) throw new Error('generator exploded');",
-      ).replace('const generator = {', 'let fixtureCalls = 0;\nconst generator = {'),
+      readFileSync(file, 'utf8')
+        .replace(
+          'async doGenerate(req: GenerateRequest) {',
+          "async doGenerate(req: GenerateRequest) {\n    fixtureCalls += 1;\n    if (fixtureCalls > 1) throw new Error('generator exploded');",
+        )
+        .replace('const generator = {', 'let fixtureCalls = 0;\nconst generator = {'),
     );
     const result = metered(project, { CEV_DIAG: '1' });
     expect(result.status).toBe(70);
