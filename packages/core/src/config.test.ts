@@ -378,6 +378,7 @@ describe('describeConfig', () => {
 });
 
 describe('registry entries and roles', () => {
+  const doJudge = (): Promise<never> => Promise.reject(new Error('not called'));
   const plain = {
     kind: 'openai-compatible',
     baseURL: 'https://gen.example/v1',
@@ -434,7 +435,7 @@ describe('registry entries and roles', () => {
   });
 
   it('rejects a judge adapter object registered and used as the generator', () => {
-    const { specVersion, id, capabilities, doJudge } = fakeJudge();
+    const { specVersion, id, capabilities } = fakeJudge();
     const issues = issuesOf(() =>
       resolveConfig({
         ...minimal,
