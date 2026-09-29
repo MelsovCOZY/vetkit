@@ -64,7 +64,7 @@ runs:
   using: composite
   steps:
     - name: Set up Node
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v7
       with:
         node-version: ${{ inputs.node-version }}
 
@@ -77,7 +77,7 @@ runs:
 
     - name: Restore the base branch baseline
       if: inputs.comment == 'true' && startsWith(github.event_name, 'pull_request')
-      uses: actions/cache/restore@v4
+      uses: actions/cache/restore@v6
       with:
         path: .vet/runs/latest.json
         key: vetkit-baseline-${{ github.base_ref }}-${{ hashFiles(inputs.criteria-files) }}-
@@ -93,7 +93,7 @@ runs:
       run: bash "$GITHUB_ACTION_PATH/action/run.sh" run
 
     - name: Upload the JUnit report
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ${{ inputs.artifact-name }}
         path: vet-junit.xml
@@ -110,7 +110,7 @@ runs:
     # Pushes to a branch save its result as the baseline PRs against that branch diff against.
     - name: Save the baseline
       if: "!startsWith(github.event_name, 'pull_request') && hashFiles('.vet/runs/latest.json') != ''"
-      uses: actions/cache/save@v4
+      uses: actions/cache/save@v6
       with:
         path: .vet/runs/latest.json
         key: vetkit-baseline-${{ github.ref_name }}-${{ hashFiles(inputs.criteria-files) }}-${{ github.run_id }}-${{ github.run_attempt }}

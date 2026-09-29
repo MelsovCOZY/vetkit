@@ -1,16 +1,23 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # Bans raw `JSON.parse(` in packages/*/src. safeParseJson(text, schema) in
 # packages/spec/src/json.ts is the one allowed chokepoint.
-set -euo pipefail
+# POSIX sh only: `sh` is dash on Ubuntu runners (no pipefail, shopt or arrays).
+set -eu
 
-shopt -s nullglob
-src_dirs=(packages/*/src)
+src_dirs=""
+for dir in packages/*/src; do
+  if [ -d "$dir" ]; then
+    src_dirs="$src_dirs $dir"
+  fi
+done
 
-if [ "${#src_dirs[@]}" -eq 0 ]; then
+if [ -z "$src_dirs" ]; then
   exit 0
 fi
 
-matches=$(grep -rn -F 'JSON.parse(' "${src_dirs[@]}" 2>/dev/null | grep -v '^packages/spec/src/json\.ts:' || true)
+# Word splitting of $src_dirs is intended: workspace paths hold no whitespace.
+# shellcheck disable=SC2086
+matches=$(grep -rn -F 'JSON.parse(' $src_dirs 2>/dev/null | grep -v '^packages/spec/src/json\.ts:' || true)
 
 if [ -n "$matches" ]; then
   echo "$matches"

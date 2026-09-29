@@ -73,13 +73,18 @@ There is no manual publish step for an ordinary release:
 2. If any `.changeset/*.md` files are pending, the `changesets/action` runs
    `bun run version` (`changeset version && bun install --no-frozen-lockfile`), which opens
    or updates a "Version Packages" pull request. Nothing is published on this run.
-3. Once that PR is merged and no changesets remain pending, the publish job runs:
+3. Once that PR is merged and no changesets remain pending, the publish job runs, but only
+   when the repository variable `RELEASE_PUBLISH` is set to `true` (Settings > Secrets and
+   variables > Actions > Variables). Without it the job is skipped, so an ordinary push to
+   `master` never publishes:
    - `bun install --frozen-lockfile` (so `bun.lock` matches the merged manifests exactly).
    - `npm i -g npm@latest` — OIDC trusted publishing needs npm >= 11.5.1
      (https://docs.npmjs.com/trusted-publishers), which the runner's preinstalled npm
      predates.
    - `bun scripts/release-preflight.ts` — checks manifest/`bun.lock` version sync before
      anything is packed.
+   - `bun run build` — builds `dist/` so the pack step's publint check finds the files that
+     `exports` and `bin` point at.
    - `bun run pack` — writes `dist-tarballs/*.tgz` (see Scripts above for what it checks).
    - `bun scripts/release-preflight.ts --tarballs dist-tarballs` — checks the packed
      tarball contents.

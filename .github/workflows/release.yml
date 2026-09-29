@@ -15,14 +15,14 @@ permissions:
 jobs:
   version:
     name: Version Packages
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
       pull-requests: write
     outputs:
       hasChangesets: ${{ steps.changesets.outputs.hasChangesets }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -42,19 +42,24 @@ jobs:
   publish:
     name: Publish
     needs: version
-    if: needs.version.outputs.hasChangesets == 'false' && github.ref == 'refs/heads/master'
-    runs-on: ubuntu-latest
+    # Opt-in: with no pending changesets this condition is also true on every ordinary push
+    # to master, so publishing additionally needs the repository variable RELEASE_PUBLISH=true.
+    if: >-
+      vars.RELEASE_PUBLISH == 'true' &&
+      needs.version.outputs.hasChangesets == 'false' &&
+      github.ref == 'refs/heads/master'
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
@@ -66,6 +71,10 @@ jobs:
 
       - name: Preflight (npm version, bun.lock version sync)
         run: bun scripts/release-preflight.ts
+
+      # publint (inside pack) checks the dist/ files that exports/bin point at.
+      - name: Build
+        run: bun run build
 
       - name: Pack
         run: bun run pack
