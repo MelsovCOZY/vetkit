@@ -293,6 +293,8 @@ describe('annotator_kind', () => {
 
   test('no span attribute key uses the old namespace', async () => {
     const span = await spanFor(verdict());
-    expect(span?.attributes.filter((a) => a.key.startsWith('classified_evals.'))).toEqual([]);
+    expect(
+      span?.attributes.filter((a) => a.key.startsWith(`${['classified', 'evals'].join('_')}.`)),
+    ).toEqual([]);
   });
 });

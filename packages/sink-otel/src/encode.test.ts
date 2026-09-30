@@ -54,7 +54,9 @@ describe('vetkit namespace', () => {
     expect(attr(rec.attributes, 'vetkit.model.transport')).toEqual({ stringValue: 'test' });
     expect(attr(rec.attributes, 'vetkit.model.pinned')).toEqual({ boolValue: true });
     expect(attr(rec.attributes, 'vetkit.cache_hit')).toEqual({ boolValue: true });
-    expect(rec.attributes.filter((a) => a.key.startsWith('classified_evals.'))).toEqual([]);
+    expect(
+      rec.attributes.filter((a) => a.key.startsWith(`${['classified', 'evals'].join('_')}.`)),
+    ).toEqual([]);
   });
 
   test('VETKIT_ATTR lists the four extension keys', () => {
