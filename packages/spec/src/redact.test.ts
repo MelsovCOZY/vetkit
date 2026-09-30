@@ -14,7 +14,7 @@ describe('secretsFrom', () => {
       EMPTY_SECRET: '',
       SVC_credential: 'cred-abcdefghijkl',
     });
-    expect(secrets).toEqual(['cred-abcdefghijkl', CANARY, 'tok-12345678']);
+    expect(secrets).toEqual([CANARY, 'cred-abcdefghijkl', 'tok-12345678']);
   });
 
   test('explicit extra secrets join the set, under the same length floor', () => {
