@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import type { Answer, Criterion, JudgeResponse, JudgeV1 } from '@vetkit/spec';
+import type { Answer, Criterion, JudgeResponse, JudgeV1, Lock } from '@vetkit/spec';
 import { vetMatchers } from './matcher.ts';
 
 const booleanCriterion: Criterion = {
@@ -132,5 +132,47 @@ describe('vetMatchers', () => {
     const result = await matchers.toPassCriterion('the output text', booleanCriterion);
     expect(lastRequestState).toBe('the output text');
     expect(result.message()).toContain('no input provided');
+  });
+});
+
+function lockFor(id: string, status: 'calibrated', threshold: number): Lock {
+  const pass = 'pass' as const;
+  return {
+    lockVersion: 1,
+    model: { requested: 'jev-fake-model', resolved: 'jev-1.0.0', transport: 'fake', pinned: false },
+    datasetHash: 'dataset-hash',
+    criteria: {
+      [id]: {
+        wordingHash: 'hash-a',
+        status,
+        threshold,
+        gauntlet: {
+          paraphrase: pass,
+          polarity: pass,
+          injection: pass,
+          master_key: pass,
+          label_permutation: pass,
+          constant_output: pass,
+          position_swap: pass,
+          length: pass,
+        },
+        reasons: [],
+        labelCount: 20,
+      },
+    },
+  };
+}
+
+describe('vetMatchers lock', () => {
+  test('lock passed in → failure message contains calibration=<state> and the lock threshold', async () => {
+    const judge = fakeJudge(() =>
+      Promise.resolve(response({ [booleanCriterion.id]: { type: 'boolean', probability: 0.55 } })),
+    );
+    const lock = lockFor(booleanCriterion.id, 'calibrated', 0.7);
+    const matchers = vetMatchers({ judge, lock });
+    const result = await matchers.toPassCriterion('text', booleanCriterion, { input: 'q' });
+    expect(result.pass).toBe(false);
+    expect(result.message()).toContain('calibration=calibrated');
+    expect(result.message()).toContain('threshold=0.7');
   });
 });

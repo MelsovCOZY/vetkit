@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import type { CachedJudgment, VerdictCache } from '@vetkit/core';
-import type { Answer, Criterion, JudgeResponse, JudgeV1 } from '@vetkit/spec';
+import type { Answer, Criterion, JudgeResponse, JudgeV1, Lock } from '@vetkit/spec';
 import { createScorer } from './scorer.ts';
 
 const booleanCriterion: Criterion = {
@@ -153,5 +153,56 @@ describe('createScorer', () => {
     const result = await score({ output: 'excellent' });
     expect(result.score).toBe(1);
     expect(result.metadata.probability).toBeCloseTo(2);
+  });
+});
+
+function lockFor(id: string, status: 'calibrated', threshold: number): Lock {
+  const pass = 'pass' as const;
+  return {
+    lockVersion: 1,
+    model: { requested: 'jev-fake-model', resolved: 'jev-1.0.0', transport: 'fake', pinned: false },
+    datasetHash: 'dataset-hash',
+    criteria: {
+      [id]: {
+        wordingHash: 'hash-a',
+        status,
+        threshold,
+        gauntlet: {
+          paraphrase: pass,
+          polarity: pass,
+          injection: pass,
+          master_key: pass,
+          label_permutation: pass,
+          constant_output: pass,
+          position_swap: pass,
+          length: pass,
+        },
+        reasons: [],
+        labelCount: 20,
+      },
+    },
+  };
+}
+
+describe('createScorer lock', () => {
+  test('lock passed in → metadata.calibration reads the lock entry and its threshold decides', async () => {
+    const judge = fakeJudge(() =>
+      Promise.resolve(response({ [booleanCriterion.id]: { type: 'boolean', probability: 0.55 } })),
+    );
+    const lock = lockFor(booleanCriterion.id, 'calibrated', 0.7);
+    const result = await createScorer({ judge, criterion: booleanCriterion, lock })({
+      output: 'text',
+    });
+    expect(result.score).toBe(0);
+    expect(result.metadata.calibration).toBe('calibrated');
+  });
+
+  test('no lock → metadata.calibration is none', async () => {
+    const judge = fakeJudge(() =>
+      Promise.resolve(response({ [booleanCriterion.id]: { type: 'boolean', probability: 0.55 } })),
+    );
+    const result = await createScorer({ judge, criterion: booleanCriterion })({ output: 'text' });
+    expect(result.score).toBe(1);
+    expect(result.metadata.calibration).toBe('none');
   });
 });
