@@ -186,13 +186,13 @@ async function readJsonBody(response: Response): Promise<unknown> {
   }
 }
 
+// RFC 9110 §10.2.3: delay-seconds is digits only, otherwise an HTTP date. A zero, past,
+// or unparsable value is `undefined` so the limiter backs off instead of retrying at once.
 function parseRetryAfterMs(header: string | null): number | undefined {
   if (header === null) return undefined;
-  const seconds = Number(header);
-  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
-  const dateMs = Date.parse(header);
-  if (Number.isNaN(dateMs)) return undefined;
-  return Math.max(0, dateMs - Date.now());
+  const value = header.trim();
+  const ms = /^\d+$/.test(value) ? Number(value) * 1000 : Date.parse(value) - Date.now();
+  return Number.isFinite(ms) && ms > 0 ? ms : undefined;
 }
 
 function isNestedAuthenticationError(body: unknown): boolean {
@@ -259,14 +259,14 @@ async function toJudgeError(
     const idSuffix = requestId !== null ? ` (request id: ${requestId})` : '';
     return new VetError('JUDGE_UNAUTHORIZED', `judge rejected the API key${idSuffix}`, {
       cause,
-      ...(requestId !== null ? { details: { requestId } } : {}),
+      details: { kind: 'terminal-auth', ...(requestId !== null ? { requestId } : {}) },
     });
   }
 
   if (status === 402) {
     return new VetError('JUDGE_UNAVAILABLE', 'judge account has no credit', {
       cause,
-      details: { retryable: false, hint: 'no credit' },
+      details: { retryable: false, hint: 'no credit', kind: 'terminal-billing' },
     });
   }
 
@@ -274,7 +274,7 @@ async function toJudgeError(
     const hint = extractErrorTypeHint(body);
     return new VetError('JUDGE_UNAVAILABLE', `judge unavailable (HTTP 403: ${hint})`, {
       cause,
-      details: { retryable: false, hint },
+      details: { retryable: false, hint, kind: 'terminal-request' },
     });
   }
 
@@ -282,20 +282,34 @@ async function toJudgeError(
     return new VetError(
       'JUDGE_BAD_RESPONSE',
       `judge rejected the request for model "${requestedModel}" (HTTP ${status})`,
-      { cause },
+      { cause, details: { kind: 'terminal-request' } },
     );
   }
 
   if (status === 429 || status >= 500) {
+    // Only a 429 is read for quota: a spend cap keeps failing, so it is terminal after one attempt.
+    if (status === 429) {
+      const hint = extractErrorTypeHint(body);
+      if (hint.includes('quota')) {
+        return new VetError('JUDGE_UNAVAILABLE', 'judge transport error (HTTP 429)', {
+          cause,
+          details: { retryable: false, hint, kind: 'terminal-billing' },
+        });
+      }
+    }
     const retryAfterMs = parseRetryAfterMs(response.headers.get('retry-after'));
     return new VetError('JUDGE_UNAVAILABLE', `judge transport error (HTTP ${status})`, {
       cause,
-      details: retryAfterMs !== undefined ? { retryable: true, retryAfterMs } : { retryable: true },
+      details:
+        retryAfterMs !== undefined
+          ? { retryable: true, retryAfterMs, kind: 'retryable' }
+          : { retryable: true, kind: 'retryable' },
     });
   }
 
   return new VetError('JUDGE_BAD_RESPONSE', `unexpected judge response (HTTP ${status})`, {
     cause,
+    details: { kind: 'terminal-request' },
   });
 }
 
@@ -379,12 +393,13 @@ export function createJevJudge(opts: CreateJevJudgeOptions): JudgeV1 {
         if (signal.aborted) {
           throw new VetError('JUDGE_TIMEOUT', 'judge request timed out', {
             cause: redactDeep(cause, apiKey),
+            details: { kind: 'retryable' },
           });
         }
         const hint = networkErrorHint(cause);
         throw new VetError('JUDGE_UNAVAILABLE', `judge is unreachable (${hint})`, {
           cause: redactDeep(cause, apiKey),
-          details: { retryable: true, hint },
+          details: { retryable: true, hint, kind: 'retryable' },
         });
       }
 

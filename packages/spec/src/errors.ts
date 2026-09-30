@@ -79,6 +79,9 @@ export const CEV_ERROR_CODES = {
 
 export type CevErrorCode = (typeof CEV_ERROR_CODES)[keyof typeof CEV_ERROR_CODES];
 
+/** How a judge failure should be treated: retried, or fatal for the whole run. */
+export type VetErrorKind = 'retryable' | 'terminal-auth' | 'terminal-billing' | 'terminal-request';
+
 // Additive detail bag for the judge/gate/cache paths, carried through the constructor's `options.details`, never required, never replacing
 // `cause`.
 export interface VetErrorDetails {
@@ -86,6 +89,7 @@ export interface VetErrorDetails {
   readonly hint?: string;
   readonly retryAfterMs?: number;
   readonly requestId?: string;
+  readonly kind?: VetErrorKind;
 }
 
 export interface VetErrorOptions extends ErrorOptions {
