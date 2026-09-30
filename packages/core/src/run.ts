@@ -53,6 +53,15 @@ export interface CriterionSummary {
   saturated: Saturation;
 }
 
+/** A case's rolled-up state over all its criteria and repeats. */
+type CaseOutcome = 'pass' | 'fail' | 'flaky' | 'unscored' | 'neutral';
+
+interface CaseSummary {
+  outcome: CaseOutcome;
+  /** Max over the case's criteria of (max − min) pass-value across repeats; 0 with one repeat. */
+  spread: number;
+}
+
 export interface RunSummary {
   total: number;
   passed: number;
@@ -60,6 +69,9 @@ export interface RunSummary {
   unscored: number;
   aborted: boolean;
   byCriterion: Record<string, CriterionSummary>;
+  /** Cases whose repeats disagree beyond the tolerance band; counted in neither passed nor failed. */
+  flaky?: number;
+  byCase?: Record<string, CaseSummary>;
 }
 
 /** One event on the event bus (./events.ts), as a tagged union over EventMap. */
@@ -82,6 +94,8 @@ export interface RunConfig {
   readonly lockPath?: string;
   /** Judge every case afresh: the verdict cache is neither read nor written. */
   readonly bypassCache?: boolean;
+  /** Judge every case this many times (default 1); each repeat has its own cache key. */
+  readonly repeats?: number;
 }
 
 export interface RunJudgeInput {
@@ -180,6 +194,11 @@ export interface DecideVerdictResult {
   threshold?: number;
 }
 
+/** decideVerdict's result plus the pass-value it compared; the value never rides on a verdict. */
+interface ValuedDecision extends DecideVerdictResult {
+  value?: number;
+}
+
 function badResponseResult(): DecideVerdictResult {
   return { status: 'error', cause: CEV_ERROR_CODES.JUDGE_BAD_RESPONSE };
 }
@@ -197,6 +216,16 @@ export function decideVerdict(
   threshold: number,
   tolerance = 0,
 ): DecideVerdictResult {
+  const { value: _value, ...decided } = decideWithValue(verdict, criterion, threshold, tolerance);
+  return decided;
+}
+
+function decideWithValue(
+  verdict: Verdict,
+  criterion: Criterion,
+  threshold: number,
+  tolerance: number,
+): ValuedDecision {
   const answer = verdict.answer;
   const escapeThreshold = criterion.escapeThreshold ?? DEFAULT_ESCAPE_THRESHOLD;
   const band = (x: number): boolean => Math.abs(x - threshold) <= tolerance + EPSILON;
@@ -215,7 +244,7 @@ export function decideVerdict(
       criterion.polarity === 'pass_when_false'
         ? criterion.criteria.length - 1 - expected
         : expected;
-    return { threshold, pass: value >= threshold, borderline: band(value) };
+    return { threshold, pass: value >= threshold, borderline: band(value), value };
   }
 
   if (criterion.type === 'choice') {
@@ -237,7 +266,7 @@ export function decideVerdict(
         ? Number(passWhen.has(answer.choice))
         : entries.filter(([label]) => passWhen.has(label)).reduce((sum, [, p]) => sum + p, 0);
     const value = criterion.polarity === 'pass_when_false' ? 1 - pPass : pPass;
-    return { threshold, pass: value >= threshold, borderline: band(value) };
+    return { threshold, pass: value >= threshold, borderline: band(value), value };
   }
 
   let p: number;
@@ -258,7 +287,7 @@ export function decideVerdict(
   // Thresholds live on the pass-value scale calibrate fits on: P(yes), or 1 − P(yes) for
   // pass_when_false (validate/calibrate.ts repeatValues).
   const value = criterion.polarity === 'pass_when_true' ? p : 1 - p;
-  return { threshold, pass: value >= threshold, borderline: band(value) };
+  return { threshold, pass: value >= threshold, borderline: band(value), value };
 }
 
 function decide(
@@ -379,7 +408,7 @@ export async function runJudge(input: RunJudgeInput): Promise<RunVerdict[]> {
     },
   };
 
-  async function judgeOnce(evalCase: Case): Promise<Verdict[]> {
+  async function judgeOnce(evalCase: Case, repeat: number): Promise<Verdict[]> {
     const stateBytes = Buffer.byteLength(evalCase.input.state, 'utf8');
     for (const c of judged) {
       events.emit('judge:request', { caseId: evalCase.id, criterionId: c.id, stateBytes });
@@ -405,6 +434,7 @@ export async function runJudge(input: RunJudgeInput): Promise<RunVerdict[]> {
       judge: observed,
       case: evalCase,
       criteria: judged,
+      repeat,
       ...(cache === undefined ? {} : { cache }),
       ...(signal === undefined ? {} : { signal }),
     });
@@ -426,7 +456,9 @@ export async function runJudge(input: RunJudgeInput): Promise<RunVerdict[]> {
     events.emit('case:start', { caseId: evalCase.id, index, total: input.cases.length });
     const raw = coded.map((c) => codeVerdict(c, evalCase));
     if (judged.length > 0) {
-      const runs = await Promise.all(Array.from({ length: repeats }, () => judgeOnce(evalCase)));
+      const runs = await Promise.all(
+        Array.from({ length: repeats }, (_, repeat) => judgeOnce(evalCase, repeat)),
+      );
       raw.push(...runs.flat());
     }
     const out = raw.flatMap((v) => {
@@ -460,11 +492,74 @@ function outcome(v: Verdict): Outcome {
   return v.pass === true ? 'passed' : 'failed';
 }
 
+function groupKey(v: Verdict): string {
+  return `${v.caseId}\u0000${v.criterionId}`;
+}
+
+interface RepeatAnalysis {
+  /** (case, criterion) groups whose repeats disagree beyond the tolerance band. */
+  readonly flaky: ReadonlySet<string>;
+  /** Per case: max over its criteria of the pass-value range across repeats. */
+  readonly spread: ReadonlyMap<string, number>;
+}
+
+/**
+ * Flakiness is judged per (case, criterion) on the repeats that answered (status 'ok'): they
+ * disagree on pass and at least one pass-value lies outside the lock's tolerance band. A
+ * disagreement the band explains is `borderline`, not flaky. Code-graded criteria have one
+ * verdict and are never flaky.
+ */
+function analyseRepeats(
+  criteria: readonly Criterion[],
+  verdicts: readonly RunVerdict[],
+  lock: Lock | null,
+  fallbackThreshold: number,
+): RepeatAnalysis {
+  const byId = new Map(criteria.map((c) => [c.id, c]));
+  const groups = new Map<string, RunVerdict[]>();
+  for (const v of verdicts) groups.set(groupKey(v), [...(groups.get(groupKey(v)) ?? []), v]);
+  const flaky = new Set<string>();
+  const spread = new Map<string, number>();
+  for (const [key, group] of groups) {
+    const first = group[0];
+    const criterion = first === undefined ? undefined : byId.get(first.criterionId);
+    if (first === undefined || criterion === undefined || criterion.grader?.kind === 'code') {
+      continue;
+    }
+    const entry = lock?.criteria[criterion.id];
+    const threshold = entry?.threshold ?? fallbackThreshold;
+    const tolerance = entry?.tolerance ?? 0;
+    const decided = group
+      .filter((v) => v.status === 'ok' && v.answer !== undefined)
+      .map((v) => ({ v, value: decideWithValue(v, criterion, threshold, tolerance).value }))
+      .filter((d): d is { v: RunVerdict; value: number } => d.value !== undefined);
+    if (decided.length === 0) continue;
+    const values = decided.map((d) => d.value);
+    const range = Math.max(...values) - Math.min(...values);
+    spread.set(first.caseId, Math.max(spread.get(first.caseId) ?? 0, range));
+    const disagree = new Set(decided.map((d) => d.v.pass === true)).size > 1;
+    const outside = values.some((x) => Math.abs(x - threshold) > tolerance + EPSILON);
+    if (decided.length >= 2 && disagree && outside) flaky.add(key);
+  }
+  return { flaky, spread };
+}
+
+// Precedence over a case's decided state: fail > flaky > unscored > pass.
+function caseOutcome(verdicts: readonly RunVerdict[], flaky: ReadonlySet<string>): CaseOutcome {
+  if (verdicts.length === 0) return 'unscored';
+  const steady = verdicts.filter((v) => !flaky.has(groupKey(v))).map(outcome);
+  if (steady.includes('failed')) return 'fail';
+  if (steady.length < verdicts.length) return 'flaky';
+  if (steady.includes('unscored')) return 'unscored';
+  return steady.includes('passed') ? 'pass' : 'neutral';
+}
+
 function summarise(
   cases: readonly Case[],
   criteria: readonly Criterion[],
   verdicts: readonly RunVerdict[],
   aborted: boolean,
+  repeats: RepeatAnalysis,
 ): RunSummary {
   const summary: RunSummary = {
     total: cases.length,
@@ -473,15 +568,22 @@ function summarise(
     unscored: 0,
     aborted,
     byCriterion: {},
+    flaky: 0,
+    byCase: {},
   };
+  const byCase: Record<string, CaseSummary> = {};
   for (const evalCase of cases) {
-    const outcomes = verdicts.filter((v) => v.caseId === evalCase.id).map(outcome);
+    const own = verdicts.filter((v) => v.caseId === evalCase.id);
     // A case with no verdicts at all (e.g. the gate refused before any judge call) was never
     // scored — it must not default to "passed", or summary.passed drifts from results: [].
-    if (outcomes.includes('failed')) summary.failed += 1;
-    else if (outcomes.length === 0 || outcomes.includes('unscored')) summary.unscored += 1;
+    const state = caseOutcome(own, repeats.flaky);
+    byCase[evalCase.id] = { outcome: state, spread: repeats.spread.get(evalCase.id) ?? 0 };
+    if (state === 'fail') summary.failed += 1;
+    else if (state === 'flaky') summary.flaky = (summary.flaky ?? 0) + 1;
+    else if (state === 'unscored') summary.unscored += 1;
     else summary.passed += 1;
   }
+  summary.byCase = byCase;
   for (const criterion of criteria) {
     const outcomes = verdicts.filter((v) => v.criterionId === criterion.id).map(outcome);
     const passed = outcomes.filter((o) => o === 'passed').length;
@@ -516,6 +618,8 @@ export interface RunEvalsResult {
   summary: RunSummary;
   model: Verdict['model'];
   exitCode: ExitCode;
+  /** How many times each case was judged. */
+  repeats?: number;
   /** Why the gate refused (exit 2); names the criterion or transport. */
   gateReasons: string[];
   gate: GateLabel;
@@ -666,6 +770,7 @@ export async function runEvals(input: RunEvalsInput): Promise<RunEvalsResult> {
 
   // The gate refuses before any judge call: no lock, an unpinned lock under --ci, or a
   // referenced boolean/choice criterion that is not gateable in the lock.
+  const repeats = Math.max(1, config.repeats ?? 1);
   const refusal = preJudgeRefusal(config, lock, active);
   if (refusal !== undefined) {
     events.emit('run:end', {
@@ -676,9 +781,10 @@ export async function runEvals(input: RunEvalsInput): Promise<RunEvalsResult> {
     });
     return {
       results: [],
-      summary: summarise(cases, criteria, [], false),
+      summary: summarise(cases, criteria, [], false, { flaky: new Set(), spread: new Map() }),
       model: runModel([], config.judge),
       exitCode: 2,
+      repeats,
       gateReasons: [refusal],
       gate: gateLabel(config, lock, active, true),
     };
@@ -692,6 +798,7 @@ export async function runEvals(input: RunEvalsInput): Promise<RunEvalsResult> {
     lock,
     events,
     bypassCache: config.bypassCache === true,
+    repeats,
     ...(config.cacheDir === undefined
       ? {}
       : {
@@ -710,7 +817,9 @@ export async function runEvals(input: RunEvalsInput): Promise<RunEvalsResult> {
 
   const results = [...judged, ...disabledVerdicts(cases, disabled, config.judge)];
   const aborted = signal?.aborted === true;
-  const summary = summarise(cases, criteria, results, aborted);
+  const fallbackThreshold = config.threshold ?? DEFAULT_THRESHOLD;
+  const analysis = analyseRepeats(active, results, lock, fallbackThreshold);
+  const summary = summarise(cases, criteria, results, aborted, analysis);
   for (const [criterionId, s] of Object.entries(summary.byCriterion)) {
     if (s.saturated !== null) {
       events.diag('info', 'CRITERION_SATURATED', `criterion ${criterionId} is ${s.saturated}`, {
@@ -738,8 +847,10 @@ export async function runEvals(input: RunEvalsInput): Promise<RunEvalsResult> {
     exitCode = gate.exitCode;
     gateReasons = gate.reasons;
   } else {
+    // Without --gate a disagreement is advisory: flaky groups stay out of the exit decision.
+    const counted = results.filter((v) => !analysis.flaky.has(groupKey(v)));
     exitCode = decideExit(
-      minPass === undefined ? { verdicts: results } : { verdicts: results, minPass },
+      minPass === undefined ? { verdicts: counted } : { verdicts: counted, minPass },
     );
   }
 
@@ -754,6 +865,7 @@ export async function runEvals(input: RunEvalsInput): Promise<RunEvalsResult> {
     summary,
     model: runModel(results, config.judge),
     exitCode,
+    repeats,
     gateReasons,
     gate: gateLabel(config, lock, active, gateReasons.length > 0),
   };
