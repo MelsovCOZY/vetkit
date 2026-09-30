@@ -245,12 +245,13 @@ describe('createOpenInferenceSink', () => {
   });
 });
 
+async function spanFor(v: Verdict): Promise<OtlpSpan | undefined> {
+  const { fetch, calls } = fakeFetch();
+  await createOpenInferenceSink({ endpoint: ENDPOINT, fetch }).doWrite([v], {});
+  return spans(calls[0])[0];
+}
+
 describe('annotator_kind', () => {
-  async function spanFor(v: Verdict): Promise<OtlpSpan | undefined> {
-    const { fetch, calls } = fakeFetch();
-    await createOpenInferenceSink({ endpoint: ENDPOINT, fetch }).doWrite([v], {});
-    return spans(calls[0])[0];
-  }
   const codeModel = { requested: 'r', resolved: 'r', transport: 'code', pinned: true };
 
   test('a judge transport yields LLM', async () => {

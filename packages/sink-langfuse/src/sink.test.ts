@@ -240,6 +240,15 @@ describe('createLangfuseSink doWrite', () => {
   });
 });
 
+async function metaOf(v: Verdict): Promise<Record<string, unknown> | undefined> {
+  const { fetch, calls } = fakeFetch(ok);
+  await sink(fetch).doWrite([v], {});
+  const meta = calls[0]?.body['metadata'];
+  return typeof meta === 'object' && meta !== null
+    ? Object.fromEntries(Object.entries(meta))
+    : undefined;
+}
+
 describe('judge-identity metadata', () => {
   const choiceAnswer: Verdict['answer'] = {
     type: 'choice',
@@ -254,12 +263,6 @@ describe('judge-identity metadata', () => {
     legend: { '0': 'bad', '1': 'ok', '2': 'good' },
     probabilities: { '0': 0.1, '1': 0.3, '2': 0.6 },
   };
-
-  async function metaOf(v: Verdict): Promise<Record<string, unknown> | undefined> {
-    const { fetch, calls } = fakeFetch(ok);
-    await sink(fetch).doWrite([v], {});
-    return calls[0]?.body['metadata'] as Record<string, unknown> | undefined;
-  }
 
   it('boolean, choice and score posts each carry metadata {model, transport, pinned, sink}', async () => {
     for (const answer of [undefined, choiceAnswer, scoreAnswer]) {
