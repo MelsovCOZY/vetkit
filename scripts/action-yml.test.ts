@@ -74,6 +74,12 @@ describe('action.yml: the sticky comment', () => {
     expect(paths).toContain('.vet/report.html');
     expect(String(upload.with?.['include-hidden-files'])).toBe('true');
   });
+
+  it('the upload step lists .vet/badge.json in the same artifact as the reports', () => {
+    const upload = stepByName('Upload');
+    expect(upload.with?.['name']).toBe('${{ inputs.artifact-name }}');
+    expect(String(upload.with?.['path']).split('\n')).toContain('.vet/badge.json');
+  });
 });
 
 describe('action.yml: the baseline cache key', () => {
