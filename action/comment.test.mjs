@@ -12,6 +12,9 @@ import {
   runOutputs,
   upsertComment,
 } from './comment.mjs';
+import * as commentModule from './comment.mjs';
+
+const markerFor = (...args) => commentModule.markerFor(...args);
 
 const FAKE_KEY = 'sk-fake-0123456789abcdef-SEEDED';
 
@@ -239,4 +242,210 @@ void test('main posts on a pull_request event with the baseline file', async () 
   assert.equal(result, 'created');
   assert.ok(calls[1]?.args.includes('repos/o/r/issues/9/comments'));
   assert.match(calls[1]?.stdin ?? '', /still-failing/);
+});
+
+const HEADLINE = {
+  failed: '### vetkit: failed',
+  unscored: '### vetkit: unscored (judge unavailable)',
+  auth: '### vetkit: auth error (the judge rejected the key named by the config)',
+  gate: '### vetkit: gate refused',
+  passed: '### vetkit: passed',
+};
+
+/** The line right after the marker. */
+function headlineOf(body) {
+  return body.split('\n')[1];
+}
+
+const passingDoc = () => runDoc([verdict('case-a', 'tone', 'pass')], { exitCode: 0 });
+
+void test("renderComment headline is '### vetkit: failed' for exitCode 1", () => {
+  const body = renderComment({ current, baseline: undefined, env: {} });
+  assert.equal(headlineOf(body), HEADLINE.failed);
+});
+
+void test("renderComment headline is '### vetkit: unscored (judge unavailable)' for exitCode 3 and for an all-unscored summary", () => {
+  const unscoredOnly = [
+    verdict('case-a', 'tone', 'unscored'),
+    verdict('case-b', 'tone', 'unscored'),
+  ];
+  const byExit = renderComment({
+    current: runDoc(unscoredOnly, { exitCode: 3 }),
+    baseline: undefined,
+    env: {},
+  });
+  assert.equal(headlineOf(byExit), HEADLINE.unscored);
+  const byCounts = renderComment({
+    current: runDoc(unscoredOnly, { exitCode: 1 }),
+    baseline: undefined,
+    env: {},
+  });
+  assert.equal(headlineOf(byCounts), HEADLINE.unscored);
+});
+
+void test("renderComment headline is '### vetkit: auth error (the judge rejected the key named by the config)' for an {error:{code:'JUDGE_UNAUTHORIZED'}} document", () => {
+  const body = renderComment({
+    current: { error: { code: 'JUDGE_UNAUTHORIZED', message: 'HTTP 401' } },
+    baseline: runDoc([verdict('case-a', 'tone', 'pass')]),
+    env: {},
+  });
+  assert.equal(headlineOf(body), HEADLINE.auth);
+  assert.doesNotMatch(body, /\| Case \| Change \|/);
+});
+
+void test("renderComment headline is '### vetkit: gate refused' for exitCode 2 with gateReasons", () => {
+  const body = renderComment({
+    current: runDoc([verdict('case-a', 'tone', 'pass')], {
+      exitCode: 2,
+      gateReasons: ['no criteria.lock.json'],
+    }),
+    baseline: undefined,
+    env: {},
+  });
+  assert.equal(headlineOf(body), HEADLINE.gate);
+  assert.match(body, /no criteria\.lock\.json/);
+});
+
+void test("renderComment headline is '### vetkit: passed' for exitCode 0", () => {
+  const body = renderComment({ current: passingDoc(), baseline: undefined, env: {} });
+  assert.equal(headlineOf(body), HEADLINE.passed);
+});
+
+void test("renderComment shows 'thresholds uncalibrated: run vet validate' when no verdict is calibrated and omits it when one is", () => {
+  const uncalibrated = renderComment({ current: passingDoc(), baseline: undefined, env: {} });
+  assert.match(uncalibrated, /thresholds uncalibrated: run vet validate/);
+  const calibrated = renderComment({
+    current: runDoc([{ ...verdict('case-a', 'tone', 'pass'), calibrated: true }], { exitCode: 0 }),
+    baseline: undefined,
+    env: {},
+  });
+  assert.doesNotMatch(calibrated, /thresholds uncalibrated/);
+});
+
+void test("renderComment explains pinned: false in one line starting 'pinned: false —' and omits it when pinned is true", () => {
+  const unpinned = renderComment({ current: passingDoc(), baseline: undefined, env: {} });
+  const lines = unpinned.split('\n').filter((line) => line.startsWith('pinned: false —'));
+  assert.equal(lines.length, 1);
+  const pinnedDoc = passingDoc();
+  pinnedDoc.model.pinned = true;
+  const pinned = renderComment({ current: pinnedDoc, baseline: undefined, env: {} });
+  assert.doesNotMatch(pinned, /pinned: false/);
+});
+
+void test('renderComment embeds the REPORT_MD file when present and the legacy counts header when absent', () => {
+  const reportMd = '## Report body\n\nsee the tables below';
+  const withReport = renderComment({ current, baseline, env: {}, reportMd });
+  assert.match(withReport, /## Report body/);
+  assert.doesNotMatch(withReport, /\| Case \| Change \|/);
+  assert.ok(withReport.startsWith(MARKER));
+  const legacy = renderComment({ current, baseline, env: {} });
+  assert.match(legacy, /\*\*1 passed · 3 failed · 1 unscored\*\*/);
+  assert.match(legacy, /\| Case \| Change \|/);
+});
+
+void test('renderComment truncates an oversized REPORT_MD and keeps the headline and links', () => {
+  const body = renderComment({
+    current,
+    baseline: undefined,
+    env: { GITHUB_SERVER_URL: 'https://github.com', GITHUB_REPOSITORY: 'o/r', GITHUB_RUN_ID: '5' },
+    reportMd: 'x'.repeat(100_000),
+  });
+  assert.ok(body.length <= 65_536);
+  assert.match(body, /_report truncated; see the artifact_/);
+  assert.equal(headlineOf(body), HEADLINE.failed);
+  assert.match(body, /actions\/runs\/5/);
+});
+
+void test('renderComment links the run URL and, when ARTIFACT_URL is set, the report artifact', () => {
+  const env = {
+    GITHUB_SERVER_URL: 'https://github.com',
+    GITHUB_REPOSITORY: 'o/r',
+    GITHUB_RUN_ID: '123',
+  };
+  const without = renderComment({ current: passingDoc(), baseline: undefined, env });
+  assert.ok(without.includes('https://github.com/o/r/actions/runs/123'));
+  assert.doesNotMatch(without, /artifacts\//);
+  const artifact = 'https://github.com/o/r/actions/runs/123/artifacts/77';
+  const withArtifact = renderComment({
+    current: passingDoc(),
+    baseline: undefined,
+    env: { ...env, ARTIFACT_URL: artifact },
+  });
+  assert.ok(withArtifact.includes('https://github.com/o/r/actions/runs/123'));
+  assert.ok(withArtifact.includes(artifact));
+});
+
+void test('renderComment never contains a seeded key value in the embedded REPORT_MD', () => {
+  const body = renderComment({
+    current: passingDoc(),
+    baseline: undefined,
+    env: { AI_GATEWAY_API_KEY: FAKE_KEY, HOME: '/home/runner' },
+    reportMd: `## Report\n\nthe judge echoed ${FAKE_KEY}`,
+  });
+  assert.ok(!body.includes(FAKE_KEY), 'seeded key leaked through the report body');
+  assert.match(body, /## Report/);
+});
+
+void test('MARKER is suffixed with COMMENT_ID and an invalid id falls back to the default marker with a ::warning', () => {
+  const suffixed = renderComment({
+    current: passingDoc(),
+    baseline: undefined,
+    env: { COMMENT_ID: 'evals-a' },
+  });
+  assert.ok(suffixed.startsWith('<!-- vetkit-report:evals-a -->'));
+  assert.equal(markerFor(''), MARKER);
+  assert.equal(markerFor(undefined), MARKER);
+  const warnings = [];
+  assert.equal(
+    markerFor('bad id -->', (m) => warnings.push(m)),
+    MARKER,
+  );
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0] ?? '', /COMMENT_ID/);
+  assert.equal(
+    markerFor('a'.repeat(65), () => {}),
+    MARKER,
+  );
+});
+
+void test('upsertComment matches the suffixed marker', async () => {
+  const marker = markerFor('evals-a');
+  const { gh, calls } = ghStub([{ code: 0, stdout: '42\n', stderr: '' }]);
+  const result = await upsertComment({
+    gh,
+    repo: 'o/r',
+    issueNumber: 7,
+    body: `${marker}\nhi`,
+    marker,
+  });
+  assert.equal(result, 'updated');
+  assert.ok(calls[0]?.args.some((arg) => arg.includes(marker)));
+  assert.ok(!calls[0]?.args.some((arg) => arg.includes(`"${MARKER}"`)));
+});
+
+void test('main reads the raw output when no run result exists and posts the auth headline with the suffixed marker', async () => {
+  const dir = workspace({
+    'raw.json': JSON.stringify({ error: { code: 'JUDGE_UNAUTHORIZED' } }),
+    'event.json': JSON.stringify({ pull_request: { number: 9 } }),
+    'report.md': '## Report body',
+  });
+  const { gh, calls } = ghStub([{ code: 0, stdout: '', stderr: '' }]);
+  const result = await main({
+    env: {
+      GITHUB_EVENT_NAME: 'pull_request',
+      GITHUB_REPOSITORY: 'o/r',
+      GITHUB_EVENT_PATH: join(dir, 'event.json'),
+      COMMENT_ID: 'evals-a',
+      REPORT_MD: join(dir, 'report.md'),
+      ARTIFACT_URL: 'https://github.com/o/r/actions/runs/1/artifacts/2',
+    },
+    argv: ['comment', join(dir, 'missing.json'), join(dir, 'missing.json'), join(dir, 'raw.json')],
+    gh,
+    warn: () => {},
+  });
+  assert.equal(result, 'created');
+  const posted = JSON.parse(calls[1]?.stdin ?? '{}').body;
+  assert.ok(posted.startsWith('<!-- vetkit-report:evals-a -->'));
+  assert.equal(headlineOf(posted), HEADLINE.auth);
+  assert.match(posted, /artifacts\/2/);
 });
