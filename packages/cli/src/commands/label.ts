@@ -2,7 +2,7 @@
 // (`--tty`), writing `evals/labels/<criterion_id>.csv`.
 import { closeSync, existsSync, fsyncSync, openSync, statSync, writeSync } from 'node:fs';
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import type { Readable, Writable } from 'node:stream';
 import { isCancel, selectKey } from '@clack/prompts';
 import {
@@ -19,6 +19,7 @@ import {
 } from '@vetkit/core';
 import { CEV_ERROR_CODES, VetError, type Case, type Criterion } from '@vetkit/spec';
 import type { Command } from 'commander';
+import { findConfigFile, projectPaths, type ProjectPaths } from '../config-load.ts';
 
 interface WritableLike {
   write(chunk: string): unknown;
@@ -42,6 +43,33 @@ interface LabelOptions {
   readonly criteria: string;
   readonly labels: string;
   readonly labeler?: string;
+}
+
+interface LabelCliOptions extends Partial<Omit<LabelOptions, 'from' | 'tty' | 'labeler'>> {
+  readonly from?: string;
+  readonly tty?: boolean;
+  readonly labeler?: string;
+  readonly config?: string;
+}
+
+// `vet label` never loads the config (no judge, no credential): only its directory matters, so an
+// explicit --config is located, not read; without one the nearest discovered config's directory
+// (else the current directory) is the project root. Explicit --cases/--criteria/--labels stay
+// cwd-relative.
+function defaultPaths(config: string | undefined): ProjectPaths {
+  const cwd = process.cwd();
+  const file = config === undefined ? findConfigFile(cwd) : resolve(config);
+  if (file === undefined) {
+    // No config anywhere: nothing to anchor to, so today's cwd-relative evals/ defaults.
+    const evals = join(cwd, 'evals');
+    return {
+      ...projectPaths(cwd, '.vet'),
+      criteria: join(evals, 'criteria.yaml'),
+      cases: join(evals, 'cases'),
+      labels: join(evals, 'labels'),
+    };
+  }
+  return projectPaths(dirname(file), '.vet');
 }
 
 interface Project {
@@ -209,14 +237,31 @@ export function registerLabel(program: Command, deps: LabelDeps = {}): Command {
     .description('import human labels from CSV or collect them in a terminal loop')
     .option('--from <path>', 'a labels CSV file or a directory of them to import')
     .option('--tty', 'label unlabeled (case, criterion) pairs interactively')
-    .option('--cases <dir>', 'cases directory', 'evals/cases')
-    .option('--criteria <file>', 'criteria file', 'evals/criteria.yaml')
-    .option('--labels <dir>', 'labels directory to write', 'evals/labels')
+    .option('--config <path>', 'config file (default: vetkit.config.* in the current directory)')
+    .option(
+      '--cases <dir>',
+      'cases directory (default: cases next to the config, or under evals/ when that directory exists)',
+    )
+    .option(
+      '--criteria <file>',
+      'criteria file (default: criteria.yaml next to the config, or under evals/ when that directory exists)',
+    )
+    .option(
+      '--labels <dir>',
+      'labels directory to write (default: labels next to the config, or under evals/ when that directory exists)',
+    )
     .option('--labeler <name>', 'labeler name recorded on each --tty row (default: $USER)')
-    .action(async (options: LabelOptions) => {
-      if ((options.from === undefined) === (options.tty !== true)) {
+    .action(async (cliOptions: LabelCliOptions) => {
+      if ((cliOptions.from === undefined) === (cliOptions.tty !== true)) {
         throw new VetError(CEV_ERROR_CODES.CONFIG_INVALID, 'pass exactly one of --from or --tty');
       }
+      const paths = defaultPaths(cliOptions.config);
+      const options: LabelOptions = {
+        ...cliOptions,
+        cases: cliOptions.cases ?? paths.cases,
+        criteria: cliOptions.criteria ?? paths.criteria,
+        labels: cliOptions.labels ?? paths.labels,
+      };
       if (options.from !== undefined) await importLabels(options, options.from, deps);
       else await labelLoop(options, deps);
     });

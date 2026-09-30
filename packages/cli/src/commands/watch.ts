@@ -4,7 +4,7 @@
 // coverage summary on exit. The one exception to the CLI-wide SIGINT->130 rule:
 // first SIGINT drains once and exits 0, second exits 130 immediately. A receiver bind
 // failure is RECEIVER_BIND (exit 2); an out-of-range --sample (and no vetkit.config.ts watch.sampleRate to fall back to) is WATCH_CONFIG (exit 2).
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import {
   createOutbox,
   createSampler,
@@ -32,6 +32,7 @@ import { CEV_EXIT, emit, getLogger, type GlobalOptions } from '../output.ts';
 import { configuredSinkNames, resolveSinks } from '../sinks.ts';
 
 interface WatchOptions extends GlobalOptions {
+  readonly config?: string;
   readonly sample?: string;
   readonly port: string;
   readonly maxInFlight?: string;
@@ -139,9 +140,12 @@ export function renderSummary(summary: CoverageSummary, promotedSkipped: number)
 
 async function watchCommand(options: WatchOptions): Promise<void> {
   const log = getLogger();
-  const loaded = await loadVetConfig({ cwd: process.cwd() });
+  const loaded = await loadVetConfig({
+    cwd: process.cwd(),
+    ...(options.config === undefined ? {} : { configPath: options.config }),
+  });
   for (const warning of loaded.warnings) log.warn(warning);
-  const { config, rootDir, judge } = loaded;
+  const { config, paths, judge } = loaded;
 
   const sampleRate =
     options.sample === undefined ? config.watch.sampleRate : Number(options.sample);
@@ -161,9 +165,9 @@ async function watchCommand(options: WatchOptions): Promise<void> {
     options.maxInFlight === undefined ? config.watch.maxInFlight : Number(options.maxInFlight);
   const promoteOn: 'fail' | 'never' = options.promote ? 'fail' : 'never';
 
-  const criteriaPath = resolve(rootDir, 'evals/criteria.yaml');
-  const casesPath = resolve(rootDir, 'evals/cases');
-  const cacheDir = resolve(rootDir, config.cacheDir);
+  const criteriaPath = paths.criteria;
+  const casesPath = paths.cases;
+  const { cacheDir } = paths;
   const inclusionPath = join(cacheDir, 'watch', 'inclusion.jsonl');
 
   const loadedCriteria = await loadCriteria(criteriaPath);
@@ -281,6 +285,7 @@ export function registerWatch(program: Command): Command {
   return program
     .command('watch')
     .description('sample live OTel traces, judge them, and promote failures into regression cases')
+    .option('--config <path>', 'config file (default: vetkit.config.* in the current directory)')
     .option('--sample <rate>', 'sample rate 0..1 (default: vetkit.config.ts watch.sampleRate)')
     .option('--port <n>', 'OTLP/HTTP receiver port', '4318')
     .option('--max-in-flight <n>', 'concurrent judge calls in flight (default: vetkit.config.ts)')

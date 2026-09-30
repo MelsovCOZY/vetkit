@@ -169,8 +169,14 @@ export function registerCheck(program: Command, deps: ValidateDeps = {}): Comman
     .option('--lock [path]', 'lock file to check (default: criteria.lock.json next to the config)')
     .option('--outbox [dir]', 'outbox to reconcile (default: <cacheDir>/outbox next to the config)')
     .option('--config <path>', 'config file (default: vetkit.config.* in the current directory)')
-    .option('--criteria <file>', 'criteria file (default: evals/criteria.yaml next to the config)')
-    .option('--cases <dir>', 'cases directory (default: evals/cases next to the config)')
+    .option(
+      '--criteria <file>',
+      'criteria file (default: criteria.yaml next to the config, or under evals/ when that directory exists)',
+    )
+    .option(
+      '--cases <dir>',
+      'cases directory (default: cases next to the config, or under evals/ when that directory exists)',
+    )
     .action(async (_options: unknown, command: Command) => {
       await checkCommand(command.optsWithGlobals<CheckOptions>(), deps);
     });

@@ -2,14 +2,17 @@
 // by id and calls doExport once per --criteria file, passing that file's basename as sourceFile. The registry is a local Map, mirroring sources.ts's registerSourcePrefix: 'vitest' is
 // registered by a module-scope call at import time.
 import { basename, extname, join, relative, resolve } from 'node:path';
-import { loadCases, loadCriteria, LOCK_FILE, readLockOrNull } from '@vetkit/core';
+import { loadCases, loadCriteria, readLockOrNull } from '@vetkit/core';
 import { CEV_ERROR_CODES, VetError, type ExporterV1 } from '@vetkit/spec';
 import { vitestExporter } from '@vetkit/export-vitest';
 import type { Command } from 'commander';
-import { loadVetConfig, type LoadedVetConfig, type LoadVetConfigOptions } from '../config-load.ts';
+import {
+  loadVetConfig,
+  projectPaths,
+  type LoadedVetConfig,
+  type LoadVetConfigOptions,
+} from '../config-load.ts';
 import { emit, getLogger, type GlobalOptions } from '../output.ts';
-
-const DEFAULT_CRITERIA_FILES = ['evals/criteria.yaml'];
 
 interface ExportOptions extends GlobalOptions {
   readonly config?: string;
@@ -24,7 +27,9 @@ export interface ExportDeps {
   /** Config loader; defaults to the CLI's shared loadVetConfig. */
   readonly loadConfig?: (
     options: LoadVetConfigOptions,
-  ) => Promise<Pick<LoadedVetConfig, 'rootDir' | 'warnings'>>;
+  ) => Promise<
+    Pick<LoadedVetConfig, 'rootDir' | 'warnings'> & Partial<Pick<LoadedVetConfig, 'paths'>>
+  >;
 }
 
 const exporters = new Map<string, ExporterV1>();
@@ -70,16 +75,17 @@ async function exportCommand(options: ExportOptions, deps: ExportDeps): Promise<
   for (const warning of loaded.warnings) getLogger().warn(warning);
   const { rootDir } = loaded;
 
-  const lockPath = join(rootDir, LOCK_FILE);
+  const paths = loaded.paths ?? projectPaths(rootDir, '.vet');
+  const lockPath = paths.lock;
   const lock = await readLockOrNull(lockPath);
   if (options.requireLock === true && lock === null) throw noLock(lockPath);
 
-  const outDir = resolve(options.out ?? join(rootDir, 'evals/vitest'));
+  const outDir = resolve(options.out ?? paths.vitestOut);
   if (!isInside(rootDir, outDir)) {
     getLogger().warn(`--out ${outDir} is outside the project root ${rootDir}`);
   }
 
-  const casesDir = resolve(options.cases ?? join(rootDir, 'evals/cases'));
+  const casesDir = resolve(options.cases ?? paths.cases);
   const cases = await loadCases(casesDir);
   if (!cases.ok) {
     throw new VetError(
@@ -88,7 +94,7 @@ async function exportCommand(options: ExportOptions, deps: ExportDeps): Promise<
     );
   }
 
-  const criteriaFiles = options.criteria ?? DEFAULT_CRITERIA_FILES;
+  const criteriaFiles = options.criteria ?? [paths.criteria];
   const files: string[] = [];
   for (const criteriaFile of criteriaFiles) {
     const criteriaPath = resolve(rootDir, criteriaFile);
@@ -124,12 +130,18 @@ export function registerExport(program: Command, deps: ExportDeps = {}): Command
     .command('export')
     .description('export criteria, cases and the lock to another eval runner')
     .requiredOption('--to <id>', 'export target id (e.g. vitest)')
-    .option('--out <dir>', 'output directory (default: evals/vitest next to the config)')
+    .option(
+      '--out <dir>',
+      'output directory (default: vitest next to the config, or under evals/ when that directory exists)',
+    )
     .option(
       '--criteria <path...>',
-      'one or more criteria files (default: evals/criteria.yaml next to the config)',
+      'one or more criteria files (default: criteria.yaml next to the config, or under evals/ when that directory exists)',
     )
-    .option('--cases <dir>', 'cases directory (default: evals/cases next to the config)')
+    .option(
+      '--cases <dir>',
+      'cases directory (default: cases next to the config, or under evals/ when that directory exists)',
+    )
     .option('--config <path>', 'config file (default: vetkit.config.* in the current directory)')
     .option('--require-lock', 'fail with EXPORT_NO_LOCK if criteria.lock.json is missing')
     .action(async (_options: unknown, command: Command) => {
