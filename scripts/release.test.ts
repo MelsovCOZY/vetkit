@@ -397,12 +397,21 @@ describe('.changeset entries', () => {
   it('the initial changeset lists every package under packages/* as minor', () => {
     const text = readFileSync(join(ROOT, '.changeset/initial-release.md'), 'utf8');
     const front = /^---\n([\s\S]*?)\n---\n/.exec(text)?.[1] ?? '';
-    const entries = parseYaml(front) as Record<string, string>;
+    const parsed: unknown = parseYaml(front);
+    const entries: Record<string, unknown> =
+      typeof parsed === 'object' && parsed !== null
+        ? Object.fromEntries(Object.entries(parsed))
+        : {};
     const names = readdirSync(PACKAGES_DIR, { withFileTypes: true })
       .filter((d) => d.isDirectory())
-      .map((d) => JSON.parse(readFileSync(join(PACKAGES_DIR, d.name, 'package.json'), 'utf8')).name)
-      .toSorted();
-    expect(Object.keys(entries).toSorted()).toEqual(names);
+      .map((d): unknown => {
+        const manifest: { name?: unknown } = JSON.parse(
+          readFileSync(join(PACKAGES_DIR, d.name, 'package.json'), 'utf8'),
+        );
+        return manifest.name;
+      })
+      .toSorted((x, y) => String(x).localeCompare(String(y)));
+    expect(Object.keys(entries).toSorted((x, y) => x.localeCompare(y))).toEqual(names);
     expect(new Set(Object.values(entries))).toEqual(new Set(['minor']));
     expect(names).toHaveLength(12);
   });
