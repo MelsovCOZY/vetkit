@@ -1,11 +1,14 @@
+import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { VetError } from '@vetkit/spec';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { loadVetConfig, projectPaths, resolveConfigFile } from './config-load.ts';
 import { judgeRequestCount } from './diag.ts';
+import { ensureCliBuilt } from './test-support/build-cli.ts';
 
 const ADAPTER_CONFIG = `export default {
   judge: {
@@ -380,16 +383,20 @@ describe('native config discovery', () => {
   });
 
   test('an enum in vetkit.config.ts is CONFIG_INVALID naming the Node version and the unsupported syntax', async () => {
+    // Under vitest, import() goes through vite (which transpiles enums), so run the built CLI on
+    // real Node instead.
+    await ensureCliBuilt();
     const cwd = await project({
       'vetkit.config.ts': `enum Kind { A }\nexport default { judge: { kind: Kind.A } };\n`,
     });
-    const error = await rejection(loadVetConfig({ cwd }));
-    expect(VetError.isInstance(error) && error.code).toBe('CONFIG_INVALID');
-    const message = error instanceof Error ? error.message : '';
-    expect(message).toContain(process.version);
-    expect(message).toContain('enums');
-    expect(message).toContain('unsupported');
-  });
+    const bin = fileURLToPath(new URL('../dist/bin.js', import.meta.url));
+    const result = spawnSync(process.execPath, [bin, 'estimate'], { cwd, encoding: 'utf8' });
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain('CONFIG_INVALID');
+    expect(result.stderr).toContain(process.version);
+    expect(result.stderr).toContain('enums');
+    expect(result.stderr).toContain('unsupported');
+  }, 180_000);
 
   test('paths: dataDir is <root>/evals when it exists, else <root>', async () => {
     const withEvals = await project({ 'vetkit.config.ts': ADAPTER_CONFIG, 'evals/.keep': '' });

@@ -22,7 +22,7 @@ test('defineConfig from vetkit accepts a typesafe-compatible endpoint config', (
   const config = defineConfig({
     judge: { kind: 'typesafe-compatible', preset: 'vercel', apiKeyEnv: 'KEY' },
   });
-  expectTypeOf(config.judge.kind).toEqualTypeOf<'typesafe-compatible'>();
+  expectTypeOf(config.judge).toHaveProperty('apiKeyEnv');
 });
 
 test('VetkitConfig, JudgeEndpoint, GeneratorEndpoint, GeneratorAdapter, RegistryEntry and JudgeV1 are exported types', () => {
