@@ -127,6 +127,15 @@ function cacheLine(result: RunEvalsResult): string {
   return `cache: ${String(cached)} cached, ${String(judged)} judged`;
 }
 
+function gateLine({ gate }: RunEvalsResult): string {
+  if (gate.tier === 'calibrated') {
+    return `gate: calibrated — ${String(gate.calibratedCriteria)}/${String(gate.judgedCriteria)} criteria calibrated (${LOCK_FILE})`;
+  }
+  return gate.lockPath === null
+    ? 'gate: uncalibrated — thresholds are the 0.5 placeholder; run `vet validate` to calibrate'
+    : `gate: uncalibrated — ${LOCK_FILE} present; pass --gate to enforce it`;
+}
+
 function render(result: RunEvalsResult): string {
   const byCase = new Map<string, RunVerdict[]>();
   for (const v of result.results) byCase.set(v.caseId, [...(byCase.get(v.caseId) ?? []), v]);
@@ -136,6 +145,7 @@ function render(result: RunEvalsResult): string {
     `${String(summary.passed)} passed, ${String(summary.failed)} failed, ${String(summary.unscored)} unscored of ${String(summary.total)}${summary.aborted ? ' (aborted)' : ''}`,
     cacheLine(result),
     `model: ${model.resolved === '' ? model.requested : model.resolved} (transport ${model.transport}, pinned: ${String(model.pinned)})`,
+    gateLine(result),
   );
   return lines.join('\n');
 }
@@ -159,7 +169,8 @@ async function runCommand(options: RunOptions & Readonly<Record<string, unknown>
   for (const warning of loaded.warnings) log.warn(warning);
   const { config, rootDir } = loaded;
   // Missing lock → null (`vet run` then refuses); an invalid one throws (exit 2).
-  const lock = await readLockOrNull(resolve(rootDir, LOCK_FILE));
+  const lockPath = resolve(rootDir, LOCK_FILE);
+  const lock = await readLockOrNull(lockPath);
   const finishes: RunHookFinish[] = [];
   for (const hook of runHooks) {
     const finish = await hook({ options, config, rootDir });
@@ -203,6 +214,7 @@ async function runCommand(options: RunOptions & Readonly<Record<string, unknown>
         },
         // Demo verdicts never enter the verdict cache; the run record below is still written.
         ...(demo ? {} : { cacheDir }),
+        lockPath,
         bypassCache: options.cache === false,
       },
       lock,

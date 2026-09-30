@@ -395,7 +395,9 @@ describe('vet run with the demo judge', () => {
   test('demo judge: pretty stdout ends with model: demo (transport demo, pinned: false) and exits 0 on the scaffold cases', () => {
     const result = runVet(['run'], demoProject(), fixtureEnv('pass'));
     expect(result.status).toBe(0);
-    expect(nonEmptyLines(result.stdout).at(-1)).toBe('model: demo (transport demo, pinned: false)');
+    const lines = nonEmptyLines(result.stdout);
+    expect(lines.at(-2)).toBe('model: demo (transport demo, pinned: false)');
+    expect(lines.at(-1)).toMatch(/^gate: uncalibrated/);
   });
 
   test('demo judge: stderr has exactly one warn line starting demo judge: naming every JEV credential var, .env and vet init --force', () => {
@@ -560,5 +562,109 @@ describe('vet run exit 3 for unscored-only runs', () => {
       if (previous === undefined) delete process.env['VETKIT_FIXTURE_MODE'];
       else process.env['VETKIT_FIXTURE_MODE'] = previous;
     }
+  });
+});
+
+const NO_LOCK_LINE =
+  'gate: uncalibrated — thresholds are the 0.5 placeholder; run `vet validate` to calibrate';
+const LOCK_NO_GATE_LINE =
+  'gate: uncalibrated — criteria.lock.json present; pass --gate to enforce it';
+const CALIBRATED_LINE = 'gate: calibrated — 1/1 criteria calibrated (criteria.lock.json)';
+
+// A calibrated lock for the fixture judge in 'pass' mode (unpinned, so --allow-unpinned).
+function plantLock(project: string, resolved = 'fake-jev-pass-resolved'): string {
+  const lockPath = join(project, 'criteria.lock.json');
+  const pass = 'pass';
+  const lock = {
+    lockVersion: 1,
+    model: { requested: 'fake-jev-pass', resolved, transport: 'fake', pinned: false },
+    criteria: {
+      tone: {
+        wordingHash: 'a'.repeat(64),
+        status: 'calibrated',
+        threshold: 0.5,
+        tolerance: 0,
+        gauntlet: {
+          paraphrase: pass,
+          polarity: pass,
+          injection: pass,
+          master_key: pass,
+          label_permutation: pass,
+          constant_output: pass,
+          position_swap: pass,
+          length: pass,
+        },
+        reasons: [],
+        labelCount: 120,
+      },
+    },
+    datasetHash: 'd'.repeat(64),
+  };
+  writeFileSync(lockPath, JSON.stringify(lock));
+  return lockPath;
+}
+
+describe('vet run gate label', () => {
+  test('pretty output ends with gate: uncalibrated and the validate hint', () => {
+    const result = runVet(['run'], freshProject(), fixtureEnv('pass'));
+    expect(result.status).toBe(0);
+    expect(nonEmptyLines(result.stdout).at(-1)).toBe(NO_LOCK_LINE);
+    expect(result.stdout).not.toContain('gate: calibrated');
+  });
+
+  test('with a lock and no --gate the hint says pass --gate', () => {
+    const project = freshProject();
+    plantLock(project);
+    const result = runVet(['run'], project, fixtureEnv('pass'));
+    expect(result.status).toBe(0);
+    expect(nonEmptyLines(result.stdout).at(-1)).toBe(LOCK_NO_GATE_LINE);
+    expect(result.stdout).not.toContain('gate: calibrated');
+  });
+
+  test('--gate --allow-unpinned on a calibrated lock ends with the calibrated line', () => {
+    const project = freshProject();
+    plantLock(project);
+    const result = runVet(['run', '--gate', '--allow-unpinned'], project, fixtureEnv('pass'));
+    expect(result.status).toBe(0);
+    expect(nonEmptyLines(result.stdout).at(-1)).toBe(CALIBRATED_LINE);
+  });
+
+  test('--json carries gate {tier, lockPath, calibratedCriteria, judgedCriteria}', () => {
+    const project = freshProject();
+    const none = runVet(['run', '--json'], project, fixtureEnv('pass'));
+    expect(parseJson(none.stdout)).toMatchObject({
+      gate: { tier: 'uncalibrated', lockPath: null, calibratedCriteria: 0, judgedCriteria: 1 },
+    });
+
+    const lockPath = plantLock(project);
+    const gated = runVet(
+      ['run', '--json', '--gate', '--allow-unpinned'],
+      project,
+      fixtureEnv('pass'),
+    );
+    expect(gated.status).toBe(0);
+    expect(parseJson(gated.stdout)).toMatchObject({
+      gate: { tier: 'calibrated', lockPath, calibratedCriteria: 1, judgedCriteria: 1 },
+    });
+    expect(gated.stdout).toContain('"gate":{');
+  });
+
+  test('a refused --gate run reports tier uncalibrated and exits 2', () => {
+    const result = runVet(['run', '--json', '--gate'], freshProject(), fixtureEnv('pass'));
+    expect(result.status).toBe(2);
+    expect(parseJson(result.stdout)).toMatchObject({
+      exitCode: 2,
+      gate: { tier: 'uncalibrated', lockPath: null },
+    });
+  });
+
+  test('latest.json carries gate', () => {
+    const project = freshProject();
+    const lockPath = plantLock(project);
+    const result = runVet(['run', '--gate', '--allow-unpinned'], project, fixtureEnv('pass'));
+    expect(result.status).toBe(0);
+    expect(parseJson(readFileSync(recordPath(project), 'utf8'))).toMatchObject({
+      gate: { tier: 'calibrated', lockPath, calibratedCriteria: 1, judgedCriteria: 1 },
+    });
   });
 });

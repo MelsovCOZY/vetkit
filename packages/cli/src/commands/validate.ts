@@ -14,7 +14,9 @@ import {
   calibrate,
   correctedPassRate,
   createEvents,
+  DEFAULT_CALLS_PER_MINUTE,
   DEFAULT_GAUNTLET_CORPORA,
+  estimateValidate,
   gauntletConstantOutput,
   gauntletInjection,
   gauntletLabelPermutation,
@@ -34,6 +36,7 @@ import {
   type CalibrationResult,
   type ConstantEntry,
   type CorrectedPassRateResult,
+  type EstimatePart,
   type Events,
   type InjectionEntry,
   type LabelSet,
@@ -66,9 +69,11 @@ import {
   type LoadVetConfigOptions,
   type ProjectPaths,
 } from '../config-load.ts';
+import { isDemoJudge } from '../demo-judge.ts';
 import { generatorFromEndpoint } from '../generators.ts';
 import { emit, getLogger, type GlobalOptions } from '../output.ts';
 import { renderEvents } from '../render-events.ts';
+import { pricingFor } from './estimate.ts';
 
 const MIN_REPEATS = 3;
 const MAX_REPEATS = 15;
@@ -516,6 +521,39 @@ async function validateCommand(options: ValidateOptions, deps: ValidateDeps): Pr
   }
 }
 
+type PreflightEstimate = Omit<EstimatePart, 'name' | 'reason'>;
+
+// The calibration part of core's validate estimate is exactly labelled cases x repeats judge
+// calls with their tokens, cost and minutes; core's `total` also adds position-swap calls.
+async function calibrationEstimate(
+  judge: JudgeV1,
+  judged: readonly Criterion[],
+  labelled: readonly Case[],
+  repeats: number,
+): Promise<PreflightEstimate> {
+  const { model, requestFormat, transport } = judge.capabilities;
+  const pricing = pricingFor(transport);
+  const est = await estimateValidate({
+    criteria: judged,
+    cases: judged.length === 0 ? [] : labelled,
+    model,
+    repeats,
+    ...(requestFormat === undefined ? {} : { requestFormat }),
+    ...(pricing === undefined ? {} : { pricing }),
+  });
+  const part = est.parts.find((p) => p.name === 'calibration');
+  if (part === undefined) throw new Error('validate estimate has no calibration part');
+  const { calls, inputTokens, cost, minutes } = part;
+  return { calls, inputTokens, cost, minutes };
+}
+
+function estimateLine(est: PreflightEstimate): string {
+  const tokens = est.inputTokens === 'unknown' ? 'unknown' : `~${String(est.inputTokens)}`;
+  const cost = est.cost === 'unknown' ? 'unknown' : `$${est.cost.usd.toFixed(6)}`;
+  const minutes = est.minutes === 'unknown' ? 'unknown' : `~${est.minutes.toFixed(1)}`;
+  return `estimate: ${String(est.calls)} judge calls, ${tokens} input tokens, cost ${cost}, ${minutes} min at ${String(DEFAULT_CALLS_PER_MINUTE)} calls/min (breakdown: vet estimate --for validate)`;
+}
+
 async function validate(
   options: ValidateOptions,
   deps: ValidateDeps,
@@ -542,8 +580,19 @@ async function validate(
   const labelledCases = cases.filter((c) => labelledIds.has(c.id));
   const judged = active.filter((c) => c.grader?.kind !== 'code');
 
+  // Demo verdicts are placeholders: refuse before any judge call, so no lock is written.
+  if (isDemoJudge(judge)) {
+    throw new VetError(
+      CEV_ERROR_CODES.GATE_REFUSED,
+      'demo judge verdicts are never locked; set a real judge key (see `vet init`)',
+    );
+  }
+  // Offline estimate of the calibration pass (labelled cases x repeats). The band top-up,
+  // gauntlets and generator calls are not counted, so it is a floor, not the whole bill.
+  const estimate = await calibrationEstimate(judge, judged, labelledCases, repeats);
+  getLogger().info(estimateLine(estimate));
   events.diag('info', 'VALIDATE_ESTIMATE', 'judge calls before top-up and gauntlets', {
-    calls: judged.length === 0 ? 0 : labelledCases.length * repeats,
+    calls: estimate.calls === 'unknown' ? 0 : estimate.calls,
     cases: labelledCases.length,
     repeats,
   });
@@ -683,6 +732,7 @@ async function validate(
     model: lock.model,
     datasetHash: lock.datasetHash,
     lockPath,
+    estimate,
   };
   // Under --json the LABELS_TOO_FEW error document below is the only stdout document.
   if (!(options.json === true && short.length > 0)) {

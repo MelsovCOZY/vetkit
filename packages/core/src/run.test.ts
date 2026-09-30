@@ -1134,6 +1134,159 @@ describe('gate refusal before any judge call', () => {
     expect(doJudge).toHaveBeenCalledTimes(1);
     expect(out.exitCode).toBe(0);
   });
+
+  const DEMO_REASON = 'demo judge is never gateable (set a real judge key; see `vet init`)';
+
+  test('a demo transport with gate:true refuses before doJudge (call count 0) with the demo reason', async () => {
+    const paths = await suite([BOOL_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
+    const { judge, doJudge } = scriptedJudge(
+      { S1: { 'answers-question': yes(0.9) } },
+      { transport: 'demo' },
+    );
+    const lock = lockOf({ 'answers-question': lockCriterion() });
+    const out = await runEvals({ config: { ...paths, judge, gate: true }, lock });
+
+    expect(doJudge).toHaveBeenCalledTimes(0);
+    expect(out.exitCode).toBe(2);
+    expect(out.results).toEqual([]);
+    expect(out.gateReasons).toEqual([DEMO_REASON]);
+  });
+
+  test('a demo transport without gate judges normally and labels uncalibrated', async () => {
+    const paths = await suite([BOOL_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
+    const { judge, doJudge } = scriptedJudge(
+      { S1: { 'answers-question': yes(0.9) } },
+      { transport: 'demo' },
+    );
+    const out = await runEvals({ config: { ...paths, judge } });
+
+    expect(doJudge).toHaveBeenCalledTimes(1);
+    expect(out.exitCode).toBe(0);
+    expect(out.gateReasons).toEqual([]);
+    expect(out.gate.tier).toBe('uncalibrated');
+  });
+
+  test('demo refusal wins over the no-lock reason', async () => {
+    const paths = await suite([BOOL_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
+    const { judge, doJudge } = scriptedJudge(
+      { S1: { 'answers-question': yes(0.9) } },
+      { transport: 'demo' },
+    );
+    const out = await runEvals({ config: { ...paths, judge, gate: true }, lock: null });
+
+    expect(doJudge).toHaveBeenCalledTimes(0);
+    expect(out.exitCode).toBe(2);
+    expect(out.gateReasons).toEqual([DEMO_REASON]);
+  });
+
+  test('a served id that differs from the lock refuses after judging and keeps the results', async () => {
+    const paths = await suite([BOOL_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
+    const { judge, doJudge } = scriptedJudge({ S1: { 'answers-question': yes(0.9) } });
+    const lock = lockOf({ 'answers-question': lockCriterion() });
+    const swapped: Lock = { ...lock, model: { ...lock.model, resolved: 'other/jev-9' } };
+    const out = await runEvals({ config: { ...paths, judge, gate: true }, lock: swapped });
+
+    expect(doJudge).toHaveBeenCalledTimes(1);
+    expect(out.exitCode).toBe(2);
+    expect(out.results).toHaveLength(1);
+    expect(out.gateReasons.join('\n')).toContain("served model 'fake/jev-1'");
+    expect(out.gate.tier).toBe('uncalibrated');
+  });
+
+  test('a differing served id never refuses when gate is not set', async () => {
+    const paths = await suite([BOOL_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
+    const { judge } = scriptedJudge({ S1: { 'answers-question': yes(0.9) } });
+    const lock = lockOf({ 'answers-question': lockCriterion() });
+    const swapped: Lock = { ...lock, model: { ...lock.model, resolved: 'other/jev-9' } };
+    const out = await runEvals({ config: { ...paths, judge }, lock: swapped });
+
+    expect(out.exitCode).toBe(0);
+    expect(out.gateReasons).toEqual([]);
+  });
+});
+
+describe('gate tier', () => {
+  const LOCK_PATH = '/abs/project/criteria.lock.json';
+
+  test('no lock → tier uncalibrated, lockPath null', async () => {
+    const paths = await suite([BOOL_YAML, SCORE_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
+    const { judge } = scriptedJudge({
+      S1: { 'answers-question': yes(0.9), helpfulness: score(0.5) },
+    });
+    const out = await runEvals({ config: { ...paths, judge } });
+
+    expect(out.gate).toEqual({
+      tier: 'uncalibrated',
+      lockPath: null,
+      calibratedCriteria: 0,
+      judgedCriteria: 1,
+    });
+  });
+
+  test('lock present without gate → uncalibrated', async () => {
+    const paths = await suite([BOOL_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
+    const { judge } = scriptedJudge({ S1: { 'answers-question': yes(0.9) } });
+    const lock = lockOf({ 'answers-question': lockCriterion() });
+    const out = await runEvals({ config: { ...paths, judge, lockPath: LOCK_PATH }, lock });
+
+    expect(out.exitCode).toBe(0);
+    expect(out.gate).toEqual({
+      tier: 'uncalibrated',
+      lockPath: LOCK_PATH,
+      calibratedCriteria: 1,
+      judgedCriteria: 1,
+    });
+  });
+
+  test('gate on calibrated lock → calibrated with counts', async () => {
+    const paths = await suite(
+      [BOOL_YAML, CHOICE_YAML, SCORE_YAML],
+      [{ id: 'c1', input: { state: 'S1' } }],
+    );
+    const { judge } = scriptedJudge({
+      S1: { 'answers-question': yes(0.9), tone: tone('polite'), helpfulness: score(0.5) },
+    });
+    const lock = lockOf({
+      'answers-question': lockCriterion(),
+      tone: lockCriterion(),
+    });
+    const out = await runEvals({
+      config: { ...paths, judge, gate: true, lockPath: LOCK_PATH },
+      lock,
+    });
+
+    expect(out.exitCode).toBe(0);
+    expect(out.gate).toEqual({
+      tier: 'calibrated',
+      lockPath: LOCK_PATH,
+      calibratedCriteria: 2,
+      judgedCriteria: 2,
+    });
+  });
+
+  test('a disabled criterion counts toward neither number', async () => {
+    const disabledYaml = `${NEG_YAML}    enabled: false\n`;
+    const paths = await suite([BOOL_YAML, disabledYaml], [{ id: 'c1', input: { state: 'S1' } }]);
+    const { judge } = scriptedJudge({ S1: { 'answers-question': yes(0.9) } });
+    const lock = lockOf({ 'answers-question': lockCriterion() });
+    const out = await runEvals({
+      config: { ...paths, judge, gate: true, lockPath: LOCK_PATH },
+      lock,
+    });
+
+    expect(out.gate).toMatchObject({ calibratedCriteria: 1, judgedCriteria: 1 });
+  });
+
+  test('gate refused → uncalibrated', async () => {
+    const paths = await suite([BOOL_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
+    const { judge, doJudge } = scriptedJudge({ S1: { 'answers-question': yes(0.9) } });
+    const out = await runEvals({ config: { ...paths, judge, gate: true } });
+
+    expect(doJudge).toHaveBeenCalledTimes(0);
+    expect(out.exitCode).toBe(2);
+    expect(out.gate.tier).toBe('uncalibrated');
+    expect(out.gate.lockPath).toBeNull();
+  });
 });
 
 // ---------- one threshold scale across calibrate, lock and run ----------

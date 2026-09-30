@@ -6,9 +6,11 @@ import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { redactSecretsDeep, safeParseJson, secretsFrom } from '@vetkit/spec';
-import type { RunEvalsResult } from './run.ts';
+import type { GateLabel, RunEvalsResult } from './run.ts';
 
-export interface RunRecord extends RunEvalsResult {
+export interface RunRecord extends Omit<RunEvalsResult, 'gate'> {
+  /** Absent in records written by `vet rerun` and by versions before the gate label. */
+  gate?: GateLabel;
   criteriaPath: string;
   casesPath: string;
   /** ISO 8601 time the run started. */

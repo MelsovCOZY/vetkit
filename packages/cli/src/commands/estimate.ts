@@ -35,7 +35,7 @@ function isPreset(name: string): name is JevPresetName {
   return Object.hasOwn(JEV_PRESETS, name);
 }
 
-function pricingFor(transport: string): EstimatePricing | undefined {
+export function pricingFor(transport: string): EstimatePricing | undefined {
   return isPreset(transport) ? JEV_PRESETS[transport].pricing : undefined;
 }
 

@@ -25,10 +25,12 @@ import { createFileCache, type VerdictCache } from './judge/cache.ts';
 import { createLimiter, type Limiter, type PacingEvent } from './judge/pacing.ts';
 import { gradeCode } from './judge/reference.ts';
 import { httpStatusOf, judgeCase } from './judge/request.ts';
-import { assertLockGates } from './validate/lock.ts';
+import { assertLockGates, lockEntryGateable } from './validate/lock.ts';
 
 /** Uncalibrated placeholder threshold, never trusted for gating. */
 const DEFAULT_THRESHOLD = 0.5;
+/** A judge with this transport produces placeholder verdicts that can never gate. */
+const DEMO_TRANSPORT = 'demo';
 const DEFAULT_ESCAPE_THRESHOLD = 0.5;
 const ESCAPE_KEY = 'escape';
 /** Float slack so |p - threshold| == tolerance counts as inside the band. */
@@ -76,6 +78,8 @@ export interface RunConfig {
   readonly ci?: boolean;
   readonly gatePolicy?: Partial<GatePolicy>;
   readonly cacheDir?: string;
+  /** Absolute path of the lock the caller read; reported as `gate.lockPath` when a lock exists. */
+  readonly lockPath?: string;
   /** Judge every case afresh: the verdict cache is neither read nor written. */
   readonly bypassCache?: boolean;
 }
@@ -514,6 +518,17 @@ export interface RunEvalsResult {
   exitCode: ExitCode;
   /** Why the gate refused (exit 2); names the criterion or transport. */
   gateReasons: string[];
+  gate: GateLabel;
+}
+
+/** Which gate tier this run was judged under; `calibrated` only for an accepted `--gate` run. */
+export interface GateLabel {
+  tier: 'uncalibrated' | 'calibrated';
+  lockPath: string | null;
+  /** Boolean/choice criteria (enabled) whose lock entry is gateable. */
+  calibratedCriteria: number;
+  /** Boolean/choice criteria (enabled). */
+  judgedCriteria: number;
 }
 
 interface LoadIssue {
@@ -555,6 +570,9 @@ function preJudgeRefusal(
   criteria: readonly Criterion[],
 ): string | undefined {
   if (config.gate !== true && config.ci !== true) return undefined;
+  if (config.gate === true && config.judge.capabilities.transport === DEMO_TRANSPORT) {
+    return 'demo judge is never gateable (set a real judge key; see `vet init`)';
+  }
   if (lock === null) {
     if (config.gate !== true) return undefined;
     return evaluateGate({
@@ -574,6 +592,25 @@ function preJudgeRefusal(
     },
   );
   return checked.ok ? undefined : `${checked.code}: ${checked.message}`;
+}
+
+function gateLabel(
+  config: RunConfig,
+  lock: Lock | null,
+  active: readonly Criterion[],
+  refused: boolean,
+): GateLabel {
+  const judged = active.filter((c) => c.type !== 'score');
+  const allowUnpinned = config.gatePolicy?.allowUnpinned ?? false;
+  return {
+    tier: config.gate === true && !refused ? 'calibrated' : 'uncalibrated',
+    lockPath: lock === null ? null : (config.lockPath ?? null),
+    calibratedCriteria:
+      lock === null
+        ? 0
+        : judged.filter((c) => lockEntryGateable(lock.criteria[c.id], allowUnpinned)).length,
+    judgedCriteria: judged.length,
+  };
 }
 
 function disabledVerdicts(
@@ -643,6 +680,7 @@ export async function runEvals(input: RunEvalsInput): Promise<RunEvalsResult> {
       model: runModel([], config.judge),
       exitCode: 2,
       gateReasons: [refusal],
+      gate: gateLabel(config, lock, active, true),
     };
   }
 
@@ -711,5 +749,12 @@ export async function runEvals(input: RunEvalsInput): Promise<RunEvalsResult> {
     exitCode,
     durationMs: Math.round(performance.now() - started),
   });
-  return { results, summary, model: runModel(results, config.judge), exitCode, gateReasons };
+  return {
+    results,
+    summary,
+    model: runModel(results, config.judge),
+    exitCode,
+    gateReasons,
+    gate: gateLabel(config, lock, active, gateReasons.length > 0),
+  };
 }
