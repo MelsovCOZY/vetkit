@@ -911,6 +911,39 @@ describe('vet validate judge outage', () => {
   });
 });
 
+// Runs validate with info logging on, recording stderr lines and judge:request events in order.
+async function orderedRun(
+  root: string,
+  judge: JudgeV1,
+  events: Events,
+): Promise<{ order: string[]; text: string; error?: unknown }> {
+  const order: string[] = [];
+  const out: string[] = [];
+  events.on('judge:request', () => order.push('judge:request'));
+  configureOutput({ json: true });
+  const err = vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+    order.push(`stderr:${String(chunk).trimEnd()}`);
+    return true;
+  });
+  const std = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+    out.push(String(chunk));
+    return true;
+  });
+  const program = new Command();
+  program.exitOverride().option('--json');
+  registerValidate(program, depsFor(root, judge, events));
+  let error: unknown;
+  try {
+    await program.parseAsync(['node', 'vet', '--json', 'validate']);
+  } catch (caught) {
+    error = caught;
+  } finally {
+    err.mockRestore();
+    std.mockRestore();
+  }
+  return { order, text: out.join(''), ...(error === undefined ? {} : { error }) };
+}
+
 describe('validate preflight', () => {
   const LABELLED = 100;
   const ESTIMATE_LINE =
@@ -923,39 +956,6 @@ describe('validate preflight', () => {
     for (let i = 0; i < LABELLED / 2; i += 1)
       rows.push({ id: `f${String(i)}`, p: 0.01, label: 'fail' });
     return rows;
-  }
-
-  // Runs validate with info logging on, recording stderr lines and judge:request events in order.
-  async function orderedRun(
-    root: string,
-    judge: JudgeV1,
-    events: Events,
-  ): Promise<{ order: string[]; stdout: string; error?: unknown }> {
-    const order: string[] = [];
-    const out: string[] = [];
-    events.on('judge:request', () => order.push('judge:request'));
-    configureOutput({ json: true });
-    const err = vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
-      order.push(`stderr:${String(chunk).trimEnd()}`);
-      return true;
-    });
-    const std = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
-      out.push(String(chunk));
-      return true;
-    });
-    const program = new Command();
-    program.exitOverride().option('--json');
-    registerValidate(program, depsFor(root, judge, events));
-    let error: unknown;
-    try {
-      await program.parseAsync(['node', 'vet', '--json', 'validate']);
-    } catch (caught) {
-      error = caught;
-    } finally {
-      err.mockRestore();
-      std.mockRestore();
-    }
-    return { order, stdout: out.join(''), ...(error === undefined ? {} : { error }) };
   }
 
   test('prints the estimate line before the first judge call (event order asserted)', async () => {
@@ -979,9 +979,9 @@ describe('validate preflight', () => {
     const root = await project(rows);
     const events = createEvents();
     const { judge } = countingJudge(rows, events);
-    const { stdout } = await orderedRun(root, judge, events);
+    const { text } = await orderedRun(root, judge, events);
 
-    const doc = parse(stdout.split('\n').find((l) => l.trim() !== '') ?? '');
+    const doc = parse(text.split('\n').find((l) => l.trim() !== '') ?? '');
     const estimate = doc['estimate'];
     expect(isRecord(estimate)).toBe(true);
     expect(estimate).toMatchObject({ calls: 300, cost: 'unknown', minutes: 12 });
@@ -991,7 +991,7 @@ describe('validate preflight', () => {
       cost: 'unknown',
       minutes: 12,
     });
-    expect(Number((estimate as { inputTokens: number }).inputTokens)).toBeGreaterThan(0);
+    expect(isRecord(estimate) ? estimate['inputTokens'] : 0).toBeGreaterThan(0);
   });
 
   test('cost is unknown for a transport with no pricing row', async () => {
