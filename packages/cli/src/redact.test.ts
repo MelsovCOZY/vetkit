@@ -78,3 +78,42 @@ describe('createLogger + redact', () => {
     expect(line).not.toContain(secret);
   });
 });
+
+describe('redact: shared sanitizer contract', () => {
+  test('short values are not substituted', () => {
+    expect(redact('please edit the file', { MY_KEY: 'e1t' })).toBe('please edit the file');
+    expect(redact('please edit the file', { MY_KEY: 'edi' })).toBe('please edit the file');
+  });
+
+  test('boundary match', () => {
+    const env = { MY_KEY: 'abcdefgh' };
+    expect(redact('xabcdefgh abcdefghx', env)).toBe('xabcdefgh abcdefghx');
+    expect(redact('key=abcdefgh;', env)).toBe('key=<redacted:8 chars>;');
+  });
+
+  test('matches env names containing CREDENTIAL, case-insensitively', () => {
+    expect(redact('v=svc-cred-value', { svc_credential_x: 'svc-cred-value' })).toBe(
+      'v=<redacted:14 chars>',
+    );
+  });
+
+  test('json stays valid', () => {
+    const secret = 'canary-Key-9f8e7d6c5b4a';
+    const out = redact(JSON.stringify({ header: `authorization: ${secret}`, n: 1 }), {
+      AI_GATEWAY_API_KEY: secret,
+    });
+    expect(out).not.toContain(secret);
+    expect(JSON.parse(out)).toEqual({ header: 'authorization: <redacted:23 chars>', n: 1 });
+  });
+
+  test('a canary in a judge request header value never survives', () => {
+    const secret = 'canary-Key-9f8e7d6c5b4a';
+    const header = { 'x-api-key': secret, Authorization: `Basic ${secret}` };
+    const out = redact({ headers: header }, { TYPESAFE_API_KEY: secret });
+    expect(JSON.stringify(out)).not.toContain(secret);
+  });
+
+  test('identity when no secrets', () => {
+    expect(redact('plain output, path /a/b', {})).toBe('plain output, path /a/b');
+  });
+});
