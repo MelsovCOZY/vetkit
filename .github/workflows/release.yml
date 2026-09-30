@@ -82,6 +82,9 @@ jobs:
       - name: Preflight (packed tarball contents)
         run: bun scripts/release-preflight.ts --tarballs dist-tarballs
 
+      - name: Release check
+        run: bun scripts/release-check.ts dist-tarballs
+
       - name: Publish tarballs (dependency order, idempotent)
         run: |
           set -euo pipefail
@@ -96,3 +99,43 @@ jobs:
             fi
             npm publish "$tgzPath" --provenance --access public
           done
+
+  # Runs only after a successful publish. Package tags (name@version) come from changesets;
+  # the per-version release and the moving major tag live in a separate namespace (v<version>, v<major>).
+  action-tag:
+    name: Tag release
+    needs: publish
+    if: needs.publish.result == 'success'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+
+      - run: bun install --frozen-lockfile
+
+      - name: Tag packages (changeset git-tag, idempotent)
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          VERSION="$(node -p "require('./packages/cli/package.json').version")"
+          if [ -z "$(git tag -l "vetkit@${VERSION}")" ]; then bunx changeset git-tag; fi
+          git push origin --tags
+
+      - name: Release and major tag (idempotent)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./packages/cli/package.json').version")"
+          MAJOR=${VERSION%%.*}
+          gh release view "v$VERSION" >/dev/null 2>&1 || gh release create "v$VERSION" --target "$GITHUB_SHA" --title "vetkit $VERSION" --notes "vetkit $VERSION"
+          git tag -f "v$MAJOR" "$GITHUB_SHA"
+          git push --force origin "refs/tags/v$MAJOR"

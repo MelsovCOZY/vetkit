@@ -7,6 +7,7 @@ export default defineConfig({
   unbundle: true,
   dts: true,
   publint: true,
+  sourcemap: false,
   // package.json has "type": "module", so plain .js/.d.ts is already ESM;
   // tsdown's fixedExtension default (true on platform 'node') would emit .mjs/.d.mts,
   // which does not match the exports map's ./dist/index.js and ./dist/index.d.ts.

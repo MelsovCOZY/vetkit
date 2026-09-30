@@ -94,6 +94,7 @@ describe('.github/workflows/ci.yml', () => {
       'bun run check',
       'bun run build',
       'bun run pack',
+      'bun scripts/release-check.ts dist-tarballs',
     ]);
   });
 

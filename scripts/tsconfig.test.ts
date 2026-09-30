@@ -101,7 +101,7 @@ describe('tsconfig.base.json compiler flags', () => {
     ['noUncheckedIndexedAccess', true],
     ['exactOptionalPropertyTypes', true],
     ['declaration', true],
-    ['declarationMap', true],
+    ['declarationMap', false],
   ])('sets %s to %j', (flag, expected) => {
     expect(baseOptions[flag]).toBe(expected);
   });
