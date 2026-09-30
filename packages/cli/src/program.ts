@@ -17,6 +17,7 @@ import { registerRunSinks } from './commands/run-sinks.ts';
 import { registerValidate } from './commands/validate.ts';
 import { registerWatch } from './commands/watch.ts';
 import { handleError } from './errors.ts';
+import { configureEnvFiles } from './env-file.ts';
 import { CEV_EXIT, configureOutput, type GlobalOptions } from './output.ts';
 import { nodeFloorError } from './node-floor.ts';
 
@@ -54,6 +55,7 @@ export function createProgram(): Command {
     .option('-q, --quiet', 'suppress info and warn lines on stderr')
     .option('--verbose', 'add debug lines on stderr')
     .option('--no-color', 'disable coloured output (FORCE_COLOR still wins)')
+    .option('--no-env-file', 'do not load .env/.env.local next to the config')
     .addHelpText('after', EXIT_CODES_HELP)
     .exitOverride();
   // Replaces commander's own --version listener so `vet --version --json` prints JSON.
@@ -64,7 +66,9 @@ export function createProgram(): Command {
     throw new CommanderError(0, 'commander.version', version);
   });
   program.hook('preAction', (_root, actionCommand) => {
-    const log = configureOutput(actionCommand.optsWithGlobals<GlobalOptions>());
+    const opts = actionCommand.optsWithGlobals<GlobalOptions & { envFile?: boolean }>();
+    const log = configureOutput(opts);
+    configureEnvFiles({ enabled: opts.envFile !== false });
     log.debug(`vet ${version}: running ${actionCommand.name()}`);
   });
   registerDoctor(program);
