@@ -495,7 +495,36 @@ describe('vet validate', () => {
     expect(VetError.isInstance(error) && error.message).toContain('tone: 10 labels (need 100)');
     expect(exitCodeOf(error)).toBe(2);
     await expect(lockAt(root)).rejects.toThrow();
-    expect(report()['criteria']).toEqual(expect.any(Array));
+    // The top-level handler renders the error document into the same stdout stream; under
+    // --json the command itself must have written nothing before it.
+    const rendered: string[] = [];
+    const sink = { write: () => true };
+    try {
+      handleError(error, {
+        json: true,
+        verbose: false,
+        strict: false,
+        stdout: {
+          write: (chunk: string) => {
+            rendered.push(chunk);
+            return true;
+          },
+        },
+        stderr: sink,
+        exit: () => {
+          throw new Error('exit');
+        },
+      });
+    } catch {
+      // unwound by the exit double above
+    }
+    const docs = [...stdout, ...rendered]
+      .join('')
+      .split('\n')
+      .filter((l) => l.trim() !== '');
+    expect(docs).toHaveLength(1);
+    const doc = parse(docs[0] ?? '');
+    expect(doc['error']).toMatchObject({ code: CEV_ERROR_CODES.LABELS_TOO_FEW });
   });
 
   test('fewer than 100 labels with a pre-existing lock: the refusal leaves it untouched', async () => {
