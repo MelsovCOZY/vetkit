@@ -68,7 +68,7 @@ function project(withLock = true): string {
       lockVersion: 1,
       model: {
         requested: 'fake-jev-pass',
-        resolved: 'fake-jev-pass',
+        resolved: 'fake-jev-pass-resolved',
         transport: 'fake',
         pinned: false,
       },
