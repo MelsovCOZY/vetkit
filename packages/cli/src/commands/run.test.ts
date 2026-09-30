@@ -651,7 +651,11 @@ const TONE_WORDING_HASH = computeWordingHash({
 
 // A calibrated lock for the fixture judge in 'pass' mode (unpinned, so --allow-unpinned), written
 // under the default request format.
-function plantLock(project: string, resolved = 'fake-jev-pass-resolved'): string {
+function plantLock(
+  project: string,
+  resolved = 'fake-jev-pass-resolved',
+  wordingHash = TONE_WORDING_HASH,
+): string {
   const lockPath = join(project, 'criteria.lock.json');
   const pass = 'pass';
   const lock = {
@@ -659,7 +663,7 @@ function plantLock(project: string, resolved = 'fake-jev-pass-resolved'): string
     model: { requested: 'fake-jev-pass', resolved, transport: 'fake', pinned: false },
     criteria: {
       tone: {
-        wordingHash: TONE_WORDING_HASH,
+        wordingHash,
         status: 'calibrated',
         threshold: 0.5,
         tolerance: 0,
@@ -736,6 +740,25 @@ describe('vet run gate label', () => {
       exitCode: 2,
       gate: { tier: 'uncalibrated', lockPath: null },
     });
+  });
+
+  test('--gate --allow-unpinned refuses a lock whose gated criterion wording changed: exit 2, tier uncalibrated', () => {
+    const project = freshProject();
+    const lockPath = plantLock(project, undefined, 'a'.repeat(64));
+    const result = runVet(
+      ['run', '--json', '--gate', '--allow-unpinned'],
+      project,
+      fixtureEnv('pass'),
+    );
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain(
+      "gate refused: criterion 'tone' changed since calibration (wording); run `vet validate`",
+    );
+    expect(parseJson(result.stdout)).toMatchObject({
+      exitCode: 2,
+      gate: { tier: 'uncalibrated', lockPath },
+    });
+    expect(result.stdout).not.toContain('"tier":"calibrated"');
   });
 
   test('latest.json carries gate', () => {

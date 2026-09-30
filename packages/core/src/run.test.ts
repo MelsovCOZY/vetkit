@@ -527,6 +527,50 @@ describe('gate policy (exit 2)', () => {
     expect(bad.exitCode).toBe(1);
   });
 
+  test('gate refuses a lock whose gated criterion wording changed since calibration; tier uncalibrated', async () => {
+    const paths = await suite([BOOL_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
+    const { judge } = scriptedJudge({ S1: { 'answers-question': yes(0.9) } });
+    const lock = lockOf({ 'answers-question': lockCriterion({ wordingHash: 'y'.repeat(64) }) });
+    const out = await runEvals({ config: { ...paths, judge, gate: true }, lock });
+
+    expect(out.exitCode).toBe(2);
+    expect(out.gateReasons).toEqual([
+      "criterion 'answers-question' changed since calibration (wording); run `vet validate`",
+    ]);
+    expect(out.gate.tier).toBe('uncalibrated');
+  });
+
+  test('gate refuses a lock written under another request format than the judge uses', async () => {
+    const paths = await suite([BOOL_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
+    // scriptedJudge reads the raw state; this lock was written under fenced-v1.
+    const { judge } = scriptedJudge({ S1: { 'answers-question': yes(0.9) } });
+    const lock: Lock = {
+      ...lockOf({ 'answers-question': lockCriterion() }),
+      requestFormat: 'fenced-v1',
+    };
+    const out = await runEvals({ config: { ...paths, judge, gate: true }, lock });
+
+    expect(out.exitCode).toBe(2);
+    expect(out.gateReasons).toHaveLength(1);
+    expect(out.gateReasons[0]).toContain("request format 'raw'");
+    expect(out.gateReasons[0]).toContain("'fenced-v1'");
+    expect(out.gate.tier).toBe('uncalibrated');
+  });
+
+  test('a changed case set (datasetHash) never refuses the gate: exit by results, tier calibrated', async () => {
+    const paths = await suite([BOOL_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
+    const { judge } = scriptedJudge({ S1: { 'answers-question': yes(0.9) } });
+    const lock: Lock = {
+      ...lockOf({ 'answers-question': lockCriterion() }),
+      datasetHash: 'z'.repeat(64),
+    };
+    const out = await runEvals({ config: { ...paths, judge, gate: true }, lock });
+
+    expect(out.exitCode).toBe(0);
+    expect(out.gateReasons).toEqual([]);
+    expect(out.gate.tier).toBe('calibrated');
+  });
+
   test('evaluateGate with no lock returns exit 2 and reasons', () => {
     const result = evaluateGate({
       verdicts: [],
