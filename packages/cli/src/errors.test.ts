@@ -1,6 +1,6 @@
 import { Writable } from 'node:stream';
 import { CommanderError } from 'commander';
-import { VetError } from '@vetkit/spec';
+import { CEV_ERROR_CODES, VetError } from '@vetkit/spec';
 import { describe, expect, test, vi } from 'vitest';
 import {
   EXIT_INTERNAL,
@@ -10,9 +10,12 @@ import {
   EXIT_UNSCORED_ONLY,
   EXIT_USAGE,
   handleError,
+  HINTS_BY_CODE,
+  hintFor,
   withExitCode,
   type HandleErrorContext,
 } from './errors.ts';
+import { createProgram } from './program.ts';
 
 const MARKER = Symbol.for('vetkit.error');
 
@@ -287,7 +290,7 @@ describe('handleError --json mode', () => {
         error: {
           code: 'E_CONFIG',
           message: 'bad config',
-          hint: 'check your configuration and CLI flags, then retry.',
+          hint: hintFor('E_CONFIG'),
         },
       })}\n`,
     );
@@ -304,7 +307,6 @@ describe('handleError --json mode', () => {
 });
 
 describe('handleError input, credential and lock codes', () => {
-  const CONFIG_HINT = 'check your configuration and CLI flags, then retry.';
   const configCodes = [
     'CRITERIA_INVALID',
     'CASE_INVALID',
@@ -316,10 +318,10 @@ describe('handleError input, credential and lock codes', () => {
 
   for (const base of configCodes) {
     for (const code of [base, `E_${base}`]) {
-      test(`${code} exits 2 with the config hint`, () => {
+      test(`${code} exits 2 with its own hint`, () => {
         const result = run(markerError(code, 'bad input'));
         expect(result.code).toBe(EXIT_USAGE);
-        expect(result.stderr).toBe(`error ${code}: bad input\n${CONFIG_HINT}\n`);
+        expect(result.stderr).toBe(`error ${code}: bad input\n${hintFor(code)}\n`);
       });
     }
   }
@@ -347,7 +349,7 @@ describe('handleError exit override (withExitCode)', () => {
     const result = run(err);
     expect(result.code).toBe(EXIT_USAGE);
     expect(result.stderr).toBe(
-      "error SOURCE_UNREADABLE: --source 'x': x is not a readable directory\ncheck your configuration and CLI flags, then retry.\n",
+      `error SOURCE_UNREADABLE: --source 'x': x is not a readable directory\n${hintFor('SOURCE_UNREADABLE')}\n`,
     );
   });
 
@@ -363,5 +365,88 @@ describe('handleError exit override (withExitCode)', () => {
     expect(result.code).toBe(EXIT_USAGE);
     expect(result.stdout).toContain('"code":"SOURCE_UNREADABLE"');
     expect(result.stdout).toContain('"message":"no such directory"');
+  });
+});
+
+const OLD_GENERIC_HINT = 'check your configuration and CLI flags, then retry.';
+const GLOBAL_FLAGS = ['--json', '--quiet', '--verbose', '--no-color'];
+
+describe('hints', () => {
+  test('hints: every CEV_ERROR_CODES value has a non-empty hint that differs from the old generic one', () => {
+    for (const code of Object.values(CEV_ERROR_CODES)) {
+      const line = run(markerError(code, 'x')).stderr.split('\n')[1];
+      expect(line, code).toBeTruthy();
+      expect(line, code).not.toBe(OLD_GENERIC_HINT);
+    }
+  });
+
+  test('hints: LABELS_TOO_FEW names vet label', () => {
+    expect(hintFor('LABELS_TOO_FEW')).toContain('vet label --from');
+    expect(hintFor('LABELS_TOO_FEW')).toContain('vet label --tty');
+    expect(hintFor('LABELS_TOO_FEW')).toContain('vet validate');
+  });
+
+  test('hints: CRITERIA_INVALID names vet lint', () => {
+    expect(hintFor('CRITERIA_INVALID')).toContain('vet lint');
+  });
+
+  test('hints: RUN_NOT_FOUND names vet run', () => {
+    expect(hintFor('RUN_NOT_FOUND')).toContain('vet run');
+  });
+
+  test('hints: GATE_UNCALIBRATED names vet validate', () => {
+    expect(hintFor('GATE_UNCALIBRATED')).toContain('vet validate');
+  });
+
+  test('hints: E_SINK_WRITE hint does not mention --strict', () => {
+    const line = run(markerError('E_SINK_WRITE', 'x')).stderr.split('\n')[1];
+    expect(line).toBeTruthy();
+    expect(line).not.toContain('--strict');
+  });
+
+  test('hints: the JSON error document keeps code, message and the per-code hint', () => {
+    const out = run(markerError('LABELS_TOO_FEW', 'x'), { json: true }).stdout;
+    expect(JSON.parse(out)).toEqual({
+      error: { code: 'LABELS_TOO_FEW', message: 'x', hint: hintFor('LABELS_TOO_FEW') },
+    });
+  });
+
+  test('hints: every flag a hint names exists on the command it names', () => {
+    const program = createProgram();
+    const findCommand = (parts: readonly string[]) => {
+      let current = program;
+      for (const name of parts) {
+        const next = current.commands.find((c) => c.name() === name);
+        if (next === undefined) return undefined;
+        current = next;
+      }
+      return current;
+    };
+    const hints = [
+      ...Object.values(CEV_ERROR_CODES).map((code) => hintFor(code)),
+      ...Object.values(HINTS_BY_CODE),
+      hintFor('E_SINK_WRITE'),
+      hintFor('SOURCE_READ'),
+      hintFor('SOMETHING_UNKNOWN'),
+    ];
+    expect(hints.length).toBeGreaterThan(40);
+    for (const hint of hints) {
+      expect(hint).not.toContain('--strict');
+      let current: ReturnType<typeof findCommand>;
+      const tokens = hint.matchAll(/vet ([a-z][a-z-]*)(?: ([a-z][a-z-]*))?|(--[a-z][a-z-]*)/g);
+      for (const match of tokens) {
+        const [, name, sub, flag] = match;
+        if (name !== undefined) {
+          const top = findCommand([name]);
+          expect(top, `${hint} names unknown command vet ${name}`).toBeDefined();
+          const withSub = sub === undefined ? undefined : findCommand([name, sub]);
+          current = withSub ?? top;
+        } else if (flag !== undefined) {
+          const known =
+            GLOBAL_FLAGS.includes(flag) || (current?.options.some((o) => o.long === flag) ?? false);
+          expect(known, `${hint}: ${flag} is not an option of the preceding command`).toBe(true);
+        }
+      }
+    }
   });
 });
