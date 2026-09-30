@@ -80,12 +80,25 @@ export function runOutputs(doc) {
   };
 }
 
+// A secret is replaced where it stands as a whole token: at the start or end of the text, or next
+// to anything but an ASCII letter or digit (whitespace, quotes, brackets, `=`, `:`, `/`, `-`, ...).
+// A letter or digit joined to it means a longer token, such as a hash or an id, that only happens
+// to contain the secret's characters; that token is left alone. Every other neighbour counts as a
+// boundary, so the rule errs towards redacting.
+const TOKEN_CHAR = 'A-Za-z0-9';
+
+function wholeToken(secret) {
+  const literal = secret.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?<![${TOKEN_CHAR}])${literal}(?![${TOKEN_CHAR}])`, 'g');
+}
+
 function redactor(env) {
   const secrets = Object.entries(env)
     .filter(([name, value]) => SECRET_NAME.test(name) && typeof value === 'string')
     .map(([, value]) => value)
     .filter((value) => value.length >= 8)
-    .toSorted((a, b) => b.length - a.length);
+    .toSorted((a, b) => b.length - a.length)
+    .map(wholeToken);
   return (text) => secrets.reduce((out, secret) => out.replaceAll(secret, '[redacted]'), text);
 }
 

@@ -686,6 +686,57 @@ void test('main does not report a run record from an earlier run when the raw ou
   assert.doesNotMatch(posted, /typesafe-ai\/jev-served-1/);
 });
 
+/** Renders a report through the redactor with the given secret seeded in the env. */
+function redactedReport(reportMd, secret = FAKE_KEY) {
+  return renderComment({
+    current: passingDoc(),
+    baseline: undefined,
+    env: { AI_GATEWAY_API_KEY: secret },
+    reportMd,
+  });
+}
+
+// The secret as a whole token: bare, on a header line, as a value, quoted, in a URL query, in
+// brackets and next to punctuation. Every form comes out as [redacted] and the surrounding text
+// is kept.
+const WHOLE_TOKEN_FORMS = [
+  ['a bare line', FAKE_KEY, '[redacted]'],
+  ['a Bearer header', `Authorization: Bearer ${FAKE_KEY}`, 'Authorization: Bearer [redacted]'],
+  ['a key=value pair', `key=${FAKE_KEY}`, 'key=[redacted]'],
+  ['double quotes', `header "${FAKE_KEY}" sent`, 'header "[redacted]" sent'],
+  ['single quotes', `header '${FAKE_KEY}' sent`, "header '[redacted]' sent"],
+  [
+    'a URL query',
+    `GET https://judge.example/v1?token=${FAKE_KEY}&x=1`,
+    'GET https://judge.example/v1?token=[redacted]&x=1',
+  ],
+  ['parentheses', `(${FAKE_KEY})`, '([redacted])'],
+  ['angle brackets', `<${FAKE_KEY}>`, '<[redacted]>'],
+  ['a comma and a colon', `keys: ${FAKE_KEY}, other`, 'keys: [redacted], other'],
+  ['a code span', `see \`${FAKE_KEY}\` above`, 'see `[redacted]` above'],
+];
+
+for (const [form, input, expected] of WHOLE_TOKEN_FORMS) {
+  void test(`renderComment replaces a secret only where it appears as a whole token: ${form} is redacted`, () => {
+    const body = redactedReport(`## Report\n\n${input}\n`);
+    assert.ok(!body.includes(FAKE_KEY), `seeded key leaked through ${form}`);
+    assert.ok(body.includes(expected), body);
+  });
+}
+
+void test('renderComment replaces a secret only where it appears as a whole token: a longer token that merely contains it is left alone', () => {
+  const hash = `0f3a${FAKE_KEY}9b7c`;
+  const body = redactedReport(`## Report\n\nartifact sha ${hash} stored\n`);
+  assert.ok(body.includes(`artifact sha ${hash} stored`), body);
+  assert.ok(!body.includes('[redacted]'), 'a token that only contains the key was redacted');
+});
+
+void test('renderComment replaces a secret only where it appears as a whole token: metacharacters in the secret match literally', () => {
+  const secret = 'sk.fake+0123456789';
+  const body = redactedReport(`## Report\n\nvalue ${secret} and skXfake+0123456789\n`, secret);
+  assert.ok(body.includes('value [redacted] and skXfake+0123456789'), body);
+});
+
 void test("renderComment headline is '### vetkit: auth error (the judge rejected the key named by the config)' for a JUDGE_UNAVAILABLE error document of kind terminal-auth", () => {
   const body = renderComment({
     current: errorDoc('JUDGE_UNAVAILABLE', {
