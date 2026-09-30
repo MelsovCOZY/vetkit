@@ -39,7 +39,21 @@ function pretty(logger: Logger, now: () => number): Subscribe {
     logger.info(`… ${plural(skipped, 'more case')} not shown`);
     skipped = 0;
   };
-  return (events) => [
+  // JUDGE_THROTTLED/JUDGE_RETRY diags pair up per retry; they are counted here, kept at
+  // debug for --verbose, and summarised as one warn line at run:end (or on unsubscribe).
+  let retries = 0;
+  let waitedMs = 0;
+  let throttleSeen = false;
+  const flushThrottle = (): void => {
+    if (!throttleSeen) return;
+    logger.warn(
+      `judge throttled: ${retries} retries, waited ${Math.round(waitedMs)}ms [JUDGE_THROTTLED]`,
+    );
+    retries = 0;
+    waitedMs = 0;
+    throttleSeen = false;
+  };
+  const subscribe: Subscribe = (events) => [
     events.on('run:start', ({ cases, criteria }) => {
       logger.info(`run: ${plural(cases, 'case')} × ${criteria} criteria`);
     }),
@@ -77,12 +91,24 @@ function pretty(logger: Logger, now: () => number): Subscribe {
     }),
     events.on('run:end', ({ verdicts, exitCode, durationMs }) => {
       flushSkipped();
+      flushThrottle();
       logger.info(`run done: ${plural(verdicts, 'verdict')}, exit ${exitCode} in ${durationMs}ms`);
     }),
     events.on('diag', ({ level, code, message, data }) => {
+      if (code === 'JUDGE_THROTTLED' || code === 'JUDGE_RETRY') {
+        throttleSeen = true;
+        if (code === 'JUDGE_RETRY') retries += 1;
+        else if (typeof data?.['retryAfterMs'] === 'number') waitedMs += data['retryAfterMs'];
+        logger.debug(`${message} [${code}]`, data);
+        return;
+      }
       logger[level](`${message} [${code}]`, data);
     }),
   ];
+  return (events) => {
+    const unsubscribers = subscribe(events);
+    return [...unsubscribers, flushThrottle];
+  };
 }
 
 /**

@@ -71,6 +71,8 @@ const INPUT_EXIT_CODES = new Set([
   'WATCH_CONFIG',
 ]);
 
+const HINT_BILLING =
+  'the judge account is out of credit or over quota; check its billing, then retry.';
 const HINT_INTERNAL = 'this looks like an internal error; rerun with --verbose and file an issue.';
 const HINT_SINK =
   'the sink write failed and unsent verdicts wait in the outbox; fix the sink, then run vet check --outbox, or retry with vet run --sink <names>.';
@@ -165,7 +167,27 @@ export function hintFor(code: string): string {
   return HINT_INTERNAL;
 }
 
-function resolveExit(code: string, strict: boolean): Resolved {
+const JUDGE_KINDS: ReadonlySet<string> = new Set([
+  'retryable',
+  'terminal-auth',
+  'terminal-billing',
+  'terminal-request',
+]);
+
+// details.kind as a known string, else undefined (an unknown value counts as absent).
+function judgeKind(err: VetError): string | undefined {
+  const kind: unknown = err.details?.kind;
+  return typeof kind === 'string' && JUDGE_KINDS.has(kind) ? kind : undefined;
+}
+
+function resolveExit(code: string, strict: boolean, kind?: string): Resolved {
+  if (code === 'JUDGE_UNAVAILABLE' || code === 'JUDGE_TIMEOUT') {
+    // A terminal kind means the judge refused us (exit 2); anything else is an outage
+    // where nothing could be judged (exit 3), not an internal bug.
+    return kind?.startsWith('terminal-') === true
+      ? { category: 'config', exitCode: EXIT_USAGE, warn: false }
+      : { category: 'unscored', exitCode: EXIT_UNSCORED_ONLY, warn: false };
+  }
   if (CONFIG_EXIT_CODES.has(code)) return { category: 'config', exitCode: EXIT_USAGE, warn: false };
   if (INTERNAL_EXIT_CODES.has(code)) {
     return { category: 'internal', exitCode: EXIT_INTERNAL, warn: false };
@@ -217,6 +239,10 @@ function exitOverride(err: VetError): number | undefined {
   return typeof value === 'number' ? value : undefined;
 }
 
+function hintForError(err: VetError, kind: string | undefined): string {
+  return kind === 'terminal-billing' ? HINT_BILLING : hintFor(err.code);
+}
+
 function causeMessage(cause: unknown): string | undefined {
   return cause instanceof Error ? cause.message : undefined;
 }
@@ -227,8 +253,10 @@ function writeJson(
   message: string,
   hint: string,
   cause: unknown,
+  kind?: string,
 ): void {
   const body: Record<string, unknown> = { code, message, hint };
+  if (kind !== undefined) body.kind = kind;
   const cm = causeMessage(cause);
   if (cm !== undefined) body.cause = redact(cm);
   stdout.write(`${JSON.stringify({ error: body })}\n`);
@@ -239,6 +267,13 @@ function writeCauseChain(stderr: WritableLike, cause: unknown): void {
   while (current instanceof Error) {
     stderr.write(`  caused by: ${current.message}\n`);
     current = current.cause;
+  }
+  // A non-Error cause is rendered once: a string as itself, an object as its HTTP status
+  // only (transport causes are { status, body }; the body must never be printed).
+  if (typeof current === 'string') {
+    stderr.write(`  caused by: ${current}\n`);
+  } else if (typeof current === 'object' && current !== null && 'status' in current) {
+    if (typeof current.status === 'number') stderr.write(`  caused by: HTTP ${current.status}\n`);
   }
 }
 
@@ -260,9 +295,10 @@ function writePretty(
 }
 
 function renderResolved(err: VetError, resolved: Resolved, ctx: HandleErrorContext): void {
-  const hint = hintFor(err.code);
+  const kind = judgeKind(err);
+  const hint = hintForError(err, kind);
   if (ctx.json) {
-    writeJson(ctx.stdout, err.code, err.message, hint, err.cause);
+    writeJson(ctx.stdout, err.code, err.message, hint, err.cause, kind);
     return;
   }
   writePretty(
@@ -301,7 +337,7 @@ export function handleError(err: unknown, ctx: HandleErrorContext): never {
       const override = exitOverride(err);
       const resolved =
         override === undefined
-          ? resolveExit(err.code, ctx.strict)
+          ? resolveExit(err.code, ctx.strict, judgeKind(err))
           : { category: 'config' as const, exitCode: override, warn: false };
       renderResolved(err, resolved, ctx);
       exitCode = resolved.exitCode;

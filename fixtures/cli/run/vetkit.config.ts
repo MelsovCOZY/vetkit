@@ -1,6 +1,8 @@
 // Fixture project for `vet run` (packages/cli/src/commands/run.test.ts). The judge is an
 // in-process JudgeV1: no network. VETKIT_FIXTURE_MODE picks its behaviour:
 //   pass (default) → P(yes) 0.9 · fail → P(yes) 0.1 · slow → waits until aborted.
+// Failure modes: down → plain Error (unscored, no retries) · throttled → retryable 429 that
+// never recovers · unauthorized → terminal-auth · no-credit → terminal-billing.
 // In slow mode it creates the file named by VETKIT_FIXTURE_STARTED once a request is in
 // flight, so a test knows when to send SIGINT. VETKIT_FIXTURE_KEY stands in for a secret
 // a real adapter would hold; it must never appear in the CLI's output.
@@ -34,6 +36,35 @@ function waitForAbort(signal: AbortSignal | undefined): Promise<never> {
   });
 }
 
+// VetError-shaped without importing @vetkit/spec (this file is copied to a tmp dir).
+function markerError(code: string, message: string, details: Record<string, unknown>): Error {
+  return Object.assign(new Error(message), { [Symbol.for('vetkit.error')]: true, code, details });
+}
+
+function failure(): Error | undefined {
+  switch (mode) {
+    case 'down':
+      return new Error('judge down');
+    case 'throttled':
+      return markerError('JUDGE_UNAVAILABLE', 'judge transport error (HTTP 429)', {
+        retryable: true,
+        retryAfterMs: 1,
+      });
+    case 'unauthorized':
+      return markerError('JUDGE_UNAUTHORIZED', 'judge rejected the API key', {
+        kind: 'terminal-auth',
+        retryable: false,
+      });
+    case 'no-credit':
+      return markerError('JUDGE_UNAVAILABLE', 'judge account has no credit', {
+        kind: 'terminal-billing',
+        retryable: false,
+      });
+    default:
+      return undefined;
+  }
+}
+
 const judge = {
   specVersion: 'v1' as const,
   id: 'fake-judge',
@@ -46,6 +77,8 @@ const judge = {
   },
   async doJudge(req: { questions: Record<string, unknown>; signal?: AbortSignal }) {
     if (mode === 'slow') await waitForAbort(req.signal);
+    const failed = failure();
+    if (failed !== undefined) throw failed;
     const yes = mode === 'fail' ? 0.1 : 0.9;
     const answers: Record<string, Answer> = {};
     for (const key of Object.keys(req.questions)) {
