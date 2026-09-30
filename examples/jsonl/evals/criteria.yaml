@@ -1,0 +1,22 @@
+$schema: 'https://melsovcozy.github.io/vetkit/schemas/criteria.schema.json'
+criteria:
+  - id: refund-issued
+    type: boolean
+    instructions: Does the assistant state that the refund was issued?
+    escape: The conversation has no assistant answer about a refund.
+    polarity: pass_when_true
+    channel: outcome
+    provenance:
+      traceIds: []
+  - id: answer-tone
+    type: choice
+    instructions: How does the assistant's answer read to the customer?
+    criteria:
+      helpful: The answer is polite and gives the customer what they asked for.
+      curt: The answer is short or dismissive.
+    passWhen: [helpful]
+    polarity: pass_when_true
+    escape: The conversation has no assistant answer.
+    channel: outcome
+    provenance:
+      traceIds: []

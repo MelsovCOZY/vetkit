@@ -1,0 +1,14 @@
+{
+  "name": "vetkit-example-ai-sdk-otlp",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bash test.sh"
+  },
+  "dependencies": {
+    "@opentelemetry/exporter-trace-otlp-http": "0.222.0",
+    "@opentelemetry/sdk-node": "0.222.0",
+    "ai": "5.0.270",
+    "vetkit": "^0.1.0"
+  }
+}

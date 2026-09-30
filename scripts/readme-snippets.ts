@@ -1,0 +1,340 @@
+// Executes every README snippet from packed tarballs: `bun scripts/readme-snippets.ts <tarball-dir>`.
+// Scans README.md, packages/*/README.md and examples/*/README.md; one scratch project per README with
+// every tarball installed through `overrides` (as scripts/consumer-matrix.sh does) plus the two pinned
+// external tools. Live integration check (real installs): it is not part of the unit suite.
+import { spawnSync } from 'node:child_process';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+/** Pinned registry packages a snippet scratch project may use besides the tarballs. */
+const EXTERNALS: Readonly<Record<string, string>> = { vitest: '5.0.2', promptfoo: '0.123.1' };
+
+const KEY_VARS = [
+  'AI_GATEWAY_API_KEY',
+  'OPENROUTER_API_KEY',
+  'TYPESAFE_API_KEY',
+  'CLOUDFLARE_API_TOKEN',
+  'CLOUDFLARE_ACCOUNT_ID',
+] as const;
+
+const SNIPPET_LANGS = new Set(['sh', 'bash', 'ts', 'js', 'yaml', 'json']);
+
+export interface Snippet {
+  /** 1-based line of the opening fence. */
+  readonly line: number;
+  readonly lang: string;
+  readonly code: string;
+  /** run: execute; write: write to `file`; skip: counted, not run; error: fails the run. */
+  readonly action: 'run' | 'write' | 'skip' | 'error';
+  readonly file?: string;
+  readonly reason?: string;
+  readonly error?: string;
+  readonly env: Readonly<Record<string, string>>;
+}
+
+interface Directive {
+  file?: string;
+  skip?: { reason?: string };
+  env: Record<string, string>;
+  error?: string;
+}
+
+const DIRECTIVE = /^<!--\s*snippet:\s*(.*?)\s*-->\s*$/;
+
+function applyDirective(directive: Directive, body: string): void {
+  if (body.startsWith('file=')) {
+    directive.file = body.slice('file='.length).trim();
+  } else if (body === 'skip' || body.startsWith('skip ')) {
+    const reason = /^skip\s+reason="([^"]+)"$/.exec(body)?.[1];
+    directive.skip = reason === undefined ? {} : { reason };
+  } else if (body.startsWith('env ')) {
+    for (const pair of body.slice('env '.length).trim().split(/\s+/)) {
+      const at = pair.indexOf('=');
+      if (at <= 0) directive.error = `env directive needs KEY=value, got "${pair}"`;
+      else directive.env[pair.slice(0, at)] = pair.slice(at + 1);
+    }
+  } else {
+    directive.error = `unknown snippet directive "${body}"`;
+  }
+}
+
+function classify(lang: string, directive: Directive): Pick<Snippet, 'action'> & Partial<Snippet> {
+  if (directive.error !== undefined) return { action: 'error', error: directive.error };
+  if (directive.skip !== undefined) {
+    if (directive.skip.reason === undefined) {
+      return { action: 'error', error: 'skip directive needs reason="..."' };
+    }
+    return { action: 'skip', reason: directive.skip.reason };
+  }
+  if (directive.file !== undefined) {
+    const file = directive.file;
+    if (file === '' || file.startsWith('/') || file.split(/[\\/]/).includes('..')) {
+      return { action: 'error', error: `file= path must stay inside the scratch project: ${file}` };
+    }
+    return { action: 'write', file };
+  }
+  if (lang === 'yaml' || lang === 'json') {
+    return { action: 'error', error: 'yaml/json block needs snippet: file=' };
+  }
+  return { action: 'run' };
+}
+
+/**
+ * Finds the snippet fences of a README. A directive is a `<!-- snippet: ... -->` line above the
+ * fence (blank lines between them are allowed: the formatter inserts one). Only top-level fences
+ * count; fences inside an HTML comment and fences with another info string are ignored.
+ */
+export function extractSnippets(markdown: string): Snippet[] {
+  const lines = markdown.replaceAll('\r\n', '\n').split('\n');
+  const snippets: Snippet[] = [];
+  let directive: Directive = { env: {} };
+  let inComment = false;
+  let index = 0;
+  while (index < lines.length) {
+    const text = lines[index] ?? '';
+    index += 1;
+    if (inComment) {
+      if (text.includes('-->')) inComment = false;
+      continue;
+    }
+    const directiveBody = DIRECTIVE.exec(text)?.[1];
+    if (directiveBody !== undefined) {
+      applyDirective(directive, directiveBody);
+      continue;
+    }
+    if (text.startsWith('<!--')) {
+      inComment = !text.includes('-->');
+      continue;
+    }
+    const fence = /^```(\S*)\s*$/.exec(text);
+    if (fence === null) {
+      if (text.trim() !== '') directive = { env: {} };
+      continue;
+    }
+    const lang = fence[1] ?? '';
+    const openLine = index;
+    const body: string[] = [];
+    while (index < lines.length && !/^```\s*$/.test(lines[index] ?? '')) {
+      body.push(lines[index] ?? '');
+      index += 1;
+    }
+    index += 1;
+    const used = directive;
+    directive = { env: {} };
+    if (!SNIPPET_LANGS.has(lang)) continue;
+    snippets.push({
+      line: openLine,
+      lang,
+      code: body.join('\n'),
+      env: used.env,
+      ...classify(lang, used),
+    });
+  }
+  return snippets;
+}
+
+const INSTALL_LINE =
+  /^\s*(?:npm\s+(?:i|install|add)|pnpm\s+(?:add|i|install)|bun\s+(?:add|i)|yarn\s+add)\s+(.+)$/;
+
+function packageName(spec: string): string {
+  return /^(@[^/]+\/[^@]+|[^@]+)/.exec(spec)?.[1] ?? spec;
+}
+
+/**
+ * Turns an install line into a no-op when every package is a tarball package or a pinned
+ * external (already installed in the scratch project); throws naming any other package.
+ * Lines that are not installs come back unchanged.
+ */
+export function rewriteInstall(line: string, tarballNames: readonly string[]): string {
+  const args = INSTALL_LINE.exec(line)?.[1];
+  if (args === undefined) return line;
+  const names = args
+    .trim()
+    .split(/\s+/)
+    .filter((token) => !token.startsWith('-'))
+    .map(packageName);
+  if (names.length === 0) return line;
+  const allowed = new Set([...tarballNames, ...Object.keys(EXTERNALS)]);
+  const unknown = names.filter((name) => !allowed.has(name));
+  if (unknown.length > 0) {
+    throw new Error(`package not installed by the snippet runner: ${unknown.join(', ')}`);
+  }
+  return 'true';
+}
+
+function tarballPackages(dir: string): Record<string, string> {
+  const packages: Record<string, string> = {};
+  for (const file of readdirSync(dir).filter((name) => name.endsWith('.tgz'))) {
+    const full = join(dir, file);
+    const result = spawnSync('tar', ['-xzOf', full, 'package/package.json'], { encoding: 'utf8' });
+    if (result.status !== 0) throw new Error(`cannot read package.json from ${full}`);
+    const manifest: { name: string } = JSON.parse(result.stdout);
+    packages[manifest.name] = full;
+  }
+  return packages;
+}
+
+function readmes(): string[] {
+  const found = [join(ROOT, 'README.md')];
+  for (const group of ['packages', 'examples']) {
+    const base = join(ROOT, group);
+    if (!existsSync(base)) continue;
+    for (const entry of readdirSync(base, { withFileTypes: true })) {
+      if (entry.isDirectory()) found.push(join(base, entry.name, 'README.md'));
+    }
+  }
+  return found.filter((path) => existsSync(path)).toSorted();
+}
+
+function scratchEnv(dir: string, extra: Readonly<Record<string, string>>): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env, ...extra };
+  for (const name of KEY_VARS) delete env[name];
+  env['PATH'] = `${join(dir, 'node_modules', '.bin')}:${env['PATH'] ?? ''}`;
+  return env;
+}
+
+function nodeFlags(lang: string): string[] {
+  const [major = 0, minor = 0] = process.versions.node.split('.').map(Number);
+  const strips = major > 22 || (major === 22 && minor >= 18);
+  return lang === 'ts' && !strips ? ['--experimental-strip-types'] : [];
+}
+
+interface Counts {
+  blocks: number;
+  skipped: number;
+}
+
+function runReadme(path: string, tarballs: Record<string, string>, counts: Counts): boolean {
+  const name = relative(ROOT, path);
+  const snippets = extractSnippets(readFileSync(path, 'utf8'));
+  const failures = snippets.filter((snippet) => snippet.action === 'error');
+  for (const failure of failures) {
+    console.error(`readme-snippets: ${name}:${failure.line}: ${failure.error ?? ''}`);
+  }
+  if (failures.length > 0) return false;
+  for (const snippet of snippets.filter((s) => s.action === 'skip')) {
+    counts.skipped += 1;
+    console.log(`readme-snippets: skip ${name}:${snippet.line} (${snippet.reason ?? ''})`);
+  }
+  if (snippets.every((snippet) => snippet.action === 'skip')) return true;
+
+  const dir = mkdtempSync(join(tmpdir(), 'vetkit-readme-'));
+  try {
+    const deps = Object.fromEntries(Object.entries(tarballs).map(([n, p]) => [n, `file:${p}`]));
+    // An example README runs inside a copy of its own project (config, evals, traces).
+    const exampleDir = dirname(path);
+    const isExample = dirname(exampleDir) === join(ROOT, 'examples');
+    if (isExample)
+      cpSync(exampleDir, dir, {
+        recursive: true,
+        filter: (from) => !from.includes('node_modules'),
+      });
+    const base: { dependencies?: Record<string, string> } = isExample
+      ? JSON.parse(readFileSync(join(exampleDir, 'package.json'), 'utf8'))
+      : {};
+    const own = Object.fromEntries(
+      Object.entries(base.dependencies ?? {}).filter(([n]) => deps[n] === undefined),
+    );
+    const manifest = {
+      ...base,
+      name: 'readme-snippets',
+      private: true,
+      type: 'module',
+      dependencies: { ...own, ...deps, ...EXTERNALS },
+      overrides: deps,
+    };
+    writeFileSync(join(dir, 'package.json'), JSON.stringify(manifest, null, 2));
+    const install = spawnSync('npm', ['install', '--no-audit', '--no-fund'], {
+      cwd: dir,
+      stdio: 'inherit',
+    });
+    if (install.status !== 0) {
+      console.error(`readme-snippets: FAIL ${name} (npm install exit ${String(install.status)})`);
+      return false;
+    }
+    for (const snippet of snippets) {
+      if (snippet.action === 'skip') continue;
+      counts.blocks += 1;
+      if (snippet.action === 'write') {
+        const target = join(dir, snippet.file ?? '');
+        mkdirSync(dirname(target), { recursive: true });
+        writeFileSync(target, `${snippet.code}\n`);
+        continue;
+      }
+      const env = scratchEnv(dir, snippet.env);
+      let result;
+      if (snippet.lang === 'sh' || snippet.lang === 'bash') {
+        const script = snippet.code
+          .split('\n')
+          .map((line) => rewriteInstall(line, Object.keys(tarballs)))
+          .join('\n');
+        result = spawnSync('bash', ['-euo', 'pipefail', '-c', script], {
+          cwd: dir,
+          env,
+          stdio: 'inherit',
+        });
+      } else {
+        const file = `snippet-${String(counts.blocks)}.${snippet.lang}`;
+        writeFileSync(join(dir, file), `${snippet.code}\n`);
+        result = spawnSync('node', [...nodeFlags(snippet.lang), file], {
+          cwd: dir,
+          env,
+          stdio: 'inherit',
+        });
+      }
+      if (result.status !== 0) {
+        console.error(
+          `readme-snippets: FAIL ${name}:${snippet.line} (exit ${String(result.status)})`,
+        );
+        return false;
+      }
+    }
+    return true;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+function main(argv: readonly string[]): number {
+  const tarballDir = argv[0];
+  if (tarballDir === undefined || !existsSync(tarballDir)) {
+    console.error(
+      `usage: bun scripts/readme-snippets.ts <tarball-dir> (not found: ${String(tarballDir)})`,
+    );
+    return 1;
+  }
+  const tarballs = tarballPackages(join(process.cwd(), tarballDir));
+  const files = readmes();
+  const counts: Counts = { blocks: 0, skipped: 0 };
+  for (const path of files) {
+    let ok: boolean;
+    try {
+      ok = runReadme(path, tarballs, counts);
+    } catch (error) {
+      console.error(`readme-snippets: FAIL ${relative(ROOT, path)}: ${String(error)}`);
+      ok = false;
+    }
+    if (!ok) return 1;
+  }
+  console.log(
+    `readme-snippets: ok (${String(counts.blocks)} blocks in ${String(files.length)} files, ${String(counts.skipped)} skipped)`,
+  );
+  return 0;
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  process.exit(main(process.argv.slice(2)));
+}

@@ -1,0 +1,55 @@
+# vetkit
+
+> vetkit is a TypeScript library and CLI (`vet`) that generates, validates and runs LLM evals: a generator model drafts criteria and cases, a typed-decision judge scores them, and every verdict records which model answered.
+
+## Install
+
+- Add it to a project with `npm i -D vetkit` (pnpm, yarn and bun equivalents work), then run `npx vetkit init`; it needs Node 22.18 or newer.
+- [CLI package README](packages/cli/README.md): commands and first run.
+- [Agent setup skill](skills/vetkit-setup/SKILL.md): init, run and a CI step, for an agent to follow.
+
+## Quickstart
+
+- `npx vetkit init` writes a runnable example with an offline demo judge; no key is needed.
+- `npx vetkit run --json` judges the cases and prints one JSON document; read its `summary`. Demo verdicts are labelled demo and never gate a build.
+- To use a real judge, ask the human to add the key to `.env`, then run `npx vetkit init --force`.
+- [JSONL example](examples/jsonl/README.md): criteria, cases and traces you can run as is.
+
+## Configuration
+
+- [Config schema](https://melsovcozy.github.io/vetkit/schemas/config.schema.json): JSON Schema for vetkit.config.ts.
+- [Configuration reference](docs/configuration.md): every config key and environment variable.
+- [Sinks](docs/sinks.md): send verdicts to Langfuse or OpenTelemetry.
+
+## CLI reference
+
+- `vet doctor`: check environment, judge credentials and judge endpoint health
+- `vet label`: import human labels from CSV or collect them in a terminal loop
+- `vet run`: judge every case against the criteria and exit with the result
+- `vet rerun`: re-judge the disputed verdicts (borderline or judge failure) of the last vet run
+- `vet validate`: calibrate every criterion against human labels and write criteria.lock.json
+- `vet estimate`: estimate judge calls, tokens, cost and minutes, with no network call
+- `vet init`: scaffold a runnable example, or generate criteria and cases from --source traces
+- `vet check`: check criteria.lock.json and the sink outbox against the current project
+- `vet lock`: maintain criteria.lock.json
+- `vet cache`: verdict cache maintenance
+- `vet criteria`: disable, enable, delete or revalidate one criterion in criteria.yaml and the lock
+- `vet cases`: secondary case-set actions: dedupe, quarantine, promote, review
+- `vet lint`: lint criteria.yaml against Jev wording weak spots (default: criteria.yaml next to the config, or under evals/ when that directory exists)
+- `vet export`: export criteria, cases and the lock to another eval runner
+- `vet watch`: sample live OTel traces, judge them, and promote failures into regression cases
+
+Every command prints one JSON document under `--json`; the shapes are in [CLI JSON shapes](docs/guides/cli-json.md).
+
+## Integrations
+
+- [AI SDK telemetry guide](docs/guides/ai-sdk-telemetry.md): send `experimental_telemetry` spans to `vet watch`.
+- [OTLP over http/json guide](docs/guides/otlp-http-json.md): the receiver accepts JSON only, protobuf gets a 415.
+- [AI SDK OTLP example](examples/ai-sdk-otlp/README.md): runs offline with a mock model.
+- [JSONL example](examples/jsonl/README.md): own-format traces and hand-written cases.
+- [Scorers README](packages/scorers/README.md): vitest matchers and a promptfoo assertion.
+- [Watch](docs/watch.md): sample live traffic and promote failures into cases.
+
+## Optional
+
+- [Contributing](CONTRIBUTING.md): repository layout and conventions.

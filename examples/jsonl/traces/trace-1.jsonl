@@ -1,0 +1,1 @@
+{"traceId": "trace-1", "messages": [{"role": "user", "parts": [{"type": "text", "content": "Can I return these shoes after 40 days?"}]}, {"role": "assistant", "parts": [{"type": "text", "content": "Returns are accepted within 30 days, so I cannot refund these shoes. I can offer a 10% coupon instead."}]}]}

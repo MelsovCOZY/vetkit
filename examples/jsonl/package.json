@@ -1,0 +1,11 @@
+{
+  "name": "vetkit-example-jsonl",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vet run --json && vet estimate --json"
+  },
+  "dependencies": {
+    "vetkit": "^0.1.0"
+  }
+}

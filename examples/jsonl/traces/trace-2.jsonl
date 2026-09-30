@@ -1,0 +1,1 @@
+{"traceId": "trace-2", "messages": [{"role": "user", "parts": [{"type": "text", "content": "Please cancel order 1234."}]}, {"role": "assistant", "parts": [{"type": "text", "content": "Order 1234 has been cancelled and a refund of $25 is on its way to your card."}]}]}

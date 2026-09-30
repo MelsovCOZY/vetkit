@@ -40,8 +40,9 @@ const config: KnipConfig = {
   },
   // Test shim: emit-scorer.test.ts maps the bare `vetkit` specifier to this file by path string.
   ignoreIssues: { 'packages/cli/src/judge-one.ts': ['exports'] },
+  // examples/ are consumer projects with their own package.json, run by scripts/examples-run.sh.
   // Codegen output (bun run codegen; CI diffs it): every schema type is emitted, used or not.
-  ignore: ['packages/spec/src/generated/**'],
+  ignore: ['packages/spec/src/generated/**', 'examples/**'],
   // Version pool asserted by scripts/manifests.test.ts; packages do not reference it yet.
   exclude: ['catalog'],
 };

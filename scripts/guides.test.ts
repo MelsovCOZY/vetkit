@@ -32,7 +32,8 @@ function help(args: readonly string[]): string {
 }
 
 function commandNames(helpText: string): string[] {
-  const section = /^Commands:\n([\s\S]*?)(?:\n\n|\nExit codes:|$(?![\s\S]))/m.exec(helpText)?.[1] ?? '';
+  const section =
+    /^Commands:\n([\s\S]*?)(?:\n\n|\nExit codes:|$(?![\s\S]))/m.exec(helpText)?.[1] ?? '';
   return section
     .split('\n')
     .map((line) => /^ {2}([a-z][a-z-]*)/.exec(line)?.[1])
