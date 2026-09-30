@@ -672,17 +672,20 @@ async function validate(
     datasetHash: lock.datasetHash,
     lockPath,
   };
-  emit(report, () =>
-    [
-      ...report.criteria.map(
-        (c) =>
-          `${c.id}: ${String(c.status)}${c.reasons.length === 0 ? '' : ` (${c.reasons.join(', ')})`}`,
-      ),
-      short.length === 0
-        ? `lock written: ${lockPath}`
-        : `refusing to write ${lockPath} (too few labels)`,
-    ].join('\n'),
-  );
+  // Under --json the LABELS_TOO_FEW error document below is the only stdout document.
+  if (!(options.json === true && short.length > 0)) {
+    emit(report, () =>
+      [
+        ...report.criteria.map(
+          (c) =>
+            `${c.id}: ${String(c.status)}${c.reasons.length === 0 ? '' : ` (${c.reasons.join(', ')})`}`,
+        ),
+        short.length === 0
+          ? `lock written: ${lockPath}`
+          : `refusing to write ${lockPath} (too few labels)`,
+      ].join('\n'),
+    );
+  }
 
   // Fewer than 100 labels per judged criterion exits 2 with the count.
   if (short.length > 0) {
