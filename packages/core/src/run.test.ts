@@ -665,7 +665,11 @@ describe('event bus', () => {
     expect(responses[0]?.status).toBe(403);
     expect(verdicts).toHaveLength(1);
     expect(verdicts[0]?.status).toBe('unscored');
-    expect(verdicts[0]?.cause).toEqual({ status: 403, errorType: 'no_providers_available' });
+    expect(verdicts[0]?.cause).toEqual({
+      code: 'JUDGE_UNAVAILABLE',
+      status: 403,
+      errorType: 'no_providers_available',
+    });
     const text = JSON.stringify(verdicts[0]);
     expect(text).not.toContain('secretEcho');
     expect(text).not.toContain(apiKey);
