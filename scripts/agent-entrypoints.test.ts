@@ -26,7 +26,10 @@ interface CommandInfo {
 
 // createProgram() lives behind the built package entry (scripts' tsconfig cannot import
 // program.ts): dump the top-level command list from it in a child process.
+let topLevelCache: CommandInfo[] | undefined;
+
 function topLevelCommands(): CommandInfo[] {
+  if (topLevelCache) return topLevelCache;
   requireBuild();
   const script = `
     const { createProgram } = await import(${JSON.stringify(INDEX)});
@@ -35,13 +38,20 @@ function topLevelCommands(): CommandInfo[] {
   `;
   const out = execFileSync('node', ['--input-type=module', '-e', script], { encoding: 'utf8' });
   const list: { name: string; description: string }[] = JSON.parse(out);
-  return list.map((c) => ({ ...c, path: [c.name] }));
+  topLevelCache = list.map((c) => ({ ...c, path: [c.name] }));
+  return topLevelCache;
 }
 
+const helpCache = new Map<string, string>();
+
 function help(args: readonly string[]): string {
+  const key = args.join(' ');
+  const cached = helpCache.get(key);
+  if (cached !== undefined) return cached;
   requireBuild();
   const result = spawnSync('node', [BIN, ...args, '--help'], { encoding: 'utf8' });
   if (result.status !== 0) throw new Error(`vet ${args.join(' ')} --help failed: ${result.stderr}`);
+  helpCache.set(key, result.stdout);
   return result.stdout;
 }
 
@@ -136,7 +146,7 @@ describe('skills/vetkit-setup/SKILL.md', () => {
   it('every `vet`/`vetkit` command and every `--flag` named in SKILL.md and llms.txt exists on that command', () => {
     expect(checkCommandMentions(skill())).toBeGreaterThan(0);
     expect(checkCommandMentions(llms())).toBeGreaterThanOrEqual(0);
-  });
+  }, 60_000);
 
   it('SKILL.md tells the agent to ask the human for the key and never to print it', () => {
     expect(skill()).toContain(
