@@ -166,6 +166,12 @@ const MIN_NODE24_MAJOR: Record<string, number> = {
   'actions/upload-artifact': 7,
   'actions/download-artifact': 8,
   'actions/cache': 6,
+  // Docker action: no Node runtime, so its first major is the floor.
+  'actions/jekyll-build-pages': 1,
+  // Composite: v5 is the first to wrap upload-artifact v7 (node24); v4 wraps v4 (node20).
+  'actions/upload-pages-artifact': 5,
+  'actions/configure-pages': 6,
+  'actions/deploy-pages': 5,
 };
 
 // Syntax dash (the /bin/sh of Ubuntu runners) rejects or mis-handles.
