@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -169,5 +170,23 @@ describe('judgeOne', () => {
       ),
     );
     expect(VetError.isInstance(error) && error.code).toBe(CEV_ERROR_CODES.CRITERIA_INVALID);
+  });
+});
+
+describe('judgeOne with the demo judge', () => {
+  test('judgeOne with a demo judge writes nothing under cacheDir/cache and returns cacheHit false twice', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'vetkit-judge-one-demo-'));
+    const demoModule = new URL('./demo-judge.ts', import.meta.url).href;
+    await writeFile(
+      join(root, 'vetkit.config.ts'),
+      `import { demoJudge } from '${demoModule}';\nexport default { judge: demoJudge };\n`,
+    );
+    const options = { configPath: join(root, 'vetkit.config.ts'), env: {} };
+    const first = await judgeOne({ criterion, state }, options);
+    const second = await judgeOne({ criterion, state }, options);
+    expect(first.cacheHit).toBe(false);
+    expect(second.cacheHit).toBe(false);
+    expect(first.model.transport).toBe('demo');
+    expect(existsSync(join(root, '.vet', 'cache'))).toBe(false);
   });
 });

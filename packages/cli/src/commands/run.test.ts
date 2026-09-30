@@ -10,10 +10,12 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { JEV_CREDENTIAL_PRIORITY, JEV_PRESETS } from '@vetkit/judge-jev';
 import { safeParseJson } from '@vetkit/spec';
 import { beforeAll, describe, expect, test } from 'vitest';
 import { ensureCliBuilt } from '../test-support/build-cli.js';
+import { createProgram } from '../program.ts';
 
 const binPath = fileURLToPath(new URL('../../dist/bin.js', import.meta.url));
 const fixtureDir = fileURLToPath(new URL('../../../../fixtures/cli/run', import.meta.url));
@@ -359,5 +361,98 @@ describe('vet run and evals/cases/pending/ (promotion rule: one file per day)', 
     // Only the fixture's one non-pending case was judged; the pending one never reaches the loader.
     expect(parseJson(result.stdout)).toMatchObject({ summary: { total: 1 } });
     expect(result.stderr).toMatch(/\b1\b.*pending/);
+  });
+});
+
+// A copy of the fixture project whose judge is the shipped demo judge, imported from the
+// built package entry (dist/index.js) so the config exercises the real public export.
+function demoProject(): string {
+  const dir = freshProject();
+  const entry = pathToFileURL(fileURLToPath(new URL('../../dist/index.js', import.meta.url)));
+  writeFileSync(
+    join(dir, 'vetkit.config.ts'),
+    `import { demoJudge } from '${entry.href}';\nexport default { judge: demoJudge };\n`,
+  );
+  return dir;
+}
+
+function credentialList(): string {
+  return JEV_CREDENTIAL_PRIORITY.map((p) =>
+    JEV_PRESETS[p].credentials.map((c) => c.name).join(' + '),
+  ).join(', ');
+}
+
+function demoHintLines(stderr: string): string[] {
+  return nonEmptyLines(stderr).filter((line) => line.includes('demo judge:'));
+}
+
+describe('vet run with the demo judge', () => {
+  test('demo judge: pretty stdout ends with model: demo (transport demo, pinned: false) and exits 0 on the scaffold cases', () => {
+    const result = runVet(['run'], demoProject(), fixtureEnv('pass'));
+    expect(result.status).toBe(0);
+    expect(nonEmptyLines(result.stdout).at(-1)).toBe('model: demo (transport demo, pinned: false)');
+  });
+
+  test('demo judge: stderr has exactly one warn line starting demo judge: naming every JEV credential var, .env and vet init --force', () => {
+    const result = runVet(['run'], demoProject(), fixtureEnv('pass'));
+    const hints = demoHintLines(result.stderr);
+    expect(hints).toHaveLength(1);
+    const [hint = ''] = hints;
+    expect(hint.startsWith('warn demo judge:')).toBe(true);
+    expect(hint).toContain('placeholder');
+    expect(hint).toContain(credentialList());
+    expect(hint).toContain('.env');
+    expect(hint.endsWith('vet init --force')).toBe(true);
+    expect(result.stdout).not.toContain('demo judge:');
+  });
+
+  test('demo judge: --json stdout is one document with model.transport demo and the hint stays on stderr', () => {
+    const result = runVet(['run', '--json'], demoProject(), fixtureEnv('pass'));
+    expect(result.status).toBe(0);
+    expect(nonEmptyLines(result.stdout)).toHaveLength(1);
+    expect(parseJson(result.stdout)).toMatchObject({ model: { transport: 'demo' } });
+    expect(result.stdout).not.toContain('demo judge:');
+    expect(demoHintLines(result.stderr)).toHaveLength(1);
+  });
+
+  test('a non-demo judge prints no demo hint', () => {
+    const result = runVet(['run'], freshProject(), fixtureEnv('pass'));
+    expect(result.status).toBe(0);
+    expect(result.stderr).not.toContain('demo judge:');
+  });
+
+  test('the hint names no flag that vet init lacks', () => {
+    const result = runVet(['run'], demoProject(), fixtureEnv('pass'));
+    const [hint = ''] = demoHintLines(result.stderr);
+    const flags = hint.match(/--\w+/g) ?? [];
+    expect(flags.length).toBeGreaterThan(0);
+    const init = createProgram().commands.find((c) => c.name() === 'init');
+    const known = init?.options.map((o) => o.long) ?? [];
+    for (const flag of flags) expect(known).toContain(flag);
+  });
+
+  test('demo judge: two consecutive runs create no .vet/cache directory and every results[].cacheHit is false', () => {
+    const project = demoProject();
+    runVet(['run', '--json'], project, fixtureEnv('pass'));
+    const second = runVet(['run', '--json'], project, fixtureEnv('pass'));
+    expect(existsSync(join(project, '.vet', 'cache'))).toBe(false);
+    const doc = parseJson(second.stdout) as { results: { cacheHit: boolean }[] };
+    expect(doc.results.length).toBeGreaterThan(0);
+    for (const v of doc.results) expect(v.cacheHit).toBe(false);
+  });
+
+  test('demo judge: .vet/runs/latest.json is still written and its model.transport is demo', () => {
+    const project = demoProject();
+    runVet(['run', '--json'], project, fixtureEnv('pass'));
+    const record = parseJson(readFileSync(join(project, '.vet', 'runs', 'latest.json'), 'utf8'));
+    expect(record).toMatchObject({ model: { transport: 'demo' } });
+  });
+
+  test('fixture judge (transport fake) still caches: second run has cacheHit true', () => {
+    const project = freshProject();
+    runVet(['run', '--json'], project, fixtureEnv('pass'));
+    const second = runVet(['run', '--json'], project, fixtureEnv('pass'));
+    const doc = parseJson(second.stdout) as { results: { cacheHit: boolean }[] };
+    expect(doc.results.some((v) => v.cacheHit)).toBe(true);
   });
 });
