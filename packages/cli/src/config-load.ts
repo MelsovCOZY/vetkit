@@ -165,7 +165,8 @@ export function resolveConfigFile(options: {
 }): ResolvedConfigFile {
   if (options.configPath !== undefined) {
     const configFile = resolve(options.cwd, options.configPath);
-    if (!existsSync(configFile)) throw invalid(`no vetkit config found at ${configFile}; run: vet init`);
+    if (!existsSync(configFile))
+      throw invalid(`no vetkit config found at ${configFile}; run: vet init`);
     return { configFile, rootDir: dirname(configFile) };
   }
   const { file, stopDir } = walk(options.cwd);

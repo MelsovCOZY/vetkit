@@ -10,6 +10,7 @@ export function nodeFloorError(version: string): string | undefined {
   const major = Number(match?.[1]);
   const minor = Number(match?.[2]);
   const ok =
-    match !== null && ((major === 22 && minor >= 18) || (major === 24 && minor >= 11) || major > 24);
+    match !== null &&
+    ((major === 22 && minor >= 18) || (major === 24 && minor >= 11) || major > 24);
   return ok ? undefined : `vetkit needs Node ${NODE_FLOOR_RANGE} (found ${version})`;
 }
