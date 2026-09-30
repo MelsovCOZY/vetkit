@@ -14,6 +14,8 @@ export interface JevProviderOptions {
   readonly gateway: {
     readonly zeroDataRetention: boolean;
     readonly only: readonly string[];
+    // Gateway model fallbacks; createJevJudge refuses a non-empty list on the vercel preset.
+    readonly models?: readonly string[];
   };
 }
 

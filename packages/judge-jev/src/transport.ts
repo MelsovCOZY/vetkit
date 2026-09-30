@@ -340,10 +340,24 @@ function fetchWithAbort(
   });
 }
 
+// A gateway model fallback reruns the request on another model, so verdicts would come
+// from a judge the lock never saw. `only` (provider pinning) is the opposite safeguard.
+function refuseGatewayFallbacks(opts: CreateJevJudgeOptions): void {
+  if (opts.preset !== 'vercel') return;
+  const effective = opts.providerOptions ?? JEV_PRESETS.vercel.providerOptions;
+  if ((effective?.gateway.models?.length ?? 0) > 0) {
+    throw new VetError(
+      'CONFIG_INVALID',
+      'the vercel preset refuses gateway model fallbacks: remove providerOptions.gateway.models',
+    );
+  }
+}
+
 export function createJevJudge(opts: CreateJevJudgeOptions): JudgeV1 {
   if (opts.apiKey === '') {
     throw new VetError('CONFIG_INVALID', 'apiKey must not be empty');
   }
+  refuseGatewayFallbacks(opts);
 
   const resolved = resolveTransport(opts);
   const { url, model, pinned, transport } = resolved;
