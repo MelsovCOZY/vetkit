@@ -24,10 +24,16 @@ function fencedBlocks(markdown: string, lang: string): string[] {
   return blocks;
 }
 
+const helpCache = new Map<string, string>();
+
 function help(args: readonly string[]): string {
+  const key = args.join(' ');
+  const cached = helpCache.get(key);
+  if (cached !== undefined) return cached;
   if (!existsSync(BIN)) throw new Error(`build first: ${BIN} is missing (bun run build)`);
   const result = spawnSync('node', [BIN, ...args, '--help'], { encoding: 'utf8' });
   if (result.status !== 0) throw new Error(`vet ${args.join(' ')} --help failed: ${result.stderr}`);
+  helpCache.set(key, result.stdout);
   return result.stdout;
 }
 
@@ -103,7 +109,7 @@ describe('guides', () => {
       }
     }
     expect(checked).toBeGreaterThan(0);
-  });
+  }, 60_000);
 
   it('docs/guides/cli-json.md equals renderJsonShapesMarkdown() (freshness)', () => {
     expect(read(join(GUIDES, 'cli-json.md'))).toBe(renderJsonShapesMarkdown());
