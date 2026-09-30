@@ -19,6 +19,7 @@ import {
   type GenerateReport,
   type ResolvedConfig,
 } from '@vetkit/core';
+import { isCancel, select } from '@clack/prompts';
 import { JEV_CREDENTIAL_PRIORITY, JEV_PRESETS, type JevPresetName } from '@vetkit/judge-jev';
 import {
   CEV_ERROR_CODES,
@@ -33,6 +34,8 @@ import { diagEnabled } from '../diag.ts';
 import { generatorFromEndpoint } from '../generators.ts';
 import { CEV_EXIT, emit, getLogger, isInteractive, prompt, type GlobalOptions } from '../output.ts';
 import { resolveSource, type SourceOptions } from '../sources.ts';
+import { applyEnvFiles } from '../env-file.ts';
+import { GATE_TARGET, renderGeneratorBlock } from './init-gate.ts';
 import { buildOtlpSummary } from './init-otlp.ts';
 
 interface InitOptions extends GlobalOptions {
@@ -72,6 +75,7 @@ const TARGETS = [
   { path: 'vetkit.config.ts', template: 'vetkit.config.ts.tmpl' },
   { path: 'evals/criteria.yaml', template: 'criteria.yaml' },
   { path: 'evals/cases/example.jsonl', template: 'example.jsonl' },
+  GATE_TARGET,
 ] as const;
 
 function invalid(message: string): VetError {
@@ -82,13 +86,55 @@ function credentialsSet(preset: JevPresetName, env: Env): boolean {
   return JEV_PRESETS[preset].credentials.every((c) => (env[c.name] ?? '') !== '');
 }
 
-// The first preset in JEV_CREDENTIAL_PRIORITY whose credentials are all set, else the first
-// preset in that order; `matched` lists every preset whose credentials are set.
-function chooseTransport(env: Env): { preset: JevPresetName; matched: JevPresetName[] } {
-  const matched = JEV_CREDENTIAL_PRIORITY.filter((p) => credentialsSet(p, env));
-  const preset = matched[0] ?? JEV_CREDENTIAL_PRIORITY[0];
-  if (preset === undefined) throw new Error('judge-jev exports no presets');
-  return { preset, matched };
+// Pinned presets first (a pinned judge is what `vet run --gate` needs), each group in
+// JEV_CREDENTIAL_PRIORITY order.
+function pinnedFirst(): JevPresetName[] {
+  return [
+    ...JEV_CREDENTIAL_PRIORITY.filter((p) => JEV_PRESETS[p].pinned),
+    ...JEV_CREDENTIAL_PRIORITY.filter((p) => !JEV_PRESETS[p].pinned),
+  ];
+}
+
+function credentialNames(presets: readonly JevPresetName[]): string {
+  return presets.flatMap((p) => JEV_PRESETS[p].credentials.map((c) => c.name)).join(', ');
+}
+
+async function pickPreset(candidates: readonly JevPresetName[]): Promise<JevPresetName> {
+  const answer = await select({
+    message: 'Several judge credentials are set. Which transport should the judge use?',
+    options: candidates.map((p) => ({
+      value: p,
+      label: p,
+      hint: `${credentialNames([p])}${JEV_PRESETS[p].pinned ? ', pinned' : ', unpinned'}`,
+    })),
+  });
+  if (isCancel(answer)) {
+    const abort = new Error('prompt for "judge transport" cancelled');
+    abort.name = 'AbortError';
+    throw abort;
+  }
+  return answer;
+}
+
+// Only `vet init` reads the environment to pick a transport; the runtime never does. One
+// candidate, or none (the demo judge), needs no question; several ask when interactive, else
+// take the first pinned one, and refuse when only unpinned ones are left to choose from.
+async function chooseTransport(
+  env: Env,
+  interactive: boolean,
+): Promise<{ preset: JevPresetName | 'demo'; matched: JevPresetName[] }> {
+  const matched = pinnedFirst().filter((p) => credentialsSet(p, env));
+  const [first] = matched;
+  if (first === undefined) return { preset: 'demo', matched };
+  if (matched.length === 1) return { preset: first, matched };
+  if (interactive) return { preset: await pickPreset(matched), matched };
+  if (!JEV_PRESETS[first].pinned) {
+    throw new VetError(
+      'NOT_INTERACTIVE',
+      `several judge credentials are set (${credentialNames(matched)}) and none is pinned, and stdin is not a TTY or CI is set; keep only one in the environment or .env`,
+    );
+  }
+  return { preset: first, matched };
 }
 
 const DEMO_JUDGE = [
@@ -97,6 +143,15 @@ const DEMO_JUDGE = [
   '  // run `vet init --force`.',
   '  judge: demoJudge,',
 ].join('\n');
+
+// The gateway serves an alias, so its judgments are pinned:false and `vet run --gate` refuses
+// them unless allowUnpinned is set.
+const GATE_UNPINNED = [
+  '  // The gateway serves typesafe-ai/jev as an alias (pinned: false), so `vet run --gate` would',
+  '  // refuse it; allowUnpinned lets it through. Set OPENROUTER_API_KEY or TYPESAFE_API_KEY and',
+  '  // run `vet init --force` for a pinned judge.',
+  '  gate: { allowUnpinned: true },',
+];
 
 // Only env var names are substituted: the bearer token's, and any further credential is the
 // endpoint's accountId, read from its env var when the config loads.
@@ -111,28 +166,27 @@ function realJudge(preset: JevPresetName): string {
     `    preset: '${preset}',`,
     `    apiKeyEnv: '${key?.name ?? ''}',${accountId}`,
     '  },',
+    ...(JEV_PRESETS[preset].pinned ? [] : GATE_UNPINNED),
   ].join('\n');
 }
 
 export function renderConfig(template: string, preset: JevPresetName | 'demo'): string {
   const demo = preset === 'demo';
-  return template
-    .replaceAll('{{imports}}', demo ? 'defineConfig, demoJudge' : 'defineConfig')
-    .replaceAll('{{judge}}', demo ? DEMO_JUDGE : realJudge(preset))
-    .replaceAll('{{generator}}', '');
+  return renderGeneratorBlock(
+    template
+      .replaceAll('{{imports}}', demo ? 'defineConfig, demoJudge' : 'defineConfig')
+      .replaceAll('{{judge}}', demo ? DEMO_JUDGE : realJudge(preset)),
+  );
 }
 
-function reportTransport(preset: JevPresetName, matched: readonly JevPresetName[]): void {
+function reportTransport(preset: JevPresetName | 'demo', matched: readonly JevPresetName[]): void {
   const log = getLogger();
-  if (matched.length === 0) {
-    const names = JEV_CREDENTIAL_PRIORITY.map((p) =>
-      JEV_PRESETS[p].credentials.map((c) => c.name).join(' + '),
-    );
+  if (preset === 'demo') {
     log.warn(
-      `no judge credential is set; using the "${preset}" transport. Set one of ${names.join(', ')} before \`vet run\``,
+      `no judge credential is set; using the demo judge. Set one of ${credentialNames(JEV_CREDENTIAL_PRIORITY)} in the environment or .env, then run \`vet init --force\``,
     );
   } else if (matched.length > 1) {
-    log.info(`judge credentials found for ${matched.join(', ')}; using "${preset}"`);
+    log.info(`judge credentials found for ${credentialNames(matched)}; using "${preset}"`);
   }
 }
 
@@ -218,7 +272,7 @@ async function scaffoldExample(dir: string, force: boolean, env: Env): Promise<s
   const existing = TARGETS.map((t) => t.path).filter((path) => existsSync(join(dir, path)));
   if (existing.length > 0 && !force) await confirmOverwrite(existing);
 
-  const { preset, matched } = chooseTransport(env);
+  const { preset, matched } = await chooseTransport(env, isInteractive());
   const contents = await Promise.all(
     TARGETS.map(async ({ path, template }) => {
       const text = await readFile(join(TEMPLATE_DIR, template), 'utf8');
@@ -235,6 +289,7 @@ async function scaffoldExample(dir: string, force: boolean, env: Env): Promise<s
 
 async function initCommand(options: InitOptions): Promise<void> {
   const dir = resolve(options.dir ?? '.');
+  applyEnvFiles({ dir, env: process.env });
   const files = await scaffoldExample(dir, options.force === true, process.env);
   emit({ files }, () => [...files.map((file) => `wrote ${file}`), 'next: vet run'].join('\n'));
 }
