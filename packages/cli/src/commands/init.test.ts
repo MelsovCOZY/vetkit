@@ -4,6 +4,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -174,6 +175,29 @@ describe('vet init --source', () => {
     const runDoc = parseJson<{ summary: { total: number } }>(runResult.stdout);
     expect(runDoc.summary.total).toBe(initDoc.cases.length);
   });
+});
+
+// These flags only mean something to the --source path; the scaffold path never reads them,
+// so accepting them there would silently write somewhere the user did not ask for.
+describe('vet init without --source', () => {
+  const sourceOnlyFlags = [
+    ['--out', 'evals-out'],
+    ['--until', '5'],
+    ['--seconds', '5'],
+  ] as const;
+
+  for (const [flag, value] of sourceOnlyFlags) {
+    test(`${flag} without --source exits 2 CONFIG_INVALID saying it only applies together with --source, and writes nothing`, () => {
+      const dir = mkdtempSync(join(tmpdir(), 'vetkit-init-no-source-'));
+      const result = runVet(['init', flag, value], dir);
+      expect(result.status).toBe(2);
+      expect(result.stderr).toContain(
+        `error CONFIG_INVALID: ${flag} only applies together with --source <spec>\n`,
+      );
+      expect(result.stdout).toBe('');
+      expect(readdirSync(dir)).toEqual([]);
+    });
+  }
 });
 
 interface GeneratorTotals {

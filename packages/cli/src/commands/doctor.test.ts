@@ -7,6 +7,7 @@ import { JEV_PRESETS } from '@vetkit/judge-jev';
 import { safeParseJson } from '@vetkit/spec';
 import { Command } from 'commander';
 import { describe, expect, test, vi } from 'vitest';
+import { NODE_FLOOR_RANGE, nodeFloorError } from '../node-floor.ts';
 import { ENV_VARS, registerDoctor, renderJson, renderTable, runDoctor } from './doctor.ts';
 
 // safeParseJson(text, schema) is the one JSON.parse chokepoint under packages/*/src
@@ -356,8 +357,9 @@ describe('registerDoctor --json is global', () => {
 
 describe('renderTable / renderJson', () => {
   test('renderTable without a painter is plain padded text', () => {
-    const checks = [{ name: 'node', status: 'pass' as const, detail: 'v22.23.2 >= 22.12' }];
-    expect(renderTable(checks)).toBe(`pass ${'node'.padEnd(22)} v22.23.2 >= 22.12`);
+    const detail = 'v22.23.2 satisfies ^22.18 || >=24.11';
+    const checks = [{ name: 'node', status: 'pass' as const, detail }];
+    expect(renderTable(checks)).toBe(`pass ${'node'.padEnd(22)} ${detail}`);
   });
 
   test('renderTable paints only the status word, keeping the padding outside it', () => {
@@ -367,7 +369,9 @@ describe('renderTable / renderJson', () => {
   });
 
   test('renderTable includes every check name and status', () => {
-    const checks = [{ name: 'node', status: 'pass' as const, detail: 'v22.23.2 >= 22.12' }];
+    const checks = [
+      { name: 'node', status: 'pass' as const, detail: 'v22.23.2 satisfies ^22.18 || >=24.11' },
+    ];
     const table = renderTable(checks);
     expect(table).toContain('node');
     expect(table).toContain('pass');
@@ -633,5 +637,60 @@ describe('runDoctor without a config file', () => {
       status: 'warn',
       detail: 'no vetkit.config.ts — cannot determine which sink credentials are required',
     });
+  });
+});
+
+// The node row and the CLI's start-up guard (node-floor.ts) must never disagree: a version
+// the guard refuses cannot be a doctor pass.
+async function nodeRow(nodeVersion: string) {
+  const result = await runDoctor({ ...SNIFF_DEPS, nodeVersion, env: {}, fetchImpl: vi.fn() });
+  return statusOf(result.checks, 'node');
+}
+
+describe('runDoctor node row', () => {
+  test('node row: v22.18.0, v22.23.2, v24.11.0 and v26.0.0 pass, the detail naming ^22.18 || >=24.11', async () => {
+    expect(NODE_FLOOR_RANGE).toBe('^22.18 || >=24.11');
+    for (const version of ['v22.18.0', 'v22.23.2', 'v24.11.0', 'v26.0.0']) {
+      expect(await nodeRow(version)).toEqual({
+        name: 'node',
+        status: 'pass',
+        detail: `${version} satisfies ^22.18 || >=24.11`,
+      });
+    }
+  });
+
+  test('node row: v22.12.0, v22.17.9, v23.11.0 and v24.10.0 fail, the detail naming the version and ^22.18 || >=24.11', async () => {
+    for (const version of ['v22.12.0', 'v22.17.9', 'v23.11.0', 'v24.10.0']) {
+      const row = await nodeRow(version);
+      expect(row.status, version).toBe('fail');
+      expect(row.detail, version).toContain('^22.18 || >=24.11');
+      expect(row.detail, version).toContain(version);
+      expect(row.detail, version).not.toContain('22.12 floor');
+    }
+  });
+
+  test('node row: an unparseable version fails, the detail naming ^22.18 || >=24.11', async () => {
+    const row = await nodeRow('not-a-version');
+    expect(row.status).toBe('fail');
+    expect(row.detail).toContain('^22.18 || >=24.11');
+  });
+
+  test('node row: passes exactly when the start-up guard accepts the version', async () => {
+    const versions = ['v20.19.0', 'v22.0.0', 'v22.17.9', 'v22.18.0', 'v23.11.0', 'v24.0.0'];
+    for (const version of [...versions, 'v24.10.9', 'v24.11.0', 'v25.0.0', 'garbage']) {
+      const accepted = nodeFloorError(version) === undefined;
+      expect((await nodeRow(version)).status === 'pass', version).toBe(accepted);
+    }
+  });
+});
+
+describe('runDoctor with a config that does not load', () => {
+  test('the generator and sink rows name --config with its <path> placeholder', async () => {
+    const cwd = await configProject('export default {;\n');
+    const result = await runDoctor({ nodeVersion: 'v22.23.2', cwd, env: {}, fetchImpl: vi.fn() });
+    expect(statusOf(result.checks, 'config').status).toBe('fail');
+    for (const name of ['generator credential', 'sink credentials']) {
+      expect(statusOf(result.checks, name).detail, name).toContain('pass --config <path> to');
+    }
   });
 });

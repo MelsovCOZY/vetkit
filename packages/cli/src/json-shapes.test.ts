@@ -374,6 +374,12 @@ describe('JSON_SHAPES coverage', () => {
     }
   });
 
+  test('the doctor example shows the node row the CLI prints: a version inside ^22.18 || >=24.11', () => {
+    const example = JSON.stringify(JSON_SHAPES.doctor['examples']);
+    expect(example).toContain('"detail":"v22.23.2 satisfies ^22.18 || >=24.11"');
+    expect(renderJsonShapesMarkdown()).not.toContain('>= 22.12');
+  });
+
   test('renderJsonShapesMarkdown lists every key once', () => {
     const markdown = renderJsonShapesMarkdown();
     const headings = markdown

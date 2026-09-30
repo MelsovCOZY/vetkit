@@ -476,6 +476,9 @@ describe('handleError --verbose non-Error causes', () => {
 
 const OLD_GENERIC_HINT = 'check your configuration and CLI flags, then retry.';
 const GLOBAL_FLAGS = ['--json', '--quiet', '--verbose', '--no-color'];
+// A hint is a command the reader can run as printed, so a flag that takes a value is followed
+// by a <placeholder> or by one of these literal values.
+const LITERAL_FLAG_VALUES = ['--to vitest'];
 
 describe('hints', () => {
   test('hints: every CEV_ERROR_CODES value has a non-empty hint that differs from the old generic one', () => {
@@ -510,6 +513,12 @@ describe('hints', () => {
     expect(line).not.toContain('--strict');
   });
 
+  test('hints: a config error names vet doctor --config with its <path> placeholder', () => {
+    for (const code of ['CONFIG_INVALID', 'E_CONFIG']) {
+      expect(hintFor(code), code).toContain('vet doctor --config <path> ');
+    }
+  });
+
   test('hints: the JSON error document keeps code, message and the per-code hint', () => {
     const out = run(markerError('LABELS_TOO_FEW', 'x'), { json: true }).stdout;
     const expected = {
@@ -518,7 +527,7 @@ describe('hints', () => {
     expect(out).toBe(`${JSON.stringify(expected)}\n`);
   });
 
-  test('hints: every flag a hint names exists on the command it names', () => {
+  test('hints: every flag a hint names exists on the command it names, and a flag that takes a value shows a value or a <placeholder>', () => {
     const program = createProgram();
     const findCommand = (parts: readonly string[]) => {
       let current = program;
@@ -552,6 +561,15 @@ describe('hints', () => {
           const known =
             GLOBAL_FLAGS.includes(flag) || (current?.options.some((o) => o.long === flag) ?? false);
           expect(known, `${hint}: ${flag} is not an option of the preceding command`).toBe(true);
+          const takesValue = current?.options.find((o) => o.long === flag)?.required ?? false;
+          const rest = hint.slice(match.index + flag.length);
+          const shown =
+            /^ <[a-z][a-z-]*>/.test(rest) ||
+            LITERAL_FLAG_VALUES.some((literal) => `${flag}${rest}`.startsWith(literal));
+          expect(
+            !takesValue || shown,
+            `${hint}: ${flag} takes a value; show one or a <placeholder>`,
+          ).toBe(true);
         }
       }
     }
