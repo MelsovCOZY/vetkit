@@ -58,21 +58,28 @@ export function redactSecrets(
   return text.replace(pattern, mask);
 }
 
-/** Applies `redactSecrets` to every string in a JSON-like value; cycles become '[circular]'. */
+/** Applies `redactSecrets` to every string in a JSON-like value; true cycles (an ancestor revisited) become '[circular]'; shared references are kept. */
 export function redactSecretsDeep(
   value: unknown,
   secrets: readonly string[],
   mask: SecretMask = defaultMask,
-  seen: WeakSet<object> = new WeakSet(),
+  ancestors: WeakSet<object> = new WeakSet(),
 ): unknown {
   if (typeof value === 'string') return redactSecrets(value, secrets, mask);
   if (value === null || typeof value !== 'object') return value;
-  if (seen.has(value)) return '[circular]';
-  seen.add(value);
-  if (Array.isArray(value)) {
-    return value.map((item) => redactSecretsDeep(item, secrets, mask, seen));
+  if (ancestors.has(value)) return '[circular]';
+  ancestors.add(value);
+  try {
+    if (Array.isArray(value)) {
+      return value.map((item) => redactSecretsDeep(item, secrets, mask, ancestors));
+    }
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        redactSecretsDeep(item, secrets, mask, ancestors),
+      ]),
+    );
+  } finally {
+    ancestors.delete(value);
   }
-  return Object.fromEntries(
-    Object.entries(value).map(([key, item]) => [key, redactSecretsDeep(item, secrets, mask, seen)]),
-  );
 }
