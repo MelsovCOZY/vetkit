@@ -18,6 +18,7 @@ import { registerValidate } from './commands/validate.ts';
 import { registerWatch } from './commands/watch.ts';
 import { handleError } from './errors.ts';
 import { CEV_EXIT, configureOutput, type GlobalOptions } from './output.ts';
+import { nodeFloorError } from './node-floor.ts';
 
 const require = createRequire(import.meta.url);
 
@@ -110,6 +111,11 @@ async function execute(program: Command, argv: readonly string[]): Promise<void>
 }
 
 export function run(argv: readonly string[], program: Command = createProgram()): void {
+  const floorError = nodeFloorError(process.version);
+  if (floorError !== undefined) {
+    process.stderr.write(`${floorError}\n`);
+    exitNow(CEV_EXIT.USAGE);
+  }
   // A command that handles SIGINT itself (`vet run` aborts and prints partial results)
   // registers its own listener; this default exit applies only when none is present.
   process.once('SIGINT', () => {
