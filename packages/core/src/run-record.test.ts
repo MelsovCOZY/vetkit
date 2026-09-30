@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runRecordSchema, safeParseJson, validateJson, VetError } from '@vetkit/spec';
 import { describe, expect, it } from 'vitest';
+import { MIGRATE_DOCS, SCHEMA_VERSIONS } from './schema-version.ts';
 import { readRunRecord, writeRunRecord, type RunRecord } from './run-record.ts';
 
 function record(overrides: Partial<Omit<RunRecord, '$schema'>> = {}): Omit<RunRecord, '$schema'> {
@@ -118,6 +119,42 @@ describe('run record', () => {
     expect(error instanceof Error && error.message).toMatch(
       /run `vet run` to write a current record$/,
     );
+  });
+
+  it('writes schemaVersion 1 on every record', async () => {
+    const { path, latestPath } = await writeRunRecord(tmp(), record());
+    for (const file of [path, latestPath]) {
+      expect(parseObject(readFileSync(file, 'utf8'))['schemaVersion']).toBe(1);
+    }
+    expect(SCHEMA_VERSIONS.runRecord).toBe(1);
+  });
+
+  it('loads a record that has no schemaVersion', async () => {
+    const cacheDir = tmp();
+    mkdirSync(join(cacheDir, 'runs'));
+    const legacy = { $schema: runRecordSchema.$id, ...record() };
+    writeFileSync(join(cacheDir, 'runs', 'latest.json'), JSON.stringify(legacy));
+    const loaded = await readRunRecord(cacheDir);
+    expect(loaded).toEqual(legacy);
+    expect(loaded).not.toHaveProperty('schemaVersion');
+  });
+
+  it('refuses a record whose schemaVersion is newer than supported', async () => {
+    const cacheDir = tmp();
+    mkdirSync(join(cacheDir, 'runs'));
+    const newer = { $schema: runRecordSchema.$id, schemaVersion: 2, ...record() };
+    writeFileSync(join(cacheDir, 'runs', 'latest.json'), JSON.stringify(newer));
+    const error = await readRunRecord(cacheDir).catch((e: unknown) => e);
+    expect(error instanceof Error && error.message).toContain(
+      'run record schemaVersion 2 is newer than this vetkit supports (1)',
+    );
+    expect(error instanceof Error && error.message).toContain(MIGRATE_DOCS);
+    writeFileSync(
+      join(cacheDir, 'runs', 'latest.json'),
+      JSON.stringify({ ...newer, schemaVersion: 0 }),
+    );
+    const invalid = await readRunRecord(cacheDir).catch((e: unknown) => e);
+    expect(invalid instanceof Error && invalid.message).toContain('is not a valid version');
   });
 
   it('runRecordSchema accepts a minimal portable record and additional properties', () => {

@@ -267,6 +267,14 @@ describe('vet run persists .vet/runs/latest.json', () => {
     });
   });
 
+  test('the run record carries schemaVersion 1 and stdout does not', () => {
+    const project = freshProject();
+    const doc = parseObject(runVet(['run', '--json'], project, fixtureEnv('pass')).stdout);
+    const rec = parseObject(readFileSync(recordPath(project), 'utf8'));
+    expect(rec['schemaVersion']).toBe(1);
+    expect(doc).not.toHaveProperty('schemaVersion');
+  });
+
   test('stdout --json carries no $schema, criteriaPath, casesPath or gateRequested keys', () => {
     const doc = parseObject(runVet(['run', '--json'], freshProject(), fixtureEnv('pass')).stdout);
     for (const key of ['$schema', 'criteriaPath', 'casesPath', 'gateRequested']) {
