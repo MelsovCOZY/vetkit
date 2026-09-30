@@ -1,15 +1,14 @@
-// `vet check --lock|--outbox`. --lock recomputes
+// `vet check [--lock <path>] [--outbox [dir]]` (no flag = the default lock). --lock recomputes
 // the lock's content hashes and compares the judge's transport, requested id and release date,
 // listing each stale criterion (wording_changed | model_changed | uncalibrated = absent from the
 // lock); stale exits 1, a missing or pre-v1 lock exits 2. --outbox prints the J6 outbox
 // reconciliation {produced, acknowledged, skipped, dead}; a dead-lettered verdict exits 1. With both
 // flags both sections print and the exit code is the larger one.
 import { readFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import {
   checkLock,
   createOutbox,
-  LOCK_FILE,
   readLock,
   type ReconcileResult,
   type StaleReport,
@@ -28,7 +27,7 @@ import { emit, getLogger } from '../output.ts';
 import { loadProject, type ProjectOptions, type ValidateDeps } from './validate.ts';
 
 interface CheckOptions extends ProjectOptions {
-  readonly lock?: string | boolean;
+  readonly lock?: string;
   readonly outbox?: string | boolean;
 }
 
@@ -73,10 +72,8 @@ async function describeReleaseDate(judge: JudgeV1): Promise<string | null> {
 
 async function checkLockFile(options: CheckOptions, deps: ValidateDeps): Promise<LockCheckReport> {
   const project = await loadProject(options, deps, false);
-  const { judge, rootDir } = project.loaded;
-  const lockPath = resolve(
-    typeof options.lock === 'string' ? options.lock : join(rootDir, LOCK_FILE),
-  );
+  const { judge } = project.loaded;
+  const lockPath = resolve(options.lock ?? project.paths.lock);
   const lock = await readSupportedLock(lockPath);
   // Disabled criteria (`enabled: false`) have no lock entry by design; check skips them.
   const criteria = project.criteria.filter((c) => c.enabled !== false);
@@ -140,14 +137,9 @@ function outboxText(r: ReconcileResult): string {
 }
 
 async function checkCommand(options: CheckOptions, deps: ValidateDeps): Promise<void> {
-  const wantLock = options.lock !== undefined && options.lock !== false;
   const wantOutbox = options.outbox !== undefined && options.outbox !== false;
-  if (!wantLock && !wantOutbox) {
-    throw new VetError(
-      CEV_ERROR_CODES.CONFIG_INVALID,
-      '`vet check` needs --lock [path] and/or --outbox [dir]',
-    );
-  }
+  // Bare `vet check` checks the default lock; --outbox alone checks only the outbox.
+  const wantLock = options.lock !== undefined || !wantOutbox;
   const lock = wantLock ? await checkLockFile(options, deps) : undefined;
   const outbox = wantOutbox ? await checkOutbox(options, deps) : undefined;
   if (lock !== undefined && outbox !== undefined) {
@@ -166,7 +158,7 @@ export function registerCheck(program: Command, deps: ValidateDeps = {}): Comman
   program
     .command('check')
     .description('check criteria.lock.json and the sink outbox against the current project')
-    .option('--lock [path]', 'lock file to check (default: criteria.lock.json next to the config)')
+    .option('--lock <path>', 'lock file to check (default: criteria.lock.json next to the config)')
     .option('--outbox [dir]', 'outbox to reconcile (default: <cacheDir>/outbox next to the config)')
     .option('--config <path>', 'config file (default: vetkit.config.* in the current directory)')
     .option(
