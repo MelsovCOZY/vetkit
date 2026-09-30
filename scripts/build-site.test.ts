@@ -34,6 +34,11 @@ const tracked = (...patterns: string[]): string[] =>
     .filter((path) => path !== '');
 const frontMatterTitle = (text: string): string | undefined =>
   /^---\ntitle: (.+)\n---\n/.exec(text)?.[1];
+const idOf = (text: string): string => {
+  const schema: { $id: string } = JSON.parse(text);
+  return schema.$id;
+};
+const byName = (a: string, b: string): number => a.localeCompare(b);
 const lintAnchor = (id: string): string => id.toLowerCase().replaceAll('_', '-');
 
 function walk(dir: string): string[] {
@@ -88,7 +93,7 @@ describe('site staging', () => {
     expect(files.length).toBeGreaterThan(8);
     for (const file of files) {
       const text = readFileSync(join(ROOT, file), 'utf8');
-      const id = (JSON.parse(text) as { $id: string }).$id;
+      const id = idOf(text);
       expect(id.startsWith(`${PAGES}/`), id).toBe(true);
       expect(staged(id.slice(PAGES.length + 1)), id).toBe(text);
     }
@@ -206,13 +211,13 @@ describe('collectPagesUrls', () => {
   it('includes every $id, lint link, MIGRATE_DOCS and homepage', () => {
     const urls = collectPagesUrls(ROOT);
     for (const file of tracked('packages/spec/schemas').filter((p) => p.endsWith('.schema.json'))) {
-      const id = (JSON.parse(readFileSync(join(ROOT, file), 'utf8')) as { $id: string }).$id;
+      const id = idOf(readFileSync(join(ROOT, file), 'utf8'));
       expect(urls, id).toContain(id);
     }
-    const otlp = JSON.parse(
+    const otlpId = idOf(
       readFileSync(join(ROOT, 'packages/source-otlp/src/reader/otlp.schema.json'), 'utf8'),
-    ) as { $id: string };
-    expect(urls).toContain(otlp.$id);
+    );
+    expect(urls).toContain(otlpId);
     for (const rule of LINT_RULES) expect(urls).toContain(rule.docs);
     expect(urls).toContain(MIGRATE_DOCS);
     expect(urls).toContain(`${PAGES}/`);
@@ -270,14 +275,14 @@ describe('pages workflow', () => {
     expect(text).toContain('gh api repos/MelsovCOZY/vetkit --jq .private');
 
     const deploy = doc.jobs['deploy'];
-    expect([deploy?.needs].flat().toSorted()).toEqual(['build', 'visibility']);
+    expect([deploy?.needs ?? []].flat().toSorted(byName)).toEqual(['build', 'visibility']);
     expect(deploy?.if).toContain("needs.visibility.outputs.private == 'false'");
     expect(deploy?.permissions).toEqual({ pages: 'write', 'id-token': 'write' });
     const deployUses = (deploy?.steps ?? []).map((s) => s.uses?.split('@')[0]);
     expect(deployUses).toEqual(['actions/configure-pages', 'actions/deploy-pages']);
 
     const linkCheck = doc.jobs['link-check'];
-    expect([linkCheck?.needs].flat().toSorted()).toEqual(['deploy', 'visibility']);
+    expect([linkCheck?.needs ?? []].flat().toSorted(byName)).toEqual(['deploy', 'visibility']);
     expect(linkCheck?.if).toBe('always()');
     expect(text).toContain(liveCheckPlan(true).message);
     expect(text).toContain('bun scripts/build-site.ts --check-live');
