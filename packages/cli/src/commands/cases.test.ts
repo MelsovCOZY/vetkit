@@ -52,8 +52,10 @@ function baseRecord(p: Project, overrides: Partial<RunRecord> = {}): RunRecord {
     model,
     exitCode: 0,
     gateReasons: [],
-    criteriaPath: join(p.root, 'evals', 'criteria.yaml'),
-    casesPath: p.cases,
+    $schema: 'https://vetkit.dev/schemas/run-record.schema.json',
+    gateRequested: false,
+    criteriaPath: 'evals/criteria.yaml',
+    casesPath: 'evals/cases',
     startedAt: '2026-09-29T00:00:00.000Z',
     ...overrides,
   };
