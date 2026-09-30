@@ -16,7 +16,7 @@ describe('@vetkit/scorers/vitest subpath', () => {
     }
   });
 
-  test('vitest.ts augments Assertion and re-exports vetMatchers', () => {
+  test('vitest.ts augments expect(x) with toPassCriterion and re-exports vetMatchers', () => {
     const text = read('vitest.ts');
     expect(text).toMatch(/declare module ['"]vitest['"]/);
     expect(text).toContain('toPassCriterion');
