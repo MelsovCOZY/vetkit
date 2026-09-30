@@ -60,11 +60,23 @@ describe('site staging', () => {
   it('stages README.md as index.md with front matter', () => {
     const index = staged('index.md');
     expect(frontMatterTitle(index)).toBeDefined();
-    expect(index).toContain('## What it is');
-    expect(index).not.toContain('src="assets/logo.png"');
-    expect(index).toContain(
-      `src="https://raw.githubusercontent.com/MelsovCOZY/vetkit/master/assets/logo.png"`,
+    const readme = readFileSync(join(ROOT, 'README.md'), 'utf8');
+    const lines = readme.split('\n');
+    const heading = lines.find((line) => line.startsWith('# '));
+    expect(heading).toBeDefined();
+    expect(index).toContain(heading);
+    const body = lines.find(
+      (line) => line.trim().length > 20 && !line.startsWith('#') && !line.includes('assets/'),
     );
+    expect(body).toBeDefined();
+    expect(index).toContain(body);
+    if (/\{\{|\{%/.test(readme)) expect(index).toContain('{% raw %}');
+    expect(index).not.toContain('src="assets/logo.png"');
+    if (readme.includes('src="assets/logo.png"')) {
+      expect(index).toContain(
+        `src="https://raw.githubusercontent.com/MelsovCOZY/vetkit/master/assets/logo.png"`,
+      );
+    }
   });
 
   it('stages every tracked top-level docs page', () => {
