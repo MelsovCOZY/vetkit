@@ -23,6 +23,21 @@ interface ScorecardJob {
   steps?: { uses?: string; with?: Record<string, unknown> }[];
 }
 
+interface ScorecardDoc {
+  on: {
+    schedule?: { cron: string }[];
+    push?: { branches?: string[] };
+    branch_protection_rule?: unknown;
+  };
+  permissions?: unknown;
+  jobs: Record<string, ScorecardJob>;
+}
+
+const readWorkflow = (file: string): WorkflowDoc & { on?: unknown } =>
+  parse(readFileSync(join(WORKFLOWS_DIR, file), 'utf8'));
+const readScorecard = (): ScorecardDoc =>
+  parse(readFileSync(join(WORKFLOWS_DIR, 'scorecard.yml'), 'utf8'));
+
 const triggersOf = (doc: { on?: unknown }): string[] => {
   const on = doc.on;
   if (typeof on === 'string') return [on];
@@ -54,16 +69,9 @@ describe('workflow supply-chain hardening', () => {
     );
   });
 
-  const readWorkflow = (file: string): WorkflowDoc & { on?: unknown } =>
-    parse(readFileSync(join(WORKFLOWS_DIR, file), 'utf8'));
-
   it('scorecard.yml runs weekly, on push to master and on branch protection changes', () => {
-    const doc = readWorkflow('scorecard.yml');
-    const on = doc.on as {
-      schedule?: { cron: string }[];
-      push?: { branches?: string[] };
-      branch_protection_rule?: unknown;
-    };
+    const doc = readScorecard();
+    const on = doc.on;
     expect(on.schedule?.[0]?.cron).toMatch(/^\S+ \S+ \S+ \S+ [0-6*]$/);
     expect(on.push?.branches).toEqual(['master']);
     expect(on).toHaveProperty('branch_protection_rule');
@@ -71,7 +79,7 @@ describe('workflow supply-chain hardening', () => {
   });
 
   it('scorecard.yml publishes results and uploads SARIF', () => {
-    const doc = readWorkflow('scorecard.yml') as { jobs: Record<string, ScorecardJob> };
+    const doc = readScorecard();
     const steps = Object.values(doc.jobs).flatMap((j) => j.steps ?? []);
     const uses = (prefix: string) => steps.find((st) => st.uses?.startsWith(prefix));
     expect(uses('actions/checkout@')?.with?.['persist-credentials']).toBe(false);
@@ -88,7 +96,7 @@ describe('workflow supply-chain hardening', () => {
   });
 
   it('scorecard.yml job is skipped while the repository is private', () => {
-    const doc = readWorkflow('scorecard.yml') as { jobs: Record<string, ScorecardJob> };
+    const doc = readScorecard();
     const jobs = Object.values(doc.jobs);
     expect(jobs).toHaveLength(1);
     expect(jobs[0]?.if).toBe('github.event.repository.private == false');
@@ -131,8 +139,11 @@ interface AuditStep {
 }
 interface AuditDoc {
   on?: unknown;
-  permissions?: unknown;
-  jobs?: Record<string, { permissions?: unknown; steps?: AuditStep[] }>;
+  permissions?: string | Record<string, unknown> | null;
+  jobs?: Record<
+    string,
+    { permissions?: string | Record<string, unknown> | null; steps?: AuditStep[] }
+  >;
   runs?: { steps?: AuditStep[] };
 }
 
@@ -177,12 +188,11 @@ describe('workflow security audit', () => {
   it.each(workflowFiles)('%s declares only contents: read at the top level', (file) => {
     const { doc } = parseAudit(join('.github/workflows', file));
     const perms = doc.permissions;
-    expect(typeof perms, `${file} top-level permissions must be a map`).toBe('object');
-    expect(perms, file).not.toBeNull();
+    if (typeof perms !== 'object' || perms === null) {
+      expect.fail(`${file} top-level permissions must be a map, got ${String(perms)}`);
+    }
     expect(
-      Object.entries(perms as Record<string, unknown>).filter(
-        ([k, v]) => !(k === 'contents' && v === 'read'),
-      ),
+      Object.entries(perms).filter(([k, v]) => !(k === 'contents' && v === 'read')),
       file,
     ).toEqual([]);
   });
@@ -193,12 +203,12 @@ describe('workflow security audit', () => {
       for (const [job, def] of Object.entries(doc.jobs ?? {})) {
         const id = `${file}:${job}`;
         const perms = def.permissions;
-        if (perms === undefined) continue;
+        if (perms === undefined || perms === null) continue;
         if (typeof perms === 'string') {
           expect(perms, `${id} string permissions`).toBe('read-all');
           continue;
         }
-        const writes = Object.entries(perms as Record<string, unknown>)
+        const writes = Object.entries(perms)
           .filter(([, v]) => v === 'write')
           .map(([k]) => k)
           .toSorted();
