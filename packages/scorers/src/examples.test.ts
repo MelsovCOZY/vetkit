@@ -5,13 +5,6 @@ const EXAMPLES = new URL('../../../examples/', import.meta.url);
 const read = (relative: string): string => readFileSync(new URL(relative, EXAMPLES), 'utf8');
 const exists = (relative: string): boolean => existsSync(new URL(relative, EXAMPLES));
 
-interface ExamplePackage {
-  private?: boolean;
-  scripts: Record<string, string>;
-  dependencies?: Record<string, string>;
-  devDependencies?: Record<string, string>;
-}
-
 describe('examples/vitest', () => {
   test('has the documented deliverables', () => {
     for (const file of [
@@ -30,13 +23,12 @@ describe('examples/vitest', () => {
   });
 
   test('scripts.test runs tsc --noEmit before vitest run; vitest pinned exactly and typecheck strict', () => {
-    const pkg: ExamplePackage = JSON.parse(read('vitest/package.json'));
-    expect(pkg.private).toBe(true);
-    expect(pkg.scripts['test']).toBe('tsc --noEmit -p tsconfig.json && vitest run');
-    const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-    expect(deps['vitest']).toBe('5.0.2');
-    expect(deps['@vetkit/scorers']).toBeDefined();
-    expect(deps['typescript']).toMatch(/^\d+\.\d+\.\d+/);
+    const pkg = read('vitest/package.json');
+    expect(pkg).toMatch(/"private":\s*true/);
+    expect(pkg).toContain('"test": "tsc --noEmit -p tsconfig.json && vitest run"');
+    expect(pkg).toMatch(/"vitest":\s*"5\.0\.2"/);
+    expect(pkg).toContain('"@vetkit/scorers"');
+    expect(pkg).toMatch(/"typescript":\s*"\d+\.\d+\.\d+"/);
     const tsconfig = read('vitest/tsconfig.json');
     expect(tsconfig).toMatch(/"strict":\s*true/);
     expect(tsconfig).toMatch(/"skipLibCheck":\s*false/);
@@ -71,12 +63,11 @@ describe('examples/promptfoo', () => {
   });
 
   test('scripts.test runs promptfoo eval with a pinned promptfoo', () => {
-    const pkg: ExamplePackage = JSON.parse(read('promptfoo/package.json'));
-    expect(pkg.private).toBe(true);
-    expect(pkg.scripts['test']).toBe('promptfoo eval --no-cache -c promptfooconfig.yaml');
-    const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-    expect(deps['promptfoo']).toBe('0.123.1');
-    expect(deps['@vetkit/scorers']).toBeDefined();
+    const pkg = read('promptfoo/package.json');
+    expect(pkg).toMatch(/"private":\s*true/);
+    expect(pkg).toContain('"test": "promptfoo eval --no-cache -c promptfooconfig.yaml"');
+    expect(pkg).toMatch(/"promptfoo":\s*"0\.123\.1"/);
+    expect(pkg).toContain('"@vetkit/scorers"');
   });
 
   test('config asserts through vetkit.assert.ts and the assertion reads no key value', () => {

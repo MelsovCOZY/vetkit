@@ -24,17 +24,13 @@ describe('@vetkit/scorers/vitest subpath', () => {
   });
 
   test('package.json exports ./vitest with types and import and keeps vitest an optional peer', () => {
-    const pkg: {
-      exports: Record<string, { types: string; import: string }>;
-      dependencies: Record<string, string>;
-      peerDependenciesMeta: Record<string, { optional: boolean }>;
-    } = JSON.parse(read('../package.json'));
-    expect(pkg.exports['./vitest']).toEqual({
-      types: './dist/vitest.d.ts',
-      import: './dist/vitest.js',
-    });
-    expect(pkg.dependencies).not.toHaveProperty('vitest');
-    expect(pkg.peerDependenciesMeta['vitest']?.optional).toBe(true);
+    const pkg = read('../package.json');
+    expect(pkg).toMatch(
+      /"\.\/vitest":\s*\{\s*"types":\s*"\.\/dist\/vitest\.d\.ts",\s*"import":\s*"\.\/dist\/vitest\.js"\s*\}/,
+    );
+    const [, dependencies = ''] = /"dependencies":\s*\{([^}]*)\}/.exec(pkg) ?? [];
+    expect(dependencies).not.toContain('vitest');
+    expect(pkg).toMatch(/"peerDependenciesMeta":\s*\{\s*"vitest":\s*\{\s*"optional":\s*true/);
   });
 
   test('tsdown builds both entries', () => {
