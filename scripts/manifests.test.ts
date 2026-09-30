@@ -233,12 +233,12 @@ describe('dependency budget', () => {
     expect(externalDeps(loadPkg('core'))).toEqual(['yaml']);
   });
 
-  it('packages/cli depends on commander, @clack/prompts, picocolors and c12', () => {
+  it('packages/cli depends on commander, @clack/prompts and picocolors, not c12', () => {
     const pkg = loadPkg('cli');
     expect(pkg?.dependencies?.commander).toBe('15.0.0');
     expect(pkg?.dependencies?.['@clack/prompts']).toBe('1.8.1');
     expect(pkg?.dependencies?.picocolors).toBe('1.1.1');
-    expect(pkg?.dependencies?.c12).toBe('^3.3.4');
+    expect(pkg?.dependencies?.c12).toBeUndefined();
   });
 
   it('packages/cli exposes the vet binary', () => {

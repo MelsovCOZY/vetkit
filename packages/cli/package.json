@@ -29,7 +29,6 @@
     "commander": "15.0.0",
     "@clack/prompts": "1.8.1",
     "picocolors": "1.1.1",
-    "c12": "^3.3.4",
     "@vetkit/core": "workspace:^",
     "@vetkit/export-vitest": "workspace:^",
     "@vetkit/generator-openai-compatible": "workspace:^",

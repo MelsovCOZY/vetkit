@@ -1,10 +1,14 @@
+import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { VetError } from '@vetkit/spec';
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { loadVetConfig } from './config-load.ts';
+import { loadVetConfig, projectPaths, resolveConfigFile } from './config-load.ts';
 import { judgeRequestCount } from './diag.ts';
+import { ensureCliBuilt } from './test-support/build-cli.ts';
 
 const ADAPTER_CONFIG = `export default {
   judge: {
@@ -331,5 +335,119 @@ describe('loadVetConfig next-step messages', () => {
     const message = error instanceof Error ? error.message : '';
     expect(message).toContain('OPENROUTER_API_KEY is not set');
     expect(message.endsWith('add OPENROUTER_API_KEY=... to .env or export it')).toBe(true);
+  });
+});
+
+describe('native config discovery', () => {
+  test('finds vetkit.config.ts in a parent directory from a nested cwd', async () => {
+    const root = await project({
+      'package.json': '{}',
+      'vetkit.config.ts': ADAPTER_CONFIG,
+      'a/b/.keep': '',
+    });
+    const loaded = await loadVetConfig({ cwd: join(root, 'a/b') });
+    expect(loaded.configFile).toBe(join(root, 'vetkit.config.ts'));
+    expect(loaded.rootDir).toBe(root);
+  });
+
+  test('stops at the nearest package.json and reports no config with the searched range', async () => {
+    const outer = await project({ 'vetkit.config.ts': ADAPTER_CONFIG, 'pkg/package.json': '{}' });
+    const cwd = join(outer, 'pkg/src');
+    await mkdir(cwd, { recursive: true });
+    const error = await rejection(loadVetConfig({ cwd }));
+    expect(VetError.isInstance(error) && error.code).toBe('CONFIG_INVALID');
+    const message = error instanceof Error ? error.message : '';
+    expect(message).toContain(join(cwd, 'vetkit.config'));
+    expect(message).toContain(`up to ${join(outer, 'pkg')}`);
+    expect(message).not.toContain('.config/vetkit');
+  });
+
+  test('prefers .ts over .json in the same directory', async () => {
+    const cwd = await project({
+      'vetkit.config.ts': ADAPTER_CONFIG,
+      'vetkit.config.json': JSON.stringify({ judge: { kind: 'x' } }),
+    });
+    const loaded = await loadVetConfig({ cwd });
+    expect(loaded.configFile).toBe(join(cwd, 'vetkit.config.ts'));
+  });
+
+  test('loads vetkit.config.json without a TS loader', async () => {
+    const cwd = await project({
+      'vetkit.config.json': JSON.stringify({
+        judge: { kind: 'typesafe-compatible', preset: 'vercel', apiKeyEnv: 'FIXTURE_JUDGE_KEY' },
+      }),
+    });
+    const loaded = await loadVetConfig({ cwd, env: { FIXTURE_JUDGE_KEY: 'k' } });
+    expect(loaded.configFile).toBe(join(cwd, 'vetkit.config.json'));
+    expect(loaded.judge.capabilities.transport).toBe('vercel');
+  });
+
+  test('an enum in vetkit.config.ts is CONFIG_INVALID naming the Node version and the unsupported syntax', async () => {
+    // Under vitest, import() goes through vite (which transpiles enums), so run the built CLI on
+    // real Node instead.
+    await ensureCliBuilt();
+    const cwd = await project({
+      'vetkit.config.ts': `enum Kind { A }\nexport default { judge: { kind: Kind.A } };\n`,
+    });
+    const bin = fileURLToPath(new URL('../dist/bin.js', import.meta.url));
+    const result = spawnSync(process.execPath, [bin, 'estimate'], { cwd, encoding: 'utf8' });
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain('CONFIG_INVALID');
+    expect(result.stderr).toContain(process.version);
+    expect(result.stderr).toContain('enums');
+    expect(result.stderr).toContain('unsupported');
+  }, 180_000);
+
+  test('paths: dataDir is <root>/evals when it exists, else <root>', async () => {
+    const withEvals = await project({ 'vetkit.config.ts': ADAPTER_CONFIG, 'evals/.keep': '' });
+    const a = await loadVetConfig({ cwd: withEvals });
+    expect(a.paths.rootDir).toBe(withEvals);
+    expect(a.paths.dataDir).toBe(join(withEvals, 'evals'));
+    expect(a.paths.criteria).toBe(join(withEvals, 'evals', 'criteria.yaml'));
+    expect(a.paths.cases).toBe(join(withEvals, 'evals', 'cases'));
+    expect(a.paths.lock).toBe(join(withEvals, 'criteria.lock.json'));
+    const bare = await project({ 'vetkit.config.ts': ADAPTER_CONFIG });
+    const b = await loadVetConfig({ cwd: bare });
+    expect(b.paths.dataDir).toBe(bare);
+    expect(b.paths.cacheDir).toBe(projectPaths(bare, b.config.cacheDir).cacheDir);
+  });
+
+  test('resolveConfigFile returns {configFile, rootDir} without importing the module', async () => {
+    const marker = join(tmpdir(), `vetkit-marker-${String(process.pid)}-${String(Date.now())}`);
+    const cwd = await project({
+      'vetkit.config.ts': `import { writeFileSync } from 'node:fs';\nwriteFileSync(${JSON.stringify(marker)}, 'x');\n${ADAPTER_CONFIG}`,
+    });
+    const resolved = resolveConfigFile({ cwd });
+    expect(resolved).toEqual({ configFile: join(cwd, 'vetkit.config.ts'), rootDir: cwd });
+    expect(existsSync(marker)).toBe(false);
+    await loadVetConfig({ cwd, resolved });
+    expect(existsSync(marker)).toBe(true);
+  });
+
+  test('loadVetConfig({resolved}) imports exactly the resolved file and skips discovery', async () => {
+    const cwd = await project({
+      'vetkit.config.ts': ADAPTER_CONFIG,
+      'other/custom.config.ts': ADAPTER_CONFIG.replace('inline-judge', 'other-judge'),
+    });
+    const resolved = {
+      configFile: join(cwd, 'other/custom.config.ts'),
+      rootDir: join(cwd, 'other'),
+    };
+    const loaded = await loadVetConfig({ cwd, resolved });
+    expect(loaded.judge.id).toBe('other-judge');
+    expect(loaded.rootDir).toBe(join(cwd, 'other'));
+  });
+
+  test('an env var set between resolveConfigFile and loadVetConfig is visible to the config module and to apiKeyEnv resolution', async () => {
+    const cwd = await project({
+      'vetkit.config.ts': `export default { judge: { kind: 'typesafe-compatible', preset: 'vercel', apiKeyEnv: 'FIXTURE_LATE_KEY', model: process.env.FIXTURE_LATE_MODEL ?? 'unset' } };\n`,
+    });
+    const env: Record<string, string | undefined> = {};
+    const resolved = resolveConfigFile({ cwd });
+    env.FIXTURE_LATE_KEY = 'late-key';
+    vi.stubEnv('FIXTURE_LATE_MODEL', 'late-model');
+    const loaded = await loadVetConfig({ cwd, env, resolved });
+    expect(loaded.missingCredentials).toEqual([]);
+    expect(loaded.judge.capabilities.model).toBe('late-model');
   });
 });

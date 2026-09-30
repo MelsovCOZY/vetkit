@@ -1,13 +1,21 @@
 // The CLI's one config loader used by `vet run` and reused by
-// later commands. c12 finds and executes vetkit.config.ts; core resolveConfig validates it and
+// later commands. Discovery walks up to the nearest package.json and Node's own import() executes the file; core resolveConfig validates it and
 // applies defaults; the judge is then built here, in the CLI, never in core: an adapter object
 // passes through, and a {kind: 'typesafe-compatible', …} descriptor becomes createJevJudge with
 // its key read from the env var the config names.
-import { dirname, resolve } from 'node:path';
+import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { dirname, extname, join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { readEnvName, resolveConfig, type ResolvedConfig } from '@vetkit/core';
 import { createJevJudgeFromEndpoint, type JevProviderOptions } from '@vetkit/judge-jev';
-import { CEV_ERROR_CODES, VetError, type JudgeEndpoint, type JudgeV1 } from '@vetkit/spec';
-import { loadConfig } from 'c12';
+import {
+  CEV_ERROR_CODES,
+  safeParseJson,
+  VetError,
+  type JudgeEndpoint,
+  type JudgeV1,
+} from '@vetkit/spec';
 import { diagEnabled, withJudgeDiag } from './diag.ts';
 
 type Env = Readonly<Record<string, string | undefined>>;
@@ -25,6 +33,32 @@ export interface LoadVetConfigOptions {
    * rejects CONFIG_INVALID before any network call. Defaults to true.
    */
   readonly requireCredentials?: boolean;
+  /**
+   * A file already found by resolveConfigFile: discovery is skipped and exactly this file is
+   * imported. Wins over configPath when both are given.
+   */
+  readonly resolved?: ResolvedConfigFile;
+}
+
+export interface ResolvedConfigFile {
+  /** Absolute path of the config file. */
+  readonly configFile: string;
+  /** The config file's directory. */
+  readonly rootDir: string;
+}
+
+/** Every project path a command needs, absolute, derived once from the config's directory. */
+export interface ProjectPaths {
+  readonly rootDir: string;
+  /** `<rootDir>/evals` when it exists, else `<rootDir>` (`vet init --out` writes flat). */
+  readonly dataDir: string;
+  readonly criteria: string;
+  readonly cases: string;
+  readonly labels: string;
+  readonly gauntlet: string;
+  readonly lock: string;
+  readonly vitestOut: string;
+  readonly cacheDir: string;
 }
 
 export interface LoadedVetConfig {
@@ -38,11 +72,17 @@ export interface LoadedVetConfig {
   readonly configFile: string;
   /** The config file's directory: project-relative paths resolve against it. */
   readonly rootDir: string;
+  readonly paths: ProjectPaths;
 }
 
-const CONFIG_NAME = 'vetkit';
+const CANDIDATES = ['ts', 'mts', 'js', 'mjs', 'json'].map((ext) => `vetkit.config.${ext}`);
+const EXTENSIONS = '{ts,mts,js,mjs,json}';
+const LOCK_FILE = 'criteria.lock.json';
+const UNSUPPORTED_SYNTAX_CODES = new Set([
+  'ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX',
+  'ERR_INVALID_TYPESCRIPT_SYNTAX',
+]);
 const JUDGE_KIND = 'typesafe-compatible';
-const EXTENSIONS = '{ts,mts,cts,js,mjs,cjs,json}';
 // A generic override of the judge transport's base URL for this
 // process, so a test (or an operator) can force a judge failure without touching config.
 // Named CEV_ (no vendor) since it applies to any typesafe-compatible endpoint, not one preset.
@@ -97,33 +137,94 @@ function judgeFromEndpoint(endpoint: JudgeEndpoint, apiKey: string): JudgeV1 {
   return createJevJudgeFromEndpoint(endpoint, extra);
 }
 
+// Walks from cwd upward; the directory holding package.json is the last one searched.
+function walk(cwd: string): { readonly file: string | undefined; readonly stopDir: string } {
+  let dir = resolve(cwd);
+  for (;;) {
+    for (const name of CANDIDATES) {
+      const file = join(dir, name);
+      if (existsSync(file)) return { file, stopDir: dir };
+    }
+    const parent = dirname(dir);
+    if (existsSync(join(dir, 'package.json')) || parent === dir) {
+      return { file: undefined, stopDir: dir };
+    }
+    dir = parent;
+  }
+}
+
+/** The nearest vetkit.config.* from cwd up to the nearest package.json, or undefined. */
+export function findConfigFile(cwd: string): string | undefined {
+  return walk(cwd).file;
+}
+
+/** Locates the config file without importing it; throws CONFIG_INVALID when there is none. */
+export function resolveConfigFile(options: {
+  readonly cwd: string;
+  readonly configPath?: string;
+}): ResolvedConfigFile {
+  if (options.configPath !== undefined) {
+    const configFile = resolve(options.cwd, options.configPath);
+    if (!existsSync(configFile)) throw invalid(`no vetkit config found at ${configFile}; run: vet init`);
+    return { configFile, rootDir: dirname(configFile) };
+  }
+  const { file, stopDir } = walk(options.cwd);
+  if (file === undefined) {
+    const cwd = resolve(options.cwd);
+    throw invalid(
+      `no vetkit config found from ${cwd} up to ${stopDir}; looked for ${join(cwd, 'vetkit.config')}.${EXTENSIONS}; run: vet init`,
+    );
+  }
+  return { configFile: file, rootDir: dirname(file) };
+}
+
+/** Root-relative paths shared by every command. */
+export function projectPaths(rootDir: string, cacheDir: string): ProjectPaths {
+  const evalsDir = join(rootDir, 'evals');
+  const dataDir = existsSync(evalsDir) ? evalsDir : rootDir;
+  return {
+    rootDir,
+    dataDir,
+    criteria: join(dataDir, 'criteria.yaml'),
+    cases: join(dataDir, 'cases'),
+    labels: join(dataDir, 'labels'),
+    gauntlet: join(dataDir, 'gauntlet'),
+    lock: join(rootDir, LOCK_FILE),
+    vitestOut: join(dataDir, 'vitest'),
+    cacheDir: resolve(rootDir, cacheDir),
+  };
+}
+
+function errorCode(error: unknown): unknown {
+  return typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined;
+}
+
+async function importConfigFile(file: string): Promise<unknown> {
+  try {
+    if (extname(file) === '.json') {
+      const parsed = safeParseJson<unknown>(await readFile(file, 'utf8'), {});
+      if (!parsed.ok) throw parsed.error;
+      return parsed.value;
+    }
+    const mod: unknown = await import(pathToFileURL(file).href);
+    return typeof mod === 'object' && mod !== null && 'default' in mod ? mod.default : mod;
+  } catch (error) {
+    const firstLine = (error instanceof Error ? error.message : String(error)).split('\n')[0];
+    const hint = UNSUPPORTED_SYNTAX_CODES.has(String(errorCode(error)))
+      ? '; Node strips types only: enums, namespaces, parameter properties and tsconfig paths are unsupported, use a union type, a plain object or vetkit.config.json'
+      : '';
+    throw new VetError(
+      CEV_ERROR_CODES.CONFIG_INVALID,
+      `cannot load ${file} on Node ${process.version}: ${firstLine}${hint}`,
+      { cause: error },
+    );
+  }
+}
+
 /** Loads, validates and resolves vetkit.config.*; throws VetError CONFIG_INVALID on any problem. */
 export async function loadVetConfig(options: LoadVetConfigOptions): Promise<LoadedVetConfig> {
-  const explicit =
-    options.configPath === undefined ? undefined : resolve(options.cwd, options.configPath);
-  const searched =
-    explicit ??
-    `${resolve(options.cwd, `${CONFIG_NAME}.config`)}.${EXTENSIONS}, ${resolve(options.cwd, '.config', CONFIG_NAME)}.${EXTENSIONS}`;
-  // Only the config file itself: no rc files, package.json, .env, env overrides or extends.
-  const loaded = await loadConfig<Record<string, unknown>>({
-    name: CONFIG_NAME,
-    cwd: explicit === undefined ? options.cwd : dirname(explicit),
-    ...(explicit === undefined ? {} : { configFile: explicit }),
-    rcFile: false,
-    globalRc: false,
-    dotenv: false,
-    packageJson: false,
-    envName: false,
-    extend: false,
-    giget: false,
-  });
-  // c12's public field for the file it actually loaded (configFile is set even when missing).
-  // oxlint-disable-next-line eslint/no-underscore-dangle
-  const configFile = loaded._configFile;
-  if (configFile === undefined) {
-    throw invalid(`no vetkit config found; searched ${searched}; run: vet init`);
-  }
-  const { config, warnings } = resolveConfig(loaded.config);
+  const { configFile, rootDir } = options.resolved ?? resolveConfigFile(options);
+  const { config, warnings } = resolveConfig(await importConfigFile(configFile));
   const env = options.env ?? process.env;
   const missingCredentials: string[] = [];
   let judge: JudgeV1;
@@ -153,6 +254,7 @@ export async function loadVetConfig(options: LoadVetConfigOptions): Promise<Load
     warnings,
     missingCredentials,
     configFile,
-    rootDir: dirname(configFile),
+    rootDir,
+    paths: projectPaths(rootDir, config.cacheDir),
   };
 }
