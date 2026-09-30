@@ -16,6 +16,7 @@ if [[ $# -ne 1 ]]; then
 fi
 
 TARBALL_DIR="$(cd "$1" && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 mapfile -t TARBALLS < <(find "$TARBALL_DIR" -maxdepth 1 -name '*.tgz' | sort)
 if [[ ${#TARBALLS[@]} -eq 0 ]]; then
@@ -46,9 +47,12 @@ FAILURES=()
 # packages: "<package-name>" -> absolute tarball path. specifiers: one
 # "<package-name>" or "<package-name>/<subpath>" import specifier per entry, both read
 # from every tarball's own package.json (name, exports) - never packages/ in the
-# checked out repo - so this script only depends on the tarball directory it is given.
-MANIFEST="$(mktemp)"
-trap 'rm -f "$MANIFEST"' EXIT
+# checked out repo - so what is installed and imported depends only on the tarball
+# directory this script is given. One scratch root holds this manifest and every
+# consumer project. It is removed on exit, pass or fail.
+SCRATCH="$(mktemp -d)"
+trap 'rm -rf "$SCRATCH"' EXIT
+MANIFEST="$SCRATCH/manifest.json"
 
 node -e '
   const fs = require("node:fs");
@@ -106,19 +110,24 @@ JSON
 # reads "resolutions" (and is pinned to Yarn Berry via "packageManager" so the
 # nodeLinker override below applies), and pnpm reads "overrides" from
 # pnpm-workspace.yaml, not from package.json.
+# The npm/bun overrides also force vitest (an optional peer of some packages) to the
+# version this repo is built with, read from the root package.json: npm 10 crashes in
+# its resolver on an exact vitest spec older than the newest release unless that
+# version is overridden, so the install must not depend on what was published last.
 write_consumer_manifest() {
   local pm="$1"
   local out_dir="$2"
   node -e '
     const fs = require("node:fs");
     const path = require("node:path");
-    const [manifestPath, outDir, pm] = process.argv.slice(1);
+    const [manifestPath, rootManifest, outDir, pm] = process.argv.slice(1);
     const { packages } = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    const vitest = JSON.parse(fs.readFileSync(rootManifest, "utf8")).devDependencies.vitest;
     const deps = Object.fromEntries(
       Object.entries(packages).map(([name, tarballPath]) => [name, `file:${tarballPath}`]),
     );
     const manifest = { name: `consumer-${pm}`, private: true, type: "module", dependencies: deps };
-    if (pm === "npm" || pm === "bun") manifest.overrides = deps;
+    if (pm === "npm" || pm === "bun") manifest.overrides = { ...deps, vitest };
     if (pm === "yarn") {
       manifest.packageManager = "yarn@4.5.0";
       manifest.resolutions = deps;
@@ -131,7 +140,7 @@ write_consumer_manifest() {
       }
       fs.writeFileSync(path.join(outDir, "pnpm-workspace.yaml"), `${lines.join("\n")}\n`);
     }
-  ' "$MANIFEST" "$out_dir" "$pm"
+  ' "$MANIFEST" "$ROOT/package.json" "$out_dir" "$pm"
 }
 
 # Runs one step; on failure, records "<label>" in FAILURES and returns 1 instead of
@@ -156,7 +165,8 @@ capture_version() {
 for pm in npm pnpm yarn bun; do
   require_tool "$pm"
 
-  project_dir="$(mktemp -d)"
+  project_dir="$SCRATCH/$pm"
+  mkdir "$project_dir"
   echo "consumer-matrix: === ${pm} ==="
   pushd "$project_dir" >/dev/null
 

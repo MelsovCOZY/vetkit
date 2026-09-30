@@ -19,8 +19,12 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-/** Pinned registry packages a snippet scratch project may use besides the tarballs. */
-const EXTERNALS: Readonly<Record<string, string>> = { vitest: '5.0.2', promptfoo: '0.123.1' };
+/**
+ * Registry packages a snippet scratch project may use besides the tarballs. promptfoo is pinned
+ * here; vitest is installed at the version this repo is built with (see repoVitestVersion).
+ */
+const EXTERNAL_NAMES = ['vitest', 'promptfoo'] as const;
+const PROMPTFOO_VERSION = '0.123.1';
 
 const KEY_VARS = [
   'AI_GATEWAY_API_KEY',
@@ -167,12 +171,66 @@ export function rewriteInstall(line: string, tarballNames: readonly string[]): s
     .filter((token) => !token.startsWith('-'))
     .map(packageName);
   if (names.length === 0) return line;
-  const allowed = new Set([...tarballNames, ...Object.keys(EXTERNALS)]);
+  const allowed = new Set<string>([...tarballNames, ...EXTERNAL_NAMES]);
   const unknown = names.filter((name) => !allowed.has(name));
   if (unknown.length > 0) {
     throw new Error(`package not installed by the snippet runner: ${unknown.join(', ')}`);
   }
   return 'true';
+}
+
+/** The vitest version this repo is built and tested with: the root package.json is the one source. */
+export function repoVitestVersion(root: string = ROOT): string {
+  const manifest: { devDependencies?: Record<string, string> } = JSON.parse(
+    readFileSync(join(root, 'package.json'), 'utf8'),
+  );
+  const version = manifest.devDependencies?.['vitest'];
+  if (version === undefined) throw new Error(`no devDependencies.vitest in ${root}/package.json`);
+  return version;
+}
+
+interface ProjectManifest {
+  readonly dependencies?: Readonly<Record<string, string>>;
+  readonly devDependencies?: Readonly<Record<string, string>>;
+}
+
+interface ScratchManifest {
+  name: string;
+  private: true;
+  type: 'module';
+  dependencies: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  overrides: Record<string, string>;
+}
+
+/**
+ * The package.json of a snippet scratch project: `base` (an example's own manifest, or `{}`)
+ * with every tarball installed from its file and forced through `overrides`, plus the external
+ * tools. vitest is installed at `vitestVersion` and overridden to the same version, and a vitest
+ * spec `base` declares is rewritten to it: npm rejects an override that disagrees with a direct
+ * spec, and npm 10 crashes in its resolver on an exact vitest spec older than the newest release
+ * unless that version is also overridden.
+ */
+export function scratchManifest(
+  base: ProjectManifest,
+  tarballs: Readonly<Record<string, string>>,
+  vitestVersion: string,
+): ScratchManifest {
+  const deps = Object.fromEntries(Object.entries(tarballs).map(([n, p]) => [n, `file:${p}`]));
+  const own = Object.fromEntries(
+    Object.entries(base.dependencies ?? {}).filter(([n]) => deps[n] === undefined),
+  );
+  return {
+    ...base,
+    name: 'readme-snippets',
+    private: true,
+    type: 'module',
+    dependencies: { ...own, ...deps, vitest: vitestVersion, promptfoo: PROMPTFOO_VERSION },
+    ...(base.devDependencies?.['vitest'] !== undefined && {
+      devDependencies: { ...base.devDependencies, vitest: vitestVersion },
+    }),
+    overrides: { ...deps, vitest: vitestVersion },
+  };
 }
 
 function tarballPackages(dir: string): Record<string, string> {
@@ -233,7 +291,6 @@ function runReadme(path: string, tarballs: Record<string, string>, counts: Count
 
   const dir = mkdtempSync(join(tmpdir(), 'vetkit-readme-'));
   try {
-    const deps = Object.fromEntries(Object.entries(tarballs).map(([n, p]) => [n, `file:${p}`]));
     // An example README runs inside a copy of its own project (config, evals, traces).
     const exampleDir = dirname(path);
     const isExample = dirname(exampleDir) === join(ROOT, 'examples');
@@ -242,20 +299,10 @@ function runReadme(path: string, tarballs: Record<string, string>, counts: Count
         recursive: true,
         filter: (from) => !from.includes('node_modules'),
       });
-    const base: { dependencies?: Record<string, string> } = isExample
+    const base: ProjectManifest = isExample
       ? JSON.parse(readFileSync(join(exampleDir, 'package.json'), 'utf8'))
       : {};
-    const own = Object.fromEntries(
-      Object.entries(base.dependencies ?? {}).filter(([n]) => deps[n] === undefined),
-    );
-    const manifest = {
-      ...base,
-      name: 'readme-snippets',
-      private: true,
-      type: 'module',
-      dependencies: { ...own, ...deps, ...EXTERNALS },
-      overrides: deps,
-    };
+    const manifest = scratchManifest(base, tarballs, repoVitestVersion());
     writeFileSync(join(dir, 'package.json'), JSON.stringify(manifest, null, 2));
     const install = spawnSync('npm', ['install', '--no-audit', '--no-fund'], {
       cwd: dir,

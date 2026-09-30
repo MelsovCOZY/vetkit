@@ -133,29 +133,37 @@ fi
 
 # ---------------------------------------------------------------- section: consumer
 say "== consumer: tarballs installed from file: deps and overrides"
-write_manifest() { # <dir> <name> [extra dev dependency name@version]
+# The consumer also installs vitest, pinned to the version this repo is built with (the clone's
+# root package.json). The same version goes into `overrides`: npm 10 crashes in its resolver on
+# an exact vitest spec older than the newest release, so without the override this install
+# would pass or fail depending on what was published last.
+write_manifest() { # <dir> <name>
   node -e '
     const fs = require("node:fs");
     const path = require("node:path");
     const { execFileSync } = require("node:child_process");
-    const [dir, out, name, dev] = process.argv.slice(1);
+    const [dir, root, out, name] = process.argv.slice(1);
     const deps = {};
     for (const file of fs.readdirSync(dir).filter((f) => f.endsWith(".tgz")).sort()) {
       const full = path.join(dir, file);
       const text = execFileSync("tar", ["-xzOf", full, "package/package.json"], { encoding: "utf8" });
       deps[JSON.parse(text).name] = `file:${full}`;
     }
-    const manifest = { name, private: true, type: "module", dependencies: deps, overrides: deps };
-    if (dev) {
-      const at = dev.lastIndexOf("@");
-      manifest.devDependencies = { [dev.slice(0, at)]: dev.slice(at + 1) };
-    }
+    const vitest = JSON.parse(fs.readFileSync(root, "utf8")).devDependencies.vitest;
+    const manifest = {
+      name,
+      private: true,
+      type: "module",
+      dependencies: deps,
+      devDependencies: { vitest },
+      overrides: { ...deps, vitest },
+    };
     fs.writeFileSync(path.join(out, "package.json"), JSON.stringify(manifest, null, 2));
-  ' "$TARBALLS" "$1" "$2" "${3:-}"
+  ' "$TARBALLS" "$CLONE/package.json" "$1" "$2"
 }
 APP="$WORK/app"
 mkdir -p "$APP"
-write_manifest "$APP" release-consumer vitest@5.0.2
+write_manifest "$APP" release-consumer
 (cd "$APP" && npm install --ignore-scripts --no-audit --no-fund) >"$WORK/app-install.out" 2>&1
 exit_is "publish 5a: npm install --ignore-scripts of every tarball" 0 $?
 
