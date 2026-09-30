@@ -1,7 +1,7 @@
 // `vet export --to <id>` Resolves a registered ExporterV1
 // by id and calls doExport once per --criteria file, passing that file's basename as sourceFile. The registry is a local Map, mirroring sources.ts's registerSourcePrefix: 'vitest' is
 // registered by a module-scope call at import time.
-import { basename, extname, join, relative, resolve } from 'node:path';
+import { basename, extname, join, relative, resolve, sep } from 'node:path';
 import { loadCases, loadCriteria, readLockOrNull } from '@vetkit/core';
 import { CEV_ERROR_CODES, VetError, type ExporterV1 } from '@vetkit/spec';
 import { vitestExporter } from '@vetkit/export-vitest';
@@ -59,6 +59,14 @@ function noLock(lockPath: string): VetError {
 function isInside(parent: string, child: string): boolean {
   const rel = relative(parent, child);
   return rel === '' || !rel.startsWith('..');
+}
+
+// The test.include glob that reaches every emitted test file: outDir relative to rootDir
+// (absolute when outDir is outside it), always with POSIX separators. Independent of `files`.
+function includeGlob(rootDir: string, outDir: string): string {
+  const dir = isInside(rootDir, outDir) ? relative(rootDir, outDir) : outDir;
+  const posix = dir.split(sep).join('/');
+  return posix === '' ? '**/*.evals.test.ts' : `${posix}/**/*.evals.test.ts`;
 }
 
 async function exportCommand(options: ExportOptions, deps: ExportDeps): Promise<void> {
@@ -122,7 +130,13 @@ async function exportCommand(options: ExportOptions, deps: ExportDeps): Promise<
     files.push(...result.files);
   }
 
-  emit({ files }, () => files.map((f) => `wrote ${f}`).join('\n'));
+  const include = includeGlob(rootDir, outDir);
+  emit({ files, include }, () =>
+    [
+      ...files.map((f) => `wrote ${f}`),
+      `next: add "${include}" to test.include in vitest.config.ts (skip if your include already matches *.test.ts)`,
+    ].join('\n'),
+  );
 }
 
 export function registerExport(program: Command, deps: ExportDeps = {}): Command {
