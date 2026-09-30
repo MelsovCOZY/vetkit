@@ -28,7 +28,8 @@ export type JsonShapeKey =
   | 'cases review'
   | 'lint'
   | 'export'
-  | 'watch';
+  | 'watch'
+  | 'migrate';
 
 const DIALECT = 'https://json-schema.org/draft/2020-12/schema';
 
@@ -238,6 +239,12 @@ export const JSON_SHAPES: Readonly<Record<JsonShapeKey, JsonSchema>> = {
   }),
   'cases review': shape(object({ remaining: int }), { remaining: 0 }),
   lint: shape(object({ issues: list }), { issues: [] }),
+  migrate: shape(object({ files: list, migrated: int }), {
+    files: [
+      { path: 'evals/criteria.yaml', format: 'criteria', from: null, to: 1, action: 'stamped' },
+    ],
+    migrated: 1,
+  }),
   export: shape(object({ files: strings, include: str }), {
     files: ['evals/vitest/criteria.yaml.evals.test.ts'],
     include: 'evals/vitest/**/*.evals.test.ts',

@@ -426,7 +426,8 @@ describe('writeLockAtomic / readLock', () => {
     const bad = join(dir, 'bad.json');
     await writeFile(bad, JSON.stringify({ ...buildLock(inputs()), lockVersion: 2 }));
     const r1 = await readLock(bad);
-    expect('error' in r1 && r1.error.code).toBe(CEV_ERROR_CODES.E_SCHEMA_INVALID);
+    expect('error' in r1 && r1.error.code).toBe(CEV_ERROR_CODES.CONFIG_INVALID);
+    expect('error' in r1 && r1.error.message).toContain('lockVersion 2');
 
     const junk = join(dir, 'junk.json');
     await writeFile(junk, '{not json');

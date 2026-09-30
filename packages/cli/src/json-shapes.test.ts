@@ -202,6 +202,7 @@ const INVOCATIONS: Record<Exclude<JsonShapeKey, 'watch' | 'cases review'>, () =>
     args: ['export', '--to', 'vitest', '--json'],
     exits: [0],
   }),
+  migrate: () => ({ cwd: projectFrom('run'), args: ['migrate', '--json'], exits: [0] }),
 };
 
 type TestedKey = keyof typeof INVOCATIONS;
@@ -342,6 +343,7 @@ const PLAN_TIME_COMMANDS = [
   'lint',
   'export',
   'watch',
+  'migrate',
 ];
 
 // Keys that are options or flavours of a command, not commands of their own.

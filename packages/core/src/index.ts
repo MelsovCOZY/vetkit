@@ -36,6 +36,22 @@ export { FENCED_V1_PREAMBLE, fenceNonce, renderState } from './judge/format.ts';
 export { gradeCode, referenceRequirement, renderReference } from './judge/reference.ts';
 export type { GradeCodeResult, ReferenceRequirementResult } from './judge/reference.ts';
 
+export {
+  CRITERIA_MIGRATIONS,
+  MIGRATE_DOCS,
+  SCHEMA_CHANGELOG,
+  SCHEMA_VERSIONS,
+  checkSchemaVersion,
+  stampCriteriaSchemaVersion,
+} from './schema-version.ts';
+export type {
+  CriteriaMigration,
+  SchemaChange,
+  SchemaFormat,
+  SchemaVersionCheck,
+  StampResult,
+} from './schema-version.ts';
+
 export { DEFAULT_FORBIDDEN_WORDS, LINT_RULES, lintCriteria } from './criteria/lint.ts';
 export type {
   LintIssue,

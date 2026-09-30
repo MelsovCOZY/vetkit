@@ -13,6 +13,7 @@ import {
   type CevErrorCode,
   type Criterion,
 } from '@vetkit/spec';
+import { checkSchemaVersion } from '../schema-version.ts';
 
 export interface CriteriaIssue {
   readonly code: CevErrorCode;
@@ -178,6 +179,8 @@ export async function loadCriteria(file: string): Promise<LoadCriteriaResult> {
       'expected a top-level criteria list',
     );
   }
+  const version = checkSchemaVersion('criteria', root['schemaVersion']);
+  if (!version.ok) return fail(CEV_ERROR_CODES.CRITERIA_INVALID, '/schemaVersion', version.message);
   const items: unknown[] = root['criteria'];
 
   const issues: CriteriaIssue[] = [];

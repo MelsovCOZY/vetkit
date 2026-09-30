@@ -69,5 +69,6 @@ export type AuthoredCriterion1 =
 
 export interface CriteriaDoc {
   $schema?: string;
+  schemaVersion?: number;
   criteria: AuthoredCriterion[];
 }

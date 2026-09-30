@@ -388,6 +388,10 @@ export const criteriaSchema: JsonSchema = {
     $schema: {
       type: 'string',
     },
+    schemaVersion: {
+      type: 'integer',
+      minimum: 1,
+    },
     criteria: {
       type: 'array',
       items: {

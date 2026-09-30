@@ -491,6 +491,28 @@
 | --- | --- | --- |
 | `issues` | array | yes |
 
+## migrate
+
+```json
+{
+  "files": [
+    {
+      "path": "evals/criteria.yaml",
+      "format": "criteria",
+      "from": null,
+      "to": 1,
+      "action": "stamped"
+    }
+  ],
+  "migrated": 1
+}
+```
+
+| field | type | required |
+| --- | --- | --- |
+| `files` | array | yes |
+| `migrated` | integer | yes |
+
 ## export
 
 ```json
