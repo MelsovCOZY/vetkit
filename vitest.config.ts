@@ -77,6 +77,13 @@ export default defineConfig({
     setupFiles: [setupFile],
     coverage: {
       provider: 'v8',
+      // Package sources only. Without `include`, every file a test loads is counted -
+      // the built packages/*/dist/*.js that CLI tests spawn or import, fixture and
+      // example configs - and sources no test loads are left out. Test files are
+      // excluded by vitest itself.
+      include: ['packages/*/src/**/*.ts'],
+      // Type tests are only type-checked, never executed, so v8 would report them at 0%.
+      exclude: ['**/*.test-d.ts'],
       // Enforced by `bun run test`, which runs with --coverage.
       thresholds: { lines: 83, branches: 76, functions: 82, statements: 82 },
     },
