@@ -7,11 +7,11 @@ import { describe, expect, it } from 'vitest';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SCRIPT = join(ROOT, 'scripts/repo-metadata.sh');
-const DESCRIPTION = (
-  JSON.parse(readFileSync(join(ROOT, 'packages/cli/package.json'), 'utf8')) as {
-    description: string;
-  }
-).description;
+const manifest: unknown = JSON.parse(readFileSync(join(ROOT, 'packages/cli/package.json'), 'utf8'));
+const DESCRIPTION =
+  typeof manifest === 'object' && manifest !== null && 'description' in manifest
+    ? String(manifest.description)
+    : '';
 
 function shim(): { dir: string; log: string } {
   const dir = mkdtempSync(join(tmpdir(), 'repo-metadata-'));
@@ -31,7 +31,7 @@ function run(args: string[], pathPrefix: string): ReturnType<typeof spawnSync> {
 }
 
 function topics(stdout: string): string[] {
-  return [...stdout.matchAll(/--add-topic\s+(\S+)/g)].map((m) => m[1] as string);
+  return [...stdout.matchAll(/--add-topic\s+(\S+)/g)].map((m) => String(m[1]));
 }
 
 describe('scripts/repo-metadata.sh', () => {
