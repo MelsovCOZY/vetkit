@@ -20,6 +20,7 @@ import {
 import { CEV_ERROR_CODES, VetError, type Case, type Criterion } from '@vetkit/spec';
 import type { Command } from 'commander';
 import { findConfigFile, projectPaths, type ProjectPaths } from '../config-load.ts';
+import { emit } from '../output.ts';
 
 interface WritableLike {
   write(chunk: string): unknown;
@@ -135,6 +136,7 @@ async function importLabels(options: LabelOptions, from: string, deps: LabelDeps
     byCriterion.set(row.criterionId, [...(byCriterion.get(row.criterionId) ?? []), row]);
   }
   await mkdir(options.labels, { recursive: true });
+  const files: string[] = [];
   for (const [criterionId, rows] of byCriterion) {
     const target = join(options.labels, `${criterionId}.csv`);
     const merged = new Map<string, LabelRow>();
@@ -151,7 +153,9 @@ async function importLabels(options: LabelOptions, from: string, deps: LabelDeps
     }
     const body = [...merged.values()].map(formatLabelRow).join('\n');
     await writeFile(target, `${LABEL_CSV_HEADER}\n${body}\n`);
+    files.push(target);
   }
+  emit({ imported: imported.length, files }, () => `imported ${String(imported.length)} label(s)`);
 }
 
 // Append + fsync per row, so an interrupted session keeps every row answered so far.

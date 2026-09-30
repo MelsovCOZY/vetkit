@@ -227,3 +227,111 @@ describe('vet export', () => {
     expect(sourceFiles).toEqual(['criteria.yaml', 'other.yaml']);
   });
 });
+
+const HINT_TAIL =
+  'to test.include in vitest.config.ts (skip if your include already matches *.test.ts)';
+
+function hintFor(glob: string): string {
+  return `next: add "${glob}" ${HINT_TAIL}`;
+}
+
+// Runs `vet export` with pretty output (no --json) and returns stdout plus stderr text.
+async function vetPretty(
+  args: readonly string[],
+  deps: ExportDeps,
+): Promise<{ out: string; err: string }> {
+  configureOutput({ quiet: false });
+  const out: string[] = [];
+  const err: string[] = [];
+  const outSpy = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+    out.push(String(chunk));
+    return true;
+  });
+  const errSpy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+    err.push(String(chunk));
+    return true;
+  });
+  const program = new Command();
+  program.exitOverride().option('--json');
+  registerExport(program, deps);
+  try {
+    await program.parseAsync(['node', 'vet', ...args]);
+  } finally {
+    outSpy.mockRestore();
+    errSpy.mockRestore();
+  }
+  return { out: out.join(''), err: err.join('') };
+}
+
+describe('vet export include hint', () => {
+  test('pretty output ends with the include hint using the outDir relative to rootDir', async () => {
+    const root = await project();
+    registerExporter('fake-hint', fakeExporter('fake-hint', ['a.evals.test.ts']));
+    const { out } = await vetPretty(['export', '--to', 'fake-hint'], depsFor(root));
+    const lines = out.trimEnd().split('\n');
+    expect(lines.at(-1)).toBe(hintFor('evals/vitest/**/*.evals.test.ts'));
+    expect(lines).toContain('wrote a.evals.test.ts');
+  });
+
+  test('--json document is exactly {files, include}', async () => {
+    const root = await project();
+    registerExporter('fake-hint-json', fakeExporter('fake-hint-json', ['a.evals.test.ts']));
+    await vet(['export', '--to', 'fake-hint-json'], depsFor(root));
+    expect(stdout.join('').trimEnd().split('\n')).toHaveLength(1);
+    expect(parseJson(stdout.join(''))).toEqual({
+      files: ['a.evals.test.ts'],
+      include: 'evals/vitest/**/*.evals.test.ts',
+    });
+  });
+
+  test('--out under a nested dir yields a POSIX glob (no backslashes) relative to rootDir', async () => {
+    const root = await project();
+    registerExporter('fake-hint-nested', fakeExporter('fake-hint-nested'));
+    const out = join(root, 'evals', 'deep', 'nested');
+    await vet(['export', '--to', 'fake-hint-nested', '--out', out], depsFor(root));
+    const doc = parseJson(stdout.join(''));
+    expect(doc).toMatchObject({ include: 'evals/deep/nested/**/*.evals.test.ts' });
+    expect(JSON.stringify(doc)).not.toContain('\\\\');
+  });
+
+  test('--out equal to rootDir yields **/*.evals.test.ts', async () => {
+    const root = await project();
+    registerExporter('fake-hint-root', fakeExporter('fake-hint-root'));
+    await vet(['export', '--to', 'fake-hint-root', '--out', root], depsFor(root));
+    expect(parseJson(stdout.join(''))).toMatchObject({ include: '**/*.evals.test.ts' });
+  });
+
+  test('--out outside rootDir yields the absolute POSIX glob and keeps the existing warning', async () => {
+    const root = await project();
+    const elsewhere = await mkdtemp(join(tmpdir(), 'vetkit-export-out-'));
+    registerExporter('fake-hint-outside', fakeExporter('fake-hint-outside'));
+    const { out, err } = await vetPretty(
+      ['export', '--to', 'fake-hint-outside', '--out', elsewhere],
+      depsFor(root),
+    );
+    const posix = elsewhere.split('\\').join('/');
+    expect(out.trimEnd().split('\n').at(-1)).toBe(hintFor(`${posix}/**/*.evals.test.ts`));
+    expect(err).toContain('is outside the project root');
+  });
+
+  test('two --criteria files: one include glob covers both subdirs (outDir/**)', async () => {
+    const root = await project();
+    await writeFile(join(root, 'evals', 'other.yaml'), CRITERIA_YAML);
+    const { exporter } = recordingExporter('fake-hint-multi');
+    registerExporter('fake-hint-multi', exporter);
+    await vet(
+      [
+        'export',
+        '--to',
+        'fake-hint-multi',
+        '--criteria',
+        'evals/criteria.yaml',
+        'evals/other.yaml',
+      ],
+      depsFor(root),
+    );
+    expect(parseJson(stdout.join(''))).toMatchObject({
+      include: 'evals/vitest/**/*.evals.test.ts',
+    });
+  });
+});
