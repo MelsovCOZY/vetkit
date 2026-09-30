@@ -86,7 +86,11 @@ describe('run record', () => {
     const cacheDir = tmp();
     const rec = { ...record({ exitCode: 1 }), sinks: { otel: 2 }, outbox: { pending: 0 } };
     await writeRunRecord(cacheDir, rec);
-    expect(await readRunRecord(cacheDir)).toEqual({ $schema: runRecordSchema.$id, ...rec });
+    expect(await readRunRecord(cacheDir)).toEqual({
+      $schema: runRecordSchema.$id,
+      schemaVersion: 1,
+      ...rec,
+    });
   });
 
   it('readRunRecord returns null when no record exists', async () => {

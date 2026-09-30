@@ -260,6 +260,7 @@ describe('vet run persists .vet/runs/latest.json', () => {
     expect(rec).toEqual({
       ...doc,
       $schema: runRecordSchema.$id,
+      schemaVersion: 1,
       criteriaPath: 'evals/criteria.yaml',
       casesPath: 'evals/cases',
       startedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
