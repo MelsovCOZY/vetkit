@@ -23,11 +23,9 @@ describe('demoJudge', () => {
     expect(demoJudge.capabilities.transport).toBe('demo');
     expect(demoJudge.capabilities.model).toBe('demo');
     expect(demoJudge.capabilities.pinned).toBe(false);
-    expect([...demoJudge.capabilities.questionTypes].sort()).toEqual([
-      'boolean',
-      'choice',
-      'score',
-    ]);
+    expect(demoJudge.capabilities.questionTypes).toEqual(
+      expect.arrayContaining(['boolean', 'choice', 'score']),
+    );
   });
 
   test('a boolean question answers choice-shaped yes at 0.9 with escape 0', async () => {

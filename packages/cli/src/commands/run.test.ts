@@ -382,6 +382,10 @@ function credentialList(): string {
   ).join(', ');
 }
 
+function isResults(doc: unknown): doc is { results: { cacheHit?: unknown }[] } {
+  return typeof doc === 'object' && doc !== null && 'results' in doc && Array.isArray(doc.results);
+}
+
 function demoHintLines(stderr: string): string[] {
   return nonEmptyLines(stderr).filter((line) => line.includes('demo judge:'));
 }
@@ -436,9 +440,11 @@ describe('vet run with the demo judge', () => {
     runVet(['run', '--json'], project, fixtureEnv('pass'));
     const second = runVet(['run', '--json'], project, fixtureEnv('pass'));
     expect(existsSync(join(project, '.vet', 'cache'))).toBe(false);
-    const doc = parseJson(second.stdout) as { results: { cacheHit: boolean }[] };
-    expect(doc.results.length).toBeGreaterThan(0);
-    for (const v of doc.results) expect(v.cacheHit).toBe(false);
+    const doc = parseJson(second.stdout);
+    expect(doc).toMatchObject({ results: expect.any(Array) });
+    const results: { cacheHit?: unknown }[] = isResults(doc) ? doc.results : [];
+    expect(results.length).toBeGreaterThan(0);
+    for (const v of results) expect(v.cacheHit).toBe(false);
   });
 
   test('demo judge: .vet/runs/latest.json is still written and its model.transport is demo', () => {
@@ -452,7 +458,9 @@ describe('vet run with the demo judge', () => {
     const project = freshProject();
     runVet(['run', '--json'], project, fixtureEnv('pass'));
     const second = runVet(['run', '--json'], project, fixtureEnv('pass'));
-    const doc = parseJson(second.stdout) as { results: { cacheHit: boolean }[] };
-    expect(doc.results.some((v) => v.cacheHit)).toBe(true);
+    const doc = parseJson(second.stdout);
+    expect(doc).toMatchObject({ results: expect.any(Array) });
+    const results: { cacheHit?: unknown }[] = isResults(doc) ? doc.results : [];
+    expect(results.some((v) => v.cacheHit === true)).toBe(true);
   });
 });
