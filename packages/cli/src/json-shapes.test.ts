@@ -319,8 +319,8 @@ function leafPaths(command: Command, prefix: string[] = []): string[] {
   });
 }
 
-// Commands that existed when the shapes were written. Later commands are covered by their own
-// beads; extend this array (and JSON_SHAPES) rather than making the walker closed-world.
+// Commands that existed when the shapes were written. Commands added afterwards are covered by
+// their own shape entries; extend this array (and JSON_SHAPES) rather than making the walker closed-world.
 const PLAN_TIME_COMMANDS = [
   'doctor',
   'init',

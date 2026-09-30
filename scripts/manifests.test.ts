@@ -156,7 +156,7 @@ const MIN_PACKAGE_NAMES = [
   'export-vitest',
 ];
 
-it('creates at least the eleven original contract packages (open-world: later beads add more)', () => {
+it('creates at least the eleven original contract packages (open-world: more packages may be added)', () => {
   expect(packageNames).toEqual(expect.arrayContaining(MIN_PACKAGE_NAMES));
   expect(packageNames.length).toBeGreaterThanOrEqual(MIN_PACKAGE_NAMES.length);
 });

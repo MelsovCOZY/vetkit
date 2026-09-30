@@ -112,7 +112,7 @@ json_curl_exit=$?
 wait "$recv_pid" 2>/dev/null
 ac4_ok=1
 { [ "$json_curl_exit" -eq 0 ] && [ "$proto_http_code" = "415" ]; } && ac4_ok=0
-result "AC4: otlp::0 receiver (port from stderr); protobuf POST -> HTTP 415 (probed before the JSON trace, per gate DECISION); curl JSON POST -> exit 0, closes on --until 1" 0 0 "$ac4_ok" \
+result "AC4: otlp::0 receiver (port from stderr); protobuf POST -> HTTP 415 (probed before the JSON trace); curl JSON POST -> exit 0, closes on --until 1" 0 0 "$ac4_ok" \
   "port=$port; protobuf http_code=$proto_http_code curl_exit=$proto_curl_exit; JSON curl exit=$json_curl_exit"
 
 if [ "$FAILED" -ne 0 ]; then

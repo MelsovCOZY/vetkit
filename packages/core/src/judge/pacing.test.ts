@@ -636,7 +636,7 @@ describe('createLimiter events and timers', () => {
   });
 });
 
-describe('createLimiter retry-after bounds (root DECISION judge retry policy)', () => {
+describe('createLimiter retry-after bounds policy', () => {
   it('Retry-After 1 waits 1000 ms', async () => {
     const clock = virtualClock();
     const limiter = createLimiter({ now: clock.now, sleep: clock.sleep });
