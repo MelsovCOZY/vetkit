@@ -77,7 +77,7 @@ describe('landing README', () => {
       cliReadme.indexOf(`\n${title}\n`),
     );
     expect(order.every((at) => at > 0)).toBe(true);
-    expect(order).toEqual([...order].sort((a, b) => a - b));
+    expect(order).toEqual(order.toSorted((a, b) => a - b));
   });
 
   it('quickstart lists the three commands, demoJudge and the .env line, and never npx vet', () => {
