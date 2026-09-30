@@ -22,6 +22,8 @@ export interface LimiterOptions {
   readonly maxRetries?: number;
   readonly totalBudgetMs?: number;
   readonly maxBackoffMs?: number;
+  /** Ceiling on a server-suggested (Retry-After) wait; larger values are clamped, not rejected. */
+  readonly maxRetryAfterMs?: number;
   readonly now?: () => number;
   readonly sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
   readonly random?: () => number;
@@ -48,6 +50,7 @@ interface Waiter {
 }
 
 const RECOVERY_STREAK = 10;
+const MIN_BACKOFF_MS = 250;
 
 function defaultSleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise<void>((resolve, reject) => {
@@ -95,6 +98,7 @@ export function createLimiter(opts: LimiterOptions = {}): Limiter {
   const maxRetries = opts.maxRetries ?? 6;
   const totalBudgetMs = opts.totalBudgetMs ?? 300_000;
   const maxBackoffMs = opts.maxBackoffMs ?? 40_000;
+  const maxRetryAfterMs = opts.maxRetryAfterMs ?? 120_000;
   const now = opts.now ?? Date.now;
   const sleep = opts.sleep ?? defaultSleep;
   const random = opts.random ?? Math.random;
@@ -213,12 +217,16 @@ export function createLimiter(opts: LimiterOptions = {}): Limiter {
       const effectiveMaxBackoffMs = networkUnreachable
         ? Math.min(maxBackoffMs, NETWORK_UNREACHABLE_MAX_BACKOFF_MS)
         : maxBackoffMs;
-      // A Retry-After in the past arrives negative: clamp so no negative delay is emitted or slept.
-      const wait = Math.max(
-        0,
-        error.details.retryAfterMs ??
-          random() * Math.min(effectiveMaxBackoffMs, 1000 * 2 ** attempts),
-      );
+      // A usable header wait is positive and finite (garbage, zero or past values fall back to
+      // backoff) and is clamped to maxRetryAfterMs; the backoff never drops below MIN_BACKOFF_MS.
+      const suggested = error.details.retryAfterMs;
+      const wait =
+        suggested !== undefined && Number.isFinite(suggested) && suggested > 0
+          ? Math.min(suggested, maxRetryAfterMs)
+          : Math.max(
+              MIN_BACKOFF_MS,
+              random() * Math.min(effectiveMaxBackoffMs, 1000 * 2 ** attempts),
+            );
       const remaining = totalBudgetMs - (now() - start);
       if (wait > remaining) {
         release();

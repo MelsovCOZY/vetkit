@@ -377,7 +377,11 @@ describe('HTTP error mapping', () => {
     );
 
     expect(err.code).toBe('JUDGE_UNAVAILABLE');
-    expect(err.details).toEqual({ retryable: false, hint: 'no_providers_available' });
+    expect(err.details).toEqual({
+      retryable: false,
+      hint: 'no_providers_available',
+      kind: 'terminal-request',
+    });
     expect(err.message).toContain('403');
     expect(err.message).toContain('no_providers_available');
   });
@@ -398,7 +402,7 @@ describe('HTTP error mapping', () => {
     );
 
     expect(err.code).toBe('JUDGE_UNAVAILABLE');
-    expect(err.details).toEqual({ retryable: false, hint: 'forbidden' });
+    expect(err.details).toEqual({ retryable: false, hint: 'forbidden', kind: 'terminal-request' });
     expect(err.message).toContain('403');
     expect(err.message).toContain('forbidden');
     expect(serializeErrorChain(err)).not.toContain(apiKey);
@@ -413,7 +417,7 @@ describe('HTTP error mapping', () => {
     );
 
     expect(err.code).toBe('JUDGE_UNAVAILABLE');
-    expect(err.details).toEqual({ retryable: false, hint: 'no credit' });
+    expect(err.details).toEqual({ retryable: false, hint: 'no credit', kind: 'terminal-billing' });
   });
 
   test('404 model_not_found maps to JUDGE_BAD_RESPONSE naming the requested model', async () => {
@@ -772,5 +776,178 @@ describe('requestFormat capability', () => {
       { apiKey: 'k' },
     );
     expect(judge.capabilities.requestFormat).toBe(resolved);
+  });
+});
+
+const ASK = { state: 's', questions: { ok: { type: 'boolean' as const, instructions: 'q' } } };
+
+async function judgeErrorFor(response: () => Response, key = 'fake-jev-key'): Promise<VetError> {
+  const fetchStub = vi.fn(async () => response());
+  const judge = createJevJudge({ preset: 'typesafe', apiKey: key, fetch: fetchStub });
+  return catchVetError(judge.doJudge(ASK));
+}
+
+describe('judge error kind', () => {
+  test.each([
+    [401, {}, 'terminal-auth'],
+    [403, { detail: { error_type: 'authentication_error' } }, 'terminal-auth'],
+    [402, {}, 'terminal-billing'],
+    [403, { error: { type: 'no_providers_available' } }, 'terminal-request'],
+    [404, {}, 'terminal-request'],
+    [422, {}, 'terminal-request'],
+    [400, {}, 'terminal-request'],
+    [429, {}, 'retryable'],
+    [429, { error: { type: 'rate_limit_exceeded' } }, 'retryable'],
+    [429, { error: { type: 'quota_for_entity_exceeded' } }, 'terminal-billing'],
+    [500, {}, 'retryable'],
+    [502, {}, 'retryable'],
+    [503, {}, 'retryable'],
+  ] as const)('kind for HTTP %s %j is %s', async (status, body, kind) => {
+    const err = await judgeErrorFor(() => jsonResponse(body, { status }));
+    expect(err.details?.kind).toBe(kind);
+  });
+
+  test('kind for HTTP 403 with auth body is terminal-auth and JUDGE_UNAUTHORIZED', async () => {
+    const err = await judgeErrorFor(() =>
+      jsonResponse({ detail: { error_type: 'authentication_error' } }, { status: 403 }),
+    );
+    expect(err.code).toBe('JUDGE_UNAUTHORIZED');
+    expect(err.details?.kind).toBe('terminal-auth');
+  });
+
+  test('kind for a network failure is retryable', async () => {
+    const fetchStub: typeof fetch = vi.fn(async () => {
+      throw new TypeError('fetch failed');
+    });
+    const judge = createJevJudge({ preset: 'typesafe', apiKey: 'fake-jev-key', fetch: fetchStub });
+    const err = await catchVetError(judge.doJudge(ASK));
+    expect(err.details?.kind).toBe('retryable');
+    expect(err.details?.retryable).toBe(true);
+  });
+
+  test('kind for a timeout is retryable but JUDGE_TIMEOUT never sets details.retryable', async () => {
+    const fetchStub: typeof fetch = vi.fn(() => new Promise<Response>(() => {}));
+    const judge = createJevJudge({
+      preset: 'typesafe',
+      apiKey: 'fake-jev-key',
+      fetch: fetchStub,
+      deadlineMs: 5,
+    });
+    const err = await catchVetError(judge.doJudge(ASK));
+    expect(err.code).toBe('JUDGE_TIMEOUT');
+    expect(err.details?.kind).toBe('retryable');
+    expect(err.details?.retryable).not.toBe(true);
+  });
+
+  test('existing fields keep their values alongside kind', async () => {
+    const e402 = await judgeErrorFor(() => jsonResponse({}, { status: 402 }));
+    expect(e402.details).toMatchObject({ retryable: false, hint: 'no credit' });
+    expect(e402.message).toBe('judge account has no credit');
+    const e401 = await judgeErrorFor(() =>
+      jsonResponse({}, { status: 401, headers: { 'x-typesafe-request-id': 'req-1' } }),
+    );
+    expect(e401.details?.requestId).toBe('req-1');
+    const e403 = await judgeErrorFor(() =>
+      jsonResponse({ error: { type: 'no_providers_available' } }, { status: 403 }),
+    );
+    expect(e403.details).toMatchObject({ retryable: false, hint: 'no_providers_available' });
+  });
+
+  test('the API key never appears in an error carrying kind', async () => {
+    const key = 'sk-secret-key-do-not-log';
+    for (const status of [401, 402, 403, 404, 422, 429, 500]) {
+      const err = await judgeErrorFor(
+        () => jsonResponse({ echoed: key, error: { type: 'x' } }, { status }),
+        key,
+      );
+      expect(serializeErrorChain(err)).not.toContain(key);
+    }
+  });
+});
+
+function retryAfterErr(headers: Record<string, string>, body: unknown = {}): Promise<VetError> {
+  return judgeErrorFor(() => jsonResponse(body, { status: 429, headers }));
+}
+
+describe('judge retry-after and quota classification', () => {
+  test('Retry-After as an HTTP date 5 s ahead -> retryAfterMs within [4000, 5000]', async () => {
+    const date = new Date(Date.now() + 5000).toUTCString();
+    const err = await retryAfterErr({ 'retry-after': date });
+    const ms = err.details?.retryAfterMs;
+    expect(ms).toBeGreaterThanOrEqual(3000);
+    expect(ms).toBeLessThanOrEqual(5000);
+  });
+
+  test('Retry-After 0 -> retryAfterMs absent', async () => {
+    const err = await retryAfterErr({ 'retry-after': '0' });
+    expect(err.details?.retryable).toBe(true);
+    expect(err.details?.retryAfterMs).toBeUndefined();
+  });
+
+  test('Retry-After in the past -> absent', async () => {
+    const err = await retryAfterErr({ 'retry-after': new Date(Date.now() - 60_000).toUTCString() });
+    expect(err.details?.retryAfterMs).toBeUndefined();
+  });
+
+  test.each(['abc', '1e9', '-1', '', '1.5'])('Retry-After %j -> absent', async (value) => {
+    const err = await retryAfterErr({ 'retry-after': value });
+    expect(err.details?.retryable).toBe(true);
+    expect(err.details?.retryAfterMs).toBeUndefined();
+  });
+
+  test('Retry-After with surrounding whitespace is trimmed', async () => {
+    const err = await retryAfterErr({ 'retry-after': ' 3 ' });
+    expect(err.details?.retryAfterMs).toBe(3000);
+  });
+
+  test('429 with error.type quota_for_entity_exceeded -> retryable false, hint is the type', async () => {
+    const err = await retryAfterErr({}, { error: { type: 'quota_for_entity_exceeded' } });
+    expect(err.code).toBe('JUDGE_UNAVAILABLE');
+    expect(err.details?.retryable).toBe(false);
+    expect(err.details?.hint).toBe('quota_for_entity_exceeded');
+    expect(err.details?.kind).toBe('terminal-billing');
+  });
+
+  test('429 with detail.error_type containing quota -> retryable false', async () => {
+    const err = await retryAfterErr({}, { detail: { error_type: 'monthly_quota_hit' } });
+    expect(err.details?.retryable).toBe(false);
+    expect(err.details?.hint).toBe('monthly_quota_hit');
+  });
+
+  test('429 rate_limit_exceeded stays retryable', async () => {
+    const err = await retryAfterErr({}, { error: { type: 'rate_limit_exceeded' } });
+    expect(err.details?.retryable).toBe(true);
+  });
+
+  test('429 with a non-JSON body -> retryable true, no retryAfterMs', async () => {
+    const err = await judgeErrorFor(() => new Response('<html>slow down</html>', { status: 429 }));
+    expect(err.details?.retryable).toBe(true);
+    expect(err.details?.retryAfterMs).toBeUndefined();
+  });
+
+  test('a 5xx body mentioning quota is still retryable', async () => {
+    const err = await judgeErrorFor(() =>
+      jsonResponse({ error: { type: 'quota_exceeded' } }, { status: 503 }),
+    );
+    expect(err.details?.retryable).toBe(true);
+    expect(err.details?.kind).toBe('retryable');
+  });
+
+  test('402 is terminal after one attempt', async () => {
+    const fetchStub = vi.fn(async () => jsonResponse({}, { status: 402 }));
+    const judge = createJevJudge({ preset: 'typesafe', apiKey: 'fake-jev-key', fetch: fetchStub });
+    const err = await catchVetError(judge.doJudge(ASK));
+    expect(err.details?.retryable).toBe(false);
+    expect(fetchStub).toHaveBeenCalledTimes(1);
+  });
+
+  test('quota 429 is terminal after one attempt', async () => {
+    const fetchStub = vi.fn(async () =>
+      jsonResponse({ error: { type: 'quota_for_entity_exceeded' } }, { status: 429 }),
+    );
+    const judge = createJevJudge({ preset: 'typesafe', apiKey: 'fake-jev-key', fetch: fetchStub });
+    const err = await catchVetError(judge.doJudge(ASK));
+    expect(err.details?.retryable).toBe(false);
+    expect(fetchStub).toHaveBeenCalledTimes(1);
   });
 });

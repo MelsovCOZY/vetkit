@@ -9,6 +9,7 @@ import {
   VetError,
   verdictSchema,
   type Answer,
+  type CevErrorCode,
   type Case,
   type Criterion,
   type JudgeResponse,
@@ -17,7 +18,11 @@ import {
 } from '@vetkit/spec';
 import { createFileCache, type VerdictCache } from './cache.ts';
 import { renderState } from './format.ts';
+import { createLimiter } from './pacing.ts';
 import { buildRequest, cacheKey, judgeCase } from './request.ts';
+import { runJudge } from '../run.ts';
+
+type VetErrorDetails = NonNullable<VetError['details']>;
 
 const SENTINEL = 'SENTINEL-OUTPUT-7f3a';
 
@@ -253,6 +258,22 @@ describe('cacheKey', () => {
   });
 });
 
+function rejecting(code: CevErrorCode, details?: VetErrorDetails): FakeJudge {
+  return fakeJudge({
+    impl: () =>
+      Promise.reject(new VetError(code, `boom ${code}`, details === undefined ? {} : { details })),
+  });
+}
+
+async function thrownBy(judge: JudgeV1): Promise<unknown> {
+  try {
+    await judgeCase({ judge, case: evalCase, criteria });
+  } catch (err) {
+    return err;
+  }
+  throw new Error('expected judgeCase to throw');
+}
+
 describe('judgeCase', () => {
   test('makes exactly one doJudge call carrying N=3 questions keyed by criterion id', async () => {
     const { judge, doJudge } = fakeJudge();
@@ -419,6 +440,56 @@ describe('judgeCase', () => {
     );
   });
 
+  describe('terminal judge errors', () => {
+    test.each([
+      ['terminal-auth is rethrown', 'JUDGE_UNAUTHORIZED', 'terminal-auth'],
+      ['terminal-billing is rethrown', 'JUDGE_UNAVAILABLE', 'terminal-billing'],
+      ['terminal-request is rethrown', 'JUDGE_BAD_RESPONSE', 'terminal-request'],
+    ] as const)('%s', async (_name, code, kind) => {
+      const details: VetErrorDetails = { kind, retryable: false, hint: 'h' };
+      const original = new VetError(code, 'exact message', { details });
+      const judge = fakeJudge({ impl: () => Promise.reject(original) }).judge;
+      const thrown = await thrownBy(judge);
+      expect(thrown).toBe(original);
+      expect(VetError.isInstance(thrown) && thrown.code).toBe(code);
+      expect(VetError.isInstance(thrown) && thrown.message).toBe('exact message');
+      expect(VetError.isInstance(thrown) && thrown.details).toEqual(details);
+    });
+
+    test('retryable stays unscored', async () => {
+      const { judge } = rejecting('JUDGE_UNAVAILABLE', { kind: 'retryable', retryable: true });
+      const verdicts = await judgeCase({ judge, case: evalCase, criteria });
+      expect(verdicts.every((v) => v.status === 'unscored')).toBe(true);
+    });
+
+    test('unknown error stays unscored', async () => {
+      const plain = fakeJudge({ impl: () => Promise.reject(new TypeError('network down')) });
+      const noKind = rejecting('JUDGE_UNAVAILABLE', { retryable: false, hint: 'x' });
+      const noDetails = rejecting('JUDGE_UNAVAILABLE');
+      for (const { judge } of [plain, noKind, noDetails]) {
+        const verdicts = await judgeCase({ judge, case: evalCase, criteria });
+        expect(verdicts).toHaveLength(3);
+        expect(verdicts.every((v) => v.status === 'unscored')).toBe(true);
+      }
+    });
+
+    test('an aborted signal still yields unscored JUDGE_TIMEOUT even for a terminal judge', async () => {
+      const { judge, doJudge } = rejecting('JUDGE_UNAUTHORIZED', { kind: 'terminal-auth' });
+      const controller = new AbortController();
+      controller.abort();
+      const verdicts = await judgeCase({
+        judge,
+        case: evalCase,
+        criteria,
+        signal: controller.signal,
+      });
+      expect(doJudge).not.toHaveBeenCalled();
+      expect(verdicts.every((v) => v.status === 'unscored' && v.cause === 'JUDGE_TIMEOUT')).toBe(
+        true,
+      );
+    });
+  });
+
   test('forwards the signal to doJudge', async () => {
     const { judge, doJudge } = fakeJudge();
     const controller = new AbortController();
@@ -539,5 +610,69 @@ describe('requestFormat', () => {
     };
     await judgeCase({ judge: fencedJudge, case: evalCase, criteria: [booleanCriterion] });
     expect(doJudge.mock.calls[0]?.[0].state).toBe(renderState(evalCase.input.state, 'fenced-v1'));
+  });
+});
+
+const terminal = (): VetError =>
+  new VetError('JUDGE_UNAUTHORIZED', 'judge rejected the API key', {
+    details: { kind: 'terminal-auth' },
+  });
+
+describe('runJudge on a terminal judge error', () => {
+  const cases: Case[] = ['c1', 'c2', 'c3', 'c4', 'c5'].map((id) => ({ ...evalCase, id }));
+  test('terminal error stops after one call', async () => {
+    const { judge, doJudge } = fakeJudge({ impl: () => Promise.reject(terminal()) });
+    const limiter = createLimiter({ maxInFlight: 1 });
+    const err = await runJudge({ cases, criteria, judge, limiter }).then(
+      () => undefined,
+      (e: unknown) => e,
+    );
+    expect(VetError.isInstance(err) && err.code).toBe('JUDGE_UNAUTHORIZED');
+    expect(VetError.isInstance(err) && err.details?.kind).toBe('terminal-auth');
+    expect(doJudge).toHaveBeenCalledTimes(1);
+  });
+
+  test('in-flight calls are bounded by the concurrency when a terminal error stops the run', async () => {
+    const { judge, doJudge } = fakeJudge({ impl: () => Promise.reject(terminal()) });
+    const limiter = createLimiter({ maxInFlight: 2 });
+    await runJudge({ cases, criteria, judge, limiter }).catch(() => undefined);
+    expect(doJudge.mock.calls.length).toBeLessThanOrEqual(2);
+  });
+
+  test('a terminal error after an earlier repeat succeeded is rethrown and partial verdicts are discarded', async () => {
+    let calls = 0;
+    const { judge } = fakeJudge({
+      impl: (req) => {
+        calls += 1;
+        if (calls === 1) {
+          return fakeJudge().doJudge(req);
+        }
+        return Promise.reject(terminal());
+      },
+    });
+    const limiter = createLimiter({ maxInFlight: 1 });
+    const err = await runJudge({
+      cases: [evalCase],
+      criteria,
+      judge,
+      limiter,
+      repeats: 2,
+    }).then(
+      () => undefined,
+      (e: unknown) => e,
+    );
+    expect(VetError.isInstance(err) && err.code).toBe('JUDGE_UNAUTHORIZED');
+  });
+
+  test('a retryable failure does not stop the run', async () => {
+    const { judge, doJudge } = fakeJudge({
+      impl: () =>
+        Promise.reject(
+          new VetError('JUDGE_TIMEOUT', 'timed out', { details: { kind: 'retryable' } }),
+        ),
+    });
+    const verdicts = await runJudge({ cases, criteria, judge });
+    expect(doJudge).toHaveBeenCalledTimes(cases.length);
+    expect(verdicts.every((v) => v.status === 'unscored')).toBe(true);
   });
 });

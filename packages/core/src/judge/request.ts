@@ -222,7 +222,7 @@ function toVerdicts(input: JudgeCaseInput, judged: CachedJudgment, cacheHit: boo
   });
 }
 
-/** One doJudge call per case; returns one Verdict per criterion and never throws on judge failure. */
+/** One doJudge call per case; returns one Verdict per criterion. Throws only a terminal judge error (details.kind 'terminal-*'). */
 export async function judgeCase(input: JudgeCaseInput): Promise<Verdict[]> {
   if (input.signal?.aborted === true) return unscored(input, CEV_ERROR_CODES.JUDGE_TIMEOUT);
 
@@ -241,6 +241,9 @@ export async function judgeCase(input: JudgeCaseInput): Promise<Verdict[]> {
       input.signal === undefined ? request : { ...request, signal: input.signal },
     );
   } catch (err) {
+    // A terminal failure (bad key, no credit, rejected request) would repeat for every case, so it
+    // reaches the caller instead of hiding behind unscored verdicts.
+    if (VetError.isInstance(err) && err.details?.kind?.startsWith('terminal-') === true) throw err;
     return unscored(input, causeOf(err, CEV_ERROR_CODES.JUDGE_UNAVAILABLE));
   }
 

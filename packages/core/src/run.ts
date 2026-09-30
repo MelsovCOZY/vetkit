@@ -320,7 +320,7 @@ function markAborted(verdicts: Verdict[]): Verdict[] {
   return verdicts.map((v) => (v.status === 'unscored' ? { ...v, cause: 'aborted' } : v));
 }
 
-/** Judges every case (one request per case per repeat) and applies thresholds; never throws on judge failure. */
+/** Judges every case (one request per case per repeat) and applies thresholds; throws only a terminal judge error. */
 export async function runJudge(input: RunJudgeInput): Promise<RunVerdict[]> {
   const { judge, signal } = input;
   const events = input.events ?? createEvents();
@@ -334,12 +334,34 @@ export async function runJudge(input: RunJudgeInput): Promise<RunVerdict[]> {
   const judged = input.criteria.filter((c) => c.grader?.kind !== 'code');
 
   // Every doJudge call goes through the shared limiter (pacing leaf); none bypasses it.
+  // The first terminal judge error stops the run: calls already in flight may finish, but no
+  // further doJudge call starts, and every waiting case rejects with that same error.
+  let terminal: VetError | undefined;
+  const callJudge: JudgeV1['doJudge'] = async (req) => {
+    if (terminal !== undefined) throw terminal;
+    try {
+      return await judge.doJudge(req);
+    } catch (err) {
+      if (VetError.isInstance(err) && err.details?.kind?.startsWith('terminal-') === true) {
+        terminal ??= err;
+      }
+      throw err;
+    }
+  };
   const paced: JudgeV1 = {
     specVersion: judge.specVersion,
     id: judge.id,
     capabilities: judge.capabilities,
-    doJudge: (req) =>
-      limiter.run(() => judge.doJudge(req), signal === undefined ? undefined : { signal }),
+    doJudge: async (req) => {
+      try {
+        return await limiter.run(
+          () => callJudge(req),
+          signal === undefined ? undefined : { signal },
+        );
+      } catch (err) {
+        throw terminal ?? err;
+      }
+    },
   };
 
   async function judgeOnce(evalCase: Case): Promise<Verdict[]> {

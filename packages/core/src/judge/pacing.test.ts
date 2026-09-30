@@ -201,7 +201,7 @@ describe('createLimiter retry and AIMD', () => {
     expect(starts).toHaveLength(3);
   });
 
-  it('retry-after honoured with no 60 s cap (90000 ms)', async () => {
+  it('retry-after above maxRetryAfterMs is clamped to the cap (90000 -> 120000 default cap honours 90000; 200000 -> 120000)', async () => {
     const clock = virtualClock();
     const limiter = createLimiter({ now: clock.now, sleep: clock.sleep });
     const f = failThen([retryable(90_000)]);
@@ -212,6 +212,16 @@ describe('createLimiter retry and AIMD', () => {
     await clock.advance(1);
     await expect(a).resolves.toBe('ok');
     expect(f.calls()).toBe(2);
+
+    const clock2 = virtualClock();
+    const limiter2 = createLimiter({ now: clock2.now, sleep: clock2.sleep });
+    const g = failThen([retryable(200_000)]);
+    const b = limiter2.run(g.fn);
+    await clock2.advance(1);
+    expect(limiter2.stats().pausedUntil).toBe(120_000);
+    await clock2.advance(119_999);
+    await expect(b).resolves.toBe('ok');
+    expect(g.calls()).toBe(2);
   });
 
   it('AIMD halves then recovers', async () => {
@@ -375,7 +385,8 @@ describe('createLimiter retry and AIMD', () => {
 
   it('budget exhausted', async () => {
     const clock = virtualClock();
-    const limiter = createLimiter({ now: clock.now, sleep: clock.sleep });
+    // The 400 s header is clamped to the 120 s cap, which still exceeds this 100 s budget.
+    const limiter = createLimiter({ now: clock.now, sleep: clock.sleep, totalBudgetMs: 100_000 });
     const last = retryable(400_000);
     const f = failThen([last]);
     const r = await settle(limiter.run(f.fn));
@@ -386,7 +397,7 @@ describe('createLimiter retry and AIMD', () => {
     expect(causeOf(r.error)).toEqual({ error: last, attempts: 1 });
     const message = messageOf(r.error);
     expect(message).toContain('judge transport error (HTTP 429)');
-    expect(message).toContain('retry budget exhausted (suggested wait 400000ms)');
+    expect(message).toContain('retry budget exhausted (suggested wait 120000ms)');
     expect(message).toContain('(after 1 attempts)');
     expect(limiter.stats().pausedUntil).toBe(0);
   });
@@ -622,5 +633,154 @@ describe('createLimiter events and timers', () => {
     await limiter.run(failThen([retryable(-1)]).fn).catch(() => {});
     expect(delaysOf(setTimeoutSpy).every((d) => d >= 0)).toBe(true);
     setTimeoutSpy.mockRestore();
+  });
+});
+
+describe('createLimiter retry-after bounds (root DECISION judge retry policy)', () => {
+  it('Retry-After 1 waits 1000 ms', async () => {
+    const clock = virtualClock();
+    const limiter = createLimiter({ now: clock.now, sleep: clock.sleep });
+    const f = failThen([retryable(1000)]);
+    const a = limiter.run(f.fn);
+    await clock.advance(999);
+    expect(f.calls()).toBe(1);
+    await clock.advance(1);
+    await expect(a).resolves.toBe('ok');
+    expect(f.calls()).toBe(2);
+  });
+
+  it('Retry-After 300 is capped at 120000 ms (maxRetryAfterMs)', async () => {
+    const clock = virtualClock();
+    const limiter = createLimiter({ now: clock.now, sleep: clock.sleep });
+    const a = limiter.run(failThen([retryable(300_000)]).fn);
+    await clock.advance(1);
+    expect(limiter.stats().pausedUntil).toBe(120_000);
+    await clock.advance(120_000);
+    await expect(a).resolves.toBe('ok');
+  });
+
+  it('a custom maxRetryAfterMs clamps', async () => {
+    const clock = virtualClock();
+    const limiter = createLimiter({
+      now: clock.now,
+      sleep: clock.sleep,
+      maxRetryAfterMs: 5000,
+    });
+    const a = limiter.run(failThen([retryable(50_000)]).fn);
+    await clock.advance(1);
+    expect(limiter.stats().pausedUntil).toBe(5000);
+    await clock.advance(5000);
+    await expect(a).resolves.toBe('ok');
+  });
+
+  it('Retry-After as an HTTP-date 5 s ahead waits ~5000 ms', async () => {
+    const clock = virtualClock();
+    const limiter = createLimiter({ now: clock.now, sleep: clock.sleep });
+    const f = failThen([retryable(4900)]);
+    const a = limiter.run(f.fn);
+    await clock.advance(4899);
+    expect(f.calls()).toBe(1);
+    await clock.advance(1);
+    await expect(a).resolves.toBe('ok');
+  });
+
+  it('Retry-After 0 waits the 250 ms floor, never 0', async () => {
+    const clock = virtualClock();
+    const limiter = createLimiter({ now: clock.now, sleep: clock.sleep, random: () => 0 });
+    const f = failThen([retryable(0)]);
+    const a = limiter.run(f.fn);
+    await clock.advance(249);
+    expect(f.calls()).toBe(1);
+    await clock.advance(1);
+    await expect(a).resolves.toBe('ok');
+    expect(f.calls()).toBe(2);
+  });
+
+  it('garbage Retry-After falls back to backoff >= 250 ms', async () => {
+    const clock = virtualClock();
+    const limiter = createLimiter({ now: clock.now, sleep: clock.sleep, random: () => 0 });
+    const a = limiter.run(failThen([retryable(Number.NaN)]).fn);
+    await clock.advance(1);
+    expect(limiter.stats().pausedUntil).toBeGreaterThanOrEqual(250);
+    await clock.advance(250);
+    await expect(a).resolves.toBe('ok');
+  });
+
+  it('missing Retry-After uses backoff', async () => {
+    const clock = virtualClock();
+    const limiter = createLimiter({ now: clock.now, sleep: clock.sleep, random: () => 0.5 });
+    const a = limiter.run(failThen([retryable()]).fn);
+    await clock.advance(1);
+    // attempt 1: 0.5 * min(40000, 1000 * 2 ** 1)
+    expect(limiter.stats().pausedUntil).toBe(1000);
+    await clock.advance(1000);
+    await expect(a).resolves.toBe('ok');
+  });
+
+  it('a retryable error without retryAfterMs never waits 0 ms even when random() returns 0', async () => {
+    const clock = virtualClock();
+    const limiter = createLimiter({ now: clock.now, sleep: clock.sleep, random: () => 0 });
+    const a = limiter.run(failThen([retryable()]).fn);
+    await clock.advance(1);
+    expect(limiter.stats().pausedUntil).toBeGreaterThanOrEqual(250);
+    await clock.advance(250);
+    await expect(a).resolves.toBe('ok');
+  });
+
+  it('maxRetryAfterMs smaller than maxBackoffMs clamps only the header path', async () => {
+    const clock = virtualClock();
+    const limiter = createLimiter({
+      now: clock.now,
+      sleep: clock.sleep,
+      maxRetryAfterMs: 1000,
+      random: () => 0.99,
+    });
+    const a = limiter.run(failThen([retryable()]).fn);
+    await clock.advance(1);
+    // backoff 0.99 * 2000 = 1980 exceeds the 1000 header cap and is not clamped by it
+    expect(limiter.stats().pausedUntil).toBeCloseTo(1980, 5);
+    await clock.advance(2000);
+    await expect(a).resolves.toBe('ok');
+  });
+
+  it('a non-retryable error (402 shape) makes exactly one attempt', async () => {
+    const clock = virtualClock();
+    const limiter = createLimiter({ now: clock.now, sleep: clock.sleep });
+    const paymentRequired = new VetError('JUDGE_UNAVAILABLE', 'judge account has no credit', {
+      details: { retryable: false, hint: 'no credit' },
+    });
+    const f = failThen([paymentRequired, paymentRequired, paymentRequired]);
+    const outcome = await settle(limiter.run(f.fn));
+    expect(outcome.ok).toBe(false);
+    expect(f.calls()).toBe(1);
+  });
+
+  it('the throttled event reports the clamped wait', async () => {
+    const clock = virtualClock();
+    const emit = vi.fn();
+    const limiter = createLimiter({ now: clock.now, sleep: clock.sleep, emit });
+    const a = limiter.run(failThen([retryable(300_000)]).fn);
+    await clock.advance(1);
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'judge.throttled', retryAfterMs: 120_000 }),
+    );
+    await clock.advance(120_000);
+    await a;
+  });
+
+  it('the throttled event reports the floored wait when random() returns 0', async () => {
+    const clock = virtualClock();
+    const events: PacingEvent[] = [];
+    const limiter = createLimiter({
+      now: clock.now,
+      sleep: clock.sleep,
+      random: () => 0,
+      emit: (e) => events.push(e),
+    });
+    const a = limiter.run(failThen([retryable()]).fn);
+    await clock.advance(250);
+    await a;
+    const throttled = events.find((e) => e.type === 'judge.throttled');
+    expect(throttled?.type === 'judge.throttled' && throttled.retryAfterMs).toBe(250);
   });
 });
