@@ -2,7 +2,7 @@ name: vetkit
 description: Run vetkit evals (vet run), upload the JUnit report and post one sticky PR comment with deltas against the base branch.
 author: vetkit
 
-# Composite, dependency-free (DECISION C10): setup-node, install the CLI, run, upload, comment
+# Composite, dependency-free: setup-node, install the CLI, run, upload, comment
 # through `gh api`. The job fails with the CLI's own exit code (0/1/2/3/130), untouched.
 inputs:
   config:

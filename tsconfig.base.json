@@ -1,6 +1,6 @@
 {
   // isolatedDeclarations requires an explicit return type on every exported declaration;
-  // every packages/*/src file (later beads) must comply.
+  // every packages/*/src file must comply.
   // types is ["node"] ONLY — never add "bun" here, it would leak Bun globals into published .d.ts.
   "compilerOptions": {
     "module": "node20",
