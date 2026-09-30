@@ -14,6 +14,7 @@ import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   generateEvals,
+  stampCriteriaSchemaVersion,
   type GenerateEvalsInput,
   type GenerateEvalsResult,
   type GenerateReport,
@@ -266,6 +267,15 @@ async function gitignoreWithCache(file: string): Promise<string | undefined> {
   return `${current}${separator}${CACHE_LINE}\n`;
 }
 
+// The config is rendered for the chosen judge. criteria.yaml gets `schemaVersion` stamped as its
+// first key (the same stamp `vet migrate` applies, so the number has one source) and the file the
+// CLI just wrote never needs migrating. Every other template is copied as is.
+function renderTarget(path: string, text: string, preset: JevPresetName | 'demo'): string {
+  if (path === 'vetkit.config.ts') return renderConfig(text, preset);
+  if (path === 'evals/criteria.yaml') return stampCriteriaSchemaVersion(text).text;
+  return text;
+}
+
 /** Writes the example scaffold into `dir`; returns the written paths, relative to `dir`. */
 async function scaffoldExample(dir: string, force: boolean, env: Env): Promise<string[]> {
   await ensureWritable(dir);
@@ -276,7 +286,7 @@ async function scaffoldExample(dir: string, force: boolean, env: Env): Promise<s
   const contents = await Promise.all(
     TARGETS.map(async ({ path, template }) => {
       const text = await readFile(join(TEMPLATE_DIR, template), 'utf8');
-      return { path, text: path === 'vetkit.config.ts' ? renderConfig(text, preset) : text };
+      return { path, text: renderTarget(path, text, preset) };
     }),
   );
   const gitignore = await gitignoreWithCache(join(dir, GITIGNORE));

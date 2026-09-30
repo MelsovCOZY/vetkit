@@ -18,6 +18,7 @@ import {
 } from '@vetkit/spec';
 import { lintCriteria, type LintIssue } from '../criteria/lint.ts';
 import type { Events } from '../events.ts';
+import { SCHEMA_VERSIONS } from '../schema-version.ts';
 import { extractCases, type TraceStatus } from './cases.ts';
 import { proposeCriteria } from './criteria.ts';
 import { dedupeCriteria, type DuplicateRecord } from './dedupe.ts';
@@ -172,7 +173,12 @@ export async function generateEvals(input: GenerateEvalsInput): Promise<Generate
   const extracted = extractCases({ traces, criteria });
 
   await mkdir(join(out, 'cases'), { recursive: true });
-  await writeFile(join(out, 'criteria.yaml'), stringify({ criteria }), 'utf8');
+  // schemaVersion first: the written file names the version it was written with.
+  await writeFile(
+    join(out, 'criteria.yaml'),
+    stringify({ schemaVersion: SCHEMA_VERSIONS.criteria, criteria }),
+    'utf8',
+  );
   await writeFile(
     join(out, 'cases', CASES_BATCH_FILE),
     extracted.cases.map((c) => `${JSON.stringify(c)}\n`).join(''),
