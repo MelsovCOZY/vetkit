@@ -41,6 +41,7 @@ export {
   caseSchema,
   criterionSchema,
   lockSchema,
+  runRecordSchema,
   specVersionSchema,
   verdictSchema,
 } from './generated/schemas.ts';

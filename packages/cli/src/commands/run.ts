@@ -2,7 +2,7 @@
 // Under --json stdout carries exactly one JSON document (the runEvals result as-is); warnings
 // and errors go to stderr. SIGINT aborts the run: partial results are still printed, with
 // summary.aborted true, and the exit code is 130.
-import { join, resolve } from 'node:path';
+import { join, relative, resolve, sep } from 'node:path';
 import {
   createEvents,
   loadCases,
@@ -176,6 +176,11 @@ async function countPendingCases(casesPath: string): Promise<number> {
   return result.ok ? result.cases.length : 0;
 }
 
+// Record paths are relative to the config directory with POSIX separators, so the record is portable.
+function toPosixRelative(rootDir: string, path: string): string {
+  return relative(rootDir, path).split(sep).join('/');
+}
+
 async function runCommand(options: RunOptions & Readonly<Record<string, unknown>>): Promise<void> {
   const log = getLogger();
   const cwd = process.cwd();
@@ -287,7 +292,14 @@ async function runCommand(options: RunOptions & Readonly<Record<string, unknown>
     lines.push(...(out.lines ?? []));
   }
   // The record is the --json document plus its inputs; partial runs included.
-  await writeRunRecord(cacheDir, { ...result, ...extras, criteriaPath, casesPath, startedAt });
+  await writeRunRecord(cacheDir, {
+    ...result,
+    ...extras,
+    criteriaPath: toPosixRelative(rootDir, criteriaPath),
+    casesPath: toPosixRelative(rootDir, casesPath),
+    startedAt,
+    gateRequested: options.gate === true,
+  });
   if (demo) log.warn(demoHint());
   emit({ ...result, ...extras }, () => [render(result), ...lines].join('\n'));
   if (result.exitCode === CEV_EXIT.UNSCORED_ONLY) {

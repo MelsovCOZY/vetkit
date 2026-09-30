@@ -23,6 +23,7 @@ export type { LockModel } from './lock.ts';
 export type { LockCriterion } from './lock.ts';
 export type { GauntletResult } from './lock.ts';
 export type { GauntletDetail } from './lock.ts';
+export type { RunRecordDoc } from './run-record.ts';
 export type { MessagePart } from './trace.ts';
 export type { NormalizedTrace } from './trace.ts';
 export type { Span } from './trace.ts';
