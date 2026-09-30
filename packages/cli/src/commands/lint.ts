@@ -43,7 +43,13 @@ async function lintCommand(path: string | undefined, options: LintOptions): Prom
       code ?? CEV_ERROR_CODES.CRITERIA_INVALID,
       issue === undefined
         ? `invalid criteria file: ${file}`
-        : `${file}${issue.path}: ${issue.message}`,
+        : [
+            `cannot load ${file}:`,
+            ...loaded.issues.map((i) => {
+              const related = i.relatedPath === undefined ? '' : ` (also at ${i.relatedPath})`;
+              return `${file}${i.path}: ${i.message}${related}`;
+            }),
+          ].join('\n'),
     );
   }
   const issues = lintCriteria(loaded.criteria);

@@ -306,16 +306,25 @@ function statusOf(err: unknown): number {
   return httpStatusOf(err) ?? 0;
 }
 
-/** The safe subset of a verdict's cause that may ride the 'verdict' event: status and errorType
- * only, never the VetError code, a body or a key. */
-function verdictCause(cause: unknown): EventMap['verdict']['cause'] {
-  if (typeof cause !== 'object' || cause === null) return undefined;
-  const status = (cause as { status?: unknown }).status;
-  const errorType = (cause as { errorType?: unknown }).errorType;
-  const out: { status?: number; errorType?: string } = {};
-  if (typeof status === 'number') out.status = status;
-  if (typeof errorType === 'string') out.errorType = errorType;
+/** The safe subset of a verdict's cause that may ride the 'verdict' event: a code (a bare string
+ * cause, or `code` on an object cause), status and errorType. Never a body or a key. */
+export function verdictCause(cause: unknown): EventMap['verdict']['cause'] {
+  const out: { code?: string; status?: number; errorType?: string } = {};
+  if (typeof cause === 'string') {
+    if (isCode(cause)) out.code = cause;
+  } else if (typeof cause === 'object' && cause !== null) {
+    const code: unknown = Reflect.get(cause, 'code');
+    const status: unknown = Reflect.get(cause, 'status');
+    const errorType: unknown = Reflect.get(cause, 'errorType');
+    if (typeof code === 'string' && isCode(code)) out.code = code;
+    if (typeof status === 'number') out.status = status;
+    if (typeof errorType === 'string') out.errorType = errorType;
+  }
   return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function isCode(value: string): boolean {
+  return value.length <= 64 && /^[A-Z_]+$/.test(value);
 }
 
 function markAborted(verdicts: Verdict[]): Verdict[] {
@@ -507,13 +516,30 @@ export interface RunEvalsResult {
   gateReasons: string[];
 }
 
-function loadError(
-  code: VetError['code'],
-  source: string,
-  issues: readonly { message: string }[],
-): VetError {
-  const detail = issues.map((i) => i.message).join('; ');
-  return new VetError(code, `cannot load ${source}: ${detail}`);
+interface LoadIssue {
+  readonly message: string;
+  /** Criteria issues: a JSON Pointer into the file. */
+  readonly path?: string;
+  /** Case issues: the file and 1-based line (0 when the file itself could not be read). */
+  readonly file?: string;
+  readonly line?: number;
+  readonly relatedPath?: string;
+}
+
+function issueLine(source: string, issue: LoadIssue): string {
+  const where =
+    issue.file === undefined
+      ? `${source}${issue.path ?? ''}`
+      : `${issue.file}${issue.line === undefined || issue.line === 0 ? '' : `:${String(issue.line)}`}`;
+  const related = issue.relatedPath === undefined ? '' : ` (also at ${issue.relatedPath})`;
+  return `${where}: ${issue.message}${related}`;
+}
+
+function loadError(code: VetError['code'], source: string, issues: readonly LoadIssue[]): VetError {
+  return new VetError(
+    code,
+    [`cannot load ${source}:`, ...issues.map((i) => issueLine(source, i))].join('\n'),
+  );
 }
 
 function runModel(verdicts: readonly Verdict[], judge: JudgeV1): Verdict['model'] {
