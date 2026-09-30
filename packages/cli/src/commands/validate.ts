@@ -2,6 +2,7 @@
 // `--repeats` times (min 3) with the cache bypassed, tops the band cases up to 15 repeats,
 // calibrates, runs the eight gauntlets on the held-out cases and writes criteria.lock.json
 // atomically. `vet check` lives in check.ts and reuses loadProject.
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import {
@@ -25,7 +26,6 @@ import {
   loadCases,
   loadCriteria,
   loadLabels,
-  LOCK_FILE,
   readLockOrNull,
   repeatValues,
   runJudge,
@@ -59,7 +59,13 @@ import {
   type JudgeV1,
 } from '@vetkit/spec';
 import type { Command } from 'commander';
-import { loadVetConfig, type LoadedVetConfig, type LoadVetConfigOptions } from '../config-load.ts';
+import {
+  loadVetConfig,
+  projectPaths,
+  type LoadedVetConfig,
+  type LoadVetConfigOptions,
+  type ProjectPaths,
+} from '../config-load.ts';
 import { generatorFromEndpoint } from '../generators.ts';
 import { emit, getLogger, type GlobalOptions } from '../output.ts';
 import { renderEvents } from '../render-events.ts';
@@ -71,12 +77,14 @@ const SEED = 0;
 
 export interface ValidateDeps {
   /** Config loader; defaults to the CLI's shared loadVetConfig. */
-  readonly loadConfig?: (
-    options: LoadVetConfigOptions,
-  ) => Promise<Pick<LoadedVetConfig, 'config' | 'judge' | 'rootDir' | 'warnings'>>;
+  readonly loadConfig?: (options: LoadVetConfigOptions) => Promise<LoadedProject>;
   /** Event bus; defaults to a fresh one rendered on stderr. */
   readonly events?: Events;
 }
+
+/** What loadProject needs from a loaded config; `paths` is derived from rootDir when a loader omits it. */
+type LoadedProject = Pick<LoadedVetConfig, 'config' | 'judge' | 'rootDir' | 'warnings'> &
+  Partial<Pick<LoadedVetConfig, 'paths'>>;
 
 export interface ProjectOptions extends GlobalOptions {
   readonly config?: string;
@@ -92,7 +100,8 @@ interface ValidateOptions extends ProjectOptions {
 }
 
 export interface Project {
-  readonly loaded: Pick<LoadedVetConfig, 'config' | 'judge' | 'rootDir' | 'warnings'>;
+  readonly loaded: LoadedProject;
+  readonly paths: ProjectPaths;
   readonly criteria: Criterion[];
   readonly cases: Case[];
 }
@@ -117,8 +126,9 @@ export async function loadProject(
     ...(options.config === undefined ? {} : { configPath: options.config }),
   });
   for (const warning of loaded.warnings) getLogger().warn(warning);
-  const criteriaPath = resolve(options.criteria ?? join(loaded.rootDir, 'evals/criteria.yaml'));
-  const casesDir = resolve(options.cases ?? join(loaded.rootDir, 'evals/cases'));
+  const paths = loaded.paths ?? projectPaths(loaded.rootDir, loaded.config.cacheDir);
+  const criteriaPath = resolve(options.criteria ?? paths.criteria);
+  const casesDir = resolve(options.cases ?? paths.cases);
   const criteria = await loadCriteria(criteriaPath);
   if (!criteria.ok) {
     const code = criteria.issues[0]?.code ?? CEV_ERROR_CODES.CRITERIA_INVALID;
@@ -129,7 +139,7 @@ export async function loadProject(
     const code = cases.issues[0]?.code ?? CEV_ERROR_CODES.CASE_INVALID;
     throw loadError(code, casesDir, cases.issues);
   }
-  return { loaded, criteria: criteria.criteria, cases: cases.cases };
+  return { loaded, paths, criteria: criteria.criteria, cases: cases.cases };
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -255,6 +265,12 @@ async function readCorpus<T>(
 
 // `--gauntlet` omitted: the shipped corpora (packages/core/src/validate/corpora.ts)
 // rather than an evals/gauntlet directory, so a fresh project gets real gauntlets out of the box.
+// An explicit --gauntlet always wins; the conventional directory counts only when it exists.
+function gauntletDir(options: ValidateOptions, paths: ProjectPaths): string | undefined {
+  if (options.gauntlet !== undefined) return resolve(options.gauntlet);
+  return existsSync(paths.gauntlet) ? paths.gauntlet : undefined;
+}
+
 async function loadCorpora(dir: string | undefined, events: Events): Promise<Corpora> {
   if (dir === undefined) {
     const { injections, masterKeys, constants, paddings } = DEFAULT_GAUNTLET_CORPORA;
@@ -495,23 +511,17 @@ async function validate(
   since: number,
 ): Promise<void> {
   const project = await loadProject(options, deps, true);
-  const { loaded, criteria, cases } = project;
-  const { judge, rootDir } = loaded;
+  const { loaded, paths, criteria, cases } = project;
+  const { judge } = loaded;
   // `enabled: false` (vet criteria disable): never judged or calibrated; the
   // lock carries no entry for it (mirrors runEvals' active/disabled split in run.ts).
   const active = criteria.filter((c) => c.enabled !== false);
   const disabled = criteria.filter((c) => c.enabled === false);
-  const labelSet = await loadLabelSet(
-    resolve(options.labels ?? join(rootDir, 'evals/labels')),
-    project,
-  );
+  const labelSet = await loadLabelSet(resolve(options.labels ?? paths.labels), project);
   const repeats = parseRepeats(options.repeats, events);
   const generator = await resolveGenerator(loaded.config.generator);
-  const corpora = await loadCorpora(
-    options.gauntlet === undefined ? undefined : resolve(options.gauntlet),
-    events,
-  );
-  const lockPath = resolve(options.lock ?? join(rootDir, LOCK_FILE));
+  const corpora = await loadCorpora(gauntletDir(options, paths), events);
+  const lockPath = resolve(options.lock ?? paths.lock);
   const byId = new Map(cases.map((c) => [c.id, c]));
 
   const labelsOf = (c: Criterion): CalibrationLabel[] =>
@@ -690,14 +700,23 @@ export function registerValidate(program: Command, deps: ValidateDeps = {}): Com
     .command('validate')
     .description('calibrate every criterion against human labels and write criteria.lock.json')
     .option('--config <path>', 'config file (default: vetkit.config.* in the current directory)')
-    .option('--criteria <file>', 'criteria file (default: evals/criteria.yaml next to the config)')
-    .option('--cases <dir>', 'cases directory (default: evals/cases next to the config)')
-    .option('--labels <dir>', 'labels directory (default: evals/labels next to the config)')
+    .option(
+      '--criteria <file>',
+      'criteria file (default: criteria.yaml next to the config, or under evals/ when that directory exists)',
+    )
+    .option(
+      '--cases <dir>',
+      'cases directory (default: cases next to the config, or under evals/ when that directory exists)',
+    )
+    .option(
+      '--labels <dir>',
+      'labels directory (default: labels next to the config, or under evals/ when that directory exists)',
+    )
     .option('--repeats <n>', 'judge each labelled case n times (default and minimum 3)')
     .option('--lock <path>', 'lock file to write (default: criteria.lock.json next to the config)')
     .option(
       '--gauntlet <dir>',
-      'gauntlet corpora directory (default: evals/gauntlet next to the config)',
+      'gauntlet corpora directory (default: gauntlet next to the config, or under evals/ when that directory exists)',
     )
     .action(async (_options: unknown, command: Command) => {
       await validateCommand(command.optsWithGlobals<ValidateOptions>(), deps);

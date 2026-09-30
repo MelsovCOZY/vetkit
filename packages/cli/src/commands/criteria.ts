@@ -3,7 +3,7 @@
 // Document-API helpers (comments and order kept); lock edits go through writeLockAtomic.
 import { existsSync } from 'node:fs';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import {
   formatCriteriaDocument,
   LOCK_FILE,
@@ -19,12 +19,41 @@ import {
 } from '@vetkit/core';
 import { CEV_ERROR_CODES, VetError, type Lock } from '@vetkit/spec';
 import type { Command } from 'commander';
+import { findConfigFile, projectPaths, type ProjectPaths } from '../config-load.ts';
 import { emit, getLogger } from '../output.ts';
 
 interface CriteriaOptions {
-  readonly criteria: string;
-  readonly lock: string;
+  readonly config?: string;
+  readonly criteria?: string;
+  readonly lock?: string;
   readonly export?: string;
+}
+
+// These commands never load the config (no judge, no credential): only its directory matters, so
+// an explicit --config is located, not read; without one the nearest discovered config's directory
+// (else the current directory) is the project root.
+function defaultPaths(config: string | undefined): ProjectPaths {
+  const cwd = process.cwd();
+  const file = config === undefined ? findConfigFile(cwd) : resolve(config);
+  if (file === undefined) {
+    // No config anywhere: nothing to anchor to, so today's cwd-relative evals/ defaults.
+    const evals = join(cwd, 'evals');
+    return {
+      ...projectPaths(cwd, '.vet'),
+      criteria: join(evals, 'criteria.yaml'),
+      cases: join(evals, 'cases'),
+      labels: join(evals, 'labels'),
+    };
+  }
+  return projectPaths(dirname(file), '.vet');
+}
+
+function criteriaPathOf(options: CriteriaOptions): string {
+  return resolve(options.criteria ?? defaultPaths(options.config).criteria);
+}
+
+function lockPathOf(options: CriteriaOptions): string {
+  return resolve(options.lock ?? defaultPaths(options.config).lock);
 }
 
 function check(result: EditResult): void {
@@ -66,8 +95,8 @@ function escapeRegExp(text: string): string {
 // A grep of evals/ (minus criteria.yaml and the lock) and the export dir for the id as a whole
 // token: promoted cases, label files and exported vitest files that still name the criterion.
 async function referencingFiles(id: string, options: CriteriaOptions): Promise<string[]> {
-  const criteriaPath = resolve(options.criteria);
-  const skip = new Set([criteriaPath, resolve(options.lock)]);
+  const criteriaPath = criteriaPathOf(options);
+  const skip = new Set([criteriaPath, lockPathOf(options)]);
   const dirs = [resolve(criteriaPath, '..')];
   if (options.export !== undefined) dirs.push(resolve(options.export));
   const pattern = new RegExp(`(?<![\\w-])${escapeRegExp(id)}(?![\\w-])`);
@@ -83,7 +112,7 @@ async function referencingFiles(id: string, options: CriteriaOptions): Promise<s
 }
 
 async function toggle(id: string, enabled: boolean, options: CriteriaOptions): Promise<void> {
-  const path = resolve(options.criteria);
+  const path = criteriaPathOf(options);
   const doc = await loadDocument(path);
   check(setEnabled(doc, id, enabled));
   await writeFile(path, formatCriteriaDocument(doc));
@@ -91,8 +120,8 @@ async function toggle(id: string, enabled: boolean, options: CriteriaOptions): P
 }
 
 async function remove(id: string, options: CriteriaOptions): Promise<void> {
-  const path = resolve(options.criteria);
-  const lockPath = resolve(options.lock);
+  const path = criteriaPathOf(options);
+  const lockPath = lockPathOf(options);
   const doc = await loadDocument(path);
   check(removeCriterion(doc, id));
   const lock = existsSync(lockPath) ? await loadLock(lockPath) : null;
@@ -111,7 +140,7 @@ async function remove(id: string, options: CriteriaOptions): Promise<void> {
 }
 
 async function revalidate(id: string, options: CriteriaOptions): Promise<void> {
-  const lockPath = resolve(options.lock);
+  const lockPath = lockPathOf(options);
   if (!existsSync(lockPath)) {
     throw new VetError(
       CEV_ERROR_CODES.CONFIG_INVALID,
@@ -126,8 +155,12 @@ async function revalidate(id: string, options: CriteriaOptions): Promise<void> {
 
 function addPaths(command: Command): Command {
   return command
-    .option('--criteria <file>', 'criteria file', 'evals/criteria.yaml')
-    .option('--lock <path>', 'lock file', LOCK_FILE);
+    .option('--config <path>', 'config file (default: vetkit.config.* in the current directory)')
+    .option(
+      '--criteria <file>',
+      'criteria file (default: criteria.yaml next to the config, or under evals/ when that directory exists)',
+    )
+    .option('--lock <path>', 'lock file (default: criteria.lock.json next to the config)');
 }
 
 export function registerCriteria(program: Command): Command {

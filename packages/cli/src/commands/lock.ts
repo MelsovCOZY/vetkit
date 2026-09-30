@@ -5,7 +5,7 @@
 // (whitespace runs collapsed) still matches, the edit is whitespace inside a sentence: the
 // wordingHash is updated in place. Any other change, and any entry without normalizedWordingHash,
 // is left stale with a pointer to `vet validate`, and refresh exits 1.
-import { join, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import {
   computeNormalizedWordingHash,
   loadCriteria,
@@ -15,7 +15,7 @@ import {
 } from '@vetkit/core';
 import { CEV_ERROR_CODES, VetError, type Lock } from '@vetkit/spec';
 import type { Command } from 'commander';
-import { loadVetConfig } from '../config-load.ts';
+import { loadVetConfig, projectPaths } from '../config-load.ts';
 import { emit, getLogger, type GlobalOptions } from '../output.ts';
 import { readSupportedLock } from './check.ts';
 import type { ValidateDeps } from './validate.ts';
@@ -41,8 +41,9 @@ async function refreshCommand(options: RefreshOptions, deps: ValidateDeps): Prom
     ...(options.config === undefined ? {} : { configPath: options.config }),
   });
   for (const warning of loaded.warnings) getLogger().warn(warning);
-  const criteriaPath = resolve(options.criteria ?? join(loaded.rootDir, 'evals/criteria.yaml'));
-  const lockPath = resolve(options.lock ?? join(loaded.rootDir, LOCK_FILE));
+  const paths = loaded.paths ?? projectPaths(loaded.rootDir, loaded.config.cacheDir);
+  const criteriaPath = resolve(options.criteria ?? paths.criteria);
+  const lockPath = resolve(options.lock ?? paths.lock);
   const criteria = await loadCriteria(criteriaPath);
   if (!criteria.ok) {
     throw new VetError(
@@ -96,7 +97,10 @@ export function registerLock(program: Command, deps: ValidateDeps = {}): Command
     )
     .option('--lock <path>', 'lock file (default: criteria.lock.json next to the config)')
     .option('--config <path>', 'config file (default: vetkit.config.* in the current directory)')
-    .option('--criteria <file>', 'criteria file (default: evals/criteria.yaml next to the config)')
+    .option(
+      '--criteria <file>',
+      'criteria file (default: criteria.yaml next to the config, or under evals/ when that directory exists)',
+    )
     .action(async (_options: unknown, command: Command) => {
       await refreshCommand(command.optsWithGlobals<RefreshOptions>(), deps);
     });

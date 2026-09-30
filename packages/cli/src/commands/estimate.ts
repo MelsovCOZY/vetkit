@@ -77,10 +77,11 @@ async function estimateCommand(options: EstimateOptions): Promise<void> {
     ...(options.config === undefined ? {} : { configPath: options.config }),
   });
   for (const warning of loaded.warnings) log.warn(warning);
-  const { config, rootDir, judge } = loaded;
+  const { judge } = loaded;
 
-  const criteriaPath = resolve(options.criteria ?? resolve(rootDir, 'evals/criteria.yaml'));
-  const casesDir = resolve(options.cases ?? resolve(rootDir, 'evals/cases'));
+  const { paths } = loaded;
+  const criteriaPath = resolve(options.criteria ?? paths.criteria);
+  const casesDir = resolve(options.cases ?? paths.cases);
   const criteria = await loadCriteria(criteriaPath);
   if (!criteria.ok) {
     const issue = criteria.issues[0];
@@ -106,7 +107,7 @@ async function estimateCommand(options: EstimateOptions): Promise<void> {
     criteria: active,
     cases: cases.cases,
     model: judge.capabilities.model,
-    cacheDir: resolve(rootDir, config.cacheDir),
+    cacheDir: paths.cacheDir,
     ...(requestFormat === undefined ? {} : { requestFormat }),
     ...(pricing === undefined ? {} : { pricing }),
   };
@@ -126,8 +127,14 @@ export function registerEstimate(program: Command): Command {
       new Option('--for <command>', 'what to estimate').choices(['run', 'validate']).default('run'),
     )
     .option('--config <path>', 'config file (default: vetkit.config.* in the current directory)')
-    .option('--criteria <file>', 'criteria file (default: evals/criteria.yaml next to the config)')
-    .option('--cases <dir>', 'cases directory (default: evals/cases next to the config)')
+    .option(
+      '--criteria <file>',
+      'criteria file (default: criteria.yaml next to the config, or under evals/ when that directory exists)',
+    )
+    .option(
+      '--cases <dir>',
+      'cases directory (default: cases next to the config, or under evals/ when that directory exists)',
+    )
     .action(async (_options: unknown, command: Command) => {
       await estimateCommand(command.optsWithGlobals<EstimateOptions>());
     });

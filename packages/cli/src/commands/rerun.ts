@@ -1,4 +1,4 @@
-// `vet rerun --disputed`: re-judges only the verdicts from the last `vet run` that
+// `vet rerun`: re-judges only the verdicts from the last `vet run` that
 // are disputed: borderline (|value - threshold| <= the lock's tolerance, already
 // computed by run.ts decide() as RunVerdict.borderline) or a judge failure (status 'unscored',
 // 'error' or 'infra_failure') — bypassing the cache for exactly those case ids (runJudge), and writes a new latest run plus a --json run-to-run comparison.
@@ -39,7 +39,6 @@ import type { ValidateDeps } from './validate.ts';
 
 interface RerunOptions extends GlobalOptions {
   readonly config?: string;
-  readonly disputed?: boolean;
 }
 
 type Outcome = 'passed' | 'failed' | 'unscored' | 'neutral';
@@ -299,9 +298,8 @@ async function rerunCommand(options: RerunOptions, deps: ValidateDeps): Promise<
 export function registerRerun(program: Command, deps: ValidateDeps = {}): Command {
   return program
     .command('rerun')
-    .description('re-judge disputed verdicts from the last `vet run`')
+    .description('re-judge the disputed verdicts (borderline or judge failure) of the last vet run')
     .option('--config <path>', 'config file (default: vetkit.config.* in the current directory)')
-    .option('--disputed', 're-judge verdicts that are borderline or a judge failure')
     .action(async (_options: unknown, command: Command) => {
       await rerunCommand(command.optsWithGlobals<RerunOptions>(), deps);
     });

@@ -1,9 +1,11 @@
 // `vet rerun --disputed`: re-judges only verdicts from the last run that are
 // disputed (borderline, or a judge failure), bypassing the cache for those cases, and writes a
 // new latest run plus a --json run-to-run comparison.
+import { spawnSync } from 'node:child_process';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   clusteredSE,
   loadCriteria,
@@ -15,7 +17,8 @@ import {
 } from '@vetkit/core';
 import { safeParseJson, VetError, type JudgeV1, type Lock } from '@vetkit/spec';
 import { Command } from 'commander';
-import { afterEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest';
+import { ensureCliBuilt } from '../test-support/build-cli.js';
 import { handleError } from '../errors.ts';
 import { configureOutput } from '../output.ts';
 import type { ValidateDeps } from './validate.ts';
@@ -244,9 +247,7 @@ describe('vet rerun --disputed', () => {
   test('no run record → exit 2 with RUN_NOT_FOUND', async () => {
     const root = await project();
     const seen = new Set<string>();
-    const error = await rejection(
-      vet(['rerun', '--disputed'], depsFor(root, makeJudge(new Map(), seen))),
-    );
+    const error = await rejection(vet(['rerun'], depsFor(root, makeJudge(new Map(), seen))));
 
     expect(exitCodeOf(error)).toBe(2);
     expect(VetError.isInstance(error) && error.code).toBe('RUN_NOT_FOUND');
@@ -259,7 +260,7 @@ describe('vet rerun --disputed', () => {
     await seedRecord(root, [verdict('case-1', { borderline: false })]);
     const seen = new Set<string>();
 
-    await vet(['rerun', '--disputed'], depsFor(root, makeJudge(new Map(), seen)));
+    await vet(['rerun'], depsFor(root, makeJudge(new Map(), seen)));
 
     expect(process.exitCode ?? 0).toBe(0);
     expect(report()).toMatchObject({ disputed: 0 });
@@ -293,7 +294,7 @@ describe('vet rerun --disputed', () => {
       ['case-infra', true],
     ]);
 
-    await vet(['rerun', '--disputed'], depsFor(root, makeJudge(passByCaseId, seen)));
+    await vet(['rerun'], depsFor(root, makeJudge(passByCaseId, seen)));
 
     expect([...seen].toSorted()).toEqual(
       ['case-borderline', 'case-error', 'case-infra', 'case-unscored'].toSorted(),
@@ -325,7 +326,7 @@ describe('vet rerun --disputed', () => {
       doJudge: () => Promise.reject(new Error('judge unavailable')),
     };
 
-    await vet(['rerun', '--disputed'], depsFor(root, failingJudge));
+    await vet(['rerun'], depsFor(root, failingJudge));
 
     const record = await readRunRecord(join(root, '.vet'));
     expect(record?.results).toMatchObject([
@@ -347,7 +348,7 @@ describe('vet rerun --disputed', () => {
     const seen = new Set<string>();
     const passByCaseId = new Map([['case-unsure', true]]);
 
-    await vet(['rerun', '--disputed'], depsFor(root, makeJudge(passByCaseId, seen)));
+    await vet(['rerun'], depsFor(root, makeJudge(passByCaseId, seen)));
 
     expect([...seen]).toEqual(['case-unsure']);
   });
@@ -380,7 +381,7 @@ describe('vet rerun --disputed', () => {
       [ids[3] ?? '', true],
     ]);
 
-    await vet(['rerun', '--disputed'], depsFor(root, makeJudge(passByCaseId, seen)));
+    await vet(['rerun'], depsFor(root, makeJudge(passByCaseId, seen)));
 
     const doc = report();
     // doc is the --json document, parsed as unknown JSON; shape asserted by the reads below.
@@ -394,5 +395,26 @@ describe('vet rerun --disputed', () => {
     expect(naive.se).not.toBeNull();
     expect(comparison.se).not.toBeNull();
     expect(comparison.se).toBeGreaterThanOrEqual(naive.se ?? 0);
+  });
+});
+
+describe('vet rerun has no --disputed flag', () => {
+  beforeAll(async () => {
+    await ensureCliBuilt();
+  }, 180_000);
+
+  test('registerRerun defines no --disputed option', () => {
+    const program = new Command();
+    registerRerun(program);
+    expect(program.commands[0]?.options.every((o) => o.long !== '--disputed')).toBe(true);
+  });
+
+  test('rerun --disputed is an unknown option (exit 2)', () => {
+    const binPath = fileURLToPath(new URL('../../dist/bin.js', import.meta.url));
+    const result = spawnSync(process.execPath, [binPath, 'rerun', '--disputed'], {
+      encoding: 'utf8',
+    });
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("unknown option '--disputed'");
   });
 });

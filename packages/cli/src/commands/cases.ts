@@ -1,7 +1,7 @@
 // `vet cases dedupe|quarantine|promote|review`. All the
 // actual file editing lives in @vetkit/core's cases/edit.ts; this file just wires the CLI
 // group, resolves paths and reports the result.
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import {
   findDuplicates,
   listPendingCases,
@@ -21,6 +21,7 @@ import {
   type Verdict,
 } from '@vetkit/spec';
 import type { Command } from 'commander';
+import { findConfigFile, projectPaths, type ProjectPaths } from '../config-load.ts';
 import { emit, getLogger, prompt } from '../output.ts';
 
 export interface CasesDeps {
@@ -29,7 +30,31 @@ export interface CasesDeps {
 }
 
 interface CasesOptions {
-  readonly cases: string;
+  readonly config?: string;
+  readonly cases?: string;
+}
+
+// These commands never load the config (no judge, no credential): only its directory matters, so
+// the project root is the config's directory (an explicit --config is not read, only located),
+// else the nearest discovered config's, else the current directory. Matches core's DEFAULT_CACHE_DIR.
+function defaultPaths(config: string | undefined): ProjectPaths {
+  const cwd = process.cwd();
+  const file = config === undefined ? findConfigFile(cwd) : resolve(config);
+  if (file === undefined) {
+    // No config anywhere: nothing to anchor to, so today's cwd-relative evals/ defaults.
+    const evals = join(cwd, 'evals');
+    return {
+      ...projectPaths(cwd, '.vet'),
+      criteria: join(evals, 'criteria.yaml'),
+      cases: join(evals, 'cases'),
+      labels: join(evals, 'labels'),
+    };
+  }
+  return projectPaths(dirname(file), '.vet');
+}
+
+function casesDir(options: CasesOptions): string {
+  return resolve(options.cases ?? defaultPaths(options.config).cases);
 }
 
 function loadError(
@@ -59,7 +84,7 @@ function renderDedupe(
 }
 
 async function dedupeCommand(options: DedupeOptions): Promise<void> {
-  const dir = resolve(options.cases);
+  const dir = casesDir(options);
   const cases = await loadCasesOrThrow(dir);
   const duplicates = findDuplicates(cases);
   const write = options.write === true;
@@ -86,7 +111,7 @@ interface QuarantineOptions extends CasesOptions {
 }
 
 async function quarantineCommand(id: string, options: QuarantineOptions): Promise<void> {
-  const dir = resolve(options.cases);
+  const dir = casesDir(options);
   const result = await quarantineCase(dir, id, options.reason);
   if (result.status === 'already_quarantined') {
     getLogger().warn(`case '${id}' is already quarantined`);
@@ -95,11 +120,11 @@ async function quarantineCommand(id: string, options: QuarantineOptions): Promis
 }
 
 interface PromoteOptions extends CasesOptions {
-  readonly cacheDir: string;
+  readonly cacheDir?: string;
 }
 
 async function promoteCommand(verdictId: string, options: PromoteOptions): Promise<void> {
-  const cacheDir = resolve(options.cacheDir);
+  const cacheDir = resolve(options.cacheDir ?? defaultPaths(options.config).cacheDir);
   const recordPath = join(cacheDir, 'runs', 'latest.json');
   const record = await readRunRecord(cacheDir);
   if (record === null) {
@@ -122,7 +147,7 @@ async function promoteCommand(verdictId: string, options: PromoteOptions): Promi
     );
   }
   const verdict: Verdict = { ...found, id: verdictId };
-  const dir = resolve(options.cases);
+  const dir = casesDir(options);
   const cases = await loadCasesOrThrow(dir);
   const evalCase = cases.find((c) => c.id === verdict.caseId);
   if (evalCase === undefined) {
@@ -162,7 +187,7 @@ async function reviewCommand(
   options: ReviewOptions,
   deps: CasesDeps,
 ): Promise<void> {
-  const dir = resolve(options.cases);
+  const dir = casesDir(options);
   const action: 'accept' | 'reject' = options.reject === true ? 'reject' : 'accept';
   if (action === 'reject' && options.reason === undefined) {
     throw new VetError(CEV_ERROR_CODES.CONFIG_INVALID, '--reject requires --reason');
@@ -206,7 +231,12 @@ async function reviewCommand(
 }
 
 function withCasesOption(command: Command): Command {
-  return command.option('--cases <dir>', 'cases directory', 'evals/cases');
+  return command
+    .option('--config <path>', 'config file (default: vetkit.config.* in the current directory)')
+    .option(
+      '--cases <dir>',
+      'cases directory (default: cases next to the config, or under evals/ when that directory exists)',
+    );
 }
 
 export function registerCases(program: Command, deps: CasesDeps = {}): Command {
@@ -214,25 +244,44 @@ export function registerCases(program: Command, deps: CasesDeps = {}): Command {
     .command('cases')
     .description('secondary case-set actions: dedupe, quarantine, promote, review');
 
-  withCasesOption(group.command('dedupe'))
+  withCasesOption(
+    group
+      .command('dedupe')
+      .description('remove exact-duplicate cases; --write applies, otherwise a dry run'),
+  )
     .option('--write', 'remove exact-hash duplicates, keeping the earliest by id')
     .action(async (options: DedupeOptions) => {
       await dedupeCommand(options);
     });
 
-  withCasesOption(group.command('quarantine <id>'))
+  withCasesOption(
+    group
+      .command('quarantine <id>')
+      .description('move a case out of the set with a recorded reason'),
+  )
     .requiredOption('--reason <text>', 'why this case is quarantined')
     .action(async (id: string, options: QuarantineOptions) => {
       await quarantineCommand(id, options);
     });
 
-  withCasesOption(group.command('promote <verdict-id>'))
-    .option('--cache-dir <dir>', 'vetkit cache directory (holds runs/latest.json)', '.vet')
+  withCasesOption(
+    group
+      .command('promote <verdict-id>')
+      .description('turn a verdict from the last vet run into a regression case'),
+  )
+    .option(
+      '--cache-dir <dir>',
+      'vetkit cache directory holding runs/latest.json (default: .vet next to the config)',
+    )
     .action(async (verdictId: string, options: PromoteOptions) => {
       await promoteCommand(verdictId, options);
     });
 
-  withCasesOption(group.command('review [id]'))
+  withCasesOption(
+    group
+      .command('review [id]')
+      .description('accept or reject auto-promoted cases waiting in cases/pending/'),
+  )
     .option('--all', 'review every pending case')
     .option('--reject', 'reject instead of accepting (requires --reason)')
     .option('--reason <text>', 'reason for --reject')

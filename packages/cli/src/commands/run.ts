@@ -2,7 +2,6 @@
 // Under --json stdout carries exactly one JSON document (the runEvals result as-is); warnings
 // and errors go to stderr. SIGINT aborts the run: partial results are still printed, with
 // summary.aborted true, and the exit code is 130.
-import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
   createEvents,
@@ -131,15 +130,6 @@ function render(result: RunEvalsResult): string {
 // loader's default evals/cases/*.jsonl glob never recurses into it, so a case sitting there is otherwise invisible
 // until `vet cases review` moves it up a level. A missing pending/ directory (the common case before any
 // promotion has happened) counts as 0, not an error.
-// `vet init --out <dir>` writes criteria.yaml and cases/ at the top level of
-// <dir>, with no evals/ subdirectory. evals/ is still the first choice when it exists (the
-// scaffold `vet init` writes with no --source uses it); only its absence falls back to
-// <rootDir> itself.
-function defaultDataDir(rootDir: string): string {
-  const evalsDir = resolve(rootDir, 'evals');
-  return existsSync(evalsDir) ? evalsDir : rootDir;
-}
-
 async function countPendingCases(casesPath: string): Promise<number> {
   const result = await loadCases(join(casesPath, 'pending'));
   return result.ok ? result.cases.length : 0;
@@ -172,14 +162,14 @@ async function runCommand(options: RunOptions & Readonly<Record<string, unknown>
   // Progress renders on stderr (render-events.ts); stdout stays the result document.
   const events = createEvents();
   const stopRendering = renderEvents(events, { options });
-  const defaultDir = defaultDataDir(rootDir);
-  const criteriaPath = resolve(options.criteria ?? resolve(defaultDir, 'criteria.yaml'));
-  const casesPath = resolve(options.cases ?? resolve(defaultDir, 'cases'));
+  const { paths } = loaded;
+  const criteriaPath = resolve(options.criteria ?? paths.criteria);
+  const casesPath = resolve(options.cases ?? paths.cases);
   const pendingCount = await countPendingCases(casesPath);
   log.info(
     `${String(pendingCount)} promoted case(s) pending review in ${join(casesPath, 'pending')} (run \`vet cases review\`)`,
   );
-  const cacheDir = resolve(rootDir, config.cacheDir);
+  const { cacheDir } = paths;
   const demo = isDemoJudge(loaded.judge);
   const startedAt = new Date().toISOString();
   const { events: runEvalsEvents, take: takeRunEnd } = deferRunEnd(events);
@@ -249,9 +239,12 @@ export function registerRun(program: Command): Command {
       .option('--config <path>', 'config file (default: vetkit.config.* in the current directory)')
       .option(
         '--criteria <file>',
-        'criteria file (default: evals/criteria.yaml next to the config)',
+        'criteria file (default: criteria.yaml next to the config, or under evals/ when that directory exists)',
       )
-      .option('--cases <dir>', 'cases directory (default: evals/cases next to the config)')
+      .option(
+        '--cases <dir>',
+        'cases directory (default: cases next to the config, or under evals/ when that directory exists)',
+      )
       .option('--gate', 'gate on calibrated thresholds from the lock; refuses (exit 2) without one')
       .option('--ci', 'CI gating: refuse (exit 2) a lock written against an unpinned transport')
       .option('--allow-unpinned', 'let --gate and --ci pass on an unpinned judge transport'),
