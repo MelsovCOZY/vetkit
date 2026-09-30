@@ -9,6 +9,7 @@ import {
   clusterKeys,
   correctedPassRate,
   decideExit,
+  formatLoadIssues,
   loadCases,
   loadCriteria,
   LOCK_FILE,
@@ -106,16 +107,6 @@ function isDisputed(v: RunVerdict, hasLock: boolean): boolean {
 function mergeVerdict(previous: RunVerdict, rejudged: RunVerdict): RunVerdict {
   if (rejudged.status === 'ok' || rejudged.status === 'not_applicable') return rejudged;
   return { ...previous, status: 'infra_failure', cause: rejudged.cause };
-}
-
-// Same as run.ts's own loadError (not exported).
-function loadError(
-  code: VetError['code'],
-  source: string,
-  issues: readonly { readonly message: string }[],
-): VetError {
-  const detail = issues.map((i) => i.message).join('; ');
-  return new VetError(code, `cannot load ${source}: ${detail}`);
 }
 
 function passValue(v: RunVerdict): number | undefined {
@@ -232,12 +223,12 @@ async function rerunCommand(options: RerunOptions, deps: ValidateDeps): Promise<
   const loadedCriteria = await loadCriteria(criteriaPath);
   if (!loadedCriteria.ok) {
     const code = loadedCriteria.issues[0]?.code ?? CEV_ERROR_CODES.CRITERIA_INVALID;
-    throw loadError(code, criteriaPath, loadedCriteria.issues);
+    throw new VetError(code, formatLoadIssues(criteriaPath, loadedCriteria.issues));
   }
   const loadedCases = await loadCases(casesPath);
   if (!loadedCases.ok) {
     const code = loadedCases.issues[0]?.code ?? CEV_ERROR_CODES.CASE_INVALID;
-    throw loadError(code, casesPath, loadedCases.issues);
+    throw new VetError(code, formatLoadIssues(casesPath, loadedCases.issues));
   }
   const { criteria } = loadedCriteria;
   const { cases } = loadedCases;

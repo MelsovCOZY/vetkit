@@ -9,6 +9,7 @@ import {
   createOutbox,
   createSampler,
   decideVerdict,
+  formatLoadIssues,
   judgeCase,
   loadCriteria,
   promoteFailure,
@@ -173,10 +174,9 @@ async function watchCommand(options: WatchOptions): Promise<void> {
 
   const loadedCriteria = await loadCriteria(criteriaPath);
   if (!loadedCriteria.ok) {
-    const issue = loadedCriteria.issues[0];
     throw new VetError(
-      issue?.code ?? CEV_ERROR_CODES.CRITERIA_INVALID,
-      `cannot load ${criteriaPath}: ${issue?.message ?? 'invalid'}`,
+      loadedCriteria.issues[0]?.code ?? CEV_ERROR_CODES.CRITERIA_INVALID,
+      formatLoadIssues(criteriaPath, loadedCriteria.issues),
     );
   }
   const criteria = loadedCriteria.criteria.filter((c) => c.enabled !== false);

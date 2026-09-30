@@ -2,7 +2,7 @@
 // by id and calls doExport once per --criteria file, passing that file's basename as sourceFile. The registry is a local Map, mirroring sources.ts's registerSourcePrefix: 'vitest' is
 // registered by a module-scope call at import time.
 import { basename, extname, join, relative, resolve, sep } from 'node:path';
-import { loadCases, loadCriteria, readLockOrNull } from '@vetkit/core';
+import { formatLoadIssues, loadCases, loadCriteria, readLockOrNull } from '@vetkit/core';
 import { CEV_ERROR_CODES, VetError, type ExporterV1 } from '@vetkit/spec';
 import { vitestExporter } from '@vetkit/export-vitest';
 import type { Command } from 'commander';
@@ -98,7 +98,7 @@ async function exportCommand(options: ExportOptions, deps: ExportDeps): Promise<
   if (!cases.ok) {
     throw new VetError(
       cases.issues[0]?.code ?? CEV_ERROR_CODES.CASE_INVALID,
-      `cannot load ${casesDir}: ${cases.issues.map((i) => i.message).join('; ')}`,
+      formatLoadIssues(casesDir, cases.issues),
     );
   }
 
@@ -110,7 +110,7 @@ async function exportCommand(options: ExportOptions, deps: ExportDeps): Promise<
     if (!criteria.ok) {
       throw new VetError(
         criteria.issues[0]?.code ?? CEV_ERROR_CODES.CRITERIA_INVALID,
-        `cannot load ${criteriaPath}: ${criteria.issues.map((i) => i.message).join('; ')}`,
+        formatLoadIssues(criteriaPath, criteria.issues),
       );
     }
     // With more than one --criteria file each call gets its own outDir subdir named after that

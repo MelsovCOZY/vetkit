@@ -4,6 +4,7 @@
 import { dirname, join, resolve } from 'node:path';
 import {
   findDuplicates,
+  formatLoadIssues,
   listPendingCases,
   loadCases,
   nearDuplicateClusters,
@@ -13,13 +14,7 @@ import {
   removeCases,
   reviewCase,
 } from '@vetkit/core';
-import {
-  CEV_ERROR_CODES,
-  VetError,
-  type Case,
-  type CevErrorCode,
-  type Verdict,
-} from '@vetkit/spec';
+import { CEV_ERROR_CODES, VetError, type Case, type Verdict } from '@vetkit/spec';
 import type { Command } from 'commander';
 import { findConfigFile, projectPaths, type ProjectPaths } from '../config-load.ts';
 import { emit, getLogger, prompt } from '../output.ts';
@@ -57,17 +52,12 @@ function casesDir(options: CasesOptions): string {
   return resolve(options.cases ?? defaultPaths(options.config).cases);
 }
 
-function loadError(
-  dir: string,
-  issues: readonly { readonly code: CevErrorCode; readonly message: string }[],
-): VetError {
-  const code = issues[0]?.code ?? CEV_ERROR_CODES.CASE_INVALID;
-  return new VetError(code, `cannot load ${dir}: ${issues.map((i) => i.message).join('; ')}`);
-}
-
 async function loadCasesOrThrow(dir: string): Promise<Case[]> {
   const loaded = await loadCases(dir);
-  if (!loaded.ok) throw loadError(dir, loaded.issues);
+  if (!loaded.ok) {
+    const code = loaded.issues[0]?.code ?? CEV_ERROR_CODES.CASE_INVALID;
+    throw new VetError(code, formatLoadIssues(dir, loaded.issues));
+  }
   return loaded.cases;
 }
 
