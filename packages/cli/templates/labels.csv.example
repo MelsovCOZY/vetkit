@@ -1,0 +1,4 @@
+case_id,criterion_id,label,labeler,labeled_at
+refund-issued,refund-issued,pass,you,2026-01-01T00:00:00Z
+refund-partial,refund-issued,fail,you,2026-01-01T00:00:00Z
+no-refund-topic,refund-issued,unknown,you,2026-01-01T00:00:00Z
