@@ -116,6 +116,15 @@ describe('defineConfig / validateConfig', () => {
     for (const issue of issues) expect(issue.message.length).toBeGreaterThan(0);
   });
 
+  it('reports every issue inside one field, not only the first', () => {
+    const issues = issuesOf(() =>
+      defineUntyped({ ...minimal, watch: { sampleRate: 1.5, maxInFlight: 0 } }),
+    );
+    const pointers = issues.map((i) => i.pointer);
+    expect(pointers).toContain('/watch/sampleRate');
+    expect(pointers).toContain('/watch/maxInFlight');
+  });
+
   it('puts every pointer and message into the error message', () => {
     try {
       defineUntyped({ ...minimal, watch: { sampleRate: 1.5 } });

@@ -3,7 +3,7 @@
 // never an implicit env-chosen default. The declarative shape
 // lives in packages/spec/schemas/config.schema.json; adapter objects are validated there as a
 // {specVersion, id, capabilities} projection, and their methods are checked structurally here.
-// c12 loading and file:// references belong to the CLI, not here.
+// Loading the config file and file:// references belong to the CLI, not here.
 import {
   CEV_ERROR_CODES,
   configSchema,
@@ -12,7 +12,6 @@ import {
   type ConfigDoc,
   type GateConfig,
   type GeneratorEndpoint,
-  type JsonSchema,
   type JudgeEndpoint,
   type JudgeV1,
   type PluginRef,
@@ -115,35 +114,18 @@ function projectConfig(input: Record<string, unknown>): Record<string, unknown> 
   return out;
 }
 
-// spec's ajv instance stops at the first error (allErrors: false), so each top-level field is
-// validated against its own sub-schema to report one issue set per field instead of one overall.
-interface SchemaParts {
-  readonly properties: Record<string, JsonSchema>;
-  readonly required: readonly string[];
-}
-
-function schemaParts(schema: JsonSchema): SchemaParts {
-  const properties: unknown = schema['properties'];
-  const required: unknown = schema['required'];
-  const defs: unknown = schema['$defs'];
-  const out: Record<string, JsonSchema> = {};
-  if (isRecord(properties)) {
-    for (const [key, sub] of Object.entries(properties)) {
-      if (isRecord(sub)) out[key] = { ...sub, $defs: defs };
-    }
+// A top-level `required` or `additionalProperties` error is worded for the config author;
+// every other error keeps ajv's message under the offending pointer.
+function issueMessage(err: Record<string, unknown>, topLevel: boolean, fallback: string): string {
+  if (err['keyword'] === 'required' && topLevel) return 'is required';
+  if (err['keyword'] === 'additionalProperties') {
+    return topLevel ? 'is not a known config key' : 'is not an allowed key';
   }
-  return {
-    properties: out,
-    required: Array.isArray(required)
-      ? required.filter((r: unknown): r is string => typeof r === 'string')
-      : [],
-  };
+  return typeof err['message'] === 'string' ? err['message'] : fallback;
 }
 
-const CONFIG_PARTS = schemaParts(configSchema);
-
-function ajvIssues(prefix: string, cause: unknown, fallback: string): ConfigIssue[] {
-  if (!Array.isArray(cause)) return [{ pointer: prefix, message: fallback }];
+function ajvIssues(cause: unknown, fallback: string): ConfigIssue[] {
+  if (!Array.isArray(cause)) return [{ pointer: '', message: fallback }];
   const issues: ConfigIssue[] = [];
   for (const err of cause) {
     if (!isRecord(err)) continue;
@@ -155,35 +137,19 @@ function ajvIssues(prefix: string, cause: unknown, fallback: string): ConfigIssu
         : typeof params['additionalProperty'] === 'string'
           ? params['additionalProperty']
           : undefined;
-    const pointer = `${prefix}${instancePath}${extra === undefined ? '' : `/${escapePointer(extra)}`}`;
-    const base = typeof err['message'] === 'string' ? err['message'] : fallback;
-    const message = err['keyword'] === 'additionalProperties' ? 'is not an allowed key' : base;
-    issues.push({ pointer, message });
+    const pointer = `${instancePath}${extra === undefined ? '' : `/${escapePointer(extra)}`}`;
+    issues.push({ pointer, message: issueMessage(err, instancePath === '', fallback) });
   }
-  return issues.length > 0 ? issues : [{ pointer: prefix, message: fallback }];
+  return issues.length > 0 ? issues : [{ pointer: '', message: fallback }];
 }
 
+// One pass over the whole document with every error collected, so a field with several
+// problems reports each of them; identical lines (a nested oneOf can repeat one) are dropped.
 function schemaIssues(input: Record<string, unknown>): ConfigIssue[] {
-  const issues: ConfigIssue[] = [];
-  for (const key of CONFIG_PARTS.required) {
-    if (input[key] === undefined)
-      issues.push({ pointer: `/${escapePointer(key)}`, message: 'is required' });
-  }
-  for (const [key, value] of Object.entries(input)) {
-    const pointer = `/${escapePointer(key)}`;
-    const sub = CONFIG_PARTS.properties[key];
-    if (sub === undefined) {
-      issues.push({ pointer, message: `is not a known config key` });
-      continue;
-    }
-    if (value === undefined) continue;
-    const result = validateJson(value, sub);
-    if (!result.ok) {
-      issues.push(...ajvIssues(pointer, result.error.cause, result.error.message));
-    }
-  }
+  const result = validateJson(input, configSchema, { allErrors: true });
+  if (result.ok) return [];
   const seen = new Set<string>();
-  return issues.filter((issue) => {
+  return ajvIssues(result.error.cause, result.error.message).filter((issue) => {
     const id = `${issue.pointer}\u0000${issue.message}`;
     if (seen.has(id)) return false;
     seen.add(id);

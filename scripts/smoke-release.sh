@@ -27,6 +27,11 @@ for name in "${CREDS[@]}"; do unset "$name"; done
 export NO_COLOR=1
 
 say() { printf 'smoke-release: %s\n' "$*"; }
+# What became of the logs under $WORK, for a FAILED verdict: the EXIT trap removes the
+# scratch root unless the caller chose it with VETKIT_SMOKE_DIR.
+keep_hint() {
+  if [ -n "${VETKIT_SMOKE_DIR:-}" ]; then printf '%s' "logs kept at $WORK"; else printf '%s' 'set VETKIT_SMOKE_DIR=<dir> to keep the logs'; fi
+}
 result() { # <label> <expected> <observed> <ok 0|1> [detail]
   local status=PASS
   if [ "$4" -ne 0 ]; then status=FAIL; FAILED=1; fi
@@ -80,7 +85,7 @@ code=$?
 exit_is "publish 1b: bun install --frozen-lockfile && bun run build && bun run pack" 0 "$code"
 if [ "$code" -ne 0 ]; then
   tail -30 "$WORK/build.out" >&2
-  say "FAILED (no tarballs; later sections skipped)"
+  say "FAILED (no tarballs; later sections skipped; $(keep_hint))"
   exit 1
 fi
 PKG_COUNT="$(find "$CLONE/packages" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')"
@@ -312,5 +317,5 @@ KEYS="$(grep -rn 'sk-\|AI_GATEWAY_API_KEY=[^$ ]' examples docs/guides llms.txt s
 is_true "integrate 14: no key values in examples, guides, llms.txt or skills" "$([ -z "$KEYS" ] && echo 0 || echo 1)" \
   "$(head -c 200 <<<"$KEYS")"
 
-if [ "$FAILED" -ne 0 ]; then say "FAILED"; exit 1; fi
+if [ "$FAILED" -ne 0 ]; then say "FAILED ($(keep_hint))"; exit 1; fi
 say "ok"

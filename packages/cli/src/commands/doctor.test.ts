@@ -391,6 +391,19 @@ describe('doctor.ts vendor neutrality', () => {
   });
 });
 
+// The loader (config-load.ts) is the one reader of the judge base URL override; doctor reports
+// its layer by the same exported name, so the two can never name different variables.
+describe('doctor.ts judge base URL override name', () => {
+  test('is imported from config-load.ts, not repeated as a literal', () => {
+    const source = readFileSync(fileURLToPath(new URL('./doctor.ts', import.meta.url)), 'utf8');
+    const code = source.replaceAll(/\/\*[\s\S]*?\*\//g, '').replaceAll(/(^|\s)\/\/.*$/gm, '$1');
+    expect(code).toMatch(
+      /import \{[^}]*\bJUDGE_BASE_URL_ENV\b[^}]*\} from '\.\.\/config-load\.ts'/,
+    );
+    expect(code).not.toContain('CEV_JUDGE_BASE_URL');
+  });
+});
+
 async function configProject(config: string): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'vetkit-doctor-'));
   await mkdir(root, { recursive: true });
@@ -691,6 +704,32 @@ describe('runDoctor with a config that does not load', () => {
     expect(statusOf(result.checks, 'config').status).toBe('fail');
     for (const name of ['generator credential', 'sink credentials']) {
       expect(statusOf(result.checks, name).detail, name).toContain('pass --config <path> to');
+    }
+  });
+
+  // "config not resolved" reads as if no config were given, but one was found and refused
+  // to load: the rows say so and carry the load error, which is what the user has to fix.
+  test('the generator and sink rows say the config failed to load and name the load error', async () => {
+    const cwd = await configProject('export default {;\n');
+    const result = await runDoctor({ nodeVersion: 'v22.23.2', cwd, env: {}, fetchImpl: vi.fn() });
+    const [firstLine] = statusOf(result.checks, 'config').detail.split('\n');
+    expect(firstLine).toMatch(/cannot load/);
+    for (const name of ['generator credential', 'sink credentials']) {
+      const detail = statusOf(result.checks, name).detail;
+      expect(detail, name).toContain('failed to load');
+      expect(detail, name).toContain(firstLine);
+      expect(detail, name).not.toContain('config not resolved');
+    }
+  });
+
+  test('a multi-line load error is summarised by its header and first pointer line', async () => {
+    const cwd = await configProject('export default { judge: 42 };\n');
+    const result = await runDoctor({ nodeVersion: 'v22.23.2', cwd, env: {}, fetchImpl: vi.fn() });
+    expect(statusOf(result.checks, 'config').detail).toContain('Invalid vetkit config:\n');
+    for (const name of ['generator credential', 'sink credentials']) {
+      const detail = statusOf(result.checks, name).detail;
+      expect(detail, name).toContain('Invalid vetkit config: /judge');
+      expect(detail, name).not.toContain('\n');
     }
   });
 });

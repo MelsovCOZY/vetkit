@@ -6,7 +6,12 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { VetError } from '@vetkit/spec';
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { loadVetConfig, projectPaths, resolveConfigFile } from './config-load.ts';
+import {
+  JUDGE_BASE_URL_ENV,
+  loadVetConfig,
+  projectPaths,
+  resolveConfigFile,
+} from './config-load.ts';
 import { judgeRequestCount } from './diag.ts';
 import { ensureCliBuilt } from './test-support/build-cli.ts';
 
@@ -172,6 +177,12 @@ describe('loadVetConfig', () => {
     expect(VetError.isInstance(error) && error.code).toBe('CONFIG_INVALID');
     expect(error instanceof Error && error.message).toContain('FIXTURE_UNSET_KEY');
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  // Other modules (doctor) name the override variable through this export, so the name the
+  // loader reads and the name they report are one constant.
+  test('exports the judge base URL override variable name', () => {
+    expect(JUDGE_BASE_URL_ENV).toBe('CEV_JUDGE_BASE_URL');
   });
 
   test('CEV_JUDGE_BASE_URL overrides the configured baseURL for that process', async () => {

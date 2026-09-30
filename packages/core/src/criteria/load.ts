@@ -101,22 +101,26 @@ function branchIndexFor(type: unknown): number {
   });
 }
 
+// The fields a type branch forbids (`not: { anyOf: [{ required: [field] }] }`).
+function forbiddenFields(branch: unknown): string[] {
+  const forbidden: unknown =
+    isRecord(branch) && isRecord(branch['not']) ? branch['not']['anyOf'] : undefined;
+  return (Array.isArray(forbidden) ? forbidden : []).flatMap((rule: unknown) => {
+    const required: unknown = isRecord(rule) ? rule['required'] : undefined;
+    return (Array.isArray(required) ? required : []).filter(
+      (field: unknown): field is string => typeof field === 'string',
+    );
+  });
+}
+
 // Fields a type branch settles by itself: the ones it gives a schema of its own and the
-// ones it forbids (`not: { anyOf: [{ required: [field] }] }`). The rule shared by all
-// types can only repeat the branch there, or describe the shape of a field it forbids.
+// ones it forbids. The rule shared by all types can only repeat the branch there, or
+// describe the shape of a field it forbids.
 function settledFields(branch: unknown): Set<string> {
-  const fields = new Set<string>();
-  if (!isRecord(branch)) return fields;
-  if (isRecord(branch['properties'])) {
+  const fields = new Set<string>(forbiddenFields(branch));
+  if (isRecord(branch) && isRecord(branch['properties'])) {
     for (const [field, rule] of Object.entries(branch['properties'])) {
       if (rule !== true) fields.add(field);
-    }
-  }
-  const forbidden: unknown = isRecord(branch['not']) ? branch['not']['anyOf'] : undefined;
-  for (const rule of Array.isArray(forbidden) ? forbidden : []) {
-    const required: unknown = isRecord(rule) ? rule['required'] : undefined;
-    for (const field of Array.isArray(required) ? required : []) {
-      if (typeof field === 'string') fields.add(field);
     }
   }
   return fields;
@@ -135,10 +139,19 @@ function errorPath(error: AjvError): string {
 
 const TYPE_BRANCHES = '#/oneOf/';
 
+// An error that rejects a value outright: a `kind` constant it does not carry, or the wrong
+// JSON type for the value as a whole.
+function rejects(error: AjvError, wrapper: AjvError): boolean {
+  return (
+    error.keyword === 'const' ||
+    (error.keyword === 'type' && error.instancePath === wrapper.instancePath)
+  );
+}
+
 // A nested oneOf (the `criteria` map-or-list, the `grader` kinds) fails with errors from
-// every alternative. An alternative that rejects the value outright (wrong JSON type, or a
-// different `kind` constant) is not the one the developer wrote, so its errors are dropped
-// unless every alternative rejects it that way.
+// every alternative. An alternative that rejects the value outright is not the one the
+// developer wrote, so its errors are dropped. When every alternative rejects it (an unknown
+// `kind`), only the rejecting lines say why: an alternative's other requirements are noise.
 function otherAlternatives(errors: readonly AjvError[]): Set<AjvError> {
   const dropped = new Set<AjvError>();
   for (const wrapper of errors) {
@@ -149,17 +162,37 @@ function otherAlternatives(errors: readonly AjvError[]): Set<AjvError> {
       const index = error.schemaPath.slice(wrapper.schemaPath.length + 1).split('/', 1)[0] ?? '';
       alternatives.set(index, [...(alternatives.get(index) ?? []), error]);
     }
-    const rejected = [...alternatives.values()].filter((group) =>
-      group.some(
-        (e) =>
-          e.keyword === 'const' ||
-          (e.keyword === 'type' && e.instancePath === wrapper.instancePath),
-      ),
-    );
-    if (rejected.length === alternatives.size) continue;
-    for (const error of rejected.flat()) dropped.add(error);
+    const groups = [...alternatives.values()];
+    const rejected = groups.filter((group) => group.some((e) => rejects(e, wrapper)));
+    const noise =
+      rejected.length === groups.length
+        ? groups.flat().filter((e) => !rejects(e, wrapper))
+        : rejected.flat();
+    for (const error of noise) dropped.add(error);
   }
   return dropped;
+}
+
+function orList(items: readonly string[]): string {
+  const last = items[items.length - 1] ?? '';
+  return items.length > 1 ? `${items.slice(0, -1).join(', ')} or ${last}` : last;
+}
+
+// Sibling alternatives each reject an unknown constant with their own (`kind` must be
+// "judge", must be "reference", must be "code"): one line at that path names them all.
+function mergeConstants(errors: readonly AjvError[]): AjvError[] {
+  const byPath = new Map<string, AjvError[]>();
+  for (const error of errors) {
+    if (error.keyword !== 'const') continue;
+    byPath.set(error.instancePath, [...(byPath.get(error.instancePath) ?? []), error]);
+  }
+  return errors.flatMap((error) => {
+    if (error.keyword !== 'const') return [error];
+    const group = byPath.get(error.instancePath) ?? [error];
+    if (group[0] !== error) return [];
+    const values = group.map((e) => JSON.stringify(e.params['allowedValue']));
+    return [{ ...error, message: `must be equal to constant ${orList(values)}` }];
+  });
 }
 
 const SHARED_FIELD = /^#\/properties\/([^/]+)\//;
@@ -183,31 +216,42 @@ function actionable(errors: readonly AjvError[], type: unknown): AjvError[] {
   );
 }
 
+// The lines for one ajv error: a `not` failure (a field the type branch forbids) is one line
+// per forbidden field the criterion carries, named; anything else is ajv's own message.
+function issueMessages(error: AjvError, item: Json): string[] {
+  const message = error.message ?? 'invalid value';
+  if (error.keyword !== 'not') return [message];
+  const type = String(item['type']);
+  const present = forbiddenFields(typeBranches()[branchIndexFor(item['type'])]).filter(
+    (field) => item[field] !== undefined,
+  );
+  return present.length === 0
+    ? [`field not allowed for a ${type} criterion (${message})`]
+    : present.map((field) => `field '${field}' is not allowed for a ${type} criterion`);
+}
+
 function schemaIssues(base: string, item: Json, cause: unknown): CriteriaIssue[] {
   const errors = Array.isArray(cause) ? cause.filter((e: unknown) => isAjvError(e)) : [];
   const relevant = actionable(errors, item['type']);
-  const chosen = relevant.length > 0 ? relevant : errors;
+  const chosen = mergeConstants(relevant.length > 0 ? relevant : errors);
   if (chosen.length === 0) {
     return [{ code: CEV_ERROR_CODES.CRITERIA_INVALID, path: base, message: 'invalid criterion' }];
   }
   const seen = new Set<string>();
-  return chosen.flatMap((error) => {
-    const message = error.message ?? 'invalid value';
-    const issue = {
-      code: CEV_ERROR_CODES.CRITERIA_INVALID,
-      path: `${base}${errorPath(error)}`,
-      message:
-        error.keyword === 'not'
-          ? `field not allowed for a ${String(item['type'])} criterion (${message})`
-          : message,
-    };
-    // Alternatives of a nested oneOf can each raise the same line (an unknown grader kind
-    // fails the `kind` constant of every known kind).
-    const line = `${issue.path}\n${issue.message}`;
-    if (seen.has(line)) return [];
-    seen.add(line);
-    return [issue];
-  });
+  return chosen.flatMap((error) =>
+    issueMessages(error, item).flatMap((message) => {
+      const issue = {
+        code: CEV_ERROR_CODES.CRITERIA_INVALID,
+        path: `${base}${errorPath(error)}`,
+        message,
+      };
+      // Two alternatives of a nested oneOf can still raise one identical line.
+      const line = `${issue.path}\n${issue.message}`;
+      if (seen.has(line)) return [];
+      seen.add(line);
+      return [issue];
+    }),
+  );
 }
 
 function passWhenIssues(base: string, criterion: Criterion): CriteriaIssue[] {

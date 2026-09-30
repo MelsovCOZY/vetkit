@@ -3,18 +3,38 @@
 // CLI) and `fixtures/**/vetkit.config.ts` among them. That dragged the totals far below the
 // thresholds and `bun run test` exited 1 with every test passing. These assertions pin the
 // coverage scope to package sources so the thresholds measure the code the tests are about.
-import { matchesGlob } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { expect, test } from 'vitest';
 
 const coverage = (await import('../vitest.config.ts')).default.test?.coverage;
 const include = coverage?.include;
 const exclude = coverage?.exclude ?? [];
 
+// The coverage patterns use only `**`, `*` and literal text, so this small translation covers
+// them without node:path's glob matcher, which Node 22.18 reports as experimental. Any other
+// glob syntax is refused rather than silently mismatched.
+function globToRegExp(pattern: string): RegExp {
+  if (/[?[\]{}!]/.test(pattern)) throw new Error(`unsupported glob syntax in ${pattern}`);
+  const source = pattern
+    .split('/')
+    .map((segment) =>
+      segment === '**'
+        ? '(?:[^/]+/)*'
+        : `${segment.replaceAll(/[.+^$()|\\]/g, '\\$&').replaceAll('*', '[^/]*')}/`,
+    )
+    .join('')
+    .replace(/\/$/, '');
+  return new RegExp(`^${source}$`);
+}
+
+const matches = (file: string, pattern: string): boolean => globToRegExp(pattern).test(file);
+
 // Mirrors how vitest decides: with no `include`, every loaded file that is not excluded
 // is counted; with one, a file must match it and must not be excluded.
 const isCounted = (file: string): boolean =>
-  (include === undefined || include.some((pattern) => matchesGlob(file, pattern))) &&
-  !exclude.some((pattern) => matchesGlob(file, pattern));
+  (include === undefined || include.some((pattern) => matches(file, pattern))) &&
+  !exclude.some((pattern) => matches(file, pattern));
 
 test('coverage.include only names package sources', () => {
   const patterns = include ?? [];
@@ -45,6 +65,13 @@ test.each([
 
 test('type tests are not counted, since they are type-checked and never executed', () => {
   expect(isCounted('packages/spec/src/errors.test-d.ts')).toBe(false);
+});
+
+// node:path's glob matcher is experimental on Node 22.18 and prints an ExperimentalWarning
+// into every test run that loads it; the patterns here are literal enough for a local check.
+test("this file does not use node:path's experimental glob matcher", () => {
+  const source = readFileSync(fileURLToPath(import.meta.url), 'utf8');
+  expect(source).not.toContain(['matches', 'Glob'].join(''));
 });
 
 test.each(['lines', 'branches', 'functions', 'statements'] as const)(
