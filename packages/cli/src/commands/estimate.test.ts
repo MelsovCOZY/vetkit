@@ -166,6 +166,36 @@ describe('vet estimate', () => {
     expect(result.stdout).toMatch(/\$\d/);
   });
 
+  test('invalid criteria: every load issue is listed with its pointer, exit 2', () => {
+    const dir = freshProject();
+    const file = join(dir, 'evals', 'criteria.yaml');
+    // Two issues in two different criteria: the first lacks polarity, the second lacks escape.
+    writeFileSync(
+      file,
+      `criteria:
+  - id: first
+    type: boolean
+    instructions: Q1?
+    escape: none
+    channel: outcome
+    provenance: { traceIds: [] }
+  - id: second
+    type: boolean
+    instructions: Q2?
+    polarity: pass_when_true
+    channel: outcome
+    provenance: { traceIds: [] }
+`,
+    );
+    const result = runVet(['estimate'], dir);
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain('CRITERIA_INVALID');
+    const lines = result.stderr.split('\n');
+    expect(lines.some((l) => l.includes(`cannot load ${file}:`))).toBe(true);
+    expect(lines.some((l) => l.startsWith(`${file}/criteria/0/polarity: `))).toBe(true);
+    expect(lines.some((l) => l.startsWith(`${file}/criteria/1/escape: `))).toBe(true);
+  });
+
   test('human output says cost unknown for a transport without a price', () => {
     const result = runVet(['estimate'], freshProject());
     expect(result.status).toBe(0);

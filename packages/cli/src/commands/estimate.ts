@@ -10,6 +10,7 @@ import { resolve } from 'node:path';
 import {
   estimateRun,
   estimateValidate,
+  formatLoadIssues,
   loadCases,
   loadCriteria,
   type CostEstimate,
@@ -84,18 +85,16 @@ async function estimateCommand(options: EstimateOptions): Promise<void> {
   const casesDir = resolve(options.cases ?? paths.cases);
   const criteria = await loadCriteria(criteriaPath);
   if (!criteria.ok) {
-    const issue = criteria.issues[0];
     throw new VetError(
-      issue?.code ?? CEV_ERROR_CODES.CRITERIA_INVALID,
-      `cannot load ${criteriaPath}: ${issue?.message ?? 'invalid'}`,
+      criteria.issues[0]?.code ?? CEV_ERROR_CODES.CRITERIA_INVALID,
+      formatLoadIssues(criteriaPath, criteria.issues),
     );
   }
   const cases = await loadCases(casesDir);
   if (!cases.ok) {
-    const issue = cases.issues[0];
     throw new VetError(
-      issue?.code ?? CEV_ERROR_CODES.CASE_INVALID,
-      `cannot load ${casesDir}: ${issue?.message ?? 'invalid'}`,
+      cases.issues[0]?.code ?? CEV_ERROR_CODES.CASE_INVALID,
+      formatLoadIssues(casesDir, cases.issues),
     );
   }
 

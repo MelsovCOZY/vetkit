@@ -8,6 +8,7 @@
 import { resolve } from 'node:path';
 import {
   computeNormalizedWordingHash,
+  formatLoadIssues,
   loadCriteria,
   LOCK_FILE,
   wordingOf,
@@ -48,7 +49,7 @@ async function refreshCommand(options: RefreshOptions, deps: ValidateDeps): Prom
   if (!criteria.ok) {
     throw new VetError(
       criteria.issues[0]?.code ?? CEV_ERROR_CODES.CRITERIA_INVALID,
-      `cannot load ${criteriaPath}: ${criteria.issues.map((i) => i.message).join('; ')}`,
+      formatLoadIssues(criteriaPath, criteria.issues),
     );
   }
   const lock = await readSupportedLock(lockPath);

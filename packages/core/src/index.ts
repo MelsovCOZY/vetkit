@@ -2,6 +2,8 @@
 
 export { computeWordingHash, loadCriteria } from './criteria/load.ts';
 export type { CriteriaIssue, LoadCriteriaResult, WordingFields } from './criteria/load.ts';
+export { formatLoadIssues } from './criteria/issues.ts';
+export type { LoadIssue } from './criteria/issues.ts';
 export { computeNormalizedWordingHash, wordingOf } from './criteria/wording.ts';
 export {
   formatCriteriaDocument,
