@@ -28,6 +28,7 @@ import {
 } from '@vetkit/spec';
 import type { Command } from 'commander';
 import { loadVetConfig } from '../config-load.ts';
+import { withExitCode } from '../errors.ts';
 import { CEV_EXIT, emit, getLogger, type GlobalOptions } from '../output.ts';
 import { configuredSinkNames, resolveSinks } from '../sinks.ts';
 
@@ -199,8 +200,22 @@ async function watchCommand(options: WatchOptions): Promise<void> {
   // separate core seam `vet run` calls through its own lock-aware `decide()`); watch has no
   // lock to read calibrated thresholds from, so it calls decideVerdict directly with the
   // config's threshold, the same math run.ts uses when a criterion has no lock entry.
+  // A terminal judge error (bad key, no credit, rejected request) would repeat for every trace:
+  // the first one is kept, the loop's hard-abort `controller` stops receiving and any further
+  // judging, and it is rethrown after runWatch settles (exit 2).
+  let terminalError: VetError | undefined;
+  const controller = new AbortController();
   const judgeFn: JudgeCaseFn = async ({ case: c, criteria: caseCriteria, signal }) => {
-    const verdicts = await judgeCase({ judge, case: c, criteria: caseCriteria, signal });
+    let verdicts: Verdict[];
+    try {
+      verdicts = await judgeCase({ judge, case: c, criteria: caseCriteria, signal });
+    } catch (err) {
+      if (VetError.isInstance(err) && err.details?.kind?.startsWith('terminal-') === true) {
+        terminalError ??= err;
+        controller.abort();
+      }
+      throw err;
+    }
     const byId = new Map(caseCriteria.map((crit) => [crit.id, crit]));
     const provenance = caseProvenance(c);
     return verdicts.map((v) => {
@@ -231,8 +246,7 @@ async function watchCommand(options: WatchOptions): Promise<void> {
 
   // First SIGINT stops accepting (receiver.close() waits for requests already being served),
   // and only once that has settled does the source end, so every trace answered with 200 is
-  // still in the queue the loop drains. The loop's hard-abort `controller` is never fired.
-  const controller = new AbortController();
+  // still in the queue the loop drains. The hard-abort `controller` fires only on a terminal judge error.
   const stopController = new AbortController();
   let sigints = 0;
   const onSigint = (): void => {
@@ -276,6 +290,8 @@ async function watchCommand(options: WatchOptions): Promise<void> {
     process.off('SIGINT', onSigint);
     await receiver.close();
   }
+
+  if (terminalError !== undefined) throw withExitCode(terminalError, CEV_EXIT.USAGE);
 
   const document = { ...summary, promotedSkipped };
   emit(document, () => renderSummary(summary, promotedSkipped));
