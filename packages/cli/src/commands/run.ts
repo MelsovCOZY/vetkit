@@ -27,6 +27,7 @@ import { isDemoJudge } from '../demo-judge.ts';
 import { readCliVersion, recordingJudge, replayJudge } from '../judge-record.ts';
 import { renderEvents } from '../render-events.ts';
 import { writeBadge } from '../reporters/badge.ts';
+import { reportToGithub } from '../reporters/github.ts';
 import { renderHtml } from '../reporters/html.ts';
 import {
   registerReporterFlag,
@@ -205,7 +206,7 @@ async function writeReportFiles(input: {
   readonly rootDir: string;
   readonly cacheDir: string;
   readonly cwd: string;
-}): Promise<string[]> {
+}): Promise<{ readonly lines: string[]; readonly markdown?: string }> {
   const { specs, rootDir, cacheDir, cwd } = input;
   const textSpecs = specs.filter((spec) => spec.kind !== 'junit');
   const includeCases = input.includeCases && textSpecs.length > 0;
@@ -230,7 +231,10 @@ async function writeReportFiles(input: {
     lines.push(`report: ${relative(cwd, target)}`);
   }
   await writeBadge(cacheDir, model);
-  return lines;
+  // The job summary is the same Markdown report, rendered only inside GitHub Actions.
+  return process.env['GITHUB_ACTIONS'] === 'true'
+    ? { lines, markdown: renderMarkdown(model) }
+    : { lines };
 }
 
 async function runCommand(options: RunOptions & Readonly<Record<string, unknown>>): Promise<void> {
@@ -356,14 +360,17 @@ async function runCommand(options: RunOptions & Readonly<Record<string, unknown>
     startedAt,
     gateRequested: options.gate === true,
   });
-  const reportLines = await writeReportFiles({
+  const reports = await writeReportFiles({
     specs: options.reporter ?? [],
     includeCases: options.includeCases === true,
     rootDir,
     cacheDir,
     cwd,
   });
-  lines.push(...reportLines);
+  lines.push(...reports.lines);
+  if (reports.markdown !== undefined) {
+    await reportToGithub({ result, markdown: reports.markdown, env: process.env });
+  }
   if (demo) log.warn(demoHint());
   emit({ ...result, ...extras }, () => [render(result), ...lines].join('\n'));
   if (result.exitCode === CEV_EXIT.UNSCORED_ONLY) {
