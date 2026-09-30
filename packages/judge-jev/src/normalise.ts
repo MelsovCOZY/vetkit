@@ -72,6 +72,10 @@ function extractTypesafeConfidence(
   return typesafe !== undefined ? asRecord(typesafe['confidence']) : undefined;
 }
 
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value !== '' ? value : undefined;
+}
+
 function extractGatewayRouting(body: Record<string, unknown>): Record<string, unknown> | undefined {
   const providerMetadata = asRecord(body['provider_metadata']);
   const gateway =
@@ -244,7 +248,11 @@ export function normalise(
   const provider = typeof finalProvider === 'string' ? finalProvider : undefined;
   const credentialType = extractCredentialType(routing);
 
-  const resolved = typeof body['model'] === 'string' ? body['model'] : requested.model;
+  // The gateway echoes the requested model even when a fallback served the call; only
+  // routing.canonicalSlug names the model that actually answered.
+  const canonicalSlug = routing?.['canonicalSlug'];
+  const wireModel = body['model'];
+  const resolved = nonEmptyString(canonicalSlug) ?? nonEmptyString(wireModel) ?? requested.model;
 
   return {
     answers,

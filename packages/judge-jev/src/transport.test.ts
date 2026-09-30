@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test, vi } from 'vitest';
 import { safeParseJson, VetError, type Question } from '@vetkit/spec';
+import type { JevProviderOptions } from './presets.ts';
 import { createJevJudge, createJevJudgeFromEndpoint } from './transport.ts';
 
 interface CapturedCall {
@@ -89,7 +90,7 @@ describe('createJevJudge presets', () => {
     async (preset, baseURL, model, hasProviderOptions) => {
       const calls: CapturedCall[] = [];
       const fetchStub: typeof fetch = vi.fn(async (input, init) => {
-        calls.push({ url: String(input), init: init ?? {} });
+        calls.push({ url: new Request(input).url, init: init ?? {} });
         return jsonResponse(fakeSuccessBody(model));
       });
 
@@ -119,7 +120,7 @@ describe('createJevJudge presets', () => {
   test('a custom baseURL overrides the preset baseURL', async () => {
     const calls: CapturedCall[] = [];
     const fetchStub: typeof fetch = vi.fn(async (input, init) => {
-      calls.push({ url: String(input), init: init ?? {} });
+      calls.push({ url: new Request(input).url, init: init ?? {} });
       return jsonResponse(fakeSuccessBody('typesafe-ai/jev'));
     });
 
@@ -747,7 +748,7 @@ describe('requestFormat capability', () => {
   test('a fenced-v1 endpoint echoes it and leaves the wire state untouched', async () => {
     const calls: CapturedCall[] = [];
     const fetchStub: typeof fetch = vi.fn(async (input, init) => {
-      calls.push({ url: String(input), init: init ?? {} });
+      calls.push({ url: new Request(input).url, init: init ?? {} });
       return jsonResponse(fakeSuccessBody('m'));
     });
     const judge = createJevJudgeFromEndpoint(
@@ -949,5 +950,100 @@ describe('judge retry-after and quota classification', () => {
     const err = await catchVetError(judge.doJudge(ASK));
     expect(err.details?.retryable).toBe(false);
     expect(fetchStub).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('served model id through the transport', () => {
+  test('a judge call through the vercel preset records the served slug in model.resolved', async () => {
+    const run1 = structuredClone(loadFixture('2026-09-25-gateway-systemone-response-run1.json'));
+    const gateway = asMutableRecord(
+      asMutableRecord(asMutableRecord(run1)['provider_metadata'])['gateway'],
+    );
+    asMutableRecord(gateway['routing'])['canonicalSlug'] = 'typesafe-ai/jev-1.13-20260917';
+    const fetchStub = vi.fn(async () => jsonResponse(run1));
+    const judge = createJevJudge({ preset: 'vercel', apiKey: 'fake-jev-key', fetch: fetchStub });
+
+    const result = await judge.doJudge({ state: 'refund conversation', questions: RUN1_QUESTIONS });
+
+    expect(result.model.resolved).toBe('typesafe-ai/jev-1.13-20260917');
+  });
+});
+
+const withModels = (models: readonly string[]): JevProviderOptions => ({
+  gateway: { zeroDataRetention: true, only: ['typesafe-ai'], models },
+});
+
+describe('vercel preset refuses gateway model fallbacks', () => {
+  test('vercel preset with providerOptions.gateway.models throws CONFIG_INVALID synchronously and never calls fetch', () => {
+    const fetchStub = vi.fn(async () => jsonResponse(fakeSuccessBody('typesafe-ai/jev')));
+    let thrown: unknown;
+    try {
+      createJevJudge({
+        preset: 'vercel',
+        apiKey: 'k',
+        fetch: fetchStub,
+        providerOptions: withModels(['anthropic/claude-sonnet-4.5']),
+      });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(VetError.isInstance(thrown) ? thrown.code : thrown).toBe('CONFIG_INVALID');
+    expect(fetchStub).toHaveBeenCalledTimes(0);
+  });
+
+  test('vercel preset with an empty models array is accepted', () => {
+    expect(() =>
+      createJevJudge({ preset: 'vercel', apiKey: 'k', providerOptions: withModels([]) }),
+    ).not.toThrow();
+  });
+
+  test('openrouter/typesafe/custom transports with the same option are not refused by this rule', async () => {
+    const options = withModels(['a/b']);
+    const builds = [
+      { preset: 'openrouter' as const },
+      { preset: 'typesafe' as const },
+      { baseURL: 'https://example.test', model: 'm' },
+    ];
+    for (const build of builds) {
+      const calls: CapturedCall[] = [];
+      const fetchStub: typeof fetch = async (input, init) => {
+        calls.push({ url: new Request(input).url, init: init ?? {} });
+        return jsonResponse(fakeSuccessBody('m'));
+      };
+      const judge = createJevJudge({
+        ...build,
+        apiKey: 'k',
+        fetch: fetchStub,
+        providerOptions: options,
+      });
+      await judge.doJudge({
+        state: 's',
+        questions: { ok: { type: 'boolean', instructions: 'q' } },
+      });
+      const call = calls[0];
+      if (call === undefined) throw new Error('expected one fetch call');
+      const sent = await capturedBody(call);
+      expect(sent.providerOptions).toEqual(options);
+    }
+  });
+
+  test('createJevJudgeFromEndpoint with preset vercel and the option throws CONFIG_INVALID naming the option path', () => {
+    let thrown: unknown;
+    try {
+      createJevJudgeFromEndpoint(
+        { preset: 'vercel' },
+        { apiKey: 'k', providerOptions: withModels(['a/b']) },
+      );
+    } catch (error) {
+      thrown = error;
+    }
+    if (!VetError.isInstance(thrown)) throw new Error('expected a VetError');
+    expect(thrown.code).toBe('CONFIG_INVALID');
+    expect(thrown.message).toContain('fallback');
+    expect(thrown.message).toContain('providerOptions.gateway.models');
+  });
+
+  test('the vercel preset default providerOptions (zeroDataRetention + only) still build', () => {
+    expect(() => createJevJudge({ preset: 'vercel', apiKey: 'k' })).not.toThrow();
   });
 });
