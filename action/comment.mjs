@@ -132,7 +132,8 @@ function errorCode(doc) {
 function headline(doc) {
   if (doc?.error !== undefined) {
     const code = errorCode(doc).replace(/^E_/, '');
-    if (AUTH_CODES.has(code)) {
+    // The kind `terminal-auth` is a rejected credential under any code.
+    if (AUTH_CODES.has(code) || doc.error?.kind === 'terminal-auth') {
       return '### vetkit: auth error (the judge rejected the key named by the config)';
     }
     if (JUDGE_DOWN_CODES.has(code)) return '### vetkit: unscored (judge unavailable)';
