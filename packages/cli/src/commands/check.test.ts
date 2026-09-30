@@ -233,7 +233,7 @@ describe('vet check --lock', () => {
     const deps = depsFor(root, judge, events);
     await vet(['validate'], deps);
     stdout = [];
-    await vet(['check', '--lock'], deps);
+    await vet(['check', '--lock', join(root, 'criteria.lock.json')], deps);
 
     expect(report()).toMatchObject({ stale: false, reasons: [] });
     expect(process.exitCode ?? 0).toBe(0);
@@ -249,7 +249,7 @@ describe('vet check --lock', () => {
     const casesFile = join(root, 'evals', 'cases', 'cases.jsonl');
     await writeFile(casesFile, (await readFile(casesFile, 'utf8')).replace('S-p0', 'S-p0 edited'));
     stdout = [];
-    await vet(['check', '--lock'], deps);
+    await vet(['check', '--lock', join(root, 'criteria.lock.json')], deps);
 
     expect(report()).toMatchObject({ stale: true, reasons: ['datasetHash'] });
     expect(process.exitCode).toBe(1);
@@ -265,18 +265,18 @@ describe('vet check --lock', () => {
 
     const newer = { ...judge, describeModel: () => Promise.resolve({ releaseDate: '2026-10-01' }) };
     stdout = [];
-    await vet(['check', '--lock'], depsFor(root, newer, events));
+    await vet(['check', '--lock', join(root, 'criteria.lock.json')], depsFor(root, newer, events));
     expect(report()).toMatchObject({ stale: true, reasons: ['releaseDate'] });
 
     const broken = { ...judge, describeModel: () => Promise.reject(new Error('no endpoint')) };
     stdout = [];
     process.exitCode = undefined;
-    await vet(['check', '--lock'], depsFor(root, broken, events));
+    await vet(['check', '--lock', join(root, 'criteria.lock.json')], depsFor(root, broken, events));
     expect(report()).toMatchObject({ stale: false, releaseDate: 'unknown' });
 
     const moved = { ...judge, capabilities: { ...judge.capabilities, transport: 'transport-b' } };
     stdout = [];
-    await vet(['check', '--lock'], depsFor(root, moved, events));
+    await vet(['check', '--lock', join(root, 'criteria.lock.json')], depsFor(root, moved, events));
     expect(report()).toMatchObject({ stale: true, reasons: ['transport'] });
   });
 
@@ -285,7 +285,9 @@ describe('vet check --lock', () => {
     const root = await project(rows);
     const events = createEvents();
     const { judge } = countingJudge(rows, events);
-    const error = await rejection(vet(['check', '--lock'], depsFor(root, judge, events)));
+    const error = await rejection(
+      vet(['check', '--lock', join(root, 'criteria.lock.json')], depsFor(root, judge, events)),
+    );
 
     expect(exitCodeOf(error)).toBe(2);
     expect(VetError.isInstance(error) && error.message).toContain('criteria.lock.json');
@@ -337,8 +339,8 @@ describe('vet check --lock with a disabled criterion', () => {
   }
 
   test('a fresh lock is not stale and never lists the disabled criterion', async () => {
-    const { deps } = await withDisabled();
-    await vet(['check', '--lock'], deps);
+    const { root, deps } = await withDisabled();
+    await vet(['check', '--lock', join(root, 'criteria.lock.json')], deps);
 
     expect(report()).toMatchObject({ stale: false, reasons: [], staleCriteria: [] });
     expect(process.exitCode ?? 0).toBe(0);
@@ -348,7 +350,7 @@ describe('vet check --lock with a disabled criterion', () => {
     const { root, deps } = await withDisabled();
     const file = join(root, 'evals', 'criteria.yaml');
     await writeFile(file, (await readFile(file, 'utf8')).replace('polite?', 'courteous?'));
-    await vet(['check', '--lock'], deps);
+    await vet(['check', '--lock', join(root, 'criteria.lock.json')], deps);
 
     expect(report()).toMatchObject({
       stale: true,
@@ -361,7 +363,7 @@ describe('vet check --lock with a disabled criterion', () => {
 describe('vet check --lock per criterion', () => {
   test('fresh lock lists no stale criteria', async () => {
     const { root, events, judge } = await validated();
-    await vet(['check', '--lock'], depsFor(root, judge, events));
+    await vet(['check', '--lock', join(root, 'criteria.lock.json')], depsFor(root, judge, events));
 
     expect(report()).toMatchObject({ stale: false, staleCriteria: [] });
     expect(process.exitCode ?? 0).toBe(0);
@@ -372,7 +374,7 @@ describe('vet check --lock per criterion', () => {
     const file = join(root, 'evals', 'criteria.yaml');
     const yaml = await readFile(file, 'utf8');
     await writeFile(file, yaml.replace('Is the reply polite?', 'Is the reply rude?'));
-    await vet(['check', '--lock'], depsFor(root, judge, events));
+    await vet(['check', '--lock', join(root, 'criteria.lock.json')], depsFor(root, judge, events));
 
     expect(report()).toMatchObject({
       stale: true,
@@ -384,7 +386,7 @@ describe('vet check --lock per criterion', () => {
   test('model drift (requested id differs from the config judge) → exit 1 with model_changed', async () => {
     const { root, events, judge } = await validated();
     const other = { ...judge, capabilities: { ...judge.capabilities, model: 'fake/jev-2' } };
-    await vet(['check', '--lock'], depsFor(root, other, events));
+    await vet(['check', '--lock', join(root, 'criteria.lock.json')], depsFor(root, other, events));
 
     const r = report();
     expect(r).toMatchObject({
@@ -398,7 +400,7 @@ describe('vet check --lock per criterion', () => {
   test('transport drift marks every criterion model_changed', async () => {
     const { root, events, judge } = await validated();
     const moved = { ...judge, capabilities: { ...judge.capabilities, transport: 'transport-b' } };
-    await vet(['check', '--lock'], depsFor(root, moved, events));
+    await vet(['check', '--lock', join(root, 'criteria.lock.json')], depsFor(root, moved, events));
 
     expect(report()).toMatchObject({
       staleCriteria: [{ id: 'tone', reasons: ['model_changed'] }],
@@ -412,7 +414,7 @@ describe('vet check --lock per criterion', () => {
       ...judge,
       capabilities: { ...judge.capabilities, requestFormat: 'fenced-v1' as const },
     };
-    await vet(['check', '--lock'], depsFor(root, fenced, events));
+    await vet(['check', '--lock', join(root, 'criteria.lock.json')], depsFor(root, fenced, events));
 
     expect(report()).toMatchObject({
       stale: true,
@@ -426,7 +428,7 @@ describe('vet check --lock per criterion', () => {
     const { root, events, judge } = await validated({ requestFormat: 'raw' });
     const { requestFormat: _raw, ...capabilities } = judge.capabilities;
     const unset = { ...judge, capabilities };
-    await vet(['check', '--lock'], depsFor(root, unset, events));
+    await vet(['check', '--lock', join(root, 'criteria.lock.json')], depsFor(root, unset, events));
 
     expect(report()).toMatchObject({ stale: true, reasons: ['requestFormat'] });
   });
@@ -444,7 +446,7 @@ describe('vet check --lock per criterion', () => {
       traceIds: []
 `;
     await writeFile(file, `${await readFile(file, 'utf8')}${extra}`);
-    await vet(['check', '--lock'], depsFor(root, judge, events));
+    await vet(['check', '--lock', join(root, 'criteria.lock.json')], depsFor(root, judge, events));
 
     expect(report()).toMatchObject({
       stale: true,
@@ -458,17 +460,31 @@ describe('vet check --lock per criterion', () => {
     const path = join(root, 'criteria.lock.json');
     const lock = await lockAt(root);
     await writeFile(path, JSON.stringify({ ...lock, lockVersion: 0 }));
-    const error = await rejection(vet(['check', '--lock'], depsFor(root, judge, events)));
+    const error = await rejection(
+      vet(['check', '--lock', join(root, 'criteria.lock.json')], depsFor(root, judge, events)),
+    );
 
     expect(exitCodeOf(error)).toBe(2);
     expect(VetError.isInstance(error) && error.message).toContain('unsupported lockVersion');
   });
 
-  test('neither --lock nor --outbox → exit 2', async () => {
+  test('check with no flags reads criteria.lock.json from the project paths', async () => {
     const { root, events, judge } = await validated();
+    await vet(['check'], depsFor(root, judge, events));
+
+    expect(report()).toMatchObject({ stale: false, lockPath: join(root, 'criteria.lock.json') });
+    expect(process.exitCode ?? 0).toBe(0);
+  });
+
+  test('check with no flags and a missing default lock → exit 2 naming the path', async () => {
+    const rows = standardRows();
+    const root = await project(rows);
+    const events = createEvents();
+    const { judge } = countingJudge(rows, events);
     const error = await rejection(vet(['check'], depsFor(root, judge, events)));
 
     expect(exitCodeOf(error)).toBe(2);
+    expect(VetError.isInstance(error) && error.message).toContain(join(root, 'criteria.lock.json'));
   });
 });
 
@@ -556,7 +572,10 @@ describe('vet check --outbox', () => {
     const { root, events, judge } = await validated();
     const dir = join(root, 'seeded-outbox');
     await seedOutbox(dir, true);
-    await vet(['check', '--lock', '--outbox', dir], depsFor(root, judge, events));
+    await vet(
+      ['check', '--lock', join(root, 'criteria.lock.json'), '--outbox', dir],
+      depsFor(root, judge, events),
+    );
 
     expect(report()).toMatchObject({
       lock: { stale: false, reasons: [] },
