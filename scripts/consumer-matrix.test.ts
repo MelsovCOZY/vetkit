@@ -15,3 +15,22 @@ describe('consumer-matrix.sh yarn install', () => {
     expect(yarnInstall).toMatch(/YARN_ENABLE_IMMUTABLE_INSTALLS=false|--no-immutable/);
   });
 });
+
+describe('consumer-matrix.sh bin aliases', () => {
+  it('runs npx vetkit --version and npx vet --version without -y', () => {
+    const lines = SCRIPT.split('\n');
+    for (const bin of ['vet', 'vetkit']) {
+      const step = lines.find((line) => line.includes(`npx ${bin} --version`));
+      expect(step).toBeDefined();
+      expect(step).not.toMatch(/npx -y/);
+    }
+    expect(SCRIPT).not.toMatch(/npx -y vet(kit)? --version/);
+  });
+
+  it('compares the two version outputs', () => {
+    expect(SCRIPT).toMatch(/versions agree/);
+    expect(SCRIPT).toMatch(/vet_v/);
+    expect(SCRIPT).toMatch(/vetkit_v/);
+    expect(SCRIPT).toMatch(/expected/);
+  });
+});

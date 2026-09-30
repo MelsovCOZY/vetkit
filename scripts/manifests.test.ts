@@ -70,8 +70,8 @@ describe('root package.json', () => {
     expect(rootPkg?.private).toBe(true);
   });
 
-  it('requires node >=22.12', () => {
-    expect(rootPkg?.engines?.node).toBe('>=22.12');
+  it('requires node ^22.18.0 || >=24.11.0', () => {
+    expect(rootPkg?.engines?.node).toBe('^22.18.0 || >=24.11.0');
   });
 
   it('declares a non-empty catalog of shared devDependency versions', () => {
@@ -183,8 +183,8 @@ describe.each(packageNames.length ? packageNames : MIN_PACKAGE_NAMES)(
       else expect(pkg?.sideEffects).toBe(false);
     });
 
-    it('requires node >=22.12', () => {
-      expect(pkg?.engines?.node).toBe('>=22.12');
+    it('requires node ^22.18.0 || >=24.11.0', () => {
+      expect(pkg?.engines?.node).toBe('^22.18.0 || >=24.11.0');
     });
 
     it('publishes only dist (cli also ships templates)', () => {
@@ -241,21 +241,19 @@ describe('dependency budget', () => {
     expect(pkg?.dependencies?.c12).toBeUndefined();
   });
 
-  it('packages/cli exposes the vet binary', () => {
-    expect(loadPkg('cli')?.bin).toEqual({ vet: './dist/bin.js' });
+  it('packages/cli exposes the vet and vetkit binaries', () => {
+    expect(loadPkg('cli')?.bin).toEqual({ vet: './dist/bin.js', vetkit: './dist/bin.js' });
   });
 
-  it('packages/judge-jev takes @typesafe-ai/sdk as an optional peer', () => {
+  it('packages/judge-jev declares no external peer', () => {
     const pkg = loadPkg('judge-jev');
-    expect(externalPeers(pkg)).toEqual(['@typesafe-ai/sdk']);
-    expect(pkg?.peerDependenciesMeta?.['@typesafe-ai/sdk']?.optional).toBe(true);
+    expect(pkg?.peerDependencies).toBeUndefined();
+    expect(pkg?.peerDependenciesMeta).toBeUndefined();
   });
 
-  it('packages/sink-langfuse and packages/source-langfuse take langfuse as an optional peer', () => {
+  it('packages/sink-langfuse and packages/source-langfuse declare no external peer', () => {
     for (const dir of ['sink-langfuse', 'source-langfuse']) {
-      const pkg = loadPkg(dir);
-      expect(externalPeers(pkg)).toEqual(['langfuse']);
-      expect(pkg?.peerDependenciesMeta?.langfuse?.optional).toBe(true);
+      expect(loadPkg(dir)?.peerDependencies).toBeUndefined();
     }
   });
 
@@ -271,10 +269,10 @@ describe('dependency budget', () => {
     expect(externalPeers(loadPkg('sink-otel'))).toEqual([]);
   });
 
-  it('packages/export-vitest requires vitest as a non-optional peer and pins evalite exactly', () => {
+  it('packages/export-vitest takes vitest as an optional peer and pins evalite exactly', () => {
     const pkg = loadPkg('export-vitest');
     expect(externalPeers(pkg)).toEqual(['vitest']);
-    expect(pkg?.peerDependenciesMeta?.vitest?.optional).not.toBe(true);
+    expect(pkg?.peerDependenciesMeta?.vitest?.optional).toBe(true);
     expect(pkg?.devDependencies?.evalite).toBe('1.0.0-beta.16');
   });
 
