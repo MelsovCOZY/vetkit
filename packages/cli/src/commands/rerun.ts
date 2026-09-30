@@ -276,7 +276,7 @@ async function rerunCommand(options: RerunOptions, deps: ValidateDeps): Promise<
   const model = pickModel(results, fallbackModel);
   const exitCode = decideExit({ verdicts: results });
   const startedAt = new Date().toISOString();
-  const record: Omit<RunRecord, '$schema' | 'gateRequested'> = {
+  const record: Omit<RunRecord, '$schema' | 'schemaVersion' | 'gateRequested'> = {
     results,
     summary,
     model,
@@ -286,7 +286,7 @@ async function rerunCommand(options: RerunOptions, deps: ValidateDeps): Promise<
     casesPath: previousRecord.casesPath,
     startedAt,
   };
-  // rerun never gates; the record-only fields ($schema, gateRequested) stay out of the --json document.
+  // rerun never gates; the record-only fields ($schema, schemaVersion, gateRequested) stay out of the --json document.
   await writeRunRecord(cacheDir, { ...record, gateRequested: false });
 
   const comparison = buildComparison(criteria, cases, previousRecord.results, results, lock);

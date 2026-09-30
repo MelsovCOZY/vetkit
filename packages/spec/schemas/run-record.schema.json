@@ -5,6 +5,7 @@
   "type": "object",
   "properties": {
     "$schema": { "type": "string" },
+    "schemaVersion": { "type": "integer", "minimum": 1 },
     "results": { "type": "array" },
     "summary": { "type": "object" },
     "model": { "type": "object" },

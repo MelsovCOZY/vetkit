@@ -20,10 +20,13 @@ import {
   VetError,
 } from '@vetkit/spec';
 import type { GateLabel, RunEvalsResult } from './run.ts';
+import { checkSchemaVersion, SCHEMA_VERSIONS } from './schema-version.ts';
 
 export interface RunRecord extends Omit<RunEvalsResult, 'gate'> {
   /** Stamped by writeRunRecord: the run-record schema `$id`. */
   $schema: string;
+  /** Stamped by writeRunRecord. Absent in records written before it existed, which count as 1. */
+  schemaVersion?: number;
   /** Absent in records written by `vet rerun` and by versions before the gate label. */
   gate?: GateLabel;
   /** Relative to the config directory, POSIX separators. */
@@ -52,9 +55,13 @@ async function writeAtomic(path: string, text: string): Promise<void> {
 /** Refuses (E_SCHEMA_INVALID, nothing written) a record with an absolute path or no `$schema`. */
 export async function writeRunRecord(
   cacheDir: string,
-  record: Omit<RunRecord, '$schema'>,
+  record: Omit<RunRecord, '$schema' | 'schemaVersion'>,
 ): Promise<{ path: string; latestPath: string }> {
-  const stamped = { $schema: runRecordSchema.$id, ...record };
+  const stamped = {
+    $schema: runRecordSchema.$id,
+    schemaVersion: SCHEMA_VERSIONS.runRecord,
+    ...record,
+  };
   const safe = redactSecretsDeep(stamped, secretsFrom(process.env));
   const checked = validateJson<RunRecord>(safe, runRecordSchema);
   if (!checked.ok) {
@@ -85,11 +92,21 @@ export async function readRunRecord(cacheDir: string): Promise<RunRecord | null>
   }
   const parsed = safeParseJson<RunRecord>(text, runRecordSchema);
   if (!parsed.ok) {
+    // The schema rejects a non-integer or sub-1 schemaVersion; name that instead of the generic message.
+    const raw = safeParseJson<{ schemaVersion?: unknown }>(text, { type: 'object' });
+    const version = raw.ok ? checkSchemaVersion('runRecord', raw.value.schemaVersion) : undefined;
+    if (version !== undefined && !version.ok) {
+      throw new VetError(CEV_ERROR_CODES.E_SCHEMA_INVALID, version.message, {
+        cause: parsed.error,
+      });
+    }
     throw new VetError(
       CEV_ERROR_CODES.E_SCHEMA_INVALID,
       'the latest run record is missing or malformed, or was written by an older vetkit; run `vet run` to write a current record',
       { cause: parsed.error },
     );
   }
+  const version = checkSchemaVersion('runRecord', parsed.value.schemaVersion);
+  if (!version.ok) throw new VetError(CEV_ERROR_CODES.E_SCHEMA_INVALID, version.message);
   return parsed.value;
 }

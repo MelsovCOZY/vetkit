@@ -2,6 +2,7 @@
 
 export interface RunRecordDoc {
   $schema: string;
+  schemaVersion?: number;
   results: unknown[];
   summary: {};
   model: {};
