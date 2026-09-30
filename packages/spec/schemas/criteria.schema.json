@@ -1,0 +1,239 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://melsovcozy.github.io/vetkit/schemas/criteria.schema.json",
+  "title": "CriteriaDoc",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "criteria": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/authoredCriterion"
+      }
+    }
+  },
+  "required": ["criteria"],
+  "$defs": {
+    "authoredCriterion": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "enum": ["boolean", "choice", "score"]
+        },
+        "instructions": {
+          "type": "string"
+        },
+        "criteria": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "escape": {
+          "type": "string"
+        },
+        "passWhen": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "escapeThreshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "polarity": {
+          "enum": ["pass_when_true", "pass_when_false"]
+        },
+        "channel": {
+          "enum": ["outcome", "safety", "quality"]
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "contentDependent": {
+          "type": "boolean"
+        },
+        "provenance": {
+          "type": "object",
+          "properties": {
+            "traceIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "generator": {
+              "type": "string"
+            }
+          },
+          "required": ["traceIds"],
+          "additionalProperties": false
+        },
+        "checkable": {
+          "enum": ["factual", "math", "code"]
+        },
+        "grader": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "judge"
+                }
+              },
+              "required": ["kind"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "reference"
+                }
+              },
+              "required": ["kind"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "code"
+                },
+                "check": {
+                  "enum": ["exact", "normalized", "numeric"]
+                }
+              },
+              "required": ["kind", "check"],
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "required": ["id", "type", "instructions", "polarity", "channel", "provenance"],
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "const": "boolean"
+            },
+            "escape": true
+          },
+          "required": ["type", "escape"],
+          "not": {
+            "anyOf": [
+              {
+                "properties": {
+                  "criteria": true
+                },
+                "required": ["criteria"]
+              },
+              {
+                "properties": {
+                  "passWhen": true
+                },
+                "required": ["passWhen"]
+              }
+            ]
+          }
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "choice"
+            },
+            "escape": true,
+            "criteria": {
+              "type": "object",
+              "minProperties": 2,
+              "maxProperties": 255,
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "passWhen": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["type", "escape", "criteria", "passWhen"]
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "score"
+            },
+            "criteria": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 10,
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["type", "criteria"],
+          "not": {
+            "anyOf": [
+              {
+                "properties": {
+                  "escape": true
+                },
+                "required": ["escape"]
+              },
+              {
+                "properties": {
+                  "passWhen": true
+                },
+                "required": ["passWhen"]
+              }
+            ]
+          }
+        }
+      ],
+      "if": {
+        "properties": {
+          "grader": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "code"
+              }
+            },
+            "required": ["kind"]
+          }
+        },
+        "required": ["grader"]
+      },
+      "then": {
+        "properties": {
+          "type": {
+            "const": "boolean"
+          }
+        },
+        "required": ["type"]
+      }
+    }
+  }
+}
