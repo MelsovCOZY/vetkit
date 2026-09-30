@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://melsovcozy.github.io/vetkit/schemas/criteria.schema.json
 # evals/criteria.yaml, written by `vet init`. Each criterion is one typed question the
 # judge answers about every case in evals/cases/.
-$schema: "https://melsovcozy.github.io/vetkit/schemas/criteria.schema.json"
+$schema: 'https://melsovcozy.github.io/vetkit/schemas/criteria.schema.json'
 criteria:
   - id: refund-issued
     # boolean: the judge answers yes or no. polarity says which answer passes.
