@@ -27,7 +27,7 @@ describe('writeRunRecord redaction', () => {
       model: { requested: 'm', resolved: CANARY, transport: 'fake', pinned: false },
       exitCode: 0,
       gateReasons: [],
-      $schema: 'https://vetkit.dev/schemas/run-record.schema.json',
+      $schema: 'https://melsovcozy.github.io/vetkit/schemas/run-record.schema.json',
       gateRequested: false,
       criteriaPath: `evals/${CANARY}.yaml`,
       casesPath: 'evals/cases',

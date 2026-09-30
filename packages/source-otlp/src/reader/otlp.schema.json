@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vetkit.dev/schemas/source-otlp/otlp.schema.json",
+  "$id": "https://melsovcozy.github.io/vetkit/schemas/source-otlp/otlp.schema.json",
   "title": "ExportTraceServiceRequest",
   "description": "Hand-written subset of opentelemetry/proto/collector/trace/v1 ExportTraceServiceRequest in the OTLP/JSON encoding (lowerCamelCase, integer enums, 64-bit integers as strings or numbers).",
   "type": "object",

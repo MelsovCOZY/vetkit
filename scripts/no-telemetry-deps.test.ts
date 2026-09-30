@@ -28,6 +28,9 @@ const REFERENCE_PATTERNS: readonly RegExp[] = [
   /https?:\/\/(?:[\w-]+\.)*vetkit\.[a-z]+\/(?!schemas\/|docs\/)/i,
 ];
 
+// A vetkit-owned host the project no longer uses; built from parts so this file does not contain it.
+const OLD_HOST = ['vetkit', 'dev'].join('.');
+
 interface SourceFile {
   path: string;
   text: string;
@@ -104,7 +107,7 @@ describe('no telemetry in shipped sources', () => {
       'const telemetryEndpoint = "x";',
       'await checkForUpdates();',
       'fetch("https://registry.npmjs.org/vetkit/latest");',
-      'fetch("https://vetkit.dev/api/ping");',
+      `fetch("https://${OLD_HOST}/api/ping");`,
       'fetch("https://updates.vetkit.io/latest");',
     ];
     for (const text of cases) {
@@ -113,7 +116,7 @@ describe('no telemetry in shipped sources', () => {
   });
 
   it('reports the path and line of a hit', () => {
-    const text = 'const a = 1;\nfetch("https://vetkit.dev/ping");\n';
+    const text = `const a = 1;\nfetch("https://${OLD_HOST}/ping");\n`;
     expect(findTelemetry([{ path: 'packages/core/src/x.ts', text }])).toMatchObject([
       { path: 'packages/core/src/x.ts', line: 2 },
     ]);
@@ -122,8 +125,8 @@ describe('no telemetry in shipped sources', () => {
   it('does not flag OpenTelemetry prose, schema ids, docs links or a path segment', () => {
     const text = [
       '// Encodes OpenTelemetry log records for OTLP.',
-      "const id = 'https://vetkit.dev/schemas/verdict.schema.json';",
-      "const docs = 'https://vetkit.dev/docs/lint';",
+      `const id = 'https://${OLD_HOST}/schemas/verdict.schema.json';`,
+      `const docs = 'https://${OLD_HOST}/docs/lint';`,
       'const segment = path.split("/")[0];',
     ].join('\n');
     expect(findTelemetry([{ path: 'packages/core/src/x.ts', text }])).toEqual([]);

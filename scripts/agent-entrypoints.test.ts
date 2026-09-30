@@ -163,10 +163,10 @@ describe('both entry points', () => {
     }
   });
 
-  it('neither file has absolute local paths, vetkit.dev links or an AGENTS.md link, and the skill never gates on the demo judge', () => {
+  it('neither file has absolute local paths, old-host links or an AGENTS.md link, and the skill never gates on the demo judge', () => {
     for (const text of [llms(), skill()]) {
       expect(text).not.toMatch(/\/home\/|\/Users\/|C:\\/);
-      expect(text).not.toContain('vetkit.dev');
+      expect(text).not.toContain(['vetkit', 'dev'].join('.'));
       expect(text).not.toContain('AGENTS.md');
     }
     expect(skill()).not.toMatch(/vet(kit)? run[^\n]*--gate/);

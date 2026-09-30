@@ -52,7 +52,7 @@ function baseRecord(p: Project, overrides: Partial<RunRecord> = {}): RunRecord {
     model,
     exitCode: 0,
     gateReasons: [],
-    $schema: 'https://vetkit.dev/schemas/run-record.schema.json',
+    $schema: 'https://melsovcozy.github.io/vetkit/schemas/run-record.schema.json',
     gateRequested: false,
     criteriaPath: 'evals/criteria.yaml',
     casesPath: 'evals/cases',

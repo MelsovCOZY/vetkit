@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vetkit.dev/schemas/case.schema.json",
+  "$id": "https://melsovcozy.github.io/vetkit/schemas/case.schema.json",
   "title": "Case",
   "type": "object",
   "properties": {

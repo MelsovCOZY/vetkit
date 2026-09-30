@@ -20,7 +20,7 @@ const COMPLETENESS = { contentCaptured: true, truncated: false, missingParents: 
 // A distinct $id: ajv registers compiled schemas by id, so reusing trace.schema.json's would clash.
 const ownLineSchema: JsonSchema = {
   ...traceSchema,
-  $id: 'https://vetkit.dev/schemas/source-jsonl/own-line.schema.json',
+  $id: 'https://melsovcozy.github.io/vetkit/schemas/source-jsonl/own-line.schema.json',
   title: 'JsonlOwnLine',
   required: ['traceId', 'messages'],
 };
@@ -33,7 +33,7 @@ const openAiTextPart: JsonSchema = {
 
 const openAiLineSchema: JsonSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
-  $id: 'https://vetkit.dev/schemas/source-jsonl/openai-line.schema.json',
+  $id: 'https://melsovcozy.github.io/vetkit/schemas/source-jsonl/openai-line.schema.json',
   type: 'object',
   properties: {
     id: { type: 'string' },

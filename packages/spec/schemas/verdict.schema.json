@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vetkit.dev/schemas/verdict.schema.json",
+  "$id": "https://melsovcozy.github.io/vetkit/schemas/verdict.schema.json",
   "title": "Verdict",
   "type": "object",
   "$defs": {
