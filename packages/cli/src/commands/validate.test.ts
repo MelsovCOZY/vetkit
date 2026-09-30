@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
-import { copyFile, mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -908,5 +908,137 @@ describe('vet validate judge outage', () => {
     const tone = toneEntry();
     expect(tone['reasons']).not.toContain('judge_unavailable');
     expect(tone['unscored']).toMatchObject({ count: 0, causes: [] });
+  });
+});
+
+describe('validate preflight', () => {
+  const LABELLED = 100;
+  const ESTIMATE_LINE =
+    /estimate: 300 judge calls, ~\d+ input tokens, cost unknown, ~12\.0 min at 25 calls\/min \(breakdown: vet estimate --for validate\)/;
+
+  function labelledRows(): Row[] {
+    const rows: Row[] = [];
+    for (let i = 0; i < LABELLED / 2; i += 1)
+      rows.push({ id: `p${String(i)}`, p: 0.99, label: 'pass' });
+    for (let i = 0; i < LABELLED / 2; i += 1)
+      rows.push({ id: `f${String(i)}`, p: 0.01, label: 'fail' });
+    return rows;
+  }
+
+  // Runs validate with info logging on, recording stderr lines and judge:request events in order.
+  async function orderedRun(
+    root: string,
+    judge: JudgeV1,
+    events: Events,
+  ): Promise<{ order: string[]; stdout: string; error?: unknown }> {
+    const order: string[] = [];
+    const out: string[] = [];
+    events.on('judge:request', () => order.push('judge:request'));
+    configureOutput({ json: true });
+    const err = vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+      order.push(`stderr:${String(chunk).trimEnd()}`);
+      return true;
+    });
+    const std = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      out.push(String(chunk));
+      return true;
+    });
+    const program = new Command();
+    program.exitOverride().option('--json');
+    registerValidate(program, depsFor(root, judge, events));
+    let error: unknown;
+    try {
+      await program.parseAsync(['node', 'vet', '--json', 'validate']);
+    } catch (caught) {
+      error = caught;
+    } finally {
+      err.mockRestore();
+      std.mockRestore();
+    }
+    return { order, stdout: out.join(''), ...(error === undefined ? {} : { error }) };
+  }
+
+  test('prints the estimate line before the first judge call (event order asserted)', async () => {
+    const rows = labelledRows();
+    const root = await project(rows);
+    const events = createEvents();
+    const { judge } = countingJudge(rows, events);
+    const { order } = await orderedRun(root, judge, events);
+
+    const estimateAt = order.findIndex((l) => ESTIMATE_LINE.test(l));
+    const firstJudge = order.indexOf('judge:request');
+    const firstCase = order.findIndex((l) => /^stderr:.*\bcase \S+ \(1\//.test(l));
+    expect(estimateAt).toBeGreaterThanOrEqual(0);
+    expect(firstJudge).toBeGreaterThan(estimateAt);
+    expect(firstCase === -1 || firstCase > estimateAt).toBe(true);
+    expect(order.filter((l) => ESTIMATE_LINE.test(l))).toHaveLength(1);
+  });
+
+  test('--json carries estimate {calls, inputTokens, cost, minutes}', async () => {
+    const rows = labelledRows();
+    const root = await project(rows);
+    const events = createEvents();
+    const { judge } = countingJudge(rows, events);
+    const { stdout } = await orderedRun(root, judge, events);
+
+    const doc = parse(stdout.split('\n').find((l) => l.trim() !== '') ?? '');
+    const estimate = doc['estimate'];
+    expect(isRecord(estimate)).toBe(true);
+    expect(estimate).toMatchObject({ calls: 300, cost: 'unknown', minutes: 12 });
+    expect(estimate).toEqual({
+      calls: 300,
+      inputTokens: expect.any(Number),
+      cost: 'unknown',
+      minutes: 12,
+    });
+    expect(Number((estimate as { inputTokens: number }).inputTokens)).toBeGreaterThan(0);
+  });
+
+  test('cost is unknown for a transport with no pricing row', async () => {
+    const rows = labelledRows();
+    const root = await project(rows);
+    const events = createEvents();
+    const { judge } = countingJudge(rows, events, { transport: 'in-process-custom' });
+    const { order } = await orderedRun(root, judge, events);
+
+    expect(order.some((l) => /estimate: 300 judge calls, .*cost unknown/.test(l))).toBe(true);
+  });
+
+  test('a demo transport exits 2 GATE_REFUSED and writes no lock', async () => {
+    const rows = labelledRows();
+    const root = await project(rows);
+    const events = createEvents();
+    const counting = countingJudge(rows, events, { transport: 'demo' });
+    const { error } = await orderedRun(root, counting.judge, events);
+
+    expect(error).toBeInstanceOf(VetError);
+    expect(error).toMatchObject({
+      code: CEV_ERROR_CODES.GATE_REFUSED,
+      message: 'demo judge verdicts are never locked; set a real judge key (see `vet init`)',
+    });
+    expect(exitCodeOf(error)).toBe(2);
+    expect(counting.total).toBe(0);
+    await expect(lockAt(root)).rejects.toBeDefined();
+  });
+
+  test('a demo transport with an existing lock leaves it byte-identical', async () => {
+    const rows = labelledRows();
+    const root = await project(rows);
+    const lockFile = join(root, 'criteria.lock.json');
+    const existing: Lock = {
+      lockVersion: 1,
+      model: { requested: 'real/jev', resolved: 'real/jev-1', transport: 'real', pinned: true },
+      criteria: {},
+      datasetHash: 'd'.repeat(64),
+    };
+    await writeFile(lockFile, `${JSON.stringify(existing)}\n`);
+    const before = await readFile(lockFile);
+    const events = createEvents();
+    const counting = countingJudge(rows, events, { transport: 'demo' });
+    const { error } = await orderedRun(root, counting.judge, events);
+
+    expect(exitCodeOf(error)).toBe(2);
+    expect(counting.total).toBe(0);
+    expect((await readFile(lockFile)).equals(before)).toBe(true);
   });
 });

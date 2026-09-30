@@ -85,3 +85,73 @@ describe('evaluateGate', () => {
     expect(out.reasons.join('\n')).toContain('criteria.lock.json');
   });
 });
+
+function served(resolved: string, over: Partial<Verdict> = {}): Verdict {
+  const base = verdict(true, true);
+  return { ...base, model: { ...base.model, resolved }, ...over };
+}
+
+describe('served model identity', () => {
+  const policy = { requireCalibrated: true, allowUnpinned: false };
+
+  test('a differing served id refuses with exit 2 naming both ids', () => {
+    const out = evaluateGate({
+      verdicts: [served('j-2')],
+      lock: lock('calibrated', true),
+      policy,
+    });
+    expect(out.exitCode).toBe(2);
+    expect(out.reasons).toEqual([
+      "served model 'j-2' differs from the lock's 'j-1' (run `vet validate` against the current judge)",
+    ]);
+  });
+
+  test('an empty resolved id is ignored', () => {
+    const out = evaluateGate({
+      verdicts: [served('')],
+      lock: lock('calibrated', true),
+      policy,
+    });
+    expect(out).toEqual({ exitCode: 0, reasons: [] });
+  });
+
+  test('two differing ids give two sorted reasons', () => {
+    const out = evaluateGate({
+      verdicts: [served('j-9'), served('j-2'), served('j-9')],
+      lock: lock('calibrated', true),
+      policy,
+    });
+    expect(out.exitCode).toBe(2);
+    expect(out.reasons).toHaveLength(2);
+    expect(out.reasons[0]).toContain("'j-2'");
+    expect(out.reasons[1]).toContain("'j-9'");
+  });
+
+  test('matching ids fall through to results', () => {
+    const ok = evaluateGate({
+      verdicts: [served('j-1')],
+      lock: lock('calibrated', true),
+      policy,
+    });
+    expect(ok).toEqual({ exitCode: 0, reasons: [] });
+    const bad = evaluateGate({
+      verdicts: [served('j-1', { pass: false })],
+      lock: lock('calibrated', true),
+      policy,
+    });
+    expect(bad.exitCode).toBe(1);
+  });
+
+  test('ungated and code-graded verdicts never trigger the served-id refusal', () => {
+    const code = served('code:exact');
+    const out = evaluateGate({
+      verdicts: [
+        served('j-2', { gated: false }),
+        { ...code, model: { ...code.model, transport: 'code' } },
+      ],
+      lock: lock('calibrated', true),
+      policy,
+    });
+    expect(out.reasons).toEqual([]);
+  });
+});
