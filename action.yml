@@ -1,6 +1,9 @@
 name: vetkit
 description: Run vetkit evals (vet run), upload the JUnit report and post one sticky PR comment with deltas against the base branch.
 author: vetkit
+branding:
+  icon: check-circle
+  color: green
 
 # Composite, dependency-free: setup-node, install the CLI, run, upload, comment
 # through `gh api`. The job fails with the CLI's own exit code (0/1/2/3/130), untouched.
@@ -18,25 +21,37 @@ inputs:
     required: false
     default: 'false'
   comment:
-    description: On pull_request events, upsert one PR comment with counts and deltas.
+    description: On pull_request events, upsert one PR comment with the outcome, the report and deltas.
     required: false
     default: 'true'
+  comment-id:
+    description: Suffix for the comment marker, so several vetkit steps on one PR keep separate comments (letters, digits, - and _; up to 64).
+    required: false
+    default: ''
   node-version:
     description: Node.js version for actions/setup-node.
     required: false
     default: '22'
   version:
-    description: The published vetkit version to install.
+    description: "Override: a published vetkit version to install globally (default: the project's own installed vet). Ignored when tarballs is set."
     required: false
-    default: '0.0.0'
+    default: ''
   tarballs:
-    description: Directory of packed .tgz files to install instead of the published version.
+    description: Directory of packed .tgz files to install instead of the project's vet or a published version.
     required: false
     default: ''
   criteria-files:
     description: Glob of criteria files hashed into the baseline cache key, so a changed suite never diffs against a stale baseline.
     required: false
     default: '**/criteria*.yaml'
+  cases-files:
+    description: Glob of case files hashed into the baseline cache key, so a changed case set never diffs against a stale baseline.
+    required: false
+    default: '**/cases/**/*.jsonl'
+  config-files:
+    description: Glob of config files hashed into the baseline cache key, so a changed config never diffs against a stale baseline.
+    required: false
+    default: 'vetkit.config.*'
   artifact-name:
     description: Name of the uploaded JUnit artifact.
     required: false
@@ -59,6 +74,12 @@ outputs:
   exitCode:
     description: The `vet run` exit code.
     value: ${{ steps.run.outputs.exitCode }}
+  version:
+    description: The vetkit version that ran.
+    value: ${{ steps.run.outputs.version }}
+  baseline-key:
+    description: The cache key the baseline was restored with (it changes when criteria, cases or config change).
+    value: ${{ steps.restore.outputs.cache-primary-key }}
 
 runs:
   using: composite
@@ -76,12 +97,13 @@ runs:
       run: bash "$GITHUB_ACTION_PATH/action/run.sh" install
 
     - name: Restore the base branch baseline
-      if: inputs.comment == 'true' && startsWith(github.event_name, 'pull_request')
+      id: restore
+      if: startsWith(github.event_name, 'pull_request')
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: .vet/runs/latest.json
-        key: vetkit-baseline-${{ github.base_ref }}-${{ hashFiles(inputs.criteria-files) }}-
-        restore-keys: vetkit-baseline-${{ github.base_ref }}-${{ hashFiles(inputs.criteria-files) }}-
+        key: vetkit-baseline-${{ github.base_ref }}-${{ hashFiles(inputs.criteria-files, inputs.cases-files, inputs.config-files) }}-
+        restore-keys: vetkit-baseline-${{ github.base_ref }}-${{ hashFiles(inputs.criteria-files, inputs.cases-files, inputs.config-files) }}-
 
     - name: vet run
       id: run
@@ -92,11 +114,16 @@ runs:
         INPUT_ALLOW_UNPINNED: ${{ inputs.allow-unpinned }}
       run: bash "$GITHUB_ACTION_PATH/action/run.sh" run
 
-    - name: Upload the JUnit report
+    - name: Upload the reports
+      id: upload
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: ${{ inputs.artifact-name }}
-        path: vet-junit.xml
+        path: |
+          vet-junit.xml
+          .vet/report.md
+          .vet/report.html
+        include-hidden-files: true
         if-no-files-found: warn
 
     - name: PR comment
@@ -105,7 +132,10 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}
-      run: node "$GITHUB_ACTION_PATH/action/comment.mjs" comment .vet/runs/latest.json .vet/baseline/latest.json
+        ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+        REPORT_MD: .vet/report.md
+        COMMENT_ID: ${{ inputs.comment-id }}
+      run: node "$GITHUB_ACTION_PATH/action/comment.mjs" comment .vet/runs/latest.json .vet/baseline/latest.json .vet/raw.json
 
     # Pushes to a branch save its result as the baseline PRs against that branch diff against.
     - name: Save the baseline
@@ -113,7 +143,7 @@ runs:
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: .vet/runs/latest.json
-        key: vetkit-baseline-${{ github.ref_name }}-${{ hashFiles(inputs.criteria-files) }}-${{ github.run_id }}-${{ github.run_attempt }}
+        key: vetkit-baseline-${{ github.ref_name }}-${{ hashFiles(inputs.criteria-files, inputs.cases-files, inputs.config-files) }}-${{ github.run_id }}-${{ github.run_attempt }}
 
     - name: Fail with the vet run exit code
       shell: bash

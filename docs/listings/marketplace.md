@@ -42,7 +42,7 @@ the gate does not pass on it unless you set `allow-unpinned: true`.
 ## Usage snippet
 
 ```yaml
-name: evals
+name: vet
 on: pull_request
 permissions:
   contents: read
@@ -52,11 +52,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: MelsovCOZY/vetkit@v0
+      - uses: actions/setup-node@v4
         with:
-          gate: 'true'
+          node-version: '22'
+      - run: npm ci
+      - uses: MelsovCOZY/vetkit@v0
         env:
-          AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 ```
 
 ## Release checklist

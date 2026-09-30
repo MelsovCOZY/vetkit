@@ -4,13 +4,17 @@
 // counts, the model and gate reasons are rendered: never verdict payloads or judge requests,
 // and any secret-looking env value is redacted as a second line of defence.
 //
-//   node comment.mjs comment <run.json> <baseline.json>   upsert the PR comment
+//   node comment.mjs comment <run.json> <baseline.json> [raw.json]   upsert the PR comment
+//     (raw.json is vet's stdout: it names an error such as a rejected key when no run result exists)
+//   env: COMMENT_ID (marker suffix), REPORT_MD (path of the Markdown report to embed),
+//        ARTIFACT_URL (report artifact link)
 //   node comment.mjs outputs <run.json>                   print passed=/failed=/unscored=/hasResult=
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 export const MARKER = '<!-- vetkit-report -->';
+const COMMENT_ID = /^[A-Za-z0-9_-]{1,64}$/;
 // GitHub rejects comment bodies over 65,536 characters.
 const MAX_BODY = 65_536;
 // Keeps the comment short enough to scan in a PR.
@@ -90,23 +94,106 @@ function build(header, rows, total, unchanged) {
   return lines.join('\n');
 }
 
-/** The comment body: marker, counts, model, gate reasons and the delta table. */
-export function renderComment({ current, baseline, env = process.env }) {
+function annotate(message) {
+  console.log(`::warning::${message}`);
+}
+
+/** The hidden marker; COMMENT_ID keeps several vetkit comments on one PR apart. */
+export function markerFor(id, warn = annotate) {
+  if (id === undefined || id === '') return MARKER;
+  if (!COMMENT_ID.test(id)) {
+    warn('vetkit: COMMENT_ID must match [A-Za-z0-9_-]{1,64}; using the default comment marker');
+    return MARKER;
+  }
+  return `<!-- vetkit-report:${id} -->`;
+}
+
+// Error before gate before unscored before failed: the first line says why the run is not green.
+function headline(doc) {
+  const { passed, failed, unscored } = runOutputs(doc);
+  if (doc?.error?.code === 'JUDGE_UNAUTHORIZED') {
+    return '### vetkit: auth error (the judge rejected the key named by the config)';
+  }
+  if ((doc?.gateReasons ?? []).length > 0) return '### vetkit: gate refused';
+  if (doc?.exitCode === 3 || (unscored > 0 && passed === 0 && failed === 0)) {
+    return '### vetkit: unscored (judge unavailable)';
+  }
+  if (doc?.exitCode === 1 || failed > 0) return '### vetkit: failed';
+  return '### vetkit: passed';
+}
+
+function banners(doc) {
+  const lines = [];
+  const results = doc?.results;
+  if (Array.isArray(results) && !results.some((v) => v.calibrated === true)) {
+    lines.push('thresholds uncalibrated: run vet validate');
+  }
+  if (doc?.model?.pinned === false) {
+    lines.push(
+      'pinned: false — the judge alias may serve a different model between runs, so scores can drift.',
+    );
+  }
+  return lines;
+}
+
+function links(env) {
+  const lines = [];
+  const { GITHUB_SERVER_URL: server, GITHUB_REPOSITORY: repo, GITHUB_RUN_ID: run } = env;
+  if (server && repo && run) lines.push(`[Workflow run](${server}/${repo}/actions/runs/${run})`);
+  if ((env.ARTIFACT_URL ?? '').startsWith('https://')) {
+    lines.push(`[Report artifact](${env.ARTIFACT_URL})`);
+  }
+  return lines.join(' · ');
+}
+
+function statusLines(doc, env) {
+  const lines = [headline(doc)];
+  const model = doc?.model;
+  if (model !== undefined) {
+    const name = model.resolved ? model.resolved : (model.requested ?? 'unknown');
+    lines.push(
+      '',
+      `Model: \`${cell(String(name))}\` (transport ${cell(String(model.transport ?? '?'))})`,
+    );
+  }
+  for (const reason of doc?.gateReasons ?? [])
+    lines.push('', `Gate refused: ${cell(String(reason))}`);
+  const notes = banners(doc);
+  if (notes.length > 0)
+    lines.push('', ...notes.flatMap((note, i) => (i === 0 ? [note] : ['', note])));
+  const linkLine = links(env);
+  if (linkLine !== '') lines.push('', linkLine);
+  return lines;
+}
+
+/**
+ * The comment body: marker, one-line outcome, banners, links, then the Markdown report when one
+ * exists, otherwise the counts and the delta table.
+ */
+export function renderComment({ current, baseline, env = process.env, reportMd, warn }) {
   const redact = redactor(env);
+  const marker = markerFor(env.COMMENT_ID, warn);
+  const status = statusLines(current, env);
+  if (typeof reportMd === 'string' && reportMd.trim() !== '') {
+    const head = [marker, ...status, '', ''].join('\n');
+    const note = '\n\n_report truncated; see the artifact_';
+    const room = MAX_BODY - head.length;
+    const report =
+      reportMd.length <= room
+        ? reportMd
+        : `${reportMd.slice(0, Math.max(0, room - note.length))}${note}`;
+    return redact(`${head}${report}`).slice(0, MAX_BODY);
+  }
   const { passed, failed, unscored } = runOutputs(current);
   const summary = current?.summary ?? {};
-  const model = current?.model ?? {};
-  const name = model.resolved ? model.resolved : (model.requested ?? 'unknown');
-  const header = [
-    MARKER,
-    '### vetkit eval report',
-    '',
-    `**${String(passed)} passed · ${String(failed)} failed · ${String(unscored)} unscored** of ${String(summary.total ?? 0)}${summary.aborted ? ' (aborted)' : ''} · exit ${String(current?.exitCode ?? '?')}`,
-    '',
-    `Model: \`${cell(String(name))}\` (transport ${cell(String(model.transport ?? '?'))}, pinned: ${String(model.pinned === true)})`,
-  ];
-  for (const reason of current?.gateReasons ?? [])
-    header.push('', `Gate refused: ${cell(String(reason))}`);
+  const header = [marker, ...status];
+  if (summary.total !== undefined) {
+    header.push(
+      '',
+      `**${String(passed)} passed · ${String(failed)} failed · ${String(unscored)} unscored** of ${String(summary.total)}${summary.aborted ? ' (aborted)' : ''} · exit ${String(current?.exitCode ?? '?')}`,
+    );
+  }
+  if (current?.summary === undefined) return redact(build(header, undefined, 0, 0));
 
   if (baseline === undefined) {
     header.push('', '_No baseline: no `.vet/runs/latest.json` from the base branch in the cache._');
@@ -132,8 +219,15 @@ function firstLine(text) {
   return String(text).trim().split('\n')[0] ?? '';
 }
 
-/** Finds the comment carrying MARKER and updates it, or creates one. Never throws on gh errors. */
-export async function upsertComment({ gh, repo, issueNumber, body, warn = console.warn }) {
+/** Finds the comment carrying the marker and updates it, or creates one. Never throws on gh errors. */
+export async function upsertComment({
+  gh,
+  repo,
+  issueNumber,
+  body,
+  marker = MARKER,
+  warn = console.warn,
+}) {
   const cannot = (stderr) => {
     warn(
       `vetkit: could not post the PR comment (the token needs \`pull-requests: write\`; fork PRs get a read-only token): ${firstLine(stderr)}`,
@@ -145,7 +239,7 @@ export async function upsertComment({ gh, repo, issueNumber, body, warn = consol
     '--paginate',
     `repos/${repo}/issues/${String(issueNumber)}/comments`,
     '--jq',
-    `.[] | select(.body | contains("${MARKER}")) | .id`,
+    `.[] | select(.body | contains("${marker}")) | .id`,
   ]);
   if (list.code !== 0) return cannot(list.stderr);
   const id = list.stdout.split('\n').find((line) => line.trim() !== '');
@@ -180,6 +274,15 @@ function readJson(path) {
   }
 }
 
+function readText(path) {
+  if (path === undefined || path === '') return undefined;
+  try {
+    return readFileSync(path, 'utf8');
+  } catch {
+    return undefined;
+  }
+}
+
 function runGh(args, stdin) {
   return new Promise((resolve) => {
     const child = spawn('gh', args, { stdio: ['pipe', 'pipe', 'pipe'] });
@@ -194,7 +297,7 @@ function runGh(args, stdin) {
 }
 
 export async function main({ env = process.env, argv, gh = runGh, warn = console.warn }) {
-  const [mode, runPath, basePath] = argv;
+  const [mode, runPath, basePath, rawPath] = argv;
   const current = readJson(runPath);
   if (mode === 'outputs') {
     // hasResult: the document is a run result (a --json error document is not a baseline).
@@ -206,16 +309,21 @@ export async function main({ env = process.env, argv, gh = runGh, warn = console
   const event = env.GITHUB_EVENT_NAME;
   if (event !== 'pull_request' && event !== 'pull_request_target') return 'skipped';
   const issueNumber = readJson(env.GITHUB_EVENT_PATH)?.pull_request?.number;
-  if (current === undefined || issueNumber === undefined || env.GITHUB_REPOSITORY === undefined) {
+  // No run result on an error: the raw vet output (an error document) still states why.
+  const doc = current ?? readJson(rawPath);
+  if (doc === undefined || issueNumber === undefined || env.GITHUB_REPOSITORY === undefined) {
     warn('vetkit: no run result or pull request number; skipping the PR comment');
     return 'skipped';
   }
-  const body = renderComment({ current, baseline: readJson(basePath), env });
-  return upsertComment({ gh, repo: env.GITHUB_REPOSITORY, issueNumber, body, warn });
-}
-
-function annotate(message) {
-  console.log(`::warning::${message}`);
+  const marker = markerFor(env.COMMENT_ID, warn);
+  const body = renderComment({
+    current: doc,
+    baseline: readJson(basePath),
+    env: { ...env, COMMENT_ID: marker === MARKER ? undefined : env.COMMENT_ID },
+    reportMd: readText(env.REPORT_MD),
+    warn,
+  });
+  return upsertComment({ gh, repo: env.GITHUB_REPOSITORY, issueNumber, body, marker, warn });
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
