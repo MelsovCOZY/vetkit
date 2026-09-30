@@ -1,14 +1,35 @@
 {
   "name": "@vetkit/spec",
   "version": "0.0.0",
+  "description": "Shared types, error codes, JSON validation and adapter contracts for vetkit",
+  "keywords": [
+    "llm",
+    "evals",
+    "evaluation",
+    "jev",
+    "typescript",
+    "ci",
+    "json-schema"
+  ],
+  "license": "Apache-2.0",
+  "homepage": "https://melsovcozy.github.io/vetkit/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MelsovCOZY/vetkit.git",
+    "directory": "packages/spec"
+  },
+  "bugs": {
+    "url": "https://github.com/MelsovCOZY/vetkit/issues"
+  },
   "type": "module",
   "sideEffects": false,
   "engines": {
-    "node": ">=22.12"
+    "node": "^22.18.0 || >=24.11.0"
   },
   "files": [
     "dist"
   ],
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

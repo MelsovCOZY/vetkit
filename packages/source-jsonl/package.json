@@ -1,14 +1,35 @@
 {
   "name": "@vetkit/source-jsonl",
   "version": "0.0.0",
+  "description": "Trace source for vetkit that reads JSONL files",
+  "keywords": [
+    "llm",
+    "evals",
+    "evaluation",
+    "jev",
+    "typescript",
+    "ci",
+    "jsonl"
+  ],
+  "license": "Apache-2.0",
+  "homepage": "https://melsovcozy.github.io/vetkit/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MelsovCOZY/vetkit.git",
+    "directory": "packages/source-jsonl"
+  },
+  "bugs": {
+    "url": "https://github.com/MelsovCOZY/vetkit/issues"
+  },
   "type": "module",
   "sideEffects": false,
   "engines": {
-    "node": ">=22.12"
+    "node": "^22.18.0 || >=24.11.0"
   },
   "files": [
     "dist"
   ],
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

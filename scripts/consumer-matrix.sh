@@ -58,17 +58,19 @@ node -e '
   const files = fs.readdirSync(dir).filter((f) => f.endsWith(".tgz")).sort();
   const packages = {};
   const specifiers = [];
+  let version = "";
   for (const file of files) {
     const full = path.join(dir, file);
     const text = execFileSync("tar", ["-xzOf", full, "package/package.json"], { encoding: "utf8" });
     const pkg = JSON.parse(text);
     packages[pkg.name] = full;
+    if (pkg.name === "vetkit") version = pkg.version;
     for (const entry of Object.keys(pkg.exports ?? {})) {
       if (entry === "./package.json") continue;
       specifiers.push(entry === "." ? pkg.name : `${pkg.name}/${entry.slice(2)}`);
     }
   }
-  fs.writeFileSync(process.argv[2], JSON.stringify({ packages, specifiers }));
+  fs.writeFileSync(process.argv[2], JSON.stringify({ packages, specifiers, version }));
 ' "$TARBALL_DIR" "$MANIFEST"
 
 write_index_mjs() {
@@ -146,6 +148,11 @@ run_step() {
   fi
 }
 
+# Runs `npx <bin> --version` (no -y) and stores its stdout in the named variable.
+capture_version() {
+  printf -v "$1" '%s' "$(npx "$2" --version)"
+}
+
 for pm in npm pnpm yarn bun; do
   require_tool "$pm"
 
@@ -186,7 +193,14 @@ for pm in npm pnpm yarn bun; do
       npx -y -p @typescript/typescript6@6.0.2 tsc --noEmit -p "tsconfig.strict-${strict}.json" || true
   done
 
-  run_step "${pm} / npx vet --version" npx -y vet --version || true
+  # No -y: an unlisted `vet` would resolve to an unrelated registry package.
+  vet_v=""
+  vetkit_v=""
+  run_step "${pm} / npx vet --version" capture_version vet_v vet || true
+  run_step "${pm} / npx vetkit --version" capture_version vetkit_v vetkit || true
+  expected="$(node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")).version)' "$MANIFEST")"
+  run_step "${pm} / vet and vetkit versions agree" \
+    test -n "$expected" -a "$vet_v" = "$vetkit_v" -a "$vet_v" = "$expected" || true
 
   popd >/dev/null
   rm -rf "${project_dir}"

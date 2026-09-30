@@ -1,20 +1,41 @@
 {
   "name": "vetkit",
   "version": "0.0.0",
+  "description": "Generate, validate and run LLM evals judged by typed decisions",
+  "keywords": [
+    "llm",
+    "evals",
+    "evaluation",
+    "jev",
+    "typescript",
+    "ci"
+  ],
+  "license": "Apache-2.0",
+  "homepage": "https://melsovcozy.github.io/vetkit/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MelsovCOZY/vetkit.git",
+    "directory": "packages/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/MelsovCOZY/vetkit/issues"
+  },
   "type": "module",
   "sideEffects": [
     "./dist/bin.js"
   ],
   "engines": {
-    "node": ">=22.12"
+    "node": "^22.18.0 || >=24.11.0"
   },
   "files": [
     "dist",
     "templates"
   ],
   "bin": {
-    "vet": "./dist/bin.js"
+    "vet": "./dist/bin.js",
+    "vetkit": "./dist/bin.js"
   },
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

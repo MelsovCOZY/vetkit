@@ -1,14 +1,35 @@
 {
   "name": "@vetkit/source-langfuse",
   "version": "0.0.0",
+  "description": "Trace source for vetkit that reads Langfuse traces",
+  "keywords": [
+    "llm",
+    "evals",
+    "evaluation",
+    "jev",
+    "typescript",
+    "ci",
+    "langfuse"
+  ],
+  "license": "Apache-2.0",
+  "homepage": "https://melsovcozy.github.io/vetkit/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MelsovCOZY/vetkit.git",
+    "directory": "packages/source-langfuse"
+  },
+  "bugs": {
+    "url": "https://github.com/MelsovCOZY/vetkit/issues"
+  },
   "type": "module",
   "sideEffects": false,
   "engines": {
-    "node": ">=22.12"
+    "node": "^22.18.0 || >=24.11.0"
   },
   "files": [
     "dist"
   ],
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -21,14 +42,6 @@
   },
   "dependencies": {
     "@vetkit/spec": "workspace:^"
-  },
-  "peerDependencies": {
-    "langfuse": "^3.39.2"
-  },
-  "peerDependenciesMeta": {
-    "langfuse": {
-      "optional": true
-    }
   },
   "devDependencies": {
     "langfuse": "3.39.2"

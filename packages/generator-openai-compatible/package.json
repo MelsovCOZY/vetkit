@@ -1,14 +1,35 @@
 {
   "name": "@vetkit/generator-openai-compatible",
   "version": "0.0.0",
+  "description": "Generator for vetkit backed by any OpenAI-compatible chat endpoint",
+  "keywords": [
+    "llm",
+    "evals",
+    "evaluation",
+    "jev",
+    "typescript",
+    "ci",
+    "openai"
+  ],
+  "license": "Apache-2.0",
+  "homepage": "https://melsovcozy.github.io/vetkit/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MelsovCOZY/vetkit.git",
+    "directory": "packages/generator-openai-compatible"
+  },
+  "bugs": {
+    "url": "https://github.com/MelsovCOZY/vetkit/issues"
+  },
   "type": "module",
   "sideEffects": false,
   "engines": {
-    "node": ">=22.12"
+    "node": "^22.18.0 || >=24.11.0"
   },
   "files": [
     "dist"
   ],
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

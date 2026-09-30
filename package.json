@@ -6,7 +6,7 @@
   "workspaces": ["packages/*"],
   "packageManager": "bun@1.4.2",
   "engines": {
-    "node": ">=22.12"
+    "node": "^22.18.0 || >=24.11.0"
   },
   "scripts": {
     "typecheck": "tsc -b tsconfig.json scripts/tsconfig.json",
