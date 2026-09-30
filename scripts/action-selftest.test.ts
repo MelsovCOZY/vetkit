@@ -102,6 +102,60 @@ describe('.github/workflows/action-selftest.yml', () => {
     expect(check.run).toMatch(/KEY_B.*KEY_C/s);
   });
 
+  describe('the badge', () => {
+    const names = selftest.steps.map((s) => s.name ?? '');
+    const runIndex = names.findIndex((n) => n.includes('Run the action'));
+    const badgeIndex = names.findIndex((n) => n.includes('Assert the badge'));
+    const script = selftest.steps[badgeIndex]?.run ?? '';
+    const artifactName = selftest.steps[runIndex]?.with?.['artifact-name'];
+    const downloadIndex = selftest.steps.findIndex(
+      (s) =>
+        s.uses?.startsWith('actions/download-artifact@') === true &&
+        s.with?.['name'] === artifactName,
+    );
+
+    it('the selftest asserts .vet/badge.json exists and is a shields endpoint badge', () => {
+      expect(script).toMatch(/-s\s+\.vet\/badge\.json/);
+      expect(script).toContain(
+        `jq -e '.schemaVersion == 1 and .label == "vetkit" and (.message|type=="string") and (.color|type=="string")'`,
+      );
+    });
+
+    it('the selftest rejects a pass rate in the badge message', () => {
+      // The calibrated count ("2/3 calibrated") is the one ratio a badge may show; it is
+      // stripped before the message is searched.
+      expect(script).toContain('gsub("[0-9]+/[0-9]+ calibrated"; "")');
+      const pattern = /grep -Eq '([^']+)'/.exec(script)?.[1];
+      expect(pattern).toBeDefined();
+      const rate = new RegExp(pattern ?? '(?!)');
+      for (const message of ['3/4', '3 / 4 pass', '75%', '3 of 4 passed']) {
+        expect(message, message).toMatch(rate);
+      }
+      for (const message of [
+        'uncalibrated · pass',
+        ' · gate pass',
+        'uncalibrated · gate refused',
+      ]) {
+        expect(message, message).not.toMatch(rate);
+      }
+    });
+
+    it('the selftest downloads the artifact the action uploaded and asserts it holds the same badge.json', () => {
+      expect(artifactName).toBe('vet-junit-${{ matrix.name }}');
+      expect(downloadIndex).toBeGreaterThan(runIndex);
+      const dir = selftest.steps[downloadIndex]?.with?.['path'] ?? '';
+      expect(dir).not.toBe('');
+      expect(script).toContain(`cmp -s .vet/badge.json ${dir}/.vet/badge.json`);
+    });
+
+    it('the badge is asserted after the download and before vet runs again', () => {
+      const rerunIndex = names.findIndex((n) => n.includes('Assert annotations and summary'));
+      expect(badgeIndex).toBeGreaterThan(downloadIndex);
+      expect(downloadIndex).toBeGreaterThan(-1);
+      expect(badgeIndex).toBeLessThan(rerunIndex);
+    });
+  });
+
   it('every step reads github.event.* only through env', () => {
     for (const s of allSteps) {
       expect(s.run ?? '', s.name).not.toMatch(/\$\{\{\s*github\.event\./);
