@@ -20,6 +20,7 @@ const GLOBAL_FLAGS = ['--json', '--quiet', '--verbose', '--no-color', '--color',
 const DOC_COMMANDS: Readonly<Record<string, readonly string[]>> = {
   'watch.md': ['watch'],
   'sinks.md': ['run', 'watch'],
+  'ci-gate.md': ['init', 'label', 'validate', 'estimate', 'check', 'run'],
 };
 const EXEMPT_DOCS = ['configuration.md', 'INDEX.md'];
 

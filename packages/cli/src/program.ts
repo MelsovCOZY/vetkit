@@ -31,6 +31,11 @@ function readVersion(): string {
   return pkgJson.version;
 }
 
+function readDescription(): string {
+  const pkgJson = require('../package.json');
+  return pkgJson.description;
+}
+
 // Codes commander uses for --version and --help; every other exit (unknown command,
 // excess arguments, unknown option, …) is a usage error and exits 2, per clig.dev.
 const ZERO_EXIT_CODES = new Set(['commander.version', 'commander.help', 'commander.helpDisplayed']);
@@ -52,7 +57,7 @@ export function createProgram(): Command {
   const version = readVersion();
   program
     .name('vet')
-    .description('vetkit CLI')
+    .description(readDescription())
     .option('-V, --version', 'output the version number')
     .option('--json', 'print one JSON document on stdout; logs stay on stderr')
     .option('-q, --quiet', 'suppress info and warn lines on stderr')

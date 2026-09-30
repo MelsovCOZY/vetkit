@@ -34,6 +34,7 @@ docs/*
 !docs/configuration.md
 !docs/sinks.md
 !docs/watch.md
+!docs/ci-gate.md
 !docs/contracts/
 !docs/guides/
 !docs/listings/

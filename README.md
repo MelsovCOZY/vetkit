@@ -1,51 +1,72 @@
-<p align="center">
-  <img src="assets/logo.png" alt="vetkit" width="256" height="256">
-</p>
+# vetkit
 
-## What it is
+Generate, validate and run LLM evals judged by typed decisions
 
-vetkit generates, validates and runs LLM evals from the command line. It is a TypeScript
-library and CLI (`vet`): you describe criteria in `criteria.yaml`, `vet` judges cases against
-them, and `vet validate` calibrates each criterion against human labels and records the result
-in `criteria.lock.json`.
+[![npm version](https://img.shields.io/npm/v/vetkit)](https://www.npmjs.com/package/vetkit)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/MelsovCOZY/vetkit/badge)](https://scorecard.dev/viewer/?uri=github.com/MelsovCOZY/vetkit)
 
-The judge is Jev, a model that answers typed choice and score questions. Jev cannot generate
-text, so any step that drafts criteria or cases uses a generator chat model (any
-OpenAI-compatible endpoint) and Jev then judges the draft. Nothing in the core is tied to one
-model, provider or gateway.
+## Quickstart
 
-## Install
-
-```
+```sh
 npm i -D vetkit
+npx vetkit init
+npx vetkit run
 ```
 
-Node >=22.12. The `vet` binary is installed into `node_modules/.bin`.
+Requires Node.js `^22.18.0 || >=24.11.0`. With no key set, `npx vetkit init` writes `judge: demoJudge` (imported from 'vetkit') into the config, so the first run needs no key and marks its verdicts `demo`. For real verdicts, put a judge key in `.env`:
 
-## Commands
+```
+OPENROUTER_API_KEY=...
+```
 
-Run `vet --help` for the full list. Global options: `--json`, `-q/--quiet`, `--verbose`,
-`--no-color`.
+![Terminal capture of npx vetkit init followed by npx vetkit run: each case gets a verdict line marked demo, then a hint to set a judge key](assets/vet-run.png)
 
-| Command    | What it does                                                            |
-| ---------- | ----------------------------------------------------------------------- |
-| `doctor`   | check environment, judge credentials and judge endpoint health          |
-| `init`     | scaffold a runnable example, or generate criteria and cases from traces |
-| `label`    | import human labels from CSV or collect them in a terminal loop         |
-| `validate` | calibrate every criterion against human labels and write the lock file  |
-| `estimate` | estimate judge calls, tokens, cost and minutes, with no network call    |
-| `run`      | judge every case against the criteria and exit with the result          |
-| `rerun`    | re-judge disputed verdicts from the last `vet run`                      |
-| `check`    | check `criteria.lock.json` and the sink outbox against the project      |
-| `lock`     | maintain `criteria.lock.json`                                           |
-| `criteria` | disable, enable, delete or revalidate one criterion                     |
-| `cases`    | secondary case-set actions: dedupe, quarantine, promote, review         |
-| `lint`     | lint `criteria.yaml` against Jev wording weak spots                     |
-| `export`   | export criteria, cases and the lock to another eval runner              |
-| `watch`    | sample live OTel traces, judge them, and promote failures into cases    |
+## CI
 
-Exit codes: `0` success, `1` the threshold or gate failed, `2` usage or config error,
-`3` nothing could be judged, `130` interrupted.
+<!-- snippet: file=.github/workflows/vet.yml -->
+
+```yaml
+name: vet
+on: pull_request
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  vet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - uses: MelsovCOZY/vetkit@v0
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+```
+
+`vet run` is an uncalibrated threshold gate and `vet run --gate` is the calibrated one, which needs labels and a committed `criteria.lock.json`. The steps to the calibrated gate are in the [CI gate walkthrough](docs/ci-gate.md); the action's inputs are in the [action README](action/README.md).
+
+## vs promptfoo / evalite / DeepEval / Braintrust
+
+| Question                               | vetkit                                                                        | promptfoo                                   | evalite                            | DeepEval                              | Braintrust           |
+| -------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------- | ---------------------------------- | ------------------------------------- | -------------------- |
+| First result without a key             | yes: `demoJudge` verdicts, marked `demo`                                      | not checked                                 | not checked                        | not checked                           | not checked          |
+| Calibrated, pinned gate with a lock    | yes: `vet validate` writes `criteria.lock.json`, `vet run --gate` enforces it | not checked                                 | not checked                        | not checked                           | not checked          |
+| Provider neutrality                    | any OpenAI-compatible generator; the judge transport is a config value        | not checked                                 | not checked                        | not checked                           | not checked          |
+| Telemetry                              | zero telemetry                                                                | on by default, opt out with an env variable | not checked                        | on by default, opt out                | not checked          |
+| Install scripts or native dependencies | no install scripts, no native dependencies                                    | no install script; native optional packages | native dependency (better-sqlite3) | Python package, not applicable to npm | `postinstall` script |
+
+"Not checked" means the fact was not verified for this table. Sources: the npm manifests of [promptfoo](https://www.npmjs.com/package/promptfoo), [evalite](https://www.npmjs.com/package/evalite) and [braintrust](https://www.npmjs.com/package/braintrust) as of promptfoo 0.123.1, evalite 0.19.0 and braintrust 3.35.0; the [promptfoo telemetry page](https://www.promptfoo.dev/docs/configuration/telemetry/); the [DeepEval data privacy page](https://deepeval.com/docs/data-privacy).
+
+## Trust
+
+- License: Apache-2.0.
+- vetkit has zero telemetry: it makes no network call except to the judge and generator endpoints you configure, and a test fails the build if analytics code appears in shipped sources.
+- The packages have no install scripts and no `postinstall`; the release check fails a tarball that has one.
+- The judge is Jev, which answers typed choice and score questions and cannot generate text. A gateway preset serves it only as the alias `typesafe-ai/jev`, so each judgment records the served model id and `pinned: false`; the `openrouter` and `typesafe` presets serve a fixed build and record `pinned: true`. `vet run --gate` refuses an unpinned judge unless you allow it.
+- Jev scores drift run to run, so thresholds use a tolerance band and at least 3 repeats. Never gate on `confidence` alone.
+- Maintenance: releases are cut from master through changesets when changes land, and a deprecated feature stays for at least one minor release, with a notice, before it is removed.
 
 ## Packages
 
@@ -60,7 +81,6 @@ Exit codes: `0` success, `1` the threshold or gate failed, `2` usage or config e
 | [`@vetkit/export-vitest`](packages/export-vitest)                             | exporter that emits a vitest scorer and test file                        |
 | [`@vetkit/source-jsonl`](packages/source-jsonl)                               | trace source reading JSONL                                               |
 | [`@vetkit/source-otlp`](packages/source-otlp)                                 | trace source reading OTLP files                                          |
-| [`@vetkit/source-langfuse`](packages/source-langfuse)                         | trace source reading Langfuse traces                                     |
 | [`@vetkit/sink-langfuse`](packages/sink-langfuse)                             | sink that writes verdicts as Langfuse scores                             |
 | [`@vetkit/sink-otel`](packages/sink-otel)                                     | sink that writes verdicts as OpenTelemetry logs and OpenInference spans  |
 

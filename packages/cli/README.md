@@ -1,25 +1,69 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/MelsovCOZY/vetkit/master/assets/logo.png" alt="vetkit" width="192" height="192">
-</p>
+# vetkit
 
-vetkit generates, validates and runs LLM evals from the command line. This package installs the `vet` binary.
+Generate, validate and run LLM evals judged by typed decisions
 
-```
+[![npm version](https://img.shields.io/npm/v/vetkit)](https://www.npmjs.com/package/vetkit)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/MelsovCOZY/vetkit/badge)](https://scorecard.dev/viewer/?uri=github.com/MelsovCOZY/vetkit)
+
+## Quickstart
+
+```sh
 npm i -D vetkit
+npx vetkit init
+npx vetkit run
 ```
 
-Node >=22.12.
+Requires Node.js `^22.18.0 || >=24.11.0`. With no key set, `npx vetkit init` writes `judge: demoJudge` (imported from 'vetkit') into the config, so the first run needs no key and marks its verdicts `demo`. For real verdicts, put a judge key in `.env`:
 
 ```
-npx vet --help
-npx vet doctor
+OPENROUTER_API_KEY=...
 ```
 
-`vet doctor` checks the environment, judge credentials and judge endpoint health. Other commands
-include `init`, `label`, `validate`, `estimate`, `run`, `rerun`, `check`, `lint`, `export` and
-`watch`. Run `vet --help` for the full list and the exit codes.
+![Terminal capture of npx vetkit init followed by npx vetkit run: each case gets a verdict line marked demo, then a hint to set a judge key](https://raw.githubusercontent.com/MelsovCOZY/vetkit/master/assets/vet-run.png)
 
-The judge is Jev, reached through a configurable transport. Nothing is tied to one model,
-provider or gateway.
+## CI
 
-Source, the package list and contributing notes are in the vetkit repository (see README.md and CONTRIBUTING.md there).
+<!-- snippet: file=.github/workflows/vet.yml -->
+
+```yaml
+name: vet
+on: pull_request
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  vet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - uses: MelsovCOZY/vetkit@v0
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+```
+
+`vet run` is an uncalibrated threshold gate and `vet run --gate` is the calibrated one, which needs labels and a committed `criteria.lock.json`. The steps to the calibrated gate are in the [CI gate walkthrough](https://github.com/MelsovCOZY/vetkit/blob/master/docs/ci-gate.md); the action's inputs are in the [action README](https://github.com/MelsovCOZY/vetkit/blob/master/action/README.md).
+
+## vs promptfoo / evalite / DeepEval / Braintrust
+
+| Question                               | vetkit                                                                        | promptfoo                                   | evalite                            | DeepEval                              | Braintrust           |
+| -------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------- | ---------------------------------- | ------------------------------------- | -------------------- |
+| First result without a key             | yes: `demoJudge` verdicts, marked `demo`                                      | not checked                                 | not checked                        | not checked                           | not checked          |
+| Calibrated, pinned gate with a lock    | yes: `vet validate` writes `criteria.lock.json`, `vet run --gate` enforces it | not checked                                 | not checked                        | not checked                           | not checked          |
+| Provider neutrality                    | any OpenAI-compatible generator; the judge transport is a config value        | not checked                                 | not checked                        | not checked                           | not checked          |
+| Telemetry                              | zero telemetry                                                                | on by default, opt out with an env variable | not checked                        | on by default, opt out                | not checked          |
+| Install scripts or native dependencies | no install scripts, no native dependencies                                    | no install script; native optional packages | native dependency (better-sqlite3) | Python package, not applicable to npm | `postinstall` script |
+
+"Not checked" means the fact was not verified for this table. Sources: the npm manifests of [promptfoo](https://www.npmjs.com/package/promptfoo), [evalite](https://www.npmjs.com/package/evalite) and [braintrust](https://www.npmjs.com/package/braintrust) as of promptfoo 0.123.1, evalite 0.19.0 and braintrust 3.35.0; the [promptfoo telemetry page](https://www.promptfoo.dev/docs/configuration/telemetry/); the [DeepEval data privacy page](https://deepeval.com/docs/data-privacy).
+
+## Trust
+
+- License: Apache-2.0.
+- vetkit has zero telemetry: it makes no network call except to the judge and generator endpoints you configure, and a test fails the build if analytics code appears in shipped sources.
+- The packages have no install scripts and no `postinstall`; the release check fails a tarball that has one.
+- The judge is Jev, which answers typed choice and score questions and cannot generate text. A gateway preset serves it only as the alias `typesafe-ai/jev`, so each judgment records the served model id and `pinned: false`; the `openrouter` and `typesafe` presets serve a fixed build and record `pinned: true`. `vet run --gate` refuses an unpinned judge unless you allow it.
+- Jev scores drift run to run, so thresholds use a tolerance band and at least 3 repeats. Never gate on `confidence` alone.
+- Maintenance: releases are cut from master through changesets when changes land, and a deprecated feature stays for at least one minor release, with a notice, before it is removed.
