@@ -4,7 +4,7 @@
 # Sections (one scratch root, one clone, one build, one pack):
 #   build      clone HEAD, frozen install, build, pack: one tarball per package
 #   tarballs   release-check, per-tarball license/readme/engines/repository, no source maps,
-#              no vetkit.dev, no span attribute leaking into the sink
+#              no retired host name, no span attribute leaking into the sink
 #   consumer   every tarball installed with npm `overrides` (the packages are not published),
 #              vetkit/vet binaries, migrate + run on the keyless fixture project, canary grep
 #   site       the Pages tree is staged offline; schema ids and anchors are checked
