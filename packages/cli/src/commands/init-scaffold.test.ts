@@ -138,20 +138,6 @@ describe('vet init', () => {
     expect(comments).toContain('threshold');
   });
 
-  test('with no judge key set: the default preset, its key env var, and a stderr hint naming all of them', async () => {
-    const dir = tempDir();
-    const result = runVet(['init'], dir);
-    expect(result.status).toBe(0);
-    for (const name of CREDENTIAL_NAMES) expect(result.stderr).toContain(name);
-    const [preset] = JEV_CREDENTIAL_PRIORITY;
-    expect(preset).toBe('vercel');
-    const apiKeyEnv = 'AI_GATEWAY_API_KEY';
-    linkVetkit(dir);
-    const loaded = await loadVetConfig({ cwd: dir, env: { [apiKeyEnv]: 'k-test' } });
-    expect(loaded.config.judge).toMatchObject({ preset, apiKeyEnv });
-    expect(loaded.judge.capabilities.transport).toBe(preset);
-  });
-
   test.each(JEV_CREDENTIAL_PRIORITY)(
     'with only the %s credentials set, the config names that preset and never a key value',
     (preset) => {
@@ -174,18 +160,6 @@ describe('vet init', () => {
       }
     },
   );
-
-  test('with every judge key set, the first preset in priority order wins and an info line names them', () => {
-    const all = Object.fromEntries(CREDENTIAL_NAMES.map((name) => [name, 'x']));
-    const dir = tempDir();
-    const result = runVet(['init'], dir, cleanEnv(all));
-    expect(result.status).toBe(0);
-    const [first, second] = JEV_CREDENTIAL_PRIORITY;
-    expect(read(dir, 'vetkit.config.ts')).toContain(`preset: '${first ?? ''}'`);
-    expect(result.stderr).toMatch(/^info /m);
-    expect(result.stderr).toContain(first);
-    expect(result.stderr).toContain(second);
-  });
 
   test('an existing target file exits 2 CONFIG_INVALID naming it, and writes nothing', () => {
     const dir = tempDir();
@@ -237,6 +211,159 @@ describe('vet init', () => {
     const result = runVet(['run', '--json'], dir);
     expect(result.status).toBe(0);
     expect(parseJson(result.stdout)).toMatchObject({ summary: { total: 3, aborted: false } });
+  });
+});
+
+describe('vet init judge selection', () => {
+  const NAMES = ['OPENROUTER_API_KEY', 'AI_GATEWAY_API_KEY', 'TYPESAFE_API_KEY'] as const;
+  const codeOf = (config: string): string =>
+    config
+      .split('\n')
+      .filter((line: string) => !line.trimStart().startsWith('//'))
+      .join('\n');
+
+  test('only OPENROUTER_API_KEY: preset openrouter, no allowUnpinned', () => {
+    const dir = tempDir();
+    const result = runVet(['init'], dir, cleanEnv({ OPENROUTER_API_KEY: 'k' }));
+    expect(result.status).toBe(0);
+    const config = read(dir, 'vetkit.config.ts');
+    expect(config).toContain("preset: 'openrouter'");
+    expect(config).toContain("apiKeyEnv: 'OPENROUTER_API_KEY'");
+    expect(config).not.toContain('allowUnpinned');
+  });
+
+  test('only TYPESAFE_API_KEY: preset typesafe', () => {
+    const dir = tempDir();
+    expect(runVet(['init'], dir, cleanEnv({ TYPESAFE_API_KEY: 'k' })).status).toBe(0);
+    const config = read(dir, 'vetkit.config.ts');
+    expect(config).toContain("preset: 'typesafe'");
+    expect(config).not.toContain('allowUnpinned');
+  });
+
+  test('only AI_GATEWAY_API_KEY: preset vercel, gate.allowUnpinned true, comment mentions pinned', () => {
+    const dir = tempDir();
+    expect(runVet(['init'], dir, cleanEnv({ AI_GATEWAY_API_KEY: 'k' })).status).toBe(0);
+    const config = read(dir, 'vetkit.config.ts');
+    expect(config).toContain("preset: 'vercel'");
+    expect(codeOf(config)).toMatch(/gate:\s*\{\s*allowUnpinned:\s*true\s*\}/);
+    const comments = config
+      .split('\n')
+      .filter((line: string) => line.trimStart().startsWith('//'))
+      .join('\n');
+    expect(comments).toContain('pinned');
+    expect(comments).toContain('OPENROUTER_API_KEY');
+  });
+
+  test('only CLOUDFLARE_API_TOKEN (no account id): treated as no key', () => {
+    const dir = tempDir();
+    const result = runVet(['init'], dir, cleanEnv({ CLOUDFLARE_API_TOKEN: 'k' }));
+    expect(result.status).toBe(0);
+    expect(read(dir, 'vetkit.config.ts')).toContain('judge: demoJudge');
+  });
+
+  test('AI_GATEWAY_API_KEY and OPENROUTER_API_KEY, no TTY: preset openrouter (first pinned) and an info line naming both', () => {
+    const dir = tempDir();
+    const result = runVet(
+      ['init'],
+      dir,
+      cleanEnv({ AI_GATEWAY_API_KEY: 'k', OPENROUTER_API_KEY: 'k' }),
+    );
+    expect(result.status).toBe(0);
+    const config = read(dir, 'vetkit.config.ts');
+    expect(config).toContain("preset: 'openrouter'");
+    expect(config).not.toContain('allowUnpinned');
+    expect(result.stderr).toMatch(/^info /m);
+    expect(result.stderr).toContain('AI_GATEWAY_API_KEY');
+    expect(result.stderr).toContain('OPENROUTER_API_KEY');
+  });
+
+  test('with every judge key set and no TTY, the first pinned preset in priority order wins', () => {
+    const all = Object.fromEntries(CREDENTIAL_NAMES.map((name) => [name, 'x']));
+    const dir = tempDir();
+    expect(runVet(['init'], dir, cleanEnv(all)).status).toBe(0);
+    expect(read(dir, 'vetkit.config.ts')).toContain("preset: 'openrouter'");
+  });
+
+  test('AI_GATEWAY_API_KEY and CLOUDFLARE pair, no TTY: exit 2 NOT_INTERACTIVE naming AI_GATEWAY_API_KEY, CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID, nothing written', () => {
+    const dir = tempDir();
+    const result = runVet(
+      ['init'],
+      dir,
+      cleanEnv({
+        AI_GATEWAY_API_KEY: 'k',
+        CLOUDFLARE_API_TOKEN: 'k',
+        CLOUDFLARE_ACCOUNT_ID: 'a',
+      }),
+    );
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain('NOT_INTERACTIVE');
+    for (const name of ['AI_GATEWAY_API_KEY', 'CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID']) {
+      expect(result.stderr).toContain(name);
+    }
+    expect(readdirSync(dir)).toEqual([]);
+  });
+
+  test('no key: demo judge block, no apiKeyEnv, stderr names the four accepted variables and .env', () => {
+    const dir = tempDir();
+    const result = runVet(['init'], dir);
+    expect(result.status).toBe(0);
+    const config = read(dir, 'vetkit.config.ts');
+    expect(config).toContain('judge: demoJudge');
+    expect(codeOf(config)).not.toMatch(/apiKeyEnv|preset/);
+    for (const name of [
+      'AI_GATEWAY_API_KEY',
+      'OPENROUTER_API_KEY',
+      'TYPESAFE_API_KEY',
+      'CLOUDFLARE_API_TOKEN',
+    ]) {
+      expect(result.stderr).toContain(name);
+    }
+    expect(result.stderr).toContain('.env');
+  });
+
+  test('a key present only in <dir>/.env selects the transport (no export)', () => {
+    const cwd = tempDir();
+    mkdirSync(join(cwd, 'proj'));
+    writeFileSync(join(cwd, 'proj/.env'), 'OPENROUTER_API_KEY=from-file-1234\n');
+    const result = runVet(['init', '--dir', 'proj'], cwd);
+    expect(result.status).toBe(0);
+    const config = read(cwd, 'proj/vetkit.config.ts');
+    expect(config).toContain("preset: 'openrouter'");
+    expect(config).not.toContain('from-file-1234');
+    expect(result.stderr).not.toContain('from-file-1234');
+  });
+
+  test('--no-env-file ignores <dir>/.env', () => {
+    const dir = tempDir();
+    writeFileSync(join(dir, '.env'), 'OPENROUTER_API_KEY=from-file-1234\n');
+    const result = runVet(['--no-env-file', 'init'], dir);
+    expect(result.status).toBe(0);
+    expect(read(dir, 'vetkit.config.ts')).toContain('judge: demoJudge');
+  });
+
+  test.each([
+    ['openrouter', { OPENROUTER_API_KEY: 'k' }, true],
+    ['typesafe', { TYPESAFE_API_KEY: 'k' }, true],
+    ['vercel', { AI_GATEWAY_API_KEY: 'k' }, false],
+  ] as const)(
+    'the written config loads with loadVetConfig and the judge capabilities.pinned matches the preset (%s)',
+    async (preset, env, pinned) => {
+      const dir = tempDir();
+      expect(runVet(['init'], dir, cleanEnv(env)).status).toBe(0);
+      linkVetkit(dir);
+      const loaded = await loadVetConfig({ cwd: dir, env });
+      expect(loaded.judge.capabilities.transport).toBe(preset);
+      expect(loaded.judge.capabilities.pinned).toBe(pinned);
+      expect(JEV_PRESETS[preset].pinned).toBe(pinned);
+    },
+  );
+
+  test('the config never contains a key value', () => {
+    const dir = tempDir();
+    const env = Object.fromEntries(NAMES.map((name) => [name, `secret-${name}-7f3a`]));
+    expect(runVet(['init'], dir, cleanEnv(env)).status).toBe(0);
+    for (const value of Object.values(env))
+      expect(read(dir, 'vetkit.config.ts')).not.toContain(value);
   });
 });
 
