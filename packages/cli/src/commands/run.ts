@@ -17,9 +17,11 @@ import {
   type RunVerdict,
   writeRunRecord,
 } from '@vetkit/core';
+import { JEV_CREDENTIAL_PRIORITY, JEV_PRESETS } from '@vetkit/judge-jev';
 import type { Command } from 'commander';
 import { loadVetConfig } from '../config-load.ts';
 import { CEV_EXIT, emit, getLogger, type GlobalOptions } from '../output.ts';
+import { isDemoJudge } from '../demo-judge.ts';
 import { renderEvents } from '../render-events.ts';
 import { registerReporterFlag, writeReports, type ReporterSpec } from '../reporters/junit.ts';
 
@@ -104,6 +106,15 @@ function deferRunEnd(events: Events): {
   return { events: proxy, take: () => pending };
 }
 
+// One stderr line telling a demo-judge user how to switch to a real judge. Credential names
+// come from the judge-jev preset data, in priority order (same shape as init.ts's warning).
+function demoHint(): string {
+  const names = JEV_CREDENTIAL_PRIORITY.map((p) =>
+    JEV_PRESETS[p].credentials.map((c) => c.name).join(' + '),
+  );
+  return `demo judge: these verdicts are placeholders, not real judgments. Put one of ${names.join(', ')} in .env, then run vet init --force`;
+}
+
 function render(result: RunEvalsResult): string {
   const byCase = new Map<string, RunVerdict[]>();
   for (const v of result.results) byCase.set(v.caseId, [...(byCase.get(v.caseId) ?? []), v]);
@@ -169,6 +180,7 @@ async function runCommand(options: RunOptions & Readonly<Record<string, unknown>
     `${String(pendingCount)} promoted case(s) pending review in ${join(casesPath, 'pending')} (run \`vet cases review\`)`,
   );
   const cacheDir = resolve(rootDir, config.cacheDir);
+  const demo = isDemoJudge(loaded.judge);
   const startedAt = new Date().toISOString();
   const { events: runEvalsEvents, take: takeRunEnd } = deferRunEnd(events);
   let result: RunEvalsResult;
@@ -185,7 +197,8 @@ async function runCommand(options: RunOptions & Readonly<Record<string, unknown>
           ...config.gate,
           allowUnpinned: options.allowUnpinned === true || config.gate.allowUnpinned,
         },
-        cacheDir,
+        // Demo verdicts never enter the verdict cache; the run record below is still written.
+        ...(demo ? {} : { cacheDir }),
       },
       lock,
       signal: controller.signal,
@@ -223,6 +236,7 @@ async function runCommand(options: RunOptions & Readonly<Record<string, unknown>
   }
   // The record is the --json document plus its inputs; partial runs included.
   await writeRunRecord(cacheDir, { ...result, ...extras, criteriaPath, casesPath, startedAt });
+  if (demo) log.warn(demoHint());
   emit({ ...result, ...extras }, () => [render(result), ...lines].join('\n'));
   process.exitCode = result.exitCode;
 }
