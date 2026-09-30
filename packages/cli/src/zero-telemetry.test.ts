@@ -254,9 +254,18 @@ describe.each(DO_NOT_TRACK_VALUES)('with DO_NOT_TRACK=%s', (doNotTrack) => {
   test('doctor with a judge credential probes only the preset host', async () => {
     vi.stubEnv('AI_GATEWAY_API_KEY', 'zt-fake-gateway-key');
     const recorder = record();
-    await vet(project('run'), ['doctor', '--json']);
+    // No vetkit config here, so doctor takes the credential-sniff path.
+    await vet(mkdtempSync(join(tmpdir(), 'vetkit-zero-telemetry-')), ['doctor', '--json']);
     const presetHost = new URL(JEV_PRESETS.vercel.baseURL).host;
     expect([...recorder.hosts]).toEqual([presetHost]);
+  });
+
+  test('doctor in a project with a config contacts no host other than the configured judge', async () => {
+    vi.stubEnv('AI_GATEWAY_API_KEY', 'zt-fake-gateway-key');
+    const recorder = record();
+    await vet(project('run'), ['doctor', '--json']);
+    // The fixture config's judge is in-process, so nothing is contacted.
+    expect(onlyContacted(recorder, [])).toEqual([]);
   });
 });
 
