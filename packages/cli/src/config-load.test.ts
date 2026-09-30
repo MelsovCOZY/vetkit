@@ -322,7 +322,12 @@ describe('loadVetConfig next-step messages', () => {
       }),
     });
     const loaded = await loadVetConfig({ cwd, env: {}, requireCredentials: false });
-    const error = await rejection(loaded.judge.doJudge({} as never));
+    const error = await rejection(
+      loaded.judge.doJudge({
+        state: 's',
+        questions: { q: { type: 'boolean', instructions: 'is it?' } },
+      }),
+    );
     const message = error instanceof Error ? error.message : '';
     expect(message).toContain('OPENROUTER_API_KEY is not set');
     expect(message.endsWith('add OPENROUTER_API_KEY=... to .env or export it')).toBe(true);
