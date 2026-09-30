@@ -4,11 +4,18 @@
 // (https://github.com/Arize-ai/openinference/blob/main/spec/annotations.md).
 import { randomBytes } from 'node:crypto';
 import type { Verdict } from '@vetkit/spec';
-import { errorType, verdictToLogRecord, type OtlpAttribute } from './encode.ts';
+import { errorType, VETKIT_ATTR, verdictToLogRecord, type OtlpAttribute } from './encode.ts';
 
 // RISK: `evaluations.<i>.evaluation.*` taken from the annotations spec read 2026-09-25.
 const EV = 'evaluations.0.evaluation';
 const SPAN_KIND_INTERNAL = 1;
+
+// RISK: annotator_kind is the OpenInference enum HUMAN | LLM | CODE (annotations spec above).
+// Code-graded ('code') and scripted ('demo') verdicts have no language-model judge; every other
+// transport is one. The transport string itself rides in vetkit.model.transport.
+function annotatorKind(transport: string): 'LLM' | 'CODE' {
+  return transport === 'code' || transport === 'demo' ? 'CODE' : 'LLM';
+}
 
 export interface OtlpSpan {
   traceId: string;
@@ -67,11 +74,11 @@ export function verdictToSpan(verdict: Verdict, nowMs: number = Date.now()): Otl
       str('openinference.span.kind', 'EVALUATOR'),
       str(`${EV}.name`, verdict.criterionId),
       ...evaluationAttributes(verdict),
-      str(`${EV}.annotator_kind`, 'JEV'),
+      str(`${EV}.annotator_kind`, annotatorKind(verdict.model.transport)),
       str(`${EV}.identifier`, verdict.id ?? ''),
-      str('classified_evals.model.resolved', verdict.model.resolved),
-      str('classified_evals.model.transport', verdict.model.transport),
-      { key: 'classified_evals.model.pinned', value: { boolValue: verdict.model.pinned } },
+      str(VETKIT_ATTR.modelResolved, verdict.model.resolved),
+      str(VETKIT_ATTR.modelTransport, verdict.model.transport),
+      { key: VETKIT_ATTR.modelPinned, value: { boolValue: verdict.model.pinned } },
     ],
   };
 }
