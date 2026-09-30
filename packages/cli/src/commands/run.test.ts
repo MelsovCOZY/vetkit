@@ -831,3 +831,165 @@ describe('vet run --record / --replay', () => {
     }
   });
 });
+
+describe('vet run --reporter md/html', () => {
+  test("writes .vet/report.md containing the counts, wording 'Is the reply polite?', 'uncalibrated', 'fake-jev-fail-resolved', 'pinned: false', 'Dataset', the version and the repo link", () => {
+    const project = freshProject();
+    const result = runVet(['run', '--json', '--reporter', 'md'], project, fixtureEnv('fail'));
+    expect(result.status).toBe(1);
+    const md = readFileSync(join(project, '.vet', 'report.md'), 'utf8');
+    expect(md.startsWith('### vetkit eval report')).toBe(true);
+    expect(md).toContain('0 passed · 1 failed · 0 unscored** of 1');
+    expect(md).toContain('Is the reply polite?');
+    expect(md).toContain('Calibration: uncalibrated');
+    expect(md).toContain('fake-jev-fail-resolved');
+    expect(md).toContain('pinned: false');
+    expect(md).toContain('Dataset `');
+    expect(md).toContain('https://github.com/MelsovCOZY/vetkit');
+    expect(existsSync(join(project, '.vet', 'junit.xml'))).toBe(false);
+    expect(existsSync(join(project, '.vet', 'report.html'))).toBe(false);
+    const version = parseObject(
+      readFileSync(join(fixtureDir, '..', '..', '..', 'packages', 'cli', 'package.json'), 'utf8'),
+    )['version'];
+    expect(md).toContain(`vetkit ${String(version)}`);
+  });
+
+  test('writes .vet/report.html starting with <!doctype html> and containing no <script', () => {
+    const project = freshProject();
+    const result = runVet(['run', '--json', '--reporter', 'html'], project, fixtureEnv('pass'));
+    expect(result.status).toBe(0);
+    const html = readFileSync(join(project, '.vet', 'report.html'), 'utf8');
+    expect(html.startsWith('<!doctype html>')).toBe(true);
+    expect(html).not.toContain('<script');
+  });
+
+  test('--reporter md=out/nested/report.md creates the directories', () => {
+    const project = freshProject();
+    runVet(['run', '--json', '--reporter', 'md=out/nested/report.md'], project, fixtureEnv('pass'));
+    expect(existsSync(join(project, 'out', 'nested', 'report.md'))).toBe(true);
+  });
+
+  test("case text 'Hello! How can I help?' is absent without --include-cases and present with it", () => {
+    const without = freshProject();
+    runVet(['run', '--json', '--reporter', 'md,html'], without, fixtureEnv('pass'));
+    for (const file of ['report.md', 'report.html']) {
+      expect(readFileSync(join(without, '.vet', file), 'utf8')).not.toContain(
+        'Hello! How can I help?',
+      );
+    }
+    const withCases = freshProject();
+    runVet(
+      ['run', '--json', '--reporter', 'md,html', '--include-cases'],
+      withCases,
+      fixtureEnv('pass'),
+    );
+    for (const file of ['report.md', 'report.html']) {
+      expect(readFileSync(join(withCases, '.vet', file), 'utf8')).toContain(
+        'Hello! How can I help?',
+      );
+    }
+  });
+
+  test('the fixture secret never appears in either report', () => {
+    const project = freshProject();
+    runVet(['run', '--reporter', 'md,html', '--include-cases'], project, fixtureEnv('fail'));
+    for (const file of ['report.md', 'report.html']) {
+      expect(readFileSync(join(project, '.vet', file), 'utf8')).not.toContain(SECRET);
+    }
+  });
+
+  test('--json stdout is still exactly one JSON document with no report keys', () => {
+    const project = freshProject();
+    const result = runVet(['run', '--json', '--reporter', 'md,html'], project, fixtureEnv('pass'));
+    expect(nonEmptyLines(result.stdout)).toHaveLength(1);
+    const doc = parseObject(result.stdout);
+    for (const key of ['report', 'reports', 'md', 'html', 'badge']) {
+      expect(doc).not.toHaveProperty(key);
+    }
+    expect(result.stdout).not.toContain('### vetkit');
+  });
+
+  test("pretty output lists 'report: .vet/report.md'", () => {
+    const project = freshProject();
+    const result = runVet(['run', '--reporter', 'md,html'], project, fixtureEnv('pass'));
+    expect(result.stdout).toContain('report: .vet/report.md');
+    expect(result.stdout).toContain('report: .vet/report.html');
+  });
+
+  test('--gate with no lock (exit 2) still writes reports carrying the gate reason', () => {
+    const project = freshProject();
+    const result = runVet(
+      ['run', '--json', '--gate', '--reporter', 'md'],
+      project,
+      fixtureEnv('pass'),
+    );
+    expect(result.status).toBe(2);
+    const md = readFileSync(join(project, '.vet', 'report.md'), 'utf8');
+    expect(md).toContain('Gate refused:');
+    expect(md).toContain('exit 2');
+  });
+
+  test('a repeated reporter kind is a usage error (exit 2)', () => {
+    const result = runVet(['run', '--reporter', 'md,md=x.md'], freshProject(), fixtureEnv('pass'));
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain('given twice');
+  });
+
+  test('SIGINT with --reporter md still writes the partial report marked aborted', async () => {
+    const project = freshProject();
+    const started = join(project, 'started');
+    const child = spawn(process.execPath, [binPath, 'run', '--json', '--reporter', 'md'], {
+      cwd: project,
+      env: fixtureEnv('slow', { VETKIT_FIXTURE_STARTED: started }),
+    });
+    const exited = new Promise<number | null>((resolve) => {
+      child.on('exit', (code) => resolve(code));
+    });
+    const deadline = Date.now() + 30_000;
+    while (!existsSync(started) && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    child.kill('SIGINT');
+    expect(await exited).toBe(130);
+    const md = readFileSync(join(project, '.vet', 'report.md'), 'utf8');
+    expect(md).toContain('(aborted)');
+    const badge = parseObject(readFileSync(join(project, '.vet', 'badge.json'), 'utf8'));
+    expect(badge['message']).toBe('uncalibrated · aborted');
+    expect(badge['color']).toBe('lightgrey');
+  }, 60_000);
+});
+
+describe('vet run writes .vet/badge.json', () => {
+  test("every vet run writes .vet/badge.json; after a fail-mode run its message is 'uncalibrated · fail' and color 'red'; after a pass-mode run 'uncalibrated · pass' and 'yellow'", () => {
+    const failing = freshProject();
+    const failRun = runVet(['run', '--json'], failing, fixtureEnv('fail'));
+    expect(failRun.status).toBe(1);
+    expect(parseObject(readFileSync(join(failing, '.vet', 'badge.json'), 'utf8'))).toEqual({
+      schemaVersion: 1,
+      label: 'vetkit',
+      message: 'uncalibrated · fail',
+      color: 'red',
+    });
+    const passing = freshProject();
+    const passRun = runVet(['run'], passing, fixtureEnv('pass'));
+    expect(passRun.status).toBe(0);
+    expect(parseObject(readFileSync(join(passing, '.vet', 'badge.json'), 'utf8'))).toEqual({
+      schemaVersion: 1,
+      label: 'vetkit',
+      message: 'uncalibrated · pass',
+      color: 'yellow',
+    });
+  });
+
+  test('a gate-refused run (exit 2) writes a gate refused, orange badge and adds nothing to stdout', () => {
+    const project = freshProject();
+    const result = runVet(['run', '--json', '--gate'], project, fixtureEnv('pass'));
+    expect(result.status).toBe(2);
+    expect(nonEmptyLines(result.stdout)).toHaveLength(1);
+    expect(result.stdout).not.toContain('badge');
+    expect(parseObject(readFileSync(join(project, '.vet', 'badge.json'), 'utf8'))).toMatchObject({
+      message: 'uncalibrated · gate refused',
+      color: 'orange',
+    });
+  });
+});

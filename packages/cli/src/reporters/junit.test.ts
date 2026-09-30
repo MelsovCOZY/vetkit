@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,10 +7,13 @@ import { safeParseJson } from '@vetkit/spec';
 import { Command } from 'commander';
 import { describe, expect, test, vi } from 'vitest';
 import {
+  DEFAULT_HTML_PATH,
   DEFAULT_JUNIT_PATH,
+  DEFAULT_MD_PATH,
   registerReporterFlag,
   renderJunit,
   writeReports,
+  writeTextReport,
   type JunitSuiteInput,
 } from './junit.ts';
 
@@ -415,22 +418,44 @@ function parseRun(args: readonly string[]): Record<string, unknown> {
 describe('registerReporterFlag', () => {
   test('--reporter junit defaults the path to .vet/junit.xml', () => {
     expect(DEFAULT_JUNIT_PATH).toBe('.vet/junit.xml');
-    expect(parseRun(['--reporter', 'junit']).reporter).toEqual({
-      kind: 'junit',
-      path: '.vet/junit.xml',
-    });
+    expect(parseRun(['--reporter', 'junit']).reporter).toEqual([
+      { kind: 'junit', path: '.vet/junit.xml' },
+    ]);
   });
 
   test('--reporter junit=<path> takes the given path', () => {
-    expect(parseRun(['--reporter', 'junit=out/vet-junit.xml']).reporter).toEqual({
-      kind: 'junit',
-      path: 'out/vet-junit.xml',
-    });
+    expect(parseRun(['--reporter', 'junit=out/vet-junit.xml']).reporter).toEqual([
+      { kind: 'junit', path: 'out/vet-junit.xml' },
+    ]);
   });
 
-  test('an unknown reporter is rejected', () => {
-    expect(() => parseRun(['--reporter', 'html'])).toThrow(/reporter/);
+  test('--reporter junit,md,html defaults the three paths', () => {
+    expect(DEFAULT_MD_PATH).toBe('.vet/report.md');
+    expect(DEFAULT_HTML_PATH).toBe('.vet/report.html');
+    expect(parseRun(['--reporter', 'junit,md,html']).reporter).toEqual([
+      { kind: 'junit', path: '.vet/junit.xml' },
+      { kind: 'md', path: '.vet/report.md' },
+      { kind: 'html', path: '.vet/report.html' },
+    ]);
+  });
+
+  test('--reporter md=a.md,html=b.html takes the given paths', () => {
+    expect(parseRun(['--reporter', 'md=a.md, html=b.html']).reporter).toEqual([
+      { kind: 'md', path: 'a.md' },
+      { kind: 'html', path: 'b.html' },
+    ]);
+  });
+
+  test('an unknown kind is rejected', () => {
+    expect(() => parseRun(['--reporter', 'pdf'])).toThrow(/reporter/);
+    expect(() => parseRun(['--reporter', 'junit,pdf=x'])).toThrow(/unknown reporter/);
     expect(() => parseRun(['--reporter', 'junit='])).toThrow(/reporter/);
+    expect(() => parseRun(['--reporter', 'md='])).toThrow(/reporter/);
+  });
+
+  test('a repeated kind is rejected', () => {
+    expect(() => parseRun(['--reporter', 'junit,junit=x'])).toThrow(/given twice/);
+    expect(() => parseRun(['--reporter', 'md,md=other.md'])).toThrow(/"md" given twice/);
   });
 
   test('no flag leaves the reporter unset', () => {
@@ -468,5 +493,36 @@ describe('writeReports', () => {
     const cwd = mkdtempSync(join(tmpdir(), 'vetkit-junit-'));
     expect(await writeReports(undefined, [suite(loadRun())], { cwd })).toBeUndefined();
     expect(readdirSync(cwd)).toEqual([]);
+  });
+
+  test('writes only the kinds asked for and returns their absolute paths', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'vetkit-junit-'));
+    const mdOnly = await writeReports({ kind: 'md', path: 'r.md' }, [suite(loadRun())], { cwd });
+    expect(mdOnly).toBeUndefined();
+    expect(readdirSync(cwd)).toEqual([]);
+    const junit = await writeReports({ kind: 'junit', path: 'j.xml' }, [suite(loadRun())], { cwd });
+    expect(junit).toBe(join(cwd, 'j.xml'));
+    expect(readdirSync(cwd)).toEqual(['j.xml']);
+  });
+});
+
+describe('writeTextReport', () => {
+  test('md/html are written atomically (no .tmp left) into created directories', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'vetkit-text-'));
+    const target = join(cwd, 'a', 'b', 'report.md');
+    await writeTextReport(target, '### hello\n');
+    expect(readFileSync(target, 'utf8')).toBe('### hello\n');
+    expect(readdirSync(join(cwd, 'a', 'b'))).toEqual(['report.md']);
+    await writeTextReport(target, 'second');
+    expect(readFileSync(target, 'utf8')).toBe('second');
+    expect(readdirSync(join(cwd, 'a', 'b'))).toEqual(['report.md']);
+  });
+
+  test('a failed write leaves no temp file behind', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'vetkit-text-'));
+    // A directory in the way makes the rename fail.
+    mkdirSync(join(cwd, 'taken'));
+    await expect(writeTextReport(join(cwd, 'taken'), 'x')).rejects.toThrow();
+    expect(readdirSync(cwd)).toEqual(['taken']);
   });
 });
