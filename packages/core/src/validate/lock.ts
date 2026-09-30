@@ -383,10 +383,31 @@ export interface StaleReport {
   readonly releaseDate: 'match' | 'differs' | 'unknown';
 }
 
+/**
+ * True when the criterion's current wording no longer hashes to what the lock entry recorded (or
+ * the entry is missing). The one comparison `vet check` and the gate share.
+ */
+export function wordingChanged(entry: LockCriterion | undefined, criterion: Criterion): boolean {
+  return entry?.wordingHash !== computeWordingHash(wordingOf(criterion));
+}
+
+/** The request format a lock was written under; locks written before the field existed are raw. */
+export function lockRequestFormat(lock: Pick<Lock, 'requestFormat'>): RequestFormat {
+  return lock.requestFormat ?? 'raw';
+}
+
+/** True when the judge now sends another request format than the lock was written under. */
+export function requestFormatChanged(
+  lock: Pick<Lock, 'requestFormat'>,
+  current: RequestFormat | undefined,
+): boolean {
+  return lockRequestFormat(lock) !== (current ?? 'raw');
+}
+
 export function checkLock(lock: Lock, current: CheckLockCurrent): StaleReport {
   const reasons: StaleReason[] = [];
   const changed = current.criteria
-    .filter((c) => lock.criteria[c.id]?.wordingHash !== computeWordingHash(wordingOf(c)))
+    .filter((c) => wordingChanged(lock.criteria[c.id], c))
     .map((c) => c.id);
   if (changed.length > 0) reasons.push('wordingHash');
   if (datasetHash(current.cases) !== lock.datasetHash) reasons.push('datasetHash');
@@ -399,9 +420,7 @@ export function checkLock(lock: Lock, current: CheckLockCurrent): StaleReport {
   if (current.model !== undefined && current.model.transport !== lock.model.transport) {
     reasons.push('transport');
   }
-  if ((lock.requestFormat ?? 'raw') !== (current.requestFormat ?? 'raw')) {
-    reasons.push('requestFormat');
-  }
+  if (requestFormatChanged(lock, current.requestFormat)) reasons.push('requestFormat');
   return { stale: reasons.length > 0, reasons, criteria: changed, releaseDate };
 }
 

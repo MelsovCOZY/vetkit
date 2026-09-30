@@ -9,6 +9,7 @@
 // boolean and choice criteria gate; code-graded criteria never reach the judge.
 import {
   CEV_ERROR_CODES,
+  DEFAULT_REQUEST_FORMAT,
   VetError,
   type Case,
   type Criterion,
@@ -843,6 +844,10 @@ export async function runEvals(input: RunEvalsInput): Promise<RunEvalsResult> {
         allowUnpinned: config.gatePolicy?.allowUnpinned ?? false,
         ...(minPass === undefined ? {} : { minPass }),
       },
+      // The wording and request format the verdicts above were judged under (judgeCase reads the
+      // same capability), so a lock calibrated against other ones refuses.
+      criteria: active,
+      requestFormat: config.judge.capabilities.requestFormat ?? DEFAULT_REQUEST_FORMAT,
     });
     exitCode = gate.exitCode;
     gateReasons = gate.reasons;
