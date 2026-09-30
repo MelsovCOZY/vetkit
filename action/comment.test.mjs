@@ -1,10 +1,10 @@
 // Plain Node test runner: `node --test action/comment.test.mjs`. No network: `gh` is a stub.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import {
   MARKER,
   computeDeltas,
@@ -200,8 +200,12 @@ void test('upsertComment warns and continues when the token cannot write', async
   assert.match(warnings[0] ?? '', /pull-requests: write/);
 });
 
+// Every workspace sits under one root, removed when the file is done.
+const TEMP_ROOT = mkdtempSync(join(tmpdir(), 'vetkit-comment-test-'));
+after(() => rmSync(TEMP_ROOT, { recursive: true, force: true }));
+
 function workspace(files) {
-  const dir = mkdtempSync(join(tmpdir(), 'vetkit-action-'));
+  const dir = mkdtempSync(join(TEMP_ROOT, 'vetkit-action-'));
   for (const [name, content] of Object.entries(files)) {
     writeFileSync(join(dir, name), content);
   }
