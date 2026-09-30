@@ -9,7 +9,6 @@ import { safeParseJson } from '@vetkit/spec';
 import { beforeAll, describe, expect, test } from 'vitest';
 import { ensureCliBuilt } from '../test-support/build-cli.js';
 import { GATE_TARGET, renderGeneratorBlock } from './init-gate.ts';
-import { mkdirSync, writeFileSync } from 'node:fs';
 
 const binPath = fileURLToPath(new URL('../../dist/bin.js', import.meta.url));
 const templatesDir = fileURLToPath(new URL('../../templates/', import.meta.url));

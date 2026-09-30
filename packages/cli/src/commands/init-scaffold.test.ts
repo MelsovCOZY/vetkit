@@ -214,14 +214,14 @@ describe('vet init', () => {
   });
 });
 
+const codeOf = (config: string): string =>
+  config
+    .split('\n')
+    .filter((line: string) => !line.trimStart().startsWith('//'))
+    .join('\n');
+
 describe('vet init judge selection', () => {
   const NAMES = ['OPENROUTER_API_KEY', 'AI_GATEWAY_API_KEY', 'TYPESAFE_API_KEY'] as const;
-  const codeOf = (config: string): string =>
-    config
-      .split('\n')
-      .filter((line: string) => !line.trimStart().startsWith('//'))
-      .join('\n');
-
   test('only OPENROUTER_API_KEY: preset openrouter, no allowUnpinned', () => {
     const dir = tempDir();
     const result = runVet(['init'], dir, cleanEnv({ OPENROUTER_API_KEY: 'k' }));
