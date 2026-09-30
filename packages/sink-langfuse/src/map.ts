@@ -4,7 +4,32 @@
 // value is numeric for BOOLEAN (1|0) and NUMERIC, and a string for CATEGORICAL. stringValue is
 // NOT a request field (Langfuse fills it from value or a configId), so it is never sent.
 
+import { createRequire } from 'node:module';
 import type { Verdict } from '@vetkit/spec';
+
+// Read once at load; the package versions independently, so the marker is its own name@version.
+function sinkMarker(): string {
+  const name = '@vetkit/sink-langfuse';
+  try {
+    const pkg: unknown = createRequire(import.meta.url)('../package.json');
+    const version =
+      typeof pkg === 'object' && pkg !== null
+        ? Object.entries(pkg).find(([k]) => k === 'version')?.[1]
+        : undefined;
+    return typeof version === 'string' && version !== '' ? `${name}@${version}` : name;
+  } catch {
+    return name;
+  }
+}
+
+const SINK_MARKER = sinkMarker();
+
+interface LangfuseScoreMetadata {
+  model: string;
+  transport: string;
+  pinned: boolean;
+  sink: string;
+}
 
 export interface LangfuseScoreBody {
   traceId: string;
@@ -13,6 +38,7 @@ export interface LangfuseScoreBody {
   value: number | string;
   dataType: 'BOOLEAN' | 'NUMERIC' | 'CATEGORICAL';
   comment?: string;
+  metadata: LangfuseScoreMetadata;
 }
 
 // Returns undefined when the verdict carries no scoreable answer.
@@ -25,6 +51,12 @@ export function toLangfuseScore(verdict: Verdict, traceId: string): LangfuseScor
       ? {}
       : { observationId: verdict.provenance.observationId }),
     name: verdict.criterionId,
+    metadata: {
+      model: verdict.model.resolved || verdict.model.requested,
+      transport: verdict.model.transport,
+      pinned: verdict.model.pinned,
+      sink: SINK_MARKER,
+    },
   };
   const comment = verdict.explanation === undefined ? {} : { comment: verdict.explanation };
   if (answer.type === 'boolean') {

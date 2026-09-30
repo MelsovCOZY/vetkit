@@ -47,7 +47,7 @@ The judge-failure rule: `error.type` is set and NO score attributes are emitted 
 | `gen_ai.response.id` | `provenance.responseId` when present |
 | `error.type` | `verdict.status` when `status != 'ok'` and NO score attributes |
 | LogRecord context | `{ traceId: provenance.traceId, spanId: provenance.spanId }` (hex, as OTLP/JSON requires) |
-| `classified_evals.*` | extension attributes (judge model resolved id, transport, pinned, wordingHash, cacheHit) |
+| `vetkit.*` | extension attributes (`vetkit.model.resolved`, `vetkit.model.transport`, `vetkit.model.pinned`, `vetkit.cache_hit`) |
 
 ## `otel-openinference`: OpenInference EVALUATOR span
 
@@ -59,7 +59,8 @@ The judge-failure rule: `error.type` is set and NO score attributes are emitted 
 | `evaluations.0.evaluation.score` | score |
 | `evaluations.0.evaluation.label` | label |
 | `evaluations.0.evaluation.explanation` | explanation |
-| `evaluations.0.evaluation.annotator_kind` | `'JEV'` |
+| `evaluations.0.evaluation.annotator_kind` | `CODE` for code-graded verdicts (`model.transport` is `code` or `demo`), else `LLM` (OpenInference enum HUMAN\|LLM\|CODE) |
+| `vetkit.model.*` | `vetkit.model.resolved`, `vetkit.model.transport`, `vetkit.model.pinned` |
 | `evaluations.0.evaluation.identifier` | `<verdict id>` |
 
 ## `langfuse`: Scores API `POST /api/public/scores`
@@ -72,7 +73,22 @@ The judge-failure rule: `error.type` is set and NO score attributes are emitted 
 | `value` | boolean → 0\|1, choice → the choice string, score → expected level (number) |
 | `dataType` | boolean → `BOOLEAN`, choice → `CATEGORICAL`, score → `NUMERIC` |
 | `comment` | explanation |
+| `metadata` | `{ model: judge model id (served id, else requested), transport, pinned, sink: '@vetkit/sink-langfuse@<version>' }` |
 | auth | basic auth `base64(pk:sk)` |
+
+## Which form does your backend want?
+
+| Descriptor kind | Form | Backends |
+| --- | --- | --- |
+| `otel` (sink id `otel/logs`) | `gen_ai.evaluation.result` LogRecord | backends that ingest OTLP logs: an OpenTelemetry Collector, Pydantic Logfire |
+| `otel/openinference` | EVALUATOR span with one span link | OpenInference-native backends such as Arize Phoenix |
+| `langfuse` | Scores API | Langfuse |
+
+Both OTel forms carry the same score, label and explanation, so the choice is about the backend,
+not the data. Sources:
+[OpenInference annotations](https://github.com/Arize-ai/openinference/blob/main/spec/annotations.md),
+[Logfire live evals](https://github.com/pydantic/logfire/blob/main/docs/evaluate/live-evals.md),
+[GenAI events](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-events.md).
 
 ## Enabling a sink
 

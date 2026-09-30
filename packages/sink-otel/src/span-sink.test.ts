@@ -86,7 +86,7 @@ function expectCarrier(span: OtlpSpan | undefined): void {
   expect(span?.kind).toBe(1);
   expect(span?.startTimeUnixNano).toBe(span?.endTimeUnixNano);
   expect(attr(span, `${EV}.name`)).toEqual({ stringValue: 'promised_refund' });
-  expect(attr(span, `${EV}.annotator_kind`)).toEqual({ stringValue: 'JEV' });
+  expect(attr(span, `${EV}.annotator_kind`)).toEqual({ stringValue: 'LLM' });
   expect(attr(span, `${EV}.identifier`)).toEqual({ stringValue: 'v-1' });
 }
 
@@ -242,5 +242,59 @@ describe('createOpenInferenceSink', () => {
     expect(calls).toHaveLength(2);
     expect(ack.accepted).toEqual(['v-1', 'v-2']);
     for (const call of calls) expect(spans(call)).toHaveLength(1);
+  });
+});
+
+async function spanFor(v: Verdict): Promise<OtlpSpan | undefined> {
+  const { fetch, calls } = fakeFetch();
+  await createOpenInferenceSink({ endpoint: ENDPOINT, fetch }).doWrite([v], {});
+  return spans(calls[0])[0];
+}
+
+describe('annotator_kind', () => {
+  const codeModel = { requested: 'r', resolved: 'r', transport: 'code', pinned: true };
+
+  test('a judge transport yields LLM', async () => {
+    const span = await spanFor(verdict());
+    expect(attr(span, `${EV}.annotator_kind`)).toEqual({ stringValue: 'LLM' });
+  });
+
+  test("transport 'code' yields CODE", async () => {
+    const span = await spanFor(verdict({ model: codeModel }));
+    expect(attr(span, `${EV}.annotator_kind`)).toEqual({ stringValue: 'CODE' });
+  });
+
+  test("transport 'demo' yields CODE", async () => {
+    const span = await spanFor(verdict({ model: { ...codeModel, transport: 'demo' } }));
+    expect(attr(span, `${EV}.annotator_kind`)).toEqual({ stringValue: 'CODE' });
+  });
+
+  test('an unscored verdict still carries annotator_kind', async () => {
+    const { answer: _a, pass: _p, ...rest } = verdict({ cause: 'x' });
+    const unscored: Verdict = { ...rest, status: 'unscored' };
+    const code = await spanFor({ ...unscored, model: codeModel });
+    expect(attr(code, `${EV}.annotator_kind`)).toEqual({ stringValue: 'CODE' });
+    const llm = await spanFor(unscored);
+    expect(attr(llm, `${EV}.annotator_kind`)).toEqual({ stringValue: 'LLM' });
+  });
+
+  test('no span attribute value equals the retired constant', async () => {
+    const retired = ['J', 'E', 'V'].join('');
+    const span = await spanFor(verdict());
+    expect(span?.attributes.map((a) => a.value.stringValue)).not.toContain(retired);
+  });
+
+  test('the vetkit.model.transport attribute carries the transport string', async () => {
+    const span = await spanFor(verdict());
+    expect(attr(span, 'vetkit.model.transport')).toEqual({ stringValue: 'test' });
+    expect(attr(span, 'vetkit.model.resolved')).toEqual({ stringValue: 'judge-2026' });
+    expect(attr(span, 'vetkit.model.pinned')).toEqual({ boolValue: false });
+  });
+
+  test('no span attribute key uses the old namespace', async () => {
+    const span = await spanFor(verdict());
+    expect(
+      span?.attributes.filter((a) => a.key.startsWith(`${['classified', 'evals'].join('_')}.`)),
+    ).toEqual([]);
   });
 });

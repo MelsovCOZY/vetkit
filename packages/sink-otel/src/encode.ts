@@ -19,6 +19,14 @@ const ATTR = {
   errorType: 'error.type',
 } as const;
 
+// Project extension attributes (not part of the GenAI semconv), hand-written in this one module.
+export const VETKIT_ATTR = {
+  modelResolved: 'vetkit.model.resolved',
+  modelTransport: 'vetkit.model.transport',
+  modelPinned: 'vetkit.model.pinned',
+  cacheHit: 'vetkit.cache_hit',
+} as const;
+
 // OTLP/gRPC's default 4 MiB message limit; the HTTP body is kept under it too.
 export const MAX_BODY_BYTES: number = 4 * 1024 * 1024;
 
@@ -119,10 +127,10 @@ export function verdictToLogRecord(verdict: Verdict, nowMs: number = Date.now())
     attributes.push(str(ATTR.responseId, provenance.responseId));
   }
   attributes.push(
-    str('classified_evals.model.resolved', verdict.model.resolved),
-    str('classified_evals.model.transport', verdict.model.transport),
-    { key: 'classified_evals.model.pinned', value: { boolValue: verdict.model.pinned } },
-    { key: 'classified_evals.cache_hit', value: { boolValue: verdict.cacheHit } },
+    str(VETKIT_ATTR.modelResolved, verdict.model.resolved),
+    str(VETKIT_ATTR.modelTransport, verdict.model.transport),
+    { key: VETKIT_ATTR.modelPinned, value: { boolValue: verdict.model.pinned } },
+    { key: VETKIT_ATTR.cacheHit, value: { boolValue: verdict.cacheHit } },
   );
   const time = `${String(Math.trunc(nowMs))}000000`;
   return {

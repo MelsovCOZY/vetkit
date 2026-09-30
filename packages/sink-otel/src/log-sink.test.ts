@@ -106,7 +106,7 @@ describe('createOtelSink', () => {
     expect(attr(rec, 'gen_ai.evaluation.explanation')).toEqual({
       stringValue: 'promised_refund: p=0.98 >= threshold 0.70 → pass',
     });
-    expect(attr(rec, 'classified_evals.model.resolved')).toEqual({ stringValue: 'judge-2026' });
+    expect(attr(rec, 'vetkit.model.resolved')).toEqual({ stringValue: 'judge-2026' });
     expect(attr(rec, 'error.type')).toBeUndefined();
     expect(calls[0]?.body.resourceLogs[0]?.scopeLogs[0]?.schemaUrl).toMatch(/^https:\/\//);
   });
