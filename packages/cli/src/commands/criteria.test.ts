@@ -3,6 +3,7 @@ import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { computeWordingHash, type WordingFields } from '@vetkit/core';
 import { safeParseJson } from '@vetkit/spec';
 import { beforeAll, describe, expect, test } from 'vitest';
 import { ensureCliBuilt } from '../test-support/build-cli.js';
@@ -46,9 +47,21 @@ const GAUNTLET = {
   length: 'pass',
 };
 
-function lockEntry(): Record<string, unknown> {
+// The wording of CRITERIA above, so the planted lock hashes like a validate-written one.
+const TONE: WordingFields = {
+  type: 'boolean',
+  instructions: 'Is the reply polite?',
+  escape: 'The reply has no discernible tone.',
+};
+const GREETS: WordingFields = {
+  type: 'boolean',
+  instructions: 'Does the reply greet the user?',
+  escape: 'The reply is empty.',
+};
+
+function lockEntry(wording: WordingFields): Record<string, unknown> {
   return {
-    wordingHash: 'a'.repeat(64),
+    wordingHash: computeWordingHash(wording),
     status: 'floating',
     threshold: 0.5,
     tolerance: 0,
@@ -72,8 +85,9 @@ function project(withLock = true): string {
         transport: 'fake',
         pinned: false,
       },
-      criteria: { tone: lockEntry(), greets: lockEntry() },
+      criteria: { tone: lockEntry(TONE), greets: lockEntry(GREETS) },
       datasetHash: 'd'.repeat(64),
+      requestFormat: 'fenced-v1',
     };
     writeFileSync(join(dir, 'criteria.lock.json'), `${JSON.stringify(lock, null, 2)}\n`);
   }

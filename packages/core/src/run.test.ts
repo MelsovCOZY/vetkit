@@ -18,7 +18,7 @@ import {
 import type { CachedJudgment, VerdictCache } from './judge/cache.ts';
 import type { Limiter } from './judge/pacing.ts';
 import { createEvents, EVENT_NAMES, type EventMap, type Events } from './events.ts';
-import { loadCriteria } from './criteria/load.ts';
+import { computeWordingHash, loadCriteria, type WordingFields } from './criteria/load.ts';
 import { estimateRun } from './estimate.ts';
 import { evaluateGate } from './gate.ts';
 import { runEvals, runJudge, verdictCause, type RunConfig, type RunVerdict } from './run.ts';
@@ -199,11 +199,49 @@ function lockCriterion(over: Partial<LockCriterion> = {}): LockCriterion {
   };
 }
 
+// The wording of the fixture criteria above, so a planted lock hashes like a validate-written one.
+const FIXTURE_WORDING: Record<string, WordingFields> = {
+  'answers-question': {
+    type: 'boolean',
+    instructions: 'Does the reply answer the question?',
+    escape: 'The reply is empty.',
+  },
+  'is-rude': { type: 'boolean', instructions: 'Is the reply rude?', escape: 'The reply is empty.' },
+  tone: {
+    type: 'choice',
+    instructions: 'Which tone does the reply take?',
+    criteria: { polite: 'The reply is courteous.', rude: 'The reply is insulting.' },
+    escape: 'The reply has no tone.',
+  },
+  helpfulness: {
+    type: 'score',
+    instructions: 'How helpful is the reply?',
+    criteria: ['not helpful', 'somewhat helpful', 'very helpful'],
+  },
+  'sum-correct': {
+    type: 'boolean',
+    instructions: 'Is the sum correct?',
+    escape: 'No number given.',
+  },
+};
+
+/** A lock over the fixture criteria; the placeholder wordingHash 'x' becomes the fixture's real hash. */
 function lockOf(criteria: Record<string, LockCriterion>, pinned = true): Lock {
+  const hashed = Object.fromEntries(
+    Object.entries(criteria).map(([id, entry]) => {
+      const wording = FIXTURE_WORDING[id];
+      return [
+        id,
+        entry.wordingHash === 'x' && wording !== undefined
+          ? { ...entry, wordingHash: computeWordingHash(wording) }
+          : entry,
+      ];
+    }),
+  );
   return {
     lockVersion: 1,
     model: { requested: 'fake/jev', resolved: 'fake/jev-1', transport: 'fake-transport', pinned },
-    criteria,
+    criteria: hashed,
     datasetHash: 'd',
   };
 }
