@@ -475,6 +475,32 @@ describe('loadCriteria', () => {
     expect(result.issues.filter((i) => WRAPPER_MESSAGE.test(i.message))).toEqual([]);
   });
 
+  test('an unknown grader kind is reported once, not once per known kind', async () => {
+    const file = await tempFile(
+      'criteria.yaml',
+      [
+        'criteria:',
+        '  - id: brief',
+        '    type: boolean',
+        '    instructions: Is the reply brief?',
+        '    escape: The reply is empty.',
+        '    polarity: pass_when_true',
+        '    channel: quality',
+        '    grader: { kind: bogus }',
+        '    provenance: { traceIds: [] }',
+        '',
+      ].join('\n'),
+    );
+
+    const result = await loadCriteria(file);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const lines = result.issues.map((i) => `${i.path}: ${i.message}`);
+    expect(result.issues.map((i) => i.path)).toContain('/criteria/0/grader/kind');
+    expect(new Set(lines).size).toBe(lines.length);
+  });
+
   test('a document without a top-level criteria list is CRITERIA_INVALID at /criteria', async () => {
     const file = await tempFile('criteria.yaml', 'other: 1\n');
 
