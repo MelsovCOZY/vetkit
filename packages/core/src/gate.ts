@@ -64,6 +64,18 @@ export function evaluateGate(input: EvaluateGateInput): GateResult {
       reasons.push(`transport '${transport}' is unpinned (pass allowUnpinned to gate anyway)`);
     }
   }
+  // A verdict served by another model than the lock's is not what was calibrated. Code-graded
+  // verdicts never reach a judge; an empty resolved id means nothing was served.
+  const servedIds = new Set<string>();
+  for (const v of input.verdicts) {
+    if (v.gated === false || v.model.transport === 'code' || v.model.resolved === '') continue;
+    if (v.model.resolved !== lock.model.resolved) servedIds.add(v.model.resolved);
+  }
+  for (const id of [...servedIds].toSorted()) {
+    reasons.push(
+      `served model '${id}' differs from the lock's '${lock.model.resolved}' (run \`vet validate\` against the current judge)`,
+    );
+  }
   if (policy.requireCalibrated) {
     const gated = new Set(
       input.verdicts.filter((v) => v.gated !== false).map((v) => v.criterionId),
