@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { RunRecord } from '@vetkit/core';
+import type { ExitCode, RunRecord } from '@vetkit/core';
 import { safeParseJson, type Case, type Criterion, type Lock } from '@vetkit/spec';
 import { describe, expect, test } from 'vitest';
 import {
@@ -205,7 +205,8 @@ describe('buildReportModel', () => {
   });
 
   test("transport 'demo' sets demo, the '> demo run' blockquote, badge state 'demo' and colour lightgrey for every exit code; transport 'fake' does not", () => {
-    for (const exitCode of [0, 1, 2, 3, 130]) {
+    const exitCodes: ExitCode[] = [0, 1, 2, 3, 130];
+    for (const exitCode of exitCodes) {
       const model = build({ record: withTransport('demo', { exitCode }) });
       expect(model.demo).toBe(true);
       expect(model.badge.color).toBe('lightgrey');
@@ -238,16 +239,16 @@ describe('buildReportModel', () => {
   });
 
   test('badge message per exitCode/gateRequested matrix (0/1/2/3/130 × on/off) never contains passed or total counts', () => {
-    const expected: Record<number, [string, string]> = {
-      0: ['pass', 'gate pass'],
-      1: ['fail', 'gate fail'],
-      2: ['gate refused', 'gate refused'],
-      3: ['unscored', 'unscored'],
-      130: ['aborted', 'aborted'],
-    };
-    for (const [code, [off, on]] of Object.entries(expected)) {
+    const expected: [ExitCode, string, string][] = [
+      [0, 'pass', 'gate pass'],
+      [1, 'fail', 'gate fail'],
+      [2, 'gate refused', 'gate refused'],
+      [3, 'unscored', 'unscored'],
+      [130, 'aborted', 'aborted'],
+    ];
+    for (const [exitCode, off, on] of expected) {
       for (const gateRequested of [false, true]) {
-        const model = build({ record: record({ exitCode: Number(code), gateRequested }) });
+        const model = build({ record: record({ exitCode, gateRequested }) });
         expect(model.badge.message).toBe(`uncalibrated · ${gateRequested ? on : off}`);
         expect(model.badge).toMatchObject({ schemaVersion: 1, label: 'vetkit' });
         expect(model.badge.message).not.toMatch(/passed|%|\d+\s*\/\s*\d+ pass/);
@@ -260,7 +261,7 @@ describe('buildReportModel', () => {
 
   test('badge color matrix', () => {
     const lock = lockWith({ polite: 'calibrated', 'cites-policy': 'calibrated' });
-    const color = (exitCode: number, gateRequested: boolean, withLock: boolean): string =>
+    const color = (exitCode: ExitCode, gateRequested: boolean, withLock: boolean): string =>
       build({
         lock: withLock ? lock : null,
         record: record({ exitCode, gateRequested }),

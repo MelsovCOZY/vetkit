@@ -2,7 +2,7 @@ import { mkdtempSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { RunRecord } from '@vetkit/core';
+import type { ExitCode, RunRecord } from '@vetkit/core';
 import { safeParseJson, type Criterion, type Lock } from '@vetkit/spec';
 import { describe, expect, test } from 'vitest';
 import { BADGE_FILE, badgeJson, writeBadge } from './badge.ts';
@@ -51,7 +51,7 @@ function calibratedLock(id: string): Lock {
   };
 }
 
-function model(exitCode: number, gateRequested: boolean, calibrated: boolean): ReportModel {
+function model(exitCode: ExitCode, gateRequested: boolean, calibrated: boolean): ReportModel {
   const parsed = safeParseJson<RunRecord>(readFileSync(join(fixtures, 'run.json'), 'utf8'), {});
   if (!parsed.ok) throw parsed.error;
   return buildReportModel({
@@ -89,7 +89,8 @@ describe('badgeJson', () => {
   });
 
   test('message is non-empty and contains neither a percentage nor a passed/total count for every exitCode × gateRequested × calibration combination', () => {
-    for (const exitCode of [0, 1, 2, 3, 130]) {
+    const exitCodes: ExitCode[] = [0, 1, 2, 3, 130];
+    for (const exitCode of exitCodes) {
       for (const gateRequested of [false, true]) {
         for (const calibrated of [false, true]) {
           const parsed = safeParseJson<{ message: string }>(
