@@ -371,10 +371,12 @@ describe('vet rerun --disputed', () => {
       criteriaPath: 'evals/criteria.yaml',
       casesPath: 'evals/cases',
       gateRequested: false,
+      schemaVersion: 1,
     });
     const doc = report();
     expect(doc).not.toHaveProperty('gateRequested');
     expect(doc).not.toHaveProperty('$schema');
+    expect(doc).not.toHaveProperty('schemaVersion');
   });
 
   test('comparison: paired per-case pass differences, clustered SE ≥ naive SE (4 cases, 2 clusters)', async () => {

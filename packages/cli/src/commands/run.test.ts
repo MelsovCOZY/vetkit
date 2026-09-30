@@ -260,11 +260,20 @@ describe('vet run persists .vet/runs/latest.json', () => {
     expect(rec).toEqual({
       ...doc,
       $schema: runRecordSchema.$id,
+      schemaVersion: 1,
       criteriaPath: 'evals/criteria.yaml',
       casesPath: 'evals/cases',
       startedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
       gateRequested: false,
     });
+  });
+
+  test('the run record carries schemaVersion 1 and stdout does not', () => {
+    const project = freshProject();
+    const doc = parseObject(runVet(['run', '--json'], project, fixtureEnv('pass')).stdout);
+    const rec = parseObject(readFileSync(recordPath(project), 'utf8'));
+    expect(rec['schemaVersion']).toBe(1);
+    expect(doc).not.toHaveProperty('schemaVersion');
   });
 
   test('stdout --json carries no $schema, criteriaPath, casesPath or gateRequested keys', () => {

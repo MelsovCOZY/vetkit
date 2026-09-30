@@ -1107,6 +1107,10 @@ export const runRecordSchema: JsonSchema = {
     $schema: {
       type: 'string',
     },
+    schemaVersion: {
+      type: 'integer',
+      minimum: 1,
+    },
     results: {
       type: 'array',
     },
