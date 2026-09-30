@@ -170,8 +170,8 @@ describe.each(packageNames.length ? packageNames : MIN_PACKAGE_NAMES)(
       expect(pkg?.name).toBe(dir === 'cli' ? 'vetkit' : `@vetkit/${dir}`);
     });
 
-    it('is version 0.0.0', () => {
-      expect(pkg?.version).toBe('0.0.0');
+    it('has a valid semver version', () => {
+      expect(pkg?.version).toMatch(/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/);
     });
 
     it('is type module', () => {

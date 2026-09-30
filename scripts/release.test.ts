@@ -20,7 +20,8 @@ interface WorkflowStep {
   uses?: string;
   id?: string;
   run?: string;
-  with?: Record<string, string>;
+  with?: Record<string, string | number>;
+  env?: Record<string, string>;
 }
 
 interface WorkflowJob {
@@ -278,5 +279,131 @@ describe('.github/workflows/release.yml', () => {
     it('skips a tarball whose version already exists on the registry (R4)', () => {
       expect(publishStep?.run).toMatch(/npm view/);
     });
+  });
+});
+
+describe('.github/workflows/release.yml release check and tags', () => {
+  const rawText = readFileSync(WORKFLOW_PATH, 'utf8');
+  const workflow = loadWorkflow(WORKFLOW_PATH);
+  const publishSteps = workflow.jobs.publish?.steps ?? [];
+  const tagJob = workflow.jobs['action-tag'];
+  const tagRuns = (tagJob?.steps ?? []).map((s) => s.run ?? '');
+  const tagStepIdx = tagRuns.findIndex((t) => t.includes('changeset git-tag'));
+
+  it('runs the release check between the post-pack preflight and publish', () => {
+    const runs = publishSteps.map((s) => s.run ?? '');
+    const postPackIdx = runs.findIndex(
+      (t) => t.includes('release-preflight') && t.includes('--tarballs'),
+    );
+    const checkIdx = runs.findIndex(
+      (t) => t.trim() === 'bun scripts/release-check.ts dist-tarballs',
+    );
+    const publishIdx = runs.findIndex((t) => t.includes('npm publish'));
+    expect(checkIdx).toBeGreaterThan(postPackIdx);
+    expect(publishIdx).toBeGreaterThan(checkIdx);
+  });
+
+  it('tags every package after publish with changeset git-tag and pushes tags', () => {
+    expect(tagJob).toBeDefined();
+    expect(tagStepIdx).toBeGreaterThanOrEqual(0);
+    const step = tagRuns[tagStepIdx] ?? '';
+    expect(step).toMatch(/bunx changeset git-tag/);
+    expect(step).toMatch(/git push origin --tags/);
+    expect(step).toMatch(/git tag -l/);
+    expect(step).toMatch(/git config user\.name/);
+    expect(step).toMatch(/git config user\.email/);
+    const checkout = tagJob?.steps.find((s) => (s.uses ?? '').startsWith('actions/checkout@'));
+    expect(checkout?.with?.['fetch-depth']).toBe(0);
+  });
+
+  it('publish job stays read-only for contents and the action-tag job grants contents: write for tags', () => {
+    expect(workflow.jobs.publish?.permissions?.contents).toBe('read');
+    expect(workflow.jobs.publish?.permissions?.['id-token']).toBe('write');
+    expect(tagJob?.permissions?.contents).toBe('write');
+  });
+
+  it('never creates a v-prefixed tag in the package-tag step', () => {
+    const step = tagRuns[tagStepIdx] ?? '';
+    expect(step).not.toMatch(/git tag\s+(-f\s+)?"?v/);
+    expect(step).not.toMatch(/refs\/tags\/v/);
+    expect(rawText).not.toMatch(/\bchangeset tag\b/);
+  });
+
+  it('keeps the publish gate on vars.RELEASE_PUBLISH unchanged', () => {
+    expect(workflow.jobs.publish?.if).toContain("vars.RELEASE_PUBLISH == 'true'");
+  });
+});
+
+describe('.github/workflows/release.yml action-tag job', () => {
+  const rawText = readFileSync(WORKFLOW_PATH, 'utf8');
+  const job = loadWorkflow(WORKFLOW_PATH).jobs['action-tag'];
+  const runs = (job?.steps ?? []).map((s) => s.run ?? '').join('\n');
+
+  it('needs publish and runs only when publish succeeded', () => {
+    const needs = job?.needs;
+    expect(Array.isArray(needs) ? needs : [needs]).toContain('publish');
+    expect(job?.if).toContain('needs.publish.result == ');
+    expect(job?.if).toContain("'success'");
+  });
+
+  it('has contents: write and no other write permission', () => {
+    const writes = Object.entries(job?.permissions ?? {}).filter(([, v]) => v === 'write');
+    expect(writes).toEqual([['contents', 'write']]);
+  });
+
+  it('creates the release vX.Y.Z from packages/cli/package.json version idempotently', () => {
+    expect(runs).toContain('packages/cli/package.json');
+    expect(runs).toMatch(/gh release view "v\$\{?VERSION\}?"/);
+    expect(runs).toMatch(/gh release create "v\$\{?VERSION\}?"/);
+    expect(runs.indexOf('gh release view')).toBeLessThan(runs.indexOf('gh release create'));
+    expect(runs).toMatch(/\|\|\s*gh release create/);
+  });
+
+  it('force-moves the plain major tag', () => {
+    expect(runs).toMatch(/MAJOR="?\$\{VERSION%%\.\*\}"?/);
+    expect(runs).toMatch(/git tag -f "v\$\{?MAJOR\}?"/);
+    expect(runs).toMatch(/git push --force origin "refs\/tags\/v\$\{?MAJOR\}?"/);
+    expect(runs).not.toMatch(/refs\/tags\/v1\b/);
+    expect(rawText).not.toMatch(/@v1\b/);
+  });
+
+  it('never creates a tag in the changesets namespace', () => {
+    const tagLines = runs
+      .split('\n')
+      .filter((l) => /git tag|git push/.test(l) && !/changeset git-tag/.test(l));
+    for (const line of tagLines) expect(line).not.toContain('vetkit@');
+    expect(runs).not.toMatch(/gh release create "vetkit@/);
+    expect(runs).not.toMatch(/gh release create "v\$\{?MAJOR\}?"/);
+  });
+
+  it('passes values through env, never a github expression inside run', () => {
+    expect(runs).not.toMatch(/\$\{\{/);
+    const env = (job?.steps ?? []).find((s) => (s.run ?? '').includes('gh release'))?.env;
+    expect(env?.['GH_TOKEN']).toBe('${{ github.token }}');
+  });
+
+  it('tags packages before the release and the major tag', () => {
+    const idx = (job?.steps ?? []).map((s) => s.run ?? '');
+    const gitTag = idx.findIndex((t) => t.includes('changeset git-tag'));
+    const release = idx.findIndex((t) => t.includes('gh release'));
+    const major = idx.findIndex((t) => t.includes('git tag -f'));
+    expect(gitTag).toBeGreaterThanOrEqual(0);
+    expect(release).toBeGreaterThan(gitTag);
+    expect(major).toBeGreaterThanOrEqual(release);
+  });
+});
+
+describe('.changeset entries', () => {
+  it('the initial changeset lists every package under packages/* as minor', () => {
+    const text = readFileSync(join(ROOT, '.changeset/initial-release.md'), 'utf8');
+    const front = /^---\n([\s\S]*?)\n---\n/.exec(text)?.[1] ?? '';
+    const entries = parseYaml(front) as Record<string, string>;
+    const names = readdirSync(PACKAGES_DIR, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => JSON.parse(readFileSync(join(PACKAGES_DIR, d.name, 'package.json'), 'utf8')).name)
+      .toSorted();
+    expect(Object.keys(entries).toSorted()).toEqual(names);
+    expect(new Set(Object.values(entries))).toEqual(new Set(['minor']));
+    expect(names).toHaveLength(12);
   });
 });
