@@ -228,6 +228,48 @@ describe('vet init without --source', () => {
       expect(readdirSync(dir)).toEqual([]);
     });
   }
+
+  // Nothing in vetkit.config.ts is at fault when a flag is misused, so the CONFIG_INVALID
+  // next-step hint (run vet doctor --config <path> ...) would send the user the wrong way.
+  test('a flag-usage refusal is its one line on stderr, without the config hint', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'vetkit-init-usage-'));
+    const refusals = [
+      ['--out', 'evals-out'],
+      ['--source', 'traces'],
+    ] as const;
+    for (const args of refusals) {
+      const result = runVet(['init', ...args], dir);
+      expect(result.status, args.join(' ')).toBe(2);
+      expect(result.stderr, args.join(' ')).not.toContain('vet doctor');
+      expect(result.stderr.trimEnd().split('\n'), args.join(' ')).toHaveLength(1);
+    }
+  });
+});
+
+// --until and --seconds stop a streaming source; a directory of traces is read whole, so
+// accepting them there would silently ignore a limit the user asked for.
+describe('vet init --source with a directory of traces', () => {
+  const limits = [
+    ['--until', '5'],
+    ['--seconds', '5'],
+  ] as const;
+
+  for (const [flag, value] of limits) {
+    for (const spec of ['traces', 'jsonl:traces']) {
+      test(`${flag} with --source ${spec} exits 2 CONFIG_INVALID naming a streaming source, and writes nothing`, () => {
+        const project = freshProject();
+        const out = join(project, 'evals-out');
+        const result = runVet(['init', '--source', spec, flag, value, '--out', out], project);
+        expect(result.status).toBe(2);
+        const [first] = result.stderr.split('\n');
+        expect(first).toMatch(new RegExp(`^error CONFIG_INVALID: ${flag} .*streaming`));
+        expect(first).toContain('otlp::<port>');
+        expect(result.stderr).not.toContain('vet doctor');
+        expect(result.stdout).toBe('');
+        expect(existsSync(out)).toBe(false);
+      });
+    }
+  }
 });
 
 interface GeneratorTotals {

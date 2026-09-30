@@ -501,6 +501,87 @@ describe('loadCriteria', () => {
     expect(new Set(lines).size).toBe(lines.length);
   });
 
+  test("the not-allowed line names the field, not ajv's 'must NOT be valid'", async () => {
+    const file = await tempFile(
+      'criteria.yaml',
+      [
+        'criteria:',
+        '  - id: brief',
+        '    type: boolean',
+        '    instructions: Is the reply brief?',
+        '    escape: The reply is empty.',
+        '    criteria: 5',
+        '    polarity: pass_when_true',
+        '    channel: quality',
+        '    provenance: { traceIds: [] }',
+        '',
+      ].join('\n'),
+    );
+
+    const result = await loadCriteria(file);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const notAllowed = result.issues.filter((i) => i.message.includes('not allowed'));
+    expect(notAllowed).toHaveLength(1);
+    expect(notAllowed[0]).toMatchObject({ path: '/criteria/0' });
+    expect(notAllowed[0]?.message).toContain("'criteria'");
+    expect(notAllowed[0]?.message).toContain('boolean');
+    expect(notAllowed[0]?.message).not.toContain('must NOT be valid');
+  });
+
+  test('an unknown grader kind is one line naming the kinds it could have been', async () => {
+    const file = await tempFile(
+      'criteria.yaml',
+      [
+        'criteria:',
+        '  - id: brief',
+        '    type: boolean',
+        '    instructions: Is the reply brief?',
+        '    escape: The reply is empty.',
+        '    polarity: pass_when_true',
+        '    channel: quality',
+        '    grader: { kind: bogus }',
+        '    provenance: { traceIds: [] }',
+        '',
+      ].join('\n'),
+    );
+
+    const result = await loadCriteria(file);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const kindLines = result.issues.filter((i) => i.path === '/criteria/0/grader/kind');
+    expect(kindLines).toHaveLength(1);
+    for (const kind of ['judge', 'reference', 'code']) {
+      expect(kindLines[0]?.message).toContain(`"${kind}"`);
+    }
+  });
+
+  test("an unknown grader kind prints no line about the code kind's check", async () => {
+    const file = await tempFile(
+      'criteria.yaml',
+      [
+        'criteria:',
+        '  - id: brief',
+        '    type: boolean',
+        '    instructions: Is the reply brief?',
+        '    escape: The reply is empty.',
+        '    polarity: pass_when_true',
+        '    channel: quality',
+        '    grader: { kind: bogus }',
+        '    provenance: { traceIds: [] }',
+        '',
+      ].join('\n'),
+    );
+
+    const result = await loadCriteria(file);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.issues.map((i) => i.path)).toEqual(['/criteria/0/grader/kind']);
+  });
+
   test('a document without a top-level criteria list is CRITERIA_INVALID at /criteria', async () => {
     const file = await tempFile('criteria.yaml', 'other: 1\n');
 
