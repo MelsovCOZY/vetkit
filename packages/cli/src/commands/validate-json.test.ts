@@ -3,6 +3,7 @@ import { cpSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { safeParseJson } from '@vetkit/spec';
 import { beforeAll, describe, expect, test } from 'vitest';
 import { ensureCliBuilt } from '../test-support/build-cli.js';
 
@@ -23,7 +24,9 @@ describe('vet validate --json', () => {
       encoding: 'utf8',
     });
     expect(result.status).toBe(2);
-    const doc = JSON.parse(result.stdout) as unknown;
+    const parsed = safeParseJson<unknown>(result.stdout, {});
+    expect(parsed.ok).toBe(true);
+    const doc = parsed.ok ? parsed.value : undefined;
     expect(JSON.stringify(doc)).toContain('LABELS_TOO_FEW');
   });
 });
