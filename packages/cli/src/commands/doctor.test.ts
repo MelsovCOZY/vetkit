@@ -423,7 +423,7 @@ const LANGFUSE_SINKS = `[${LANGFUSE_DESCRIPTOR}]`;
 const OK_HEALTH = () => vi.fn(async () => jsonResponse(200, { name: 'jev' }));
 
 describe('runDoctor with a resolved config (--config)', () => {
-  const BASE = { nodeVersion: 'v22.23.2', bunPresent: () => true, lefthookInstalled: () => true };
+  const BASE = { nodeVersion: 'v22.23.2' };
 
   test('judge credential row names the env var the config selects, not the priority list', async () => {
     const cwd = await configProject(configSource({ judge: PRESET_JUDGE }));
@@ -467,7 +467,7 @@ describe('runDoctor with a resolved config (--config)', () => {
       fetchImpl,
     });
     expect(fetchImpl).toHaveBeenCalledWith(
-      JEV_PRESETS.typesafe.health.url({}),
+      `${JEV_PRESETS.typesafe.baseURL}${JEV_PRESETS.typesafe.health.path({})}`,
       expect.objectContaining({ headers: { Authorization: 'Bearer fake-judge-key' } }),
     );
   });
