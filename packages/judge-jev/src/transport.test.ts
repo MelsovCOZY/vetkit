@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test, vi } from 'vitest';
 import { safeParseJson, VetError, type Question } from '@vetkit/spec';
+import type { JevProviderOptions } from './presets.ts';
 import { createJevJudge, createJevJudgeFromEndpoint } from './transport.ts';
 
 interface CapturedCall {
@@ -968,11 +969,11 @@ describe('served model id through the transport', () => {
   });
 });
 
-describe('vercel preset refuses gateway model fallbacks', () => {
-  const withModels = (models: readonly string[]) => ({
-    gateway: { zeroDataRetention: true, only: ['typesafe-ai'], models },
-  });
+const withModels = (models: readonly string[]): JevProviderOptions => ({
+  gateway: { zeroDataRetention: true, only: ['typesafe-ai'], models },
+});
 
+describe('vercel preset refuses gateway model fallbacks', () => {
   test('vercel preset with providerOptions.gateway.models throws CONFIG_INVALID synchronously and never calls fetch', () => {
     const fetchStub = vi.fn(async () => jsonResponse(fakeSuccessBody('typesafe-ai/jev')));
     let thrown: unknown;
@@ -1004,7 +1005,11 @@ describe('vercel preset refuses gateway model fallbacks', () => {
       { baseURL: 'https://example.test', model: 'm' },
     ];
     for (const build of builds) {
-      const fetchStub = vi.fn(async () => jsonResponse(fakeSuccessBody('m')));
+      const calls: CapturedCall[] = [];
+      const fetchStub: typeof fetch = async (input, init) => {
+        calls.push({ url: String(input), init: init ?? {} });
+        return jsonResponse(fakeSuccessBody('m'));
+      };
       const judge = createJevJudge({
         ...build,
         apiKey: 'k',
@@ -1015,8 +1020,9 @@ describe('vercel preset refuses gateway model fallbacks', () => {
         state: 's',
         questions: { ok: { type: 'boolean', instructions: 'q' } },
       });
-      const call = fetchStub.mock.calls[0] as unknown as [string, RequestInit];
-      const sent = await capturedBody({ url: call[0], init: call[1] });
+      const call = calls[0];
+      if (call === undefined) throw new Error('expected one fetch call');
+      const sent = await capturedBody(call);
       expect(sent.providerOptions).toEqual(options);
     }
   });
