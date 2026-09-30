@@ -25,6 +25,7 @@ describe('docs/ ignore allowlist', () => {
     'docs/configuration.md',
     'docs/sinks.md',
     'docs/watch.md',
+    'docs/ci-gate.md',
     'docs/contracts/j3.md',
     'docs/contracts/new-contract.md',
     'docs/guides/x.md',
@@ -41,7 +42,7 @@ describe('docs/ ignore allowlist', () => {
       .filter((path) => path !== '')
       .filter(
         (path) =>
-          !/^docs\/(\.gitkeep|configuration\.md|sinks\.md|watch\.md|contracts\/.+|guides\/.+|listings\/.+)$/.test(
+          !/^docs\/(\.gitkeep|configuration\.md|sinks\.md|watch\.md|ci-gate\.md|contracts\/.+|guides\/.+|listings\/.+)$/.test(
             path,
           ),
       );
