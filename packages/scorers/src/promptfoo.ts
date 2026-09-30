@@ -3,7 +3,7 @@
 // test-only fixture promptfoo.test.ts asserts shape against; production code never imports it
 // (this package has zero dependency on the promptfoo package).
 import type { VerdictCache } from '@vetkit/core';
-import type { Criterion, JudgeV1 } from '@vetkit/spec';
+import type { Criterion, JudgeV1, Lock } from '@vetkit/spec';
 import { judgeOne, probabilityOf } from './judge-one.ts';
 
 export interface GradingResult {
@@ -16,21 +16,59 @@ export interface GradingResult {
   graderError?: boolean;
 }
 
+/**
+ * The structural subset of promptfoo's assertion context this adapter reads; keeping it local is
+ * what leaves this package with zero promptfoo dependency.
+ */
+export interface PromptfooAssertionContext {
+  readonly prompt?: string;
+  readonly vars?: Readonly<Record<string, unknown>>;
+}
+
 export interface ToPromptfooAssertionOptions {
   readonly judge: JudgeV1;
   readonly criterion: Criterion;
+  /** The project's criteria.lock.json (read by the caller); supplies threshold and tolerance. */
+  readonly lock?: Lock;
+  /** The var holding the judged state (default 'input'). */
+  readonly inputVar?: string;
+  /** The var holding the reference answer (default 'expected'). */
+  readonly expectedVar?: string;
   readonly threshold?: number;
   readonly cache?: VerdictCache;
 }
 
+type StateSource = 'vars' | 'prompt' | 'output';
+
+// A non-string var, or an empty prompt, is skipped: the next source stands in.
+function pickState(
+  output: string,
+  context: PromptfooAssertionContext | undefined,
+  inputVar: string,
+): { state: string; stateSource: StateSource } {
+  const fromVars = context?.vars?.[inputVar];
+  if (typeof fromVars === 'string') return { state: fromVars, stateSource: 'vars' };
+  const fromPrompt = context?.prompt;
+  if (fromPrompt !== undefined && fromPrompt !== '') {
+    return { state: fromPrompt, stateSource: 'prompt' };
+  }
+  return { state: output, stateSource: 'output' };
+}
+
 export function toPromptfooAssertion(
   options: ToPromptfooAssertionOptions,
-): (output: string) => Promise<GradingResult> {
-  return async (output) => {
-    const { verdict, pass, threshold } = await judgeOne({
+): (output: string, context?: PromptfooAssertionContext) => Promise<GradingResult> {
+  const inputVar = options.inputVar ?? 'input';
+  const expectedVar = options.expectedVar ?? 'expected';
+  return async (output, context) => {
+    const { state, stateSource } = pickState(output, context, inputVar);
+    const expected = context?.vars?.[expectedVar];
+    const { verdict, pass, threshold, calibration } = await judgeOne({
       judge: options.judge,
       criterion: options.criterion,
-      state: output,
+      state,
+      ...(options.lock === undefined ? {} : { lock: options.lock }),
+      ...(typeof expected === 'string' ? { expected } : {}),
       ...(options.threshold === undefined ? {} : { threshold: options.threshold }),
       ...(options.cache === undefined ? {} : { cache: options.cache }),
     });
@@ -44,7 +82,7 @@ export function toPromptfooAssertion(
         pass: true,
         score: 0,
         reason: `${id} escaped: not_applicable`,
-        metadata: { status: 'not_applicable', model },
+        metadata: { status: 'not_applicable', model, calibration, stateSource },
       };
     }
     if (verdict.status !== 'ok' || verdict.answer === undefined || pass === undefined) {
@@ -56,7 +94,7 @@ export function toPromptfooAssertion(
         pass: false,
         score: 0,
         reason: `${id} unscored: ${causeText}`,
-        metadata: { status: verdict.status, model },
+        metadata: { status: verdict.status, model, calibration, stateSource },
         graderError: true,
       };
     }
@@ -67,7 +105,7 @@ export function toPromptfooAssertion(
       score: probability,
       reason: `${id} ${pass ? 'passed' : 'failed'} (p=${probability.toFixed(2)}, threshold=${appliedThreshold.toFixed(2)})`,
       namedScores: { [id]: probability },
-      metadata: { model },
+      metadata: { model, calibration, stateSource },
     };
   };
 }

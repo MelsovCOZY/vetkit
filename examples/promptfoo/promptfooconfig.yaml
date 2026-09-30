@@ -1,0 +1,11 @@
+description: vetkit criterion as a promptfoo assertion
+prompts:
+  - '{{input}}'
+providers:
+  - echo
+tests:
+  - vars:
+      input: "User: Can I get a refund for my order #4411?\nAssistant: Yes. I have issued a full refund for order #4411; it will reach your card in 3-5 days."
+    assert:
+      - type: javascript
+        value: file://vetkit.assert.ts

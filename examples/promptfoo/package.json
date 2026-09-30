@@ -1,0 +1,16 @@
+{
+  "name": "vetkit-example-promptfoo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "promptfoo eval --no-cache -c promptfooconfig.yaml"
+  },
+  "dependencies": {
+    "@vetkit/core": "^0.0.0",
+    "@vetkit/judge-jev": "^0.0.0",
+    "@vetkit/scorers": "^0.0.0",
+    "@vetkit/spec": "^0.0.0",
+    "promptfoo": "0.123.1",
+    "vetkit": "^0.1.0"
+  }
+}
