@@ -385,7 +385,8 @@ describe('createLimiter retry and AIMD', () => {
 
   it('budget exhausted', async () => {
     const clock = virtualClock();
-    const limiter = createLimiter({ now: clock.now, sleep: clock.sleep });
+    // The 400 s header is clamped to the 120 s cap, which still exceeds this 100 s budget.
+    const limiter = createLimiter({ now: clock.now, sleep: clock.sleep, totalBudgetMs: 100_000 });
     const last = retryable(400_000);
     const f = failThen([last]);
     const r = await settle(limiter.run(f.fn));
@@ -396,7 +397,7 @@ describe('createLimiter retry and AIMD', () => {
     expect(causeOf(r.error)).toEqual({ error: last, attempts: 1 });
     const message = messageOf(r.error);
     expect(message).toContain('judge transport error (HTTP 429)');
-    expect(message).toContain('retry budget exhausted (suggested wait 400000ms)');
+    expect(message).toContain('retry budget exhausted (suggested wait 120000ms)');
     expect(message).toContain('(after 1 attempts)');
     expect(limiter.stats().pausedUntil).toBe(0);
   });

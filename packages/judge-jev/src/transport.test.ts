@@ -377,7 +377,11 @@ describe('HTTP error mapping', () => {
     );
 
     expect(err.code).toBe('JUDGE_UNAVAILABLE');
-    expect(err.details).toEqual({ retryable: false, hint: 'no_providers_available' });
+    expect(err.details).toEqual({
+      retryable: false,
+      hint: 'no_providers_available',
+      kind: 'terminal-request',
+    });
     expect(err.message).toContain('403');
     expect(err.message).toContain('no_providers_available');
   });
@@ -398,7 +402,7 @@ describe('HTTP error mapping', () => {
     );
 
     expect(err.code).toBe('JUDGE_UNAVAILABLE');
-    expect(err.details).toEqual({ retryable: false, hint: 'forbidden' });
+    expect(err.details).toEqual({ retryable: false, hint: 'forbidden', kind: 'terminal-request' });
     expect(err.message).toContain('403');
     expect(err.message).toContain('forbidden');
     expect(serializeErrorChain(err)).not.toContain(apiKey);
@@ -413,7 +417,7 @@ describe('HTTP error mapping', () => {
     );
 
     expect(err.code).toBe('JUDGE_UNAVAILABLE');
-    expect(err.details).toEqual({ retryable: false, hint: 'no credit' });
+    expect(err.details).toEqual({ retryable: false, hint: 'no credit', kind: 'terminal-billing' });
   });
 
   test('404 model_not_found maps to JUDGE_BAD_RESPONSE naming the requested model', async () => {
