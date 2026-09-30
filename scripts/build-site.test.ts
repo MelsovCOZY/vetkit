@@ -79,10 +79,9 @@ describe('site staging', () => {
     expect(existsSync(join(out, 'docs/listings'))).toBe(false);
   });
 
-  it('takes the page title from the first heading', () => {
-    const title = frontMatterTitle(staged('docs/guides/cli-json.md'));
-    const heading = /^# (.+)$/m.exec(readFileSync(join(ROOT, 'docs/guides/cli-json.md'), 'utf8'));
-    expect(title).toBe(JSON.stringify(heading?.[1]));
+  it('takes the page title from the first heading, or the file name when there is none', () => {
+    expect(frontMatterTitle(staged('docs/watch.md'))).toBe(JSON.stringify('`vet watch`'));
+    expect(frontMatterTitle(staged('docs/guides/cli-json.md'))).toBe(JSON.stringify('cli-json'));
   });
 
   it('copies every spec schema and the otlp schema to the path its $id names', () => {
@@ -186,7 +185,7 @@ describe('rewriteLink', () => {
 
   it('points package paths and contracts at the repository on GitHub', () => {
     expect(rewriteLink('packages/cli', 'README.md')).toBe(`${GITHUB}/tree/master/packages/cli`);
-    expect(rewriteLink('docs/contracts/j7.md', 'docs/watch.md')).toBe(
+    expect(rewriteLink('contracts/j7.md', 'docs/watch.md')).toBe(
       `${GITHUB}/blob/master/docs/contracts/j7.md`,
     );
     expect(rewriteLink('../contracts/j7.md', 'docs/guides/x.md')).toBe(
