@@ -27,10 +27,11 @@ export interface JevCredentialEnv {
 export type JevEnv = Readonly<Record<string, string | undefined>>;
 
 // Per-transport health probe: OpenRouter and Cloudflare health endpoints differ, so each
-// preset gets its own probe rather than one shared shape.
+// preset gets its own probe rather than one shared shape. The path is relative to the
+// baseURL actually in use (the preset's, or the one a config overrides it with).
 export interface JevHealthEndpoint {
   readonly method: 'GET' | 'HEAD';
-  readonly url: (env: JevEnv) => string;
+  readonly path: (env: JevEnv) => string;
 }
 
 // A price row for one transport (the per-transport price table lives here, as
@@ -64,7 +65,7 @@ export const JEV_PRESETS: Record<'typesafe' | 'vercel' | 'openrouter' | 'cloudfl
     credentials: [
       { name: 'TYPESAFE_API_KEY', purpose: 'judge credential for the TypeSafe direct transport' },
     ],
-    health: { method: 'GET', url: () => 'https://api.typesafe.ai/v1/models' },
+    health: { method: 'GET', path: () => '/v1/models' },
   },
   vercel: {
     baseURL: 'https://ai-gateway.vercel.sh/typesafe',
@@ -81,7 +82,7 @@ export const JEV_PRESETS: Record<'typesafe' | 'vercel' | 'openrouter' | 'cloudfl
         purpose: 'judge credential for the Vercel AI Gateway transport (typesafe-ai/jev alias)',
       },
     ],
-    health: { method: 'GET', url: () => 'https://ai-gateway.vercel.sh/typesafe/v1/models' },
+    health: { method: 'GET', path: () => '/v1/models' },
     pricing: {
       inputPerMTok: 0.042,
       outputPerMTok: 0,
@@ -101,10 +102,7 @@ export const JEV_PRESETS: Record<'typesafe' | 'vercel' | 'openrouter' | 'cloudfl
         purpose: 'judge credential for the OpenRouter Decisions transport',
       },
     ],
-    health: {
-      method: 'GET',
-      url: () => 'https://openrouter.ai/api/v1/models?output_modalities=all',
-    },
+    health: { method: 'GET', path: () => '/v1/models?output_modalities=all' },
   },
   cloudflare: {
     // UNVERIFIED: the {result, success, errors} REST envelope is taken from
@@ -126,8 +124,7 @@ export const JEV_PRESETS: Record<'typesafe' | 'vercel' | 'openrouter' | 'cloudfl
     ],
     health: {
       method: 'HEAD',
-      url: (env) =>
-        `https://api.cloudflare.com/client/v4/accounts/${env.CLOUDFLARE_ACCOUNT_ID ?? ''}/ai/run`,
+      path: (env) => `/accounts/${env.CLOUDFLARE_ACCOUNT_ID ?? ''}/ai/run`,
     },
   },
 };
