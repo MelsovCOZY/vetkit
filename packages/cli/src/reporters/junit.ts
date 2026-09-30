@@ -30,6 +30,8 @@ export interface RenderJunitOptions {
   /** When the run happened; rendered without a timezone, as the XSD requires. */
   readonly timestamp: Date;
   readonly hostname?: string;
+  /** Applied to every value before XML-escaping (escaped text no longer matches a raw secret). */
+  readonly redact?: (text: string) => string;
 }
 
 function escapeXml(value: string): string {
@@ -41,9 +43,12 @@ function escapeXml(value: string): string {
     .replaceAll("'", '&apos;');
 }
 
-function attrs(values: Record<string, string | number>): string {
+function attrs(
+  values: Record<string, string | number>,
+  redact: (text: string) => string = (text) => text,
+): string {
   return Object.entries(values)
-    .map(([key, value]) => ` ${key}="${escapeXml(String(value))}"`)
+    .map(([key, value]) => ` ${key}="${escapeXml(redact(String(value)))}"`)
     .join('');
 }
 
@@ -89,6 +94,8 @@ export function renderJunit(
   suites: readonly JunitSuiteInput[],
   options: RenderJunitOptions,
 ): string {
+  const redact = options.redact ?? ((text: string) => text);
+  const attr = (values: Record<string, string | number>): string => attrs(values, redact);
   const names = suiteNames(suites.map((s) => s.criteriaPath));
   const timestamp = formatTimestamp(options.timestamp);
   const host = options.hostname ?? 'localhost';
@@ -108,18 +115,18 @@ export function renderJunit(
       ['model.transport', model.transport],
       ['model.pinned', String(model.pinned)],
     ]
-      .map(([key = '', value = '']) => `      <property${attrs({ name: key, value })}/>`)
+      .map(([key = '', value = '']) => `      <property${attr({ name: key, value })}/>`)
       .join('\n');
     const cases = outcomes.map(({ v, o }) => {
-      const open = `    <testcase${attrs({ name: `${v.caseId}::${v.criterionId}`, classname: name, time: 0 })}`;
+      const open = `    <testcase${attr({ name: `${v.caseId}::${v.criterionId}`, classname: name, time: 0 })}`;
       if (o.kind === 'pass') return `${open}/>`;
       const child =
         o.kind === 'failure'
-          ? `<failure${attrs({ message: o.message, type: 'threshold' })}/>`
-          : `<skipped${attrs({ message: v.status })}/>`;
+          ? `<failure${attr({ message: o.message, type: 'threshold' })}/>`
+          : `<skipped${attr({ message: v.status })}/>`;
       return `${open}>\n      ${child}\n    </testcase>`;
     });
-    const suiteAttrs = attrs({
+    const suiteAttrs = attr({
       name,
       timestamp,
       hostname: host,
@@ -142,7 +149,7 @@ export function renderJunit(
       '  </testsuite>',
     ].join('\n');
   });
-  const rootAttrs = attrs({ ...totals, errors: 0 });
+  const rootAttrs = attr({ ...totals, errors: 0 });
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
     body.length === 0 ? `<testsuites${rootAttrs}/>` : `<testsuites${rootAttrs}>`,
@@ -189,13 +196,12 @@ export async function writeReports(
   if (reporter === undefined) return undefined;
   const target = resolve(options.cwd, reporter.path);
   // Env-secret pass only (no entropy heuristics), so hashes in test names stay intact.
-  const xml = redactSecrets(
-    renderJunit(suites, {
-      timestamp: options.timestamp ?? new Date(),
-      hostname: options.hostname ?? (osHostname() || 'localhost'),
-    }),
-    secretsFrom(process.env),
-  );
+  const secrets = secretsFrom(process.env);
+  const xml = renderJunit(suites, {
+    timestamp: options.timestamp ?? new Date(),
+    hostname: options.hostname ?? (osHostname() || 'localhost'),
+    redact: (text) => redactSecrets(text, secrets),
+  });
   await mkdir(dirname(target), { recursive: true });
   const temp = `${target}.${String(process.pid)}.tmp`;
   try {
