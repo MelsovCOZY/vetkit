@@ -59,7 +59,7 @@ export function createCloudflareTransport(opts: CloudflareTransportOptions): Clo
       return new VetError(
         'JUDGE_UNAVAILABLE',
         `Cloudflare refused the token (HTTP 403); check that ${apiKeyEnv} has Workers AI access`,
-        { details: { retryable: false } },
+        { details: { kind: 'terminal-auth', retryable: false } },
       );
     },
     unwrap(envelope) {
