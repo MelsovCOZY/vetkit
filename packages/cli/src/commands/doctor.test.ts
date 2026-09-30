@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -17,12 +17,19 @@ function parseJson(text: string): unknown {
   return result.value;
 }
 
-const PASSING_DEPS = {
-  nodeVersion: 'v22.23.2',
-  bunPresent: () => true,
-  lefthookInstalled: () => true,
-  configExists: () => true,
-};
+// A project whose config selects the typesafe preset with TYPESAFE_API_KEY: doctor resolves
+// it by default, so the tests that only need a healthy config share this directory.
+const PROJECT_DIR = mkdtempSync(join(tmpdir(), 'vetkit-doctor-pass-'));
+writeFileSync(join(PROJECT_DIR, 'package.json'), '{}');
+writeFileSync(
+  join(PROJECT_DIR, 'vetkit.config.ts'),
+  `export default { judge: { kind: 'typesafe-compatible', preset: 'typesafe', apiKeyEnv: 'TYPESAFE_API_KEY' } };\n`,
+);
+
+const PASSING_DEPS = { nodeVersion: 'v22.23.2', cwd: PROJECT_DIR };
+
+// No config found: the sniff table (env-var priority list) is shown.
+const SNIFF_DEPS = { nodeVersion: 'v22.23.2', configExists: () => false };
 
 function statusOf(
   checks: readonly { name: string; status: string; detail: string }[],
@@ -55,7 +62,7 @@ describe('runDoctor', () => {
 
   test('no judge key: judge credential is a fail row naming the four accepted variables', async () => {
     const result = await runDoctor({
-      ...PASSING_DEPS,
+      ...SNIFF_DEPS,
       env: {},
       fetchImpl: vi.fn(),
     });
@@ -70,7 +77,7 @@ describe('runDoctor', () => {
 
   test('multiple judge keys set: info row names the config-selected transport', async () => {
     const result = await runDoctor({
-      ...PASSING_DEPS,
+      ...SNIFF_DEPS,
       env: { AI_GATEWAY_API_KEY: 'fake-gw-key', TYPESAFE_API_KEY: 'fake-ts-key' },
       fetchImpl: vi.fn(async () => jsonResponse(200, { name: 'jev', release_date: '2026-09-15' })),
     });
@@ -103,6 +110,85 @@ describe('runDoctor', () => {
     expect(result.exitCode).toBe(0);
   });
 
+  test('401 is a fail row and exit code 1 without --strict', async () => {
+    const result = await runDoctor({
+      ...PASSING_DEPS,
+      env: { TYPESAFE_API_KEY: 'fake-key' },
+      fetchImpl: vi.fn(async () => jsonResponse(401, {})),
+    });
+    expect(statusOf(result.checks, 'judge endpoint health').status).toBe('fail');
+    expect(result.exitCode).toBe(1);
+    const sniffed = await runDoctor({
+      ...SNIFF_DEPS,
+      env: { TYPESAFE_API_KEY: 'fake-key' },
+      fetchImpl: vi.fn(async () => jsonResponse(401, {})),
+    });
+    expect(statusOf(sniffed.checks, 'judge endpoint health').status).toBe('fail');
+  });
+
+  test('403 authentication_error is a fail row', async () => {
+    const result = await runDoctor({
+      ...PASSING_DEPS,
+      env: { TYPESAFE_API_KEY: 'fake-key' },
+      fetchImpl: vi.fn(async () =>
+        jsonResponse(403, { detail: { error_type: 'authentication_error' } }),
+      ),
+    });
+    expect(statusOf(result.checks, 'judge endpoint health').status).toBe('fail');
+    expect(result.exitCode).toBe(1);
+  });
+
+  test('402 stays a warn row', async () => {
+    const result = await runDoctor({
+      ...PASSING_DEPS,
+      env: { TYPESAFE_API_KEY: 'fake-key' },
+      fetchImpl: vi.fn(async () => jsonResponse(402, {})),
+    });
+    expect(statusOf(result.checks, 'judge endpoint health').status).toBe('warn');
+    expect(result.exitCode).toBe(0);
+  });
+
+  test('no bun or lefthook row in either mode', async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(200, { name: 'jev' }));
+    const env = { TYPESAFE_API_KEY: 'fake-key' };
+    const configured = await runDoctor({ ...PASSING_DEPS, env, fetchImpl });
+    const sniffed = await runDoctor({ ...SNIFF_DEPS, env, fetchImpl });
+    for (const { checks } of [configured, sniffed]) {
+      const names = checks.map((c) => c.name);
+      expect(names).not.toContain('bun');
+      expect(names).not.toContain('lefthook');
+    }
+  });
+
+  test('the Cloudflare pair is one credential, joined with +', async () => {
+    const row = statusOf(
+      (await runDoctor({ ...SNIFF_DEPS, env: {}, fetchImpl: vi.fn() })).checks,
+      'judge credential',
+    );
+    expect(row.detail).toContain('CLOUDFLARE_API_TOKEN+CLOUDFLARE_ACCOUNT_ID=<unset>');
+    expect(row.detail).not.toContain('CLOUDFLARE_API_TOKEN=<unset>');
+    expect(row.detail).not.toMatch(/(^|, )CLOUDFLARE_ACCOUNT_ID=<unset>/);
+    expect(row.detail).toMatch(/set one of .*CLOUDFLARE_API_TOKEN\+CLOUDFLARE_ACCOUNT_ID/);
+    expect(row.detail).not.toMatch(/CLOUDFLARE_API_TOKEN, /);
+  });
+
+  test('a partly set Cloudflare pair shows each name and names the missing one', async () => {
+    const row = statusOf(
+      (
+        await runDoctor({
+          ...SNIFF_DEPS,
+          env: { CLOUDFLARE_API_TOKEN: 'fake-cf-token' },
+          fetchImpl: vi.fn(),
+        })
+      ).checks,
+      'judge credential',
+    );
+    expect(row.status).toBe('fail');
+    expect(row.detail).toContain('CLOUDFLARE_API_TOKEN=<set>+CLOUDFLARE_ACCOUNT_ID=<unset>');
+    expect(row.detail).toMatch(/CLOUDFLARE_ACCOUNT_ID is missing/);
+    expect(row.detail).not.toContain('fake-cf-token');
+  });
+
   describe('health-check HTTP error hints', () => {
     test('401 hints at an invalid credential', async () => {
       const result = await runDoctor({
@@ -111,6 +197,7 @@ describe('runDoctor', () => {
         fetchImpl: vi.fn(async () => jsonResponse(401, {})),
       });
       expect(statusOf(result.checks, 'judge endpoint health').detail).toMatch(/unauthorized/i);
+      expect(statusOf(result.checks, 'judge endpoint health').status).toBe('fail');
     });
 
     test('402 hints at no credit or exhausted budget', async () => {
@@ -124,7 +211,7 @@ describe('runDoctor', () => {
 
     test('gateway 403 customer_verification_required hints at identity verification', async () => {
       const result = await runDoctor({
-        ...PASSING_DEPS,
+        ...SNIFF_DEPS,
         env: { AI_GATEWAY_API_KEY: 'fake-gw-key' },
         fetchImpl: vi.fn(async () =>
           jsonResponse(403, { error: { type: 'customer_verification_required' } }),
@@ -135,7 +222,7 @@ describe('runDoctor', () => {
 
     test('gateway 403 free-tier model hints at a plan upgrade', async () => {
       const result = await runDoctor({
-        ...PASSING_DEPS,
+        ...SNIFF_DEPS,
         env: { AI_GATEWAY_API_KEY: 'fake-gw-key' },
         fetchImpl: vi.fn(async () =>
           jsonResponse(403, { error: { type: 'free_tier_model_not_available' } }),
@@ -158,7 +245,7 @@ describe('runDoctor', () => {
 
   test('vercel transport: reports zero-data-retention as best-effort and prints gateway routing metadata', async () => {
     const result = await runDoctor({
-      ...PASSING_DEPS,
+      ...SNIFF_DEPS,
       env: { AI_GATEWAY_API_KEY: 'fake-gw-key' },
       fetchImpl: vi.fn(async () =>
         jsonResponse(200, {
@@ -180,7 +267,7 @@ describe('runDoctor', () => {
   test('no leak: a set credential never appears in full, only <set> unless --reveal-suffix', async () => {
     const secret = 'fake-gateway-secret-value-9999';
     const result = await runDoctor({
-      ...PASSING_DEPS,
+      ...SNIFF_DEPS,
       env: { AI_GATEWAY_API_KEY: secret },
       fetchImpl: vi.fn(async () => jsonResponse(200, { name: 'jev', release_date: '2026-09-15' })),
     });
@@ -192,7 +279,7 @@ describe('runDoctor', () => {
   test('--reveal-suffix shows only the last 4 characters of a set credential', async () => {
     const secret = 'fake-gateway-secret-value-9999';
     const result = await runDoctor({
-      ...PASSING_DEPS,
+      ...SNIFF_DEPS,
       env: { AI_GATEWAY_API_KEY: secret },
       fetchImpl: vi.fn(async () => jsonResponse(200, { name: 'jev', release_date: '2026-09-15' })),
       revealSuffix: true,
@@ -243,9 +330,13 @@ describe('docs/configuration.md env-docs', () => {
   test('lists exactly the env var names doctor.ts exports', () => {
     const docsPath = fileURLToPath(new URL('../../../../docs/configuration.md', import.meta.url));
     const content = readFileSync(docsPath, 'utf8');
-    const tableLines = content
-      .split('\n')
-      .filter((line) => line.startsWith('|'))
+    // Only the first table under "## Environment variables": other tables may follow it.
+    const section = content.split('\n## Environment variables')[1]?.split('\n## ')[0] ?? '';
+    const lines = section.split('\n');
+    const start = lines.findIndex((line) => line.startsWith('|'));
+    const tableLines = lines
+      .slice(start)
+      .filter((line, i, all) => all.slice(0, i + 1).every((l) => l.startsWith('|')))
       .slice(2); // drop the header row and the separator row
     const documented = new Set(
       tableLines.flatMap((line) => [...line.matchAll(/`([A-Z][A-Z0-9_]*)`/g)].map((m) => m[1])),
@@ -332,7 +423,7 @@ const LANGFUSE_SINKS = `[${LANGFUSE_DESCRIPTOR}]`;
 const OK_HEALTH = () => vi.fn(async () => jsonResponse(200, { name: 'jev' }));
 
 describe('runDoctor with a resolved config (--config)', () => {
-  const BASE = { nodeVersion: 'v22.23.2', bunPresent: () => true, lefthookInstalled: () => true };
+  const BASE = { nodeVersion: 'v22.23.2' };
 
   test('judge credential row names the env var the config selects, not the priority list', async () => {
     const cwd = await configProject(configSource({ judge: PRESET_JUDGE }));
@@ -376,7 +467,7 @@ describe('runDoctor with a resolved config (--config)', () => {
       fetchImpl,
     });
     expect(fetchImpl).toHaveBeenCalledWith(
-      JEV_PRESETS.typesafe.health.url({}),
+      `${JEV_PRESETS.typesafe.baseURL}${JEV_PRESETS.typesafe.health.path({})}`,
       expect.objectContaining({ headers: { Authorization: 'Bearer fake-judge-key' } }),
     );
   });
