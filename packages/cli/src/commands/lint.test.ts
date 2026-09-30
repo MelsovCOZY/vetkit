@@ -106,6 +106,41 @@ describe('vet lint', () => {
     expect(result.stdout).toMatch(/tone/);
   });
 
+  test('an invalid criteria file lists every issue with its pointer', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'vetkit-lint-invalid-'));
+    const file = join(dir, 'criteria.yaml');
+    writeFileSync(
+      file,
+      `criteria:
+  - id: first
+    type: boolean
+    instructions: Q1?
+    escape: none
+    channel: outcome
+    provenance: { traceIds: [] }
+  - id: second
+    type: boolean
+    instructions: Q2?
+    polarity: pass_when_true
+    channel: outcome
+    provenance: { traceIds: [] }
+`,
+    );
+    const result = runLint([file]);
+    expect(result.status).toBe(2);
+    const lines = result.stderr.split('\n');
+    expect(lines.some((l) => l.includes(`${file}/criteria/0/polarity: `))).toBe(true);
+    expect(lines.some((l) => l.includes(`${file}/criteria/1/escape: `))).toBe(true);
+
+    const json = runLint([file, '--json']);
+    expect(json.status).toBe(2);
+    const doc = parseJson<{ error: { code: string; message: string } }>(json.stdout);
+    expect(doc.error.code).toBe('CRITERIA_INVALID');
+    const messageLines = doc.error.message.split('\n');
+    expect(messageLines.some((l) => l.startsWith(`${file}/criteria/0/polarity: `))).toBe(true);
+    expect(messageLines.some((l) => l.startsWith(`${file}/criteria/1/escape: `))).toBe(true);
+  });
+
   test('the default path is evals/criteria.yaml, relative to cwd', () => {
     const dir = mkdtempSync(join(tmpdir(), 'vetkit-lint-'));
     mkdirSync(join(dir, 'evals'), { recursive: true });

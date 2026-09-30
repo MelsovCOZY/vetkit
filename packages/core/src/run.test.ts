@@ -337,8 +337,8 @@ describe('runEvals results and summary', () => {
     );
     const { judge } = scriptedJudge({});
     const err: unknown = await runEvals({ config: { ...paths, judge } }).catch((e: unknown) => e);
-    expect(VetError.isInstance(err)).toBe(true);
-    const e = err as VetError;
+    if (!VetError.isInstance(err)) throw new Error('expected a VetError');
+    const e = err;
     expect(e.code).toBe(CEV_ERROR_CODES.CRITERIA_INVALID);
     const lines = e.message.split('\n');
     expect(lines[0]).toBe(`cannot load ${paths.criteriaPath}:`);
@@ -354,8 +354,8 @@ describe('runEvals results and summary', () => {
     await writeFile(file, 'not json\n{"also": "bad"}\n');
     const { judge } = scriptedJudge({});
     const err: unknown = await runEvals({ config: { ...paths, judge } }).catch((e: unknown) => e);
-    expect(VetError.isInstance(err)).toBe(true);
-    const lines = (err as VetError).message.split('\n');
+    if (!VetError.isInstance(err)) throw new Error('expected a VetError');
+    const lines = err.message.split('\n');
     expect(lines.some((l) => l.startsWith(`${file}:1: `))).toBe(true);
     expect(lines.some((l) => l.startsWith(`${file}:2: `))).toBe(true);
   });
