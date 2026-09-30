@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module';
 import { Command, CommanderError } from 'commander';
+import { registerCache } from './commands/cache.ts';
 import { registerCases } from './commands/cases.ts';
 import { registerCheck } from './commands/check.ts';
 import { registerCriteria } from './commands/criteria.ts';
@@ -82,6 +83,7 @@ export function createProgram(): Command {
   registerInit(program);
   registerCheck(program);
   registerLock(program);
+  registerCache(program);
   registerCriteria(program);
   registerCases(program);
   registerLint(program);
