@@ -124,7 +124,8 @@ fresh: criteria.lock.json matches the criteria and cases
 ```
 
 If you edit a criterion or the served model changes, the check reports it as stale and exits 1; run
-`vet validate` again. Next, gate in CI.
+`vet validate` again. `vet run --gate` refuses (exit 2) a lock whose gated criteria wording or request
+format changed since calibration, so run `vet check` first to see what went stale. Next, gate in CI.
 
 ## Gate in CI
 
