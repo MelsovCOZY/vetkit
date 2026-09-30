@@ -538,7 +538,7 @@ describe('createFileCache', () => {
   test('a corrupt cache file is a miss, emits a diag event, and is overwritten', async () => {
     const onDiag = vi.fn();
     const cache = createFileCache(dir, { onDiag });
-    const key = cacheKey(evalCase, criteria, 'jev-fake-model');
+    const key = cacheKey(evalCase, criteria, 'jev-fake-model', { transport: 'fake' });
     writeFileSync(join(dir, `${key}.json`), '{not json');
 
     const { judge, doJudge } = fakeJudge();
