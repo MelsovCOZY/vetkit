@@ -1,6 +1,7 @@
 // Fixture project for `vet run` (packages/cli/src/commands/run.test.ts). The judge is an
 // in-process JudgeV1: no network. VETKIT_FIXTURE_MODE picks its behaviour:
-//   pass (default) → P(yes) 0.9 · fail → P(yes) 0.1 · slow → waits until aborted.
+//   pass (default) → P(yes) 0.9 · fail → P(yes) 0.1 · slow → waits until aborted ·
+//   alternate → P(yes) 0.9, 0.1, 0.9, … per call (a flaky judge for --repeat).
 // Failure modes: down → plain Error (unscored, no retries) · throttled → retryable 429 that
 // never recovers · unauthorized → terminal-auth · no-credit → terminal-billing.
 // In slow mode it creates the file named by VETKIT_FIXTURE_STARTED once a request is in
@@ -65,6 +66,8 @@ function failure(): Error | undefined {
   }
 }
 
+let calls = 0;
+
 const judge = {
   specVersion: 'v1' as const,
   id: 'fake-judge',
@@ -79,7 +82,8 @@ const judge = {
     if (mode === 'slow') await waitForAbort(req.signal);
     const failed = failure();
     if (failed !== undefined) throw failed;
-    const yes = mode === 'fail' ? 0.1 : 0.9;
+    calls += 1;
+    const yes = mode === 'fail' || (mode === 'alternate' && calls % 2 === 0) ? 0.1 : 0.9;
     const answers: Record<string, Answer> = {};
     for (const key of Object.keys(req.questions)) {
       answers[key] = {

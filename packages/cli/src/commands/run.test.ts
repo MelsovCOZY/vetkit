@@ -4,6 +4,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -666,5 +667,107 @@ describe('vet run gate label', () => {
     expect(parseJson(readFileSync(recordPath(project), 'utf8'))).toMatchObject({
       gate: { tier: 'calibrated', lockPath, calibratedCriteria: 1, judgedCriteria: 1 },
     });
+  });
+});
+
+describe('vet run --repeat', () => {
+  test('--repeat 3 judges each case three times (results length) and --json carries repeats', () => {
+    const result = runVet(['run', '--json', '--repeat', '3'], freshProject(), fixtureEnv('pass'));
+    expect(result.status).toBe(0);
+    const doc = parseJson(result.stdout);
+    expect(doc).toMatchObject({
+      repeats: 3,
+      summary: { flaky: 0, passed: 1 },
+      results: [{}, {}, {}],
+    });
+  });
+
+  test('an invalid --repeat exits 2 naming the flag', () => {
+    for (const raw of ['0', 'x']) {
+      const result = runVet(['run', '--repeat', raw], freshProject(), fixtureEnv('pass'));
+      expect(result.status).toBe(2);
+      expect(result.stderr).toContain('CONFIG_INVALID');
+      expect(result.stderr).toContain(`--repeat must be a positive integer, got '${raw}'`);
+    }
+  });
+
+  test('pretty output prints flaky <id> (spread x.xx) with an alternating fixture judge', () => {
+    const result = runVet(['run', '--repeat', '3'], freshProject(), fixtureEnv('alternate'));
+    expect(result.status).toBe(0);
+    expect(result.stdout).toMatch(/^flaky case-1 \(spread 0\.80\)$/m);
+    expect(result.stdout).toMatch(/, 1 flaky/);
+  });
+});
+
+function noCredentials(): NodeJS.ProcessEnv {
+  const env = fixtureEnv('pass', { CEV_JUDGE_BASE_URL: 'http://127.0.0.1:9' });
+  delete env['AI_GATEWAY_API_KEY'];
+  delete env['OPENROUTER_API_KEY'];
+  delete env['VETKIT_FIXTURE_KEY'];
+  return env;
+}
+
+// The recording project's own config is an in-process judge; the replay project swaps in a
+// descriptor judge whose credential is unset, so any real call would fail.
+function replayProject(recordDir: string): string {
+  const dir = freshProject();
+  rmSync(join(dir, 'vetkit.config.ts'));
+  writeFileSync(
+    join(dir, 'vetkit.config.json'),
+    JSON.stringify({
+      judge: { kind: 'typesafe-compatible', preset: 'vercel', apiKeyEnv: 'AI_GATEWAY_API_KEY' },
+    }),
+  );
+  cpSync(recordDir, join(dir, 'rec'), { recursive: true });
+  return dir;
+}
+
+function withoutCacheHit(doc: unknown): unknown {
+  const results =
+    typeof doc === 'object' && doc !== null && 'results' in doc && Array.isArray(doc.results)
+      ? doc.results
+      : [];
+  return results.map((v: Record<string, unknown>) => {
+    const { cacheHit: _cacheHit, ...rest } = v;
+    return rest;
+  });
+}
+
+describe('vet run --record / --replay', () => {
+  test('record then replay with the credential env var deleted and a refused judge URL gives identical results', () => {
+    const project = freshProject();
+    const recorded = runVet(['run', '--json', '--record', 'rec'], project, fixtureEnv('pass'));
+    expect(recorded.status).toBe(0);
+    const replayed = runVet(
+      ['run', '--json', '--replay', 'rec'],
+      replayProject(join(project, 'rec')),
+      noCredentials(),
+    );
+    expect(replayed.status).toBe(recorded.status);
+    expect(withoutCacheHit(parseJson(replayed.stdout))).toEqual(
+      withoutCacheHit(parseJson(recorded.stdout)),
+    );
+  });
+
+  test('record and replay together exit 2', () => {
+    const result = runVet(
+      ['run', '--record', 'a', '--replay', 'b'],
+      freshProject(),
+      fixtureEnv('pass'),
+    );
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain('--record and --replay are exclusive');
+  });
+
+  test('recorded files contain no canary key', () => {
+    const project = freshProject();
+    const result = runVet(['run', '--json', '--record', 'rec'], project, fixtureEnv('pass'));
+    expect(result.status).toBe(0);
+    const files = readdirSync(join(project, 'rec'));
+    expect(files).toContain('manifest.json');
+    expect(files.length).toBeGreaterThan(1);
+    for (const file of files) {
+      expect(readFileSync(join(project, 'rec', file), 'utf8')).not.toContain(SECRET);
+    }
   });
 });
