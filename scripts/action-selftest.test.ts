@@ -29,12 +29,12 @@ interface Doc {
 }
 
 const doc: Doc = parse(TEXT);
-function job(name: string): Job | undefined {
+function jobNamed(name: string): Job | undefined {
   return doc.jobs[name];
 }
 
-const selftest: Job = job('selftest') ?? { steps: [] };
-const baselineJob: Job = job('baseline-key') ?? { steps: [] };
+const selftest: Job = jobNamed('selftest') ?? { steps: [] };
+const baselineJob: Job = jobNamed('baseline-key') ?? { steps: [] };
 
 function step(job: Job, fragment: string): Step {
   const found = job.steps.find((s) => s.name?.includes(fragment));
