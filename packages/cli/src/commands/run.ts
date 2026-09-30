@@ -31,6 +31,8 @@ interface RunOptions extends GlobalOptions {
   readonly gate?: boolean;
   readonly ci?: boolean;
   readonly allowUnpinned?: boolean;
+  // commander's negatable `--no-cache`: false when passed, otherwise true.
+  readonly cache?: boolean;
   readonly reporter?: ReporterSpec;
 }
 
@@ -114,6 +116,16 @@ function demoHint(): string {
   return `demo judge: these verdicts are placeholders, not real judgments. Put one of ${names.join(', ')} in .env, then run vet init --force`;
 }
 
+const JUDGED_STATUSES = new Set<string>(['ok', 'unscored', 'error', 'infra_failure']);
+
+function cacheLine(result: RunEvalsResult): string {
+  const cached = result.results.filter((v) => v.cacheHit).length;
+  const judged = result.results.filter(
+    (v) => JUDGED_STATUSES.has(v.status) && !v.cacheHit && result.model.transport !== 'code',
+  ).length;
+  return `cache: ${String(cached)} cached, ${String(judged)} judged`;
+}
+
 function render(result: RunEvalsResult): string {
   const byCase = new Map<string, RunVerdict[]>();
   for (const v of result.results) byCase.set(v.caseId, [...(byCase.get(v.caseId) ?? []), v]);
@@ -121,6 +133,7 @@ function render(result: RunEvalsResult): string {
   const { summary, model } = result;
   lines.push(
     `${String(summary.passed)} passed, ${String(summary.failed)} failed, ${String(summary.unscored)} unscored of ${String(summary.total)}${summary.aborted ? ' (aborted)' : ''}`,
+    cacheLine(result),
     `model: ${model.resolved === '' ? model.requested : model.resolved} (transport ${model.transport}, pinned: ${String(model.pinned)})`,
   );
   return lines.join('\n');
@@ -189,6 +202,7 @@ async function runCommand(options: RunOptions & Readonly<Record<string, unknown>
         },
         // Demo verdicts never enter the verdict cache; the run record below is still written.
         ...(demo ? {} : { cacheDir }),
+        bypassCache: options.cache === false,
       },
       lock,
       signal: controller.signal,
@@ -247,7 +261,8 @@ export function registerRun(program: Command): Command {
       )
       .option('--gate', 'gate on calibrated thresholds from the lock; refuses (exit 2) without one')
       .option('--ci', 'CI gating: refuse (exit 2) a lock written against an unpinned transport')
-      .option('--allow-unpinned', 'let --gate and --ci pass on an unpinned judge transport'),
+      .option('--allow-unpinned', 'let --gate and --ci pass on an unpinned judge transport')
+      .option('--no-cache', 'judge every case afresh; neither read nor write the verdict cache'),
   ).action(async (_options: unknown, command: Command) => {
     await runCommand(command.optsWithGlobals<RunOptions & Readonly<Record<string, unknown>>>());
   });

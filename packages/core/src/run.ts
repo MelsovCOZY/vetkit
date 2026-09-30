@@ -76,6 +76,8 @@ export interface RunConfig {
   readonly ci?: boolean;
   readonly gatePolicy?: Partial<GatePolicy>;
   readonly cacheDir?: string;
+  /** Judge every case afresh: the verdict cache is neither read nor written. */
+  readonly bypassCache?: boolean;
 }
 
 export interface RunJudgeInput {
@@ -618,13 +620,25 @@ export async function runEvals(input: RunEvalsInput): Promise<RunEvalsResult> {
     };
   }
 
+  const reportedCorrupt = new Set<string>();
   const judged = await runJudge({
     cases,
     criteria: active,
     judge: config.judge,
     lock,
     events,
-    ...(config.cacheDir === undefined ? {} : { cache: createFileCache(config.cacheDir) }),
+    bypassCache: config.bypassCache === true,
+    ...(config.cacheDir === undefined
+      ? {}
+      : {
+          cache: createFileCache(config.cacheDir, {
+            onDiag: (e) => {
+              if (reportedCorrupt.has(e.key)) return;
+              reportedCorrupt.add(e.key);
+              events.diag('warn', 'CACHE_CORRUPT', `cache entry ${e.file} is corrupt; re-judging`);
+            },
+          }),
+        }),
     ...(config.threshold === undefined ? {} : { threshold: config.threshold }),
     ...(input.limiter === undefined ? {} : { limiter: input.limiter }),
     ...(signal === undefined ? {} : { signal }),
