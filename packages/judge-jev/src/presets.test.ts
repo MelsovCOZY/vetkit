@@ -30,24 +30,33 @@ describe('JEV_PRESETS credential metadata', () => {
 });
 
 describe('JEV_PRESETS health endpoint', () => {
-  it('describes each preset health probe as a method and a url(env) builder', () => {
+  it('describes each preset health probe as a method and a path(env) relative to the baseURL', () => {
     const health = Object.fromEntries(
       Object.entries(JEV_PRESETS).map(([name, preset]) => [
         name,
-        { method: preset.health.method, url: preset.health.url(env) },
+        { method: preset.health.method, path: preset.health.path(env) },
       ]),
     );
     expect(health).toEqual({
-      typesafe: { method: 'GET', url: 'https://api.typesafe.ai/v1/models' },
-      vercel: { method: 'GET', url: 'https://ai-gateway.vercel.sh/typesafe/v1/models' },
-      openrouter: {
-        method: 'GET',
-        url: 'https://openrouter.ai/api/v1/models?output_modalities=all',
-      },
-      cloudflare: {
-        method: 'HEAD',
-        url: 'https://api.cloudflare.com/client/v4/accounts/acct-123/ai/run',
-      },
+      typesafe: { method: 'GET', path: '/v1/models' },
+      vercel: { method: 'GET', path: '/v1/models' },
+      openrouter: { method: 'GET', path: '/v1/models?output_modalities=all' },
+      cloudflare: { method: 'HEAD', path: '/accounts/acct-123/ai/run' },
+    });
+  });
+
+  it('baseURL + path equals the absolute health URLs the probes used before', () => {
+    const urls = Object.fromEntries(
+      Object.entries(JEV_PRESETS).map(([name, preset]) => [
+        name,
+        `${preset.baseURL}${preset.health.path(env)}`,
+      ]),
+    );
+    expect(urls).toEqual({
+      typesafe: 'https://api.typesafe.ai/v1/models',
+      vercel: 'https://ai-gateway.vercel.sh/typesafe/v1/models',
+      openrouter: 'https://openrouter.ai/api/v1/models?output_modalities=all',
+      cloudflare: 'https://api.cloudflare.com/client/v4/accounts/acct-123/ai/run',
     });
   });
 });
