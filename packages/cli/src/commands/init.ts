@@ -83,6 +83,21 @@ function invalid(message: string): VetError {
   return new VetError(CEV_ERROR_CODES.CONFIG_INVALID, message);
 }
 
+// A flag-usage refusal: the one line and the usage exit code. Commander prints the message
+// and throws its own error, which the program maps to exit 2 without the next-step hint a
+// VetError gets; nothing in vetkit.config.ts is at fault, so `vet doctor --config` would
+// send the user the wrong way.
+function refuse(command: Command, message: string): never {
+  return command.error(`error CONFIG_INVALID: ${message}`, { exitCode: CEV_EXIT.USAGE });
+}
+
+// A bare path or `jsonl:<dir>` (the default source prefix) is a directory of traces, read
+// whole: --until and --seconds would be ignored there, not applied.
+function readsDirectory(spec: string): boolean {
+  const colon = spec.indexOf(':');
+  return colon === -1 || spec.slice(0, colon) === 'jsonl';
+}
+
 function credentialsSet(preset: JevPresetName, env: Env): boolean {
   return JEV_PRESETS[preset].credentials.every((c) => (env[c.name] ?? '') !== '');
 }
@@ -300,10 +315,10 @@ async function scaffoldExample(dir: string, force: boolean, env: Env): Promise<s
 // --out, --until and --seconds only reach the --source path; the scaffold writes into --dir.
 const SOURCE_ONLY_FLAGS = ['out', 'until', 'seconds'] as const;
 
-async function initCommand(options: InitOptions): Promise<void> {
+async function initCommand(options: InitOptions, command: Command): Promise<void> {
   for (const flag of SOURCE_ONLY_FLAGS) {
     if (options[flag] !== undefined) {
-      throw invalid(`--${flag} only applies together with --source <spec>`);
+      refuse(command, `--${flag} only applies together with --source <spec>`);
     }
   }
   const dir = resolve(options.dir ?? '.');
@@ -433,9 +448,22 @@ function tapSource(source: SourceV1, sink: NormalizedTrace[]): SourceV1 {
   };
 }
 
-async function generateCommand(options: InitOptions & { source: string }): Promise<void> {
+async function generateCommand(
+  options: InitOptions & { source: string },
+  command: Command,
+): Promise<void> {
   if (options.out === undefined || options.out === '') {
-    throw invalid('--source requires --out <dir>');
+    refuse(command, '--source requires --out <dir>');
+  }
+  if (readsDirectory(options.source)) {
+    for (const flag of ['until', 'seconds'] as const) {
+      if (options[flag] !== undefined) {
+        refuse(
+          command,
+          `--${flag} only applies to a streaming --source such as otlp::<port>; '${options.source}' is a directory of traces and is read whole`,
+        );
+      }
+    }
   }
   const out = resolve(options.out);
   const force = options.force === true;
@@ -532,9 +560,9 @@ export function registerInit(program: Command): Command {
     .action(async (_options: unknown, command: Command) => {
       const options = command.optsWithGlobals<InitOptions>();
       if (options.source === undefined) {
-        await initCommand(options);
+        await initCommand(options, command);
       } else {
-        await generateCommand({ ...options, source: options.source });
+        await generateCommand({ ...options, source: options.source }, command);
       }
     });
 }

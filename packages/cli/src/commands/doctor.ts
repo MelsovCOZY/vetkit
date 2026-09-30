@@ -1,7 +1,12 @@
 import { describeConfig, type ResolvedConfig } from '@vetkit/core';
 import { JEV_CREDENTIAL_PRIORITY, JEV_PRESETS, type JevPresetName } from '@vetkit/judge-jev';
 import type { Command } from 'commander';
-import { findConfigFile, loadVetConfig, type LoadedVetConfig } from '../config-load.ts';
+import {
+  findConfigFile,
+  JUDGE_BASE_URL_ENV,
+  loadVetConfig,
+  type LoadedVetConfig,
+} from '../config-load.ts';
 import { NODE_FLOOR_RANGE, nodeFloorError } from '../node-floor.ts';
 import { colors } from '../output.ts';
 import { sinkRefName } from '../sinks.ts';
@@ -341,25 +346,34 @@ function checkConfig(configExists: boolean): DoctorCheck {
     : { name: 'config', status: 'fail', detail: 'no vetkit.config.ts' };
 }
 
-// Without --config the config is not resolved, so these two rows can only say how to get
-// a real per-adapter check (checkConfiguredGenerator / checkConfiguredSinks).
-function checkGeneratorCredential(configExists: boolean): DoctorCheck {
+// The load error's first line; a header line ending in ':' takes the next line with it, so
+// an "Invalid vetkit config:" summary still names the pointer.
+function loadErrorSummary(message: string): string {
+  const [head = '', next] = message.split('\n');
+  return head.endsWith(':') && next !== undefined ? `${head} ${next.trim()}` : head;
+}
+
+// Without a loadable config these two rows can only say how to get a real per-adapter check
+// (checkConfiguredGenerator / checkConfiguredSinks). A config that was found but failed to
+// load is named with its load error: that, not a missing --config, is what to fix.
+function unresolvedDetail(load: FailedLoad | undefined, missing: string, verify: string): string {
+  if (load === undefined) return `no vetkit.config.ts — cannot determine which ${missing}`;
+  return `config failed to load: ${loadErrorSummary(load.message)} — fix it, or pass --config <path> to verify ${verify} from another file`;
+}
+
+function checkGeneratorCredential(load: FailedLoad | undefined): DoctorCheck {
   return {
     name: 'generator credential',
     status: 'warn',
-    detail: configExists
-      ? 'config not resolved — pass --config <path> to verify the generator credential'
-      : 'no vetkit.config.ts — cannot determine which generator credential is required',
+    detail: unresolvedDetail(load, 'generator credential is required', 'the generator credential'),
   };
 }
 
-function checkSinkCredentials(configExists: boolean): DoctorCheck {
+function checkSinkCredentials(load: FailedLoad | undefined): DoctorCheck {
   return {
     name: 'sink credentials',
     status: 'warn',
-    detail: configExists
-      ? 'config not resolved — pass --config <path> to verify sink credentials'
-      : 'no vetkit.config.ts — cannot determine which sink credentials are required',
+    detail: unresolvedDetail(load, 'sink credentials are required', 'sink credentials'),
   };
 }
 
@@ -482,9 +496,9 @@ async function checkJudgeHealth(probe: HealthProbe, fetchImpl: typeof fetch): Pr
   }
 }
 
-type ConfigLoad =
-  | { readonly ok: true; readonly loaded: LoadedVetConfig }
-  | { readonly ok: false; readonly message: string };
+type FailedLoad = { readonly ok: false; readonly message: string };
+
+type ConfigLoad = { readonly ok: true; readonly loaded: LoadedVetConfig } | FailedLoad;
 
 async function loadForDoctor(cwd: string, config: true | string, env: Env): Promise<ConfigLoad> {
   try {
@@ -526,10 +540,6 @@ interface DoctorRun {
 export async function runDoctor(deps: DoctorDeps = {}): Promise<DoctorResult> {
   return (await inspect(deps)).result;
 }
-
-// The env var the loader reads to override the judge base URL (config-load.ts); doctor only
-// names it to report the `env` layer.
-const JUDGE_BASE_URL_ENV = 'CEV_JUDGE_BASE_URL';
 
 // One row per resolved judge value with the layer that supplied it, from the loader's own
 // report: a key is `.env` by NAME in an env file's `applied` list, never by comparing values.
@@ -616,14 +626,15 @@ async function inspect(deps: DoctorDeps): Promise<DoctorRun> {
     }
   } else {
     const selected = selectTransport(env);
+    const failed = load !== undefined && !load.ok ? load : undefined;
     checks = [
       nodeCheck,
-      load === undefined
+      failed === undefined
         ? checkConfig(false)
-        : { name: 'config', status: 'fail', detail: load.message },
+        : { name: 'config', status: 'fail', detail: failed.message },
       checkJudgeCredential(env, revealSuffix),
-      checkGeneratorCredential(load !== undefined),
-      checkSinkCredentials(load !== undefined),
+      checkGeneratorCredential(failed),
+      checkSinkCredentials(failed),
       selected
         ? await checkJudgeHealth(
             presetProbe(selected, JEV_PRESETS[selected].baseURL, env),

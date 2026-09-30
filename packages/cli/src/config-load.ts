@@ -93,10 +93,13 @@ const UNSUPPORTED_SYNTAX_CODES = new Set([
   'ERR_INVALID_TYPESCRIPT_SYNTAX',
 ]);
 const JUDGE_KIND = 'typesafe-compatible';
-// A generic override of the judge transport's base URL for this
-// process, so a test (or an operator) can force a judge failure without touching config.
-// Named CEV_ (no vendor) since it applies to any typesafe-compatible endpoint, not one preset.
-const JUDGE_BASE_URL_ENV = 'CEV_JUDGE_BASE_URL';
+/**
+ * A generic override of the judge transport's base URL for this process, so a test (or an
+ * operator) can force a judge failure without touching config. Named CEV_ (no vendor) since it
+ * applies to any typesafe-compatible endpoint, not one preset. Exported so a command that
+ * reports the override (doctor) names the same variable the loader reads.
+ */
+export const JUDGE_BASE_URL_ENV = 'CEV_JUDGE_BASE_URL';
 
 function isProviderOptions(value: unknown): value is JevProviderOptions {
   if (typeof value !== 'object' || value === null || !('gateway' in value)) return false;
