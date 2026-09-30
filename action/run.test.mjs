@@ -8,18 +8,31 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const RUN_SH = fileURLToPath(new URL('./run.sh', import.meta.url));
 
+// Every directory these tests create sits under one root, removed when the file is done.
+const TEMP_ROOT = mkdtempSync(join(tmpdir(), 'vetkit-run-test-'));
+after(() => rmSync(TEMP_ROOT, { recursive: true, force: true }));
+
+function scratch(prefix) {
+  return mkdtempSync(join(TEMP_ROOT, prefix));
+}
+
+// run.sh and what it starts get the root as their temp dir, and as the runner temp dir a
+// tarball install lands in, so whatever they create there is removed with it.
+const CHILD_ENV = { ...process.env, TMPDIR: TEMP_ROOT, RUNNER_TEMP: TEMP_ROOT };
+
 /** A `vet` shim on its own PATH entry, so run.sh finds it ahead of any real vetkit. */
 function vetShim(script) {
-  const dir = mkdtempSync(join(tmpdir(), 'vetkit-vet-shim-'));
+  const dir = scratch('vetkit-vet-shim-');
   const bin = join(dir, 'vet');
   writeFileSync(bin, script);
   chmodSync(bin, 0o755);
@@ -30,7 +43,7 @@ function runAction(cwd, binDir) {
   return spawnSync('bash', [RUN_SH, 'run'], {
     cwd,
     env: {
-      ...process.env,
+      ...CHILD_ENV,
       PATH: `${binDir}:${process.env.PATH}`,
       GITHUB_OUTPUT: join(cwd, 'github_output.txt'),
       INPUT_CONFIG: '',
@@ -42,7 +55,7 @@ function runAction(cwd, binDir) {
 }
 
 void test('run.sh keeps the RunRecord vet already wrote instead of overwriting it with --json stdout', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'vetkit-run-'));
+  const dir = scratch('vetkit-run-');
   const bin = vetShim(`#!/usr/bin/env bash
 set -euo pipefail
 mkdir -p .vet/runs
@@ -62,7 +75,7 @@ echo '{"summary":{"passed":3,"failed":0,"unscored":0},"model":{"requested":"m"},
 });
 
 void test('run.sh falls back to the --json output when vet does not persist its own record', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'vetkit-run-'));
+  const dir = scratch('vetkit-run-');
   const bin = vetShim(`#!/usr/bin/env bash
 set -euo pipefail
 echo '{"summary":{"passed":1,"failed":2,"unscored":0},"model":{"requested":"m"},"results":[]}'
@@ -86,7 +99,7 @@ function pathWithoutVet() {
 
 /** An executable `node_modules/.bin/vet` in a fresh project directory. */
 function projectWithVet(script) {
-  const dir = mkdtempSync(join(tmpdir(), 'vetkit-project-'));
+  const dir = scratch('vetkit-project-');
   mkdirSync(join(dir, 'node_modules/.bin'), { recursive: true });
   writeFileSync(join(dir, 'package.json'), '{"name":"consumer","private":true}');
   const bin = join(dir, 'node_modules/.bin/vet');
@@ -101,7 +114,7 @@ function runInstall(cwd, inputs, binDir) {
   return spawnSync('bash', [RUN_SH, 'install'], {
     cwd,
     env: {
-      ...process.env,
+      ...CHILD_ENV,
       PATH: binDir === undefined ? pathWithoutVet() : `${binDir}:${pathWithoutVet()}`,
       GITHUB_WORKSPACE: cwd,
       GITHUB_ENV: join(cwd, 'github_env.txt'),
@@ -116,7 +129,7 @@ function runInstall(cwd, inputs, binDir) {
 
 /** An `npm` on PATH that records its argv instead of installing anything. */
 function npmStub(cwd) {
-  const dir = mkdtempSync(join(tmpdir(), 'vetkit-npm-stub-'));
+  const dir = scratch('vetkit-npm-stub-');
   const bin = join(dir, 'npm');
   writeFileSync(bin, `#!/usr/bin/env bash\necho "$*" >> "${join(cwd, 'npm-argv.txt')}"\n`);
   chmodSync(bin, 0o755);
@@ -128,7 +141,7 @@ function readOr(path) {
 }
 
 void test('run.sh install fails with a next-step message when neither a project vet nor a version is given', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'vetkit-empty-'));
+  const dir = scratch('vetkit-empty-');
 
   const result = runInstall(dir, {});
 
@@ -149,7 +162,7 @@ void test('run.sh install picks the project-local vet and records VETKIT_INSTALL
 
 void test('run.sh install prefers tarballs over version over the project vet', () => {
   const dir = projectWithVet(PROJECT_VET);
-  const tarballs = mkdtempSync(join(tmpdir(), 'vetkit-tarballs-'));
+  const tarballs = scratch('vetkit-tarballs-');
   const npm = npmStub(dir);
 
   const withBoth = runInstall(dir, { INPUT_TARBALLS: tarballs, INPUT_VERSION: '1.2.3' }, npm);
@@ -184,7 +197,7 @@ function runProject(dir, extraEnv = {}) {
   return spawnSync('bash', [RUN_SH, 'run'], {
     cwd: dir,
     env: {
-      ...process.env,
+      ...CHILD_ENV,
       PATH: pathWithoutVet(),
       GITHUB_WORKSPACE: dir,
       GITHUB_OUTPUT: join(dir, 'github_output.txt'),

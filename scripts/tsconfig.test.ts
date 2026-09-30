@@ -271,10 +271,15 @@ function createIsolatedWorkspace(): { dir: string; cleanup: () => void } {
   cpSync(path.join(rootDir, 'tsconfig.json'), path.join(dir, 'tsconfig.json'));
   symlinkSync(path.join(rootDir, 'node_modules'), path.join(dir, 'node_modules'), 'dir');
   // The typecheck script also builds the scripts/ + spike/ project (scripts/tsconfig.json),
-  // which needs its sources, the vitest.config.ts they import and the root package.json
-  // (type: module) that makes them ES modules.
+  // which needs its sources, the root-level .ts files they import (vitest.config.ts and whatever
+  // sits next to it: copying them all keeps this working when another one is added) and the
+  // root package.json (type: module) that makes them ES modules.
   cpSync(path.join(rootDir, 'package.json'), path.join(dir, 'package.json'));
-  cpSync(path.join(rootDir, 'vitest.config.ts'), path.join(dir, 'vitest.config.ts'));
+  for (const entry of readdirSync(rootDir, { withFileTypes: true })) {
+    if (entry.isFile() && entry.name.endsWith('.ts')) {
+      cpSync(path.join(rootDir, entry.name), path.join(dir, entry.name));
+    }
+  }
   cpSync(path.join(rootDir, 'scripts'), path.join(dir, 'scripts'), { recursive: true });
   cpSync(path.join(rootDir, 'spike'), path.join(dir, 'spike'), {
     recursive: true,
