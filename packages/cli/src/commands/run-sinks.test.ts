@@ -288,14 +288,14 @@ describe('vet run --sink', () => {
     });
   }, 60_000);
 
-  test('judge failure: --sink exits 0 (unscored-only), without --sink stays 1', () => {
+  test('judge failure: --sink exits 0 (unscored-only), without --sink exits 3', () => {
     const project = freshProject();
     const plain = runVet(
       ['run', '--json'],
       freshProject(),
       envFor(freshProject(), { VETKIT_FIXTURE_MODE: 'throw' }),
     );
-    expect(plain.status).toBe(1);
+    expect(plain.status).toBe(3);
     const result = runVet(
       ['run', '--sink', 'otel', '--json'],
       project,
