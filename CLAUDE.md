@@ -2,7 +2,7 @@
 
 Unopinionated TypeScript library + CLI that generates, validates and runs LLM evals. TypeSafe AI's Jev
 (System One typed decisions) is the judge; any chat model is the generator. Nothing is hard-coded to one
-model, provider or gateway. No code exists yet: the plan lives in bd. Research briefs are no longer kept in the repo.
+model, provider or gateway. The repo is implemented (packages/, action.yml, docs/, examples/); the design ledger lives in bd. Research briefs are no longer kept in the repo.
 
 ## Where things are
 
@@ -27,8 +27,8 @@ model, provider or gateway. No code exists yet: the plan lives in bd. Research b
 
 - Do not run `bun publish` or `changeset publish`. Use the npm OIDC chain above.
 - Do not push, open PRs, or add a git remote unless asked. Commits are local-only and only on request.
-- Do not read keys from anywhere but env vars, and never log `AI_GATEWAY_API_KEY`, `TYPESAFE_API_KEY`,
-  or judge request/response bodies.
+- Libraries (@vetkit/*) read process.env only and never read files; the vetkit CLI seeds process.env from ./.env and ./.env.local next to the resolved config (existing env wins) and never logs their values.
+  Never log `AI_GATEWAY_API_KEY`, `TYPESAFE_API_KEY`, or judge request/response bodies.
 - Do not depend on the `ai` package, add `trustedDependencies`, or ship a `postinstall` script.
 - Do not use TodoWrite, TaskCreate or markdown TODO lists. Use bd.
 - Do not hard-code Vercel, TypeSafe, OpenRouter or Cloudflare anywhere but their adapter subpath.
