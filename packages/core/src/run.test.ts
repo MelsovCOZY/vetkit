@@ -1422,7 +1422,7 @@ function picked(choice: string, probabilities: Record<string, number>): Answer {
   return { type: 'choice', choice, confidence: 0.5, probabilities };
 }
 
-describe('choice threshold scale matches calibrate repeatValues (DECISION 2026-09-28)', () => {
+describe('choice threshold scale matches calibrate repeatValues', () => {
   test('spread mass: argmax in passWhen but P(passWhen) below the threshold fails', async () => {
     const paths = await suite([TONE3_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
     const { judge } = scriptedJudge({

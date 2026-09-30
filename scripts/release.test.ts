@@ -76,7 +76,7 @@ function loadRealManifests(): Record<string, PackageManifest> {
 }
 
 describe('checkNpmVersion', () => {
-  it('fails for the local npm version (PREMISE: npm --version -> 10.9.8)', () => {
+  it('fails for the local npm version (npm --version reports 10.9.8)', () => {
     expect(checkNpmVersion('10.9.8').ok).toBe(false);
   });
 
