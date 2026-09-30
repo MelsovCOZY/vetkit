@@ -91,7 +91,7 @@ describe('workflow supply-chain hardening', () => {
     expect(uses('github/codeql-action/upload-sarif@')?.with?.['sarif_file']).toBe('results.sarif');
     const text = readFileSync(join(WORKFLOWS_DIR, 'scorecard.yml'), 'utf8');
     expect(text).toMatch(/ossf\/scorecard-action@[0-9a-f]{40} # v2\.4\.4/);
-    expect(text).toMatch(/only (runs )?(once|when|after)[^\n]*public/i);
+    expect(text).toMatch(/only (runs )?(once|when|after)[\s\S]{0,60}public/i);
     expect(text).not.toMatch(/secrets\.(?!GITHUB_TOKEN)/);
   });
 
