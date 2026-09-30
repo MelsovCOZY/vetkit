@@ -292,6 +292,10 @@ function runGh(args, stdin) {
     child.stderr.on('data', (chunk) => (stderr += chunk));
     child.on('error', (error) => resolve({ code: 127, stdout, stderr: error.message }));
     child.on('close', (code) => resolve({ code: code ?? 1, stdout, stderr }));
+    // gh may exit without reading stdin: the result then comes from its exit code and stdout.
+    child.stdin.on('error', (error) => {
+      if (error.code !== 'EPIPE') resolve({ code: 1, stdout, stderr: error.message });
+    });
     child.stdin.end(stdin ?? '');
   });
 }
