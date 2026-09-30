@@ -7,16 +7,19 @@ echo plain
 ```
 
 <!-- snippet: file=vetkit.config.ts -->
+
 ```ts
 export default {};
 ```
 
 <!-- snippet: skip reason="needs a generator key" -->
+
 ```bash
 vet init --source jsonl:traces
 ```
 
 <!-- snippet: env GREETING=hello -->
+
 ```bash
 echo "$GREETING"
 ```
@@ -46,6 +49,7 @@ echo inside-a-comment
 -->
 
 <!-- snippet: file=../escape.json -->
+
 ```json
 {}
 ```
