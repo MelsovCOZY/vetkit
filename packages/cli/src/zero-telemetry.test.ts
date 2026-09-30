@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { JEV_PRESETS } from '@vetkit/judge-jev';
+import { safeParseJson } from '@vetkit/spec';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { createProgram } from './program.ts';
 
@@ -55,6 +56,7 @@ function record(): Recorder {
     if (!isLoopback(hostOf(url))) return Promise.reject(new TypeError('fetch failed (blocked)'));
     return realFetch(input, init);
   });
+  // oxlint-disable-next-line typescript/unbound-method
   const originalConnect = net.Socket.prototype.connect;
   vi.spyOn(net.Socket.prototype, 'connect').mockImplementation(function (
     this: net.Socket,
@@ -92,6 +94,15 @@ interface Listener {
   readonly requests: string[];
 }
 
+function isNoul(question: unknown): boolean {
+  return (
+    typeof question === 'object' &&
+    question !== null &&
+    'type' in question &&
+    question.type === 'noul'
+  );
+}
+
 // Answers every question the way a passing judge would; also accepts any sink POST.
 async function listen(): Promise<Listener> {
   const requests: string[] = [];
@@ -101,16 +112,20 @@ async function listen(): Promise<Listener> {
     req.on('end', () => {
       requests.push(`${req.method ?? ''} ${req.url ?? ''}`);
       res.setHeader('content-type', 'application/json');
-      if (req.url !== '/v1/systemone') return res.end('{}');
-      const parsed: unknown = JSON.parse(body);
-      const questions =
-        typeof parsed === 'object' && parsed !== null && 'questions' in parsed
-          ? Object.entries(parsed.questions as Record<string, { type: string }>)
-          : [];
+      if (req.url !== '/v1/systemone') {
+        res.end('{}');
+        return;
+      }
+      const parsed = safeParseJson<unknown>(body, {});
+      if (!parsed.ok) throw parsed.error;
+      const raw = parsed.value;
+      const asked =
+        typeof raw === 'object' && raw !== null && 'questions' in raw ? raw.questions : {};
+      const questions = typeof asked === 'object' && asked !== null ? Object.entries(asked) : [];
       const answers = Object.fromEntries(
         questions.map(([key, question]) => [
           key,
-          question.type === 'noul'
+          isNoul(question)
             ? { type: 'noul', noul: 0.9 }
             : {
                 type: 'choice',
@@ -256,7 +271,7 @@ describe('the recorder', () => {
     const recorder = record();
     expect(() => net.connect({ host: 'raw.unlisted.invalid', port: 443 })).toThrow(/blocked/);
     dns.lookup('lookup.unlisted.invalid', () => undefined);
-    expect(onlyContacted(recorder, []).sort()).toEqual([
+    expect(onlyContacted(recorder, []).toSorted()).toEqual([
       'lookup.unlisted.invalid',
       'raw.unlisted.invalid:443',
     ]);
