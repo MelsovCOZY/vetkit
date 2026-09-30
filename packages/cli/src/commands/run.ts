@@ -8,6 +8,7 @@ import {
   loadCases,
   LOCK_FILE,
   readLockOrNull,
+  readRunRecord,
   runEvals,
   type EventMap,
   type Events,
@@ -25,7 +26,20 @@ import { hintFor } from '../errors.ts';
 import { isDemoJudge } from '../demo-judge.ts';
 import { readCliVersion, recordingJudge, replayJudge } from '../judge-record.ts';
 import { renderEvents } from '../render-events.ts';
-import { registerReporterFlag, writeReports, type ReporterSpec } from '../reporters/junit.ts';
+import { writeBadge } from '../reporters/badge.ts';
+import { renderHtml } from '../reporters/html.ts';
+import {
+  registerReporterFlag,
+  writeReports,
+  writeTextReport,
+  type ReporterSpec,
+} from '../reporters/junit.ts';
+import {
+  buildReportModel,
+  loadReportInputs,
+  renderMarkdown,
+  VETKIT_VERSION,
+} from '../reporters/report.ts';
 
 interface RunOptions extends GlobalOptions {
   readonly config?: string;
@@ -36,7 +50,8 @@ interface RunOptions extends GlobalOptions {
   readonly allowUnpinned?: boolean;
   // commander's negatable `--no-cache`: false when passed, otherwise true.
   readonly cache?: boolean;
-  readonly reporter?: ReporterSpec;
+  readonly reporter?: readonly ReporterSpec[];
+  readonly includeCases?: boolean;
   readonly repeat?: string;
   readonly record?: string;
   readonly replay?: string;
@@ -181,6 +196,43 @@ function toPosixRelative(rootDir: string, path: string): string {
   return relative(rootDir, path).split(sep).join('/');
 }
 
+// The report model is built from the record just written, on every run: the badge always needs
+// it, and the md/html reports share it. A report that cannot be written fails the command
+// (exit 2) with the record already on disk.
+async function writeReportFiles(input: {
+  readonly specs: readonly ReporterSpec[];
+  readonly includeCases: boolean;
+  readonly rootDir: string;
+  readonly cacheDir: string;
+  readonly cwd: string;
+}): Promise<string[]> {
+  const { specs, rootDir, cacheDir, cwd } = input;
+  const textSpecs = specs.filter((spec) => spec.kind !== 'junit');
+  const includeCases = input.includeCases && textSpecs.length > 0;
+  const record = await readRunRecord(cacheDir);
+  if (record === null) {
+    throw new VetError(CEV_ERROR_CODES.RUN_NOT_FOUND, `no run record at ${cacheDir}`);
+  }
+  const inputs = await loadReportInputs({ rootDir, record, includeCases });
+  if (textSpecs.length > 0) for (const warning of inputs.warnings) getLogger().warn(warning);
+  const model = buildReportModel({
+    record,
+    criteria: inputs.criteria,
+    lock: inputs.lock,
+    ...(inputs.cases === undefined ? {} : { cases: inputs.cases }),
+    includeCases,
+    vetkitVersion: VETKIT_VERSION,
+  });
+  const lines: string[] = [];
+  for (const spec of textSpecs) {
+    const target = resolve(cwd, spec.path);
+    await writeTextReport(target, spec.kind === 'md' ? renderMarkdown(model) : renderHtml(model));
+    lines.push(`report: ${relative(cwd, target)}`);
+  }
+  await writeBadge(cacheDir, model);
+  return lines;
+}
+
 async function runCommand(options: RunOptions & Readonly<Record<string, unknown>>): Promise<void> {
   const log = getLogger();
   const cwd = process.cwd();
@@ -283,7 +335,11 @@ async function runCommand(options: RunOptions & Readonly<Record<string, unknown>
   }
 
   for (const reason of result.gateReasons) log.error(`gate refused: ${reason}`);
-  await writeReports(options.reporter, [{ criteriaPath, result }], { cwd });
+  await writeReports(
+    options.reporter?.find((spec) => spec.kind === 'junit'),
+    [{ criteriaPath, result }],
+    { cwd },
+  );
   const extras: Record<string, unknown> = {};
   const lines: string[] = [];
   for (const finish of finishes) {
@@ -300,6 +356,14 @@ async function runCommand(options: RunOptions & Readonly<Record<string, unknown>
     startedAt,
     gateRequested: options.gate === true,
   });
+  const reportLines = await writeReportFiles({
+    specs: options.reporter ?? [],
+    includeCases: options.includeCases === true,
+    rootDir,
+    cacheDir,
+    cwd,
+  });
+  lines.push(...reportLines);
   if (demo) log.warn(demoHint());
   emit({ ...result, ...extras }, () => [render(result), ...lines].join('\n'));
   if (result.exitCode === CEV_EXIT.UNSCORED_ONLY) {
@@ -325,6 +389,10 @@ export function registerRun(program: Command): Command {
       .option(
         '--cases <dir>',
         'cases directory (default: cases next to the config, or under evals/ when that directory exists)',
+      )
+      .option(
+        '--include-cases',
+        'put case ids and (redacted, truncated) case text in md/html reports; no effect without them',
       )
       .option('--gate', 'gate on calibrated thresholds from the lock; refuses (exit 2) without one')
       .option('--ci', 'CI gating: refuse (exit 2) a lock written against an unpinned transport')

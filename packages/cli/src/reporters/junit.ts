@@ -13,9 +13,19 @@ import { redactSecrets, secretsFrom } from '@vetkit/spec';
 import { InvalidArgumentError, type Command } from 'commander';
 
 export const DEFAULT_JUNIT_PATH = '.vet/junit.xml';
+export const DEFAULT_MD_PATH = '.vet/report.md';
+export const DEFAULT_HTML_PATH = '.vet/report.html';
+
+type ReporterKind = 'junit' | 'md' | 'html';
+
+const DEFAULT_PATHS: Record<ReporterKind, string> = {
+  junit: DEFAULT_JUNIT_PATH,
+  md: DEFAULT_MD_PATH,
+  html: DEFAULT_HTML_PATH,
+};
 
 export interface ReporterSpec {
-  readonly kind: 'junit';
+  readonly kind: ReporterKind;
   /** Output path, resolved against the cwd at write time. */
   readonly path: string;
 }
@@ -158,23 +168,53 @@ export function renderJunit(
   ].join('\n');
 }
 
-/** Parses `junit` or `junit=<path>`; anything else is a usage error. */
-function parseReporterSpec(value: string): ReporterSpec {
-  const [kind, ...rest] = value.split('=');
-  const path = rest.length === 0 ? DEFAULT_JUNIT_PATH : rest.join('=');
-  if (kind !== 'junit' || path === '') {
-    throw new InvalidArgumentError(`unknown reporter "${value}" (expected junit or junit=<path>)`);
-  }
-  return { kind, path };
+const REPORTER_USAGE = 'a comma list of junit[=path], md[=path], html[=path]';
+
+function isReporterKind(kind: string | undefined): kind is ReporterKind {
+  return kind !== undefined && Object.hasOwn(DEFAULT_PATHS, kind);
 }
 
-/** Adds `--reporter junit[=path]` to a command; the parsed value lands in opts().reporter. */
+/** Parses a comma list of `junit[=path]`, `md[=path]`, `html[=path]`; anything else is a usage error. */
+function parseReporterSpec(value: string): readonly ReporterSpec[] {
+  const specs: ReporterSpec[] = [];
+  for (const part of value.split(',')) {
+    const item = part.trim();
+    const [kind, ...rest] = item.split('=');
+    const path = rest.length === 0 ? undefined : rest.join('=');
+    if (!isReporterKind(kind) || path === '') {
+      throw new InvalidArgumentError(`unknown reporter "${item}" (expected ${REPORTER_USAGE})`);
+    }
+    if (specs.some((spec) => spec.kind === kind)) {
+      throw new InvalidArgumentError(`reporter "${kind}" given twice`);
+    }
+    specs.push({ kind, path: path ?? DEFAULT_PATHS[kind] });
+  }
+  return specs;
+}
+
+/** Adds `--reporter <list>` to a command; the parsed specs land in opts().reporter. */
 export function registerReporterFlag(command: Command): Command {
   return command.option(
     '--reporter <spec>',
-    `also write a report: junit[=path] (default path ${DEFAULT_JUNIT_PATH})`,
+    `also write reports: ${REPORTER_USAGE} (default paths ${DEFAULT_JUNIT_PATH}, ${DEFAULT_MD_PATH}, ${DEFAULT_HTML_PATH})`,
     parseReporterSpec,
   );
+}
+
+/**
+ * Writes text to `target` through a sibling temp file and a rename, so readers never see a
+ * partial document; missing directories are created. Never writes to stdout.
+ */
+export async function writeTextReport(target: string, text: string): Promise<void> {
+  await mkdir(dirname(target), { recursive: true });
+  const temp = `${target}.${String(process.pid)}.tmp`;
+  try {
+    await writeFile(temp, text, 'utf8');
+    await rename(temp, target);
+  } catch (error) {
+    await rm(temp, { force: true });
+    throw error;
+  }
 }
 
 export interface WriteReportsOptions {
@@ -184,16 +224,15 @@ export interface WriteReportsOptions {
 }
 
 /**
- * Writes the report the flag asked for (nothing when unset) and returns its absolute path.
- * The file is written to a sibling temp file and renamed, so readers never see a partial
- * document; missing directories are created. Never writes to stdout.
+ * Writes the JUnit report when the spec asks for one (nothing otherwise; md and html are
+ * rendered from the report model by the caller) and returns its absolute path.
  */
 export async function writeReports(
   reporter: ReporterSpec | undefined,
   suites: readonly JunitSuiteInput[],
   options: WriteReportsOptions,
 ): Promise<string | undefined> {
-  if (reporter === undefined) return undefined;
+  if (reporter?.kind !== 'junit') return undefined;
   const target = resolve(options.cwd, reporter.path);
   // Env-secret pass only (no entropy heuristics), so hashes in test names stay intact.
   const secrets = secretsFrom(process.env);
@@ -202,14 +241,6 @@ export async function writeReports(
     hostname: options.hostname ?? (osHostname() || 'localhost'),
     redact: (text) => redactSecrets(text, secrets),
   });
-  await mkdir(dirname(target), { recursive: true });
-  const temp = `${target}.${String(process.pid)}.tmp`;
-  try {
-    await writeFile(temp, xml, 'utf8');
-    await rename(temp, target);
-  } catch (error) {
-    await rm(temp, { force: true });
-    throw error;
-  }
+  await writeTextReport(target, xml);
   return target;
 }
