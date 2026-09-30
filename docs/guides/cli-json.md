@@ -18,7 +18,7 @@
     {
       "name": "node",
       "status": "pass",
-      "detail": "v22.12.0 >= 22.12"
+      "detail": "v22.23.2 satisfies ^22.18 || >=24.11"
     }
   ],
   "exitCode": 0

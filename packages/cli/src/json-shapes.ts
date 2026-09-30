@@ -141,7 +141,7 @@ const outboxProps = { produced: int, acknowledged: int, skipped: int, dead: int 
 export const JSON_SHAPES: Readonly<Record<JsonShapeKey, JsonSchema>> = {
   '--version': shape(object({ version: str }), { version: '0.1.0' }),
   doctor: shape(object({ checks: list, exitCode: { enum: [0, 1] }, config: obj }, ['config']), {
-    checks: [{ name: 'node', status: 'pass', detail: 'v22.12.0 >= 22.12' }],
+    checks: [{ name: 'node', status: 'pass', detail: 'v22.23.2 satisfies ^22.18 || >=24.11' }],
     exitCode: 0,
   }),
   init: shape(object({ files: strings }), { files: ['vetkit.config.ts', 'evals/criteria.yaml'] }),
