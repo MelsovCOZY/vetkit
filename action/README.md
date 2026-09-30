@@ -79,11 +79,14 @@ above. `OPENROUTER_API_KEY` uses a pinned judge transport. To use `AI_GATEWAY_AP
 
 The first line is one of:
 
-- `vetkit: failed`: some cases failed.
-- `vetkit: unscored (judge unavailable)`: the judge could not score, which is an outage and not a regression.
+- `vetkit: failed`: some cases failed, or the run stopped on an error such as an invalid config or
+  criteria file. For an error the comment shows its code and message.
+- `vetkit: unscored (judge unavailable)`: the judge could not score (it was down, timed out, throttled
+  or its account is out of credit), which is an outage and not a regression.
 - `vetkit: auth error (the judge rejected the key named by the config)`: fix the secret.
 - `vetkit: gate refused`: `gate: 'true'` could not run, for example with no `criteria.lock.json`.
-- `vetkit: passed`.
+- `vetkit: passed`: the run exited 0 with no failed case. A run that errored or left no result never
+  reads `passed`.
 
 `thresholds uncalibrated: run vet validate` means no committed calibration backs the thresholds.
 `pinned: false` means the judge alias may serve a different model between runs, so scores can drift.
