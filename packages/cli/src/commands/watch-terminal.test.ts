@@ -52,9 +52,11 @@ async function waitUntil(cond: () => boolean, timeoutMs = 10_000): Promise<void>
   }
 }
 
+function msg(role: string, content: string): string {
+  return JSON.stringify([{ role, parts: [{ type: 'text', content }] }]);
+}
+
 function otlpTraceBody(traceId: string): string {
-  const msg = (role: string, content: string): string =>
-    JSON.stringify([{ role, parts: [{ type: 'text', content }] }]);
   return JSON.stringify({
     resourceSpans: [
       {
