@@ -490,3 +490,194 @@ void test('main reads the raw output when no run result exists and posts the aut
   assert.equal(headlineOf(posted), HEADLINE.auth);
   assert.match(posted, /artifacts\/2/);
 });
+
+function errorDoc(code, extra = {}) {
+  return { error: { code, message: `${code} happened`, hint: 'fix it, then retry.', ...extra } };
+}
+
+const headlineFor = (doc) =>
+  headlineOf(renderComment({ current: doc, baseline: undefined, env: {} }));
+
+void test("renderComment headline is '### vetkit: unscored (judge unavailable)' for a no-credit error document and the body names the code and the kind", () => {
+  const body = renderComment({
+    current: errorDoc('JUDGE_UNAVAILABLE', {
+      message: 'judge account has no credit',
+      kind: 'terminal-billing',
+    }),
+    baseline: undefined,
+    env: {},
+  });
+  assert.equal(headlineOf(body), HEADLINE.unscored);
+  assert.ok(body.includes('JUDGE_UNAVAILABLE'), 'the error code is shown');
+  assert.ok(body.includes('terminal-billing'), 'the kind tells no credit from an outage');
+  assert.ok(body.includes('judge account has no credit'), 'the message is shown');
+});
+
+void test("renderComment headline is '### vetkit: unscored (judge unavailable)' for every error that means the judge could not answer", () => {
+  const docs = [
+    errorDoc('JUDGE_UNAVAILABLE'),
+    errorDoc('JUDGE_UNAVAILABLE', { kind: 'retryable' }),
+    errorDoc('JUDGE_UNAVAILABLE', { kind: 'terminal-request' }),
+    errorDoc('JUDGE_TIMEOUT'),
+    errorDoc('UNSCORED_ONLY'),
+    errorDoc('E_RATE_LIMIT'),
+    errorDoc('E_TIMEOUT'),
+    errorDoc('E_NETWORK'),
+  ];
+  for (const doc of docs) {
+    assert.equal(headlineFor(doc), HEADLINE.unscored, JSON.stringify(doc.error));
+  }
+});
+
+void test("renderComment headline is '### vetkit: failed' for a CONFIG_INVALID error document and the body shows the code and the message", () => {
+  const body = renderComment({
+    current: errorDoc('CONFIG_INVALID', { message: 'config file not found: nope.config.ts' }),
+    baseline: runDoc([verdict('case-a', 'tone', 'pass')]),
+    env: {},
+  });
+  assert.equal(headlineOf(body), HEADLINE.failed);
+  assert.ok(body.includes('CONFIG_INVALID'), 'the error code is shown');
+  assert.ok(body.includes('config file not found: nope.config.ts'), 'the message is shown');
+  assert.doesNotMatch(body, /\| Case \| Change \|/);
+});
+
+void test("renderComment headline is '### vetkit: failed' for criteria, gate and unknown error codes and the body shows the code", () => {
+  for (const code of [
+    'CRITERIA_INVALID',
+    'CASE_INVALID',
+    'GATE_UNCALIBRATED',
+    'GATE_UNPINNED',
+    'INTERNAL',
+    'SOME_CODE_ADDED_LATER',
+  ]) {
+    const body = renderComment({ current: errorDoc(code), baseline: undefined, env: {} });
+    assert.equal(headlineOf(body), HEADLINE.failed, code);
+    assert.ok(body.includes(code), `${code} is shown`);
+    assert.ok(body.includes(`${code} happened`), `the ${code} message is shown`);
+  }
+  assert.equal(headlineFor({ error: { message: 'no code at all' } }), HEADLINE.failed);
+  assert.equal(headlineFor({ error: 'a bare string' }), HEADLINE.failed);
+});
+
+void test('renderComment redacts a seeded key value in the error message', () => {
+  const body = renderComment({
+    current: errorDoc('CONFIG_INVALID', { message: `bad header Bearer ${FAKE_KEY} in the config` }),
+    baseline: undefined,
+    env: { AI_GATEWAY_API_KEY: FAKE_KEY },
+  });
+  assert.ok(!body.includes(FAKE_KEY), 'seeded key leaked through the error message');
+  assert.ok(body.includes('bad header Bearer [redacted] in the config'));
+});
+
+void test('renderComment keeps the error message on one line and inside a code span', () => {
+  const body = renderComment({
+    current: errorDoc('CRITERIA_INVALID', {
+      message: 'line 3:\n  unknown key `<!-- x -->` | @someone',
+    }),
+    baseline: undefined,
+    env: {},
+  });
+  const line = body.split('\n').find((text) => text.includes('CRITERIA_INVALID'));
+  assert.ok(line?.includes("`line 3: unknown key '<!-- x -->' \\| @someone`"), line);
+});
+
+void test("renderComment never says '### vetkit: passed' for a document that carries an error, whatever its counts and exit code", () => {
+  for (const code of ['CONFIG_INVALID', 'JUDGE_UNAVAILABLE', 'JUDGE_UNAUTHORIZED', 'SINK_WRITE']) {
+    const body = renderComment({
+      current: { ...passingDoc(), ...errorDoc(code) },
+      baseline: undefined,
+      env: {},
+    });
+    assert.notEqual(headlineOf(body), HEADLINE.passed, code);
+    assert.ok(!body.includes('vetkit: passed'), code);
+  }
+});
+
+void test("renderComment headline is '### vetkit: passed' only for exit code 0: another or a missing exit code reads '### vetkit: failed'", () => {
+  const passing = [verdict('case-a', 'tone', 'pass')];
+  for (const exitCode of [2, 70, 130, undefined]) {
+    assert.equal(headlineFor(runDoc(passing, { exitCode })), HEADLINE.failed, String(exitCode));
+  }
+  assert.equal(
+    headlineFor(runDoc([verdict('case-a', 'tone', 'fail')], { exitCode: 0 })),
+    HEADLINE.failed,
+  );
+  assert.equal(headlineFor({ exitCode: 0 }), HEADLINE.failed, 'no counts at all');
+});
+
+/** Runs `main` on a pull_request event over the given files and returns the posted comment body. */
+async function postedBody(files, env = {}) {
+  const dir = workspace({
+    'event.json': JSON.stringify({ pull_request: { number: 9 } }),
+    ...files,
+  });
+  const { gh, calls } = ghStub([{ code: 0, stdout: '', stderr: '' }]);
+  const result = await main({
+    env: {
+      GITHUB_EVENT_NAME: 'pull_request',
+      GITHUB_REPOSITORY: 'o/r',
+      GITHUB_EVENT_PATH: join(dir, 'event.json'),
+      ...(files['report.md'] === undefined ? {} : { REPORT_MD: join(dir, 'report.md') }),
+      ...env,
+    },
+    argv: ['comment', join(dir, 'run.json'), join(dir, 'base.json'), join(dir, 'raw.json')],
+    gh,
+    warn: () => {},
+  });
+  assert.equal(result, 'created');
+  return JSON.parse(calls[1]?.stdin ?? '{}').body;
+}
+
+void test('main posts the unscored headline for a no-credit raw output and no run record', async () => {
+  const posted = await postedBody({
+    'raw.json': JSON.stringify(
+      errorDoc('JUDGE_UNAVAILABLE', {
+        message: 'judge account has no credit',
+        kind: 'terminal-billing',
+      }),
+    ),
+  });
+  assert.equal(headlineOf(posted), HEADLINE.unscored);
+});
+
+void test('main posts the failed headline with the code and the message for a CONFIG_INVALID raw output', async () => {
+  const posted = await postedBody({
+    'raw.json': JSON.stringify(
+      errorDoc('CONFIG_INVALID', { message: 'config file not found: nope.config.ts' }),
+    ),
+  });
+  assert.equal(headlineOf(posted), HEADLINE.failed);
+  assert.ok(posted.includes('CONFIG_INVALID'));
+  assert.ok(posted.includes('config file not found: nope.config.ts'));
+});
+
+void test('main posts the failed headline with a one-line reason when the raw output is missing and there is no run record', async () => {
+  const posted = await postedBody({});
+  const lines = posted.split('\n');
+  assert.equal(lines[1], HEADLINE.failed);
+  assert.match(lines[3] ?? '', /produced no result/);
+  assert.equal(lines.length, 4, posted);
+});
+
+void test('main posts the failed headline with a one-line reason when the raw output is not JSON and there is no run record', async () => {
+  for (const raw of ['', 'npm error could not determine executable to run', '{}']) {
+    const posted = await postedBody({ 'raw.json': raw });
+    const lines = posted.split('\n');
+    assert.equal(lines[1], HEADLINE.failed, raw);
+    assert.match(lines[3] ?? '', /produced no result/, raw);
+    assert.equal(lines.length, 4, posted);
+  }
+});
+
+void test('main does not report a run record from an earlier run when the raw output carries an error', async () => {
+  const posted = await postedBody({
+    'run.json': JSON.stringify(passingDoc()),
+    'report.md': '## Earlier report\n\n1 passed',
+    'raw.json': JSON.stringify(errorDoc('CONFIG_INVALID')),
+  });
+  assert.equal(headlineOf(posted), HEADLINE.failed);
+  assert.ok(posted.includes('CONFIG_INVALID'));
+  assert.doesNotMatch(posted, /1 passed/);
+  assert.doesNotMatch(posted, /Earlier report/);
+  assert.doesNotMatch(posted, /typesafe-ai\/jev-served-1/);
+});
