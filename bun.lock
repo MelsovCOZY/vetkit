@@ -69,6 +69,9 @@
       "peerDependencies": {
         "vitest": "^5.0.2",
       },
+      "optionalPeers": [
+        "vitest",
+      ],
     },
     "packages/generator-openai-compatible": {
       "name": "@vetkit/generator-openai-compatible",
@@ -86,12 +89,6 @@
       "devDependencies": {
         "@typesafe-ai/sdk": "0.6.0",
       },
-      "peerDependencies": {
-        "@typesafe-ai/sdk": "^0.6.0",
-      },
-      "optionalPeers": [
-        "@typesafe-ai/sdk",
-      ],
     },
     "packages/scorers": {
       "name": "@vetkit/scorers",
@@ -116,12 +113,6 @@
       "devDependencies": {
         "langfuse": "3.39.2",
       },
-      "peerDependencies": {
-        "langfuse": "^3.39.2",
-      },
-      "optionalPeers": [
-        "langfuse",
-      ],
     },
     "packages/sink-otel": {
       "name": "@vetkit/sink-otel",
@@ -146,12 +137,6 @@
       "devDependencies": {
         "langfuse": "3.39.2",
       },
-      "peerDependencies": {
-        "langfuse": "^3.39.2",
-      },
-      "optionalPeers": [
-        "langfuse",
-      ],
     },
     "packages/source-otlp": {
       "name": "@vetkit/source-otlp",

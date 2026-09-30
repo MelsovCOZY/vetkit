@@ -1,14 +1,35 @@
 {
   "name": "@vetkit/judge-jev",
   "version": "0.0.0",
+  "description": "Jev judge client for vetkit with configurable transport presets",
+  "keywords": [
+    "llm",
+    "evals",
+    "evaluation",
+    "jev",
+    "typescript",
+    "ci",
+    "judge"
+  ],
+  "license": "Apache-2.0",
+  "homepage": "https://melsovcozy.github.io/vetkit/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MelsovCOZY/vetkit.git",
+    "directory": "packages/judge-jev"
+  },
+  "bugs": {
+    "url": "https://github.com/MelsovCOZY/vetkit/issues"
+  },
   "type": "module",
   "sideEffects": false,
   "engines": {
-    "node": ">=22.12"
+    "node": "^22.18.0 || >=24.11.0"
   },
   "files": [
     "dist"
   ],
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -21,14 +42,6 @@
   },
   "dependencies": {
     "@vetkit/spec": "workspace:^"
-  },
-  "peerDependencies": {
-    "@typesafe-ai/sdk": "^0.6.0"
-  },
-  "peerDependenciesMeta": {
-    "@typesafe-ai/sdk": {
-      "optional": true
-    }
   },
   "devDependencies": {
     "@typesafe-ai/sdk": "0.6.0"

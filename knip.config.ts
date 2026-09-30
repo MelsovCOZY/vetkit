@@ -27,8 +27,9 @@ const config: KnipConfig = {
       ignoreDependencies: ['vitest'],
     },
     'packages/export-vitest': {
-      // Peer of the evalite optional integration; dev-installed so its types resolve.
-      ignoreDependencies: ['evalite'],
+      // evalite: peer of the optional integration; dev-installed so its types resolve.
+      // vitest: optional peer, deliberately not a hard dependency.
+      ignoreDependencies: ['evalite', 'vitest'],
     },
     'packages/judge-jev': {
       // Loaded by dynamic specifier in src/transport.ts, so knip sees no static import.
