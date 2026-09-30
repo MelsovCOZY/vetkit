@@ -90,7 +90,7 @@ describe('createJevJudge presets', () => {
     async (preset, baseURL, model, hasProviderOptions) => {
       const calls: CapturedCall[] = [];
       const fetchStub: typeof fetch = vi.fn(async (input, init) => {
-        calls.push({ url: String(input), init: init ?? {} });
+        calls.push({ url: new Request(input).url, init: init ?? {} });
         return jsonResponse(fakeSuccessBody(model));
       });
 
@@ -120,7 +120,7 @@ describe('createJevJudge presets', () => {
   test('a custom baseURL overrides the preset baseURL', async () => {
     const calls: CapturedCall[] = [];
     const fetchStub: typeof fetch = vi.fn(async (input, init) => {
-      calls.push({ url: String(input), init: init ?? {} });
+      calls.push({ url: new Request(input).url, init: init ?? {} });
       return jsonResponse(fakeSuccessBody('typesafe-ai/jev'));
     });
 
@@ -748,7 +748,7 @@ describe('requestFormat capability', () => {
   test('a fenced-v1 endpoint echoes it and leaves the wire state untouched', async () => {
     const calls: CapturedCall[] = [];
     const fetchStub: typeof fetch = vi.fn(async (input, init) => {
-      calls.push({ url: String(input), init: init ?? {} });
+      calls.push({ url: new Request(input).url, init: init ?? {} });
       return jsonResponse(fakeSuccessBody('m'));
     });
     const judge = createJevJudgeFromEndpoint(
@@ -1007,7 +1007,7 @@ describe('vercel preset refuses gateway model fallbacks', () => {
     for (const build of builds) {
       const calls: CapturedCall[] = [];
       const fetchStub: typeof fetch = async (input, init) => {
-        calls.push({ url: String(input), init: init ?? {} });
+        calls.push({ url: new Request(input).url, init: init ?? {} });
         return jsonResponse(fakeSuccessBody('m'));
       };
       const judge = createJevJudge({
