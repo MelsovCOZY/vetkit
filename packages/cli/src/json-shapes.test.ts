@@ -204,7 +204,13 @@ const INVOCATIONS: Record<Exclude<JsonShapeKey, 'watch' | 'cases review'>, () =>
   }),
 };
 
-const TESTED_KEYS = Object.keys(INVOCATIONS) as (keyof typeof INVOCATIONS)[];
+type TestedKey = keyof typeof INVOCATIONS;
+
+function isTestedKey(key: string): key is TestedKey {
+  return Object.hasOwn(INVOCATIONS, key);
+}
+
+const TESTED_KEYS = Object.keys(INVOCATIONS).filter(isTestedKey);
 
 describe('JSON_SHAPES', () => {
   test.each(TESTED_KEYS)(
