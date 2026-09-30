@@ -91,15 +91,35 @@ function chooseTransport(env: Env): { preset: JevPresetName; matched: JevPresetN
   return { preset, matched };
 }
 
+const DEMO_JUDGE = [
+  '  // The judge is the demo judge: it runs offline, returns placeholder verdicts marked',
+  "  // transport 'demo', and never gates or locks. To use a real judge, set a key in .env, then",
+  '  // run `vet init --force`.',
+  '  judge: demoJudge,',
+].join('\n');
+
 // Only env var names are substituted: the bearer token's, and any further credential is the
 // endpoint's accountId, read from its env var when the config loads.
-function renderConfig(template: string, preset: JevPresetName): string {
+function realJudge(preset: JevPresetName): string {
   const [key, ...rest] = JEV_PRESETS[preset].credentials;
   const accountId = rest.map((c) => `\n    accountId: process.env['${c.name}'],`).join('');
+  return [
+    '  // The judge is Jev, reached through the transport below. The key is never stored here:',
+    '  // `vet run` reads it from the environment variable named by apiKeyEnv.',
+    '  judge: {',
+    "    kind: 'typesafe-compatible',",
+    `    preset: '${preset}',`,
+    `    apiKeyEnv: '${key?.name ?? ''}',${accountId}`,
+    '  },',
+  ].join('\n');
+}
+
+export function renderConfig(template: string, preset: JevPresetName | 'demo'): string {
+  const demo = preset === 'demo';
   return template
-    .replaceAll('{{transport}}', preset)
-    .replaceAll('{{apiKeyEnv}}', key?.name ?? '')
-    .replaceAll('{{accountId}}', accountId);
+    .replaceAll('{{imports}}', demo ? 'defineConfig, demoJudge' : 'defineConfig')
+    .replaceAll('{{judge}}', demo ? DEMO_JUDGE : realJudge(preset))
+    .replaceAll('{{generator}}', '');
 }
 
 function reportTransport(preset: JevPresetName, matched: readonly JevPresetName[]): void {

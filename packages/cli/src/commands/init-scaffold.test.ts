@@ -7,23 +7,28 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { lintCriteria, loadCases, loadCriteria } from '@vetkit/core';
+import { lintCriteria, loadCases, loadCriteria, runEvals } from '@vetkit/core';
 import { JEV_CREDENTIAL_PRIORITY, JEV_PRESETS } from '@vetkit/judge-jev';
 import { safeParseJson } from '@vetkit/spec';
 import { beforeAll, describe, expect, test } from 'vitest';
 import { loadVetConfig } from '../config-load.ts';
+import { demoJudge } from '../demo-judge.ts';
 import { ensureCliBuilt } from '../test-support/build-cli.js';
+import { renderConfig } from './init.ts';
 
 const binPath = fileURLToPath(new URL('../../dist/bin.js', import.meta.url));
 const fakeJudgeConfig = fileURLToPath(
   new URL('../../../../fixtures/cli/run/vetkit.config.ts', import.meta.url),
 );
 const templateCriteria = fileURLToPath(new URL('../../templates/criteria.yaml', import.meta.url));
+const templatesDir = fileURLToPath(new URL('../../templates/', import.meta.url));
+const cliPackageDir = fileURLToPath(new URL('../../', import.meta.url));
 
 const TARGETS = ['vetkit.config.ts', 'evals/criteria.yaml', 'evals/cases/example.jsonl'] as const;
 const CREDENTIAL_NAMES = JEV_CREDENTIAL_PRIORITY.flatMap((p) =>
@@ -54,6 +59,12 @@ function runVet(args: readonly string[], cwd: string, env = cleanEnv()): Result 
 
 function tempDir(): string {
   return mkdtempSync(join(tmpdir(), 'vetkit-init-'));
+}
+
+// The scaffolded config imports 'vetkit'; a project resolves it from its own node_modules.
+function linkVetkit(dir: string): void {
+  mkdirSync(join(dir, 'node_modules'), { recursive: true });
+  symlinkSync(cliPackageDir, join(dir, 'node_modules', 'vetkit'), 'dir');
 }
 
 function parseJson(text: string): unknown {
@@ -119,7 +130,7 @@ describe('vet init', () => {
   test('the criteria template comments explain escape, passWhen and thresholds', () => {
     const comments = readFileSync(templateCriteria, 'utf8')
       .split('\n')
-      .filter((line) => line.trim().startsWith('#'))
+      .filter((line: string) => line.trim().startsWith('#'))
       .join('\n');
     expect(readFileSync(templateCriteria, 'utf8')).toMatch(/^\s+escape:/m);
     expect(comments).toContain('escape');
@@ -135,6 +146,7 @@ describe('vet init', () => {
     const [preset] = JEV_CREDENTIAL_PRIORITY;
     expect(preset).toBe('vercel');
     const apiKeyEnv = 'AI_GATEWAY_API_KEY';
+    linkVetkit(dir);
     const loaded = await loadVetConfig({ cwd: dir, env: { [apiKeyEnv]: 'k-test' } });
     expect(loaded.config.judge).toMatchObject({ preset, apiKeyEnv });
     expect(loaded.judge.capabilities.transport).toBe(preset);
@@ -225,6 +237,111 @@ describe('vet init', () => {
     const result = runVet(['run', '--json'], dir);
     expect(result.status).toBe(0);
     expect(parseJson(result.stdout)).toMatchObject({ summary: { total: 3, aborted: false } });
+  });
+});
+
+const templateConfig = readFileSync(join(templatesDir, 'vetkit.config.ts.tmpl'), 'utf8');
+const templateCases = readFileSync(join(templatesDir, 'example.jsonl'), 'utf8')
+  .split('\n')
+  .filter((line: string) => line !== '');
+
+describe('the typed scaffold config', () => {
+  test.each(JEV_CREDENTIAL_PRIORITY)(
+    'the rendered config imports defineConfig from vetkit and wraps the object in defineConfig() (%s)',
+    (preset) => {
+      const text = renderConfig(templateConfig, preset);
+      const code = text.split('\n').filter((line: string) => !line.startsWith('//'));
+      expect(code[0]).toMatch(/^import \{ defineConfig \} from 'vetkit';$/);
+      expect(text).toContain('export default defineConfig({');
+      expect(text.trimEnd().endsWith('});')).toBe(true);
+    },
+  );
+
+  test('renderConfig demo: imports demoJudge, sets judge: demoJudge, contains no apiKeyEnv or preset line', () => {
+    const text = renderConfig(templateConfig, 'demo');
+    expect(text).toContain("import { defineConfig, demoJudge } from 'vetkit';");
+    expect(text).toContain('judge: demoJudge,');
+    const code = text.split('\n').filter((line: string) => !line.trimStart().startsWith('//'));
+    expect(code.join('\n')).not.toMatch(/apiKeyEnv|preset|accountId/);
+    expect(text).not.toContain('{{');
+  });
+
+  test.each(JEV_CREDENTIAL_PRIORITY)(
+    'renderConfig real preset: keeps kind, preset, apiKeyEnv (and accountId for cloudflare) inside defineConfig() (%s)',
+    (preset) => {
+      const [key, ...rest] = JEV_PRESETS[preset].credentials;
+      const text = renderConfig(templateConfig, preset);
+      const body = text.slice(text.indexOf('defineConfig({'));
+      expect(body).toContain("kind: 'typesafe-compatible'");
+      expect(body).toContain(`preset: '${preset}'`);
+      expect(body).toContain(`apiKeyEnv: '${key?.name ?? ''}'`);
+      for (const c of rest) expect(body).toContain(`accountId: process.env['${c.name}']`);
+      if (rest.length === 0) expect(body).not.toContain('accountId');
+      expect(text).not.toContain('{{');
+    },
+  );
+
+  test('a written demo scaffold loads through loadVetConfig with node_modules/vetkit linked to packages/cli: judge.capabilities.transport is demo', async () => {
+    const dir = tempDir();
+    linkVetkit(dir);
+    writeFileSync(join(dir, 'vetkit.config.ts'), renderConfig(templateConfig, 'demo'));
+    const loaded = await loadVetConfig({ cwd: dir, env: {} });
+    expect(loaded.judge.capabilities.transport).toBe('demo');
+  });
+
+  test('a written real-preset scaffold still loads through loadVetConfig with the key env set', async () => {
+    const dir = tempDir();
+    linkVetkit(dir);
+    writeFileSync(join(dir, 'vetkit.config.ts'), renderConfig(templateConfig, 'vercel'));
+    const loaded = await loadVetConfig({ cwd: dir, env: { AI_GATEWAY_API_KEY: 'k-test' } });
+    expect(loaded.config.judge).toMatchObject({
+      preset: 'vercel',
+      apiKeyEnv: 'AI_GATEWAY_API_KEY',
+    });
+    expect(loaded.judge.capabilities.transport).toBe('vercel');
+  });
+
+  test('the template comments name .env, vet init --force and the word demo', () => {
+    const comments = templateConfig
+      .split('\n')
+      .filter((line: string) => line.trimStart().startsWith('//'))
+      .join('\n');
+    expect(comments).toContain('.env');
+    expect(comments).toContain('vet init --force');
+    expect(comments).toContain('demo');
+  });
+
+  test('the template names no vendor', () => {
+    expect(templateConfig).not.toMatch(/vercel|typesafe-ai|openrouter|cloudflare/i);
+  });
+});
+
+describe('the example cases', () => {
+  test('the example cases carry no should-fail tag and still number three', () => {
+    expect(templateCases).toHaveLength(3);
+    expect(templateCases.join('\n')).not.toContain('should-fail');
+  });
+
+  test('the template case ids are refund-issued, refund-partial, no-refund-topic', () => {
+    const ids = templateCases.map((line) => {
+      const doc = parseJson(line);
+      return typeof doc === 'object' && doc !== null && 'id' in doc ? doc.id : undefined;
+    });
+    expect(ids).toEqual(['refund-issued', 'refund-partial', 'no-refund-topic']);
+  });
+
+  test('runEvals over the templates with demoJudge exits 0: 3 passed, 0 failed', async () => {
+    const result = await runEvals({
+      config: {
+        criteriaPath: templateCriteria,
+        casesDir: templatesDir,
+        judge: demoJudge,
+        threshold: 0.5,
+      },
+      lock: null,
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.summary).toMatchObject({ total: 3, passed: 3, failed: 0 });
   });
 });
 
