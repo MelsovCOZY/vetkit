@@ -9,13 +9,17 @@
 # One shared build, one scratch root. Every assertion prints
 # `smoke-gate-share-ci: PASS|FAIL <label> (exit N, expected M)`.
 #
-# Usage: bash scripts/smoke-gate-share-ci.sh        (env: VETKIT_SMOKE_DIR for the scratch root)
+# Usage: bash scripts/smoke-gate-share-ci.sh   (env: VETKIT_SMOKE_DIR to choose and keep the scratch root)
 set -u
 
 ROOT="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
 BIN="$ROOT/packages/cli/dist/bin.js"
 BASE="${VETKIT_SMOKE_DIR:-${TMPDIR:-/tmp}/vetkit-smoke-gate-share-ci}"
 FAILED=0
+# The scratch root is removed on exit, pass or fail, when it is this script's default. A
+# directory the caller named with VETKIT_SMOKE_DIR is the caller's to keep.
+cleanup() { [ -z "${VETKIT_SMOKE_DIR:-}" ] && rm -rf "$BASE" "$BASE.out" "$BASE.err"; return 0; }
+trap cleanup EXIT
 
 say() { printf 'smoke-gate-share-ci: %s\n' "$*"; }
 result() { # <label> <expected> <observed-exit> <ok 0|1> [detail]
@@ -44,7 +48,11 @@ expect() { result "$1" "$2" "$CODE" "$([ "$CODE" -eq "$2" ] && echo 0 || echo 1)
 
 finish() {
   if [ "$FAILED" -ne 0 ]; then
-    say "FAILED; scratch files are in $BASE" >&2
+    if [ -n "${VETKIT_SMOKE_DIR:-}" ]; then
+      say "FAILED; scratch files are in $BASE" >&2
+    else
+      say "FAILED; set VETKIT_SMOKE_DIR to keep the scratch files" >&2
+    fi
     exit 1
   fi
   say ok

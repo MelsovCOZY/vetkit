@@ -70,6 +70,9 @@ export default defineConfig({
     // must not fail the run; scripts/spike below always have test files, so this is
     // a safety net for the packages-only case.
     passWithNoTests: true,
+    // One temp root per run, removed when the run ends. Absolute for the same reason as
+    // `setupFiles` above: package projects set their own `root`.
+    globalSetup: [join(repoRoot, 'vitest.global-setup.ts')],
     restoreMocks: true,
     clearMocks: true,
     unstubEnvs: true,

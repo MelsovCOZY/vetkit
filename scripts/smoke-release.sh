@@ -16,7 +16,7 @@
 # Every judge and generator credential is removed. The only network is npm/bun installing
 # registry packages. No judge or gateway call, no GitHub call, no publish, no push.
 #
-# Usage: bash scripts/smoke-release.sh
+# Usage: bash scripts/smoke-release.sh   (env: VETKIT_SMOKE_DIR to choose and keep the scratch root)
 set -u
 
 ROOT="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
@@ -47,6 +47,10 @@ fails() { result "$1" 0 1 1 "${2:-}"; }
 is_true() { result "$1" 0 "$2" "$2" "${3:-}"; }
 
 WORK="${VETKIT_SMOKE_DIR:-$(mktemp -d "${TMPDIR:-/tmp}/vetkit-release.XXXXXX")}"
+# The scratch root (a clone, two installs) is removed on exit, pass or fail, when this script
+# made it. A directory the caller named with VETKIT_SMOKE_DIR is the caller's to keep.
+cleanup() { [ -z "${VETKIT_SMOKE_DIR:-}" ] && rm -rf "$WORK"; return 0; }
+trap cleanup EXIT
 case "$WORK" in "$ROOT"|"$ROOT"/*) say "scratch dir must be outside the repo: $WORK" >&2; exit 2 ;; esac
 
 for tool in git bun node npm jq tar cmp; do
