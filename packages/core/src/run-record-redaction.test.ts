@@ -2,9 +2,16 @@ import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, test, vi } from 'vitest';
+import { safeParseJson } from '@vetkit/spec';
 import { writeRunRecord, type RunRecord } from './run-record.ts';
 
 const CANARY = 'canary-Key-9f8e7d6c5b4a';
+
+function parseJson(text: string): unknown {
+  const result = safeParseJson<unknown>(text, {});
+  if (!result.ok) throw result.error;
+  return result.value;
+}
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -27,6 +34,6 @@ describe('writeRunRecord redaction', () => {
     await writeRunRecord(dir, record);
     const text = await readFile(join(dir, 'runs', 'latest.json'), 'utf8');
     expect(text).not.toContain(CANARY);
-    expect(JSON.parse(text)).toMatchObject({ startedAt: '2026-01-01T00:00:00.000Z' });
+    expect(parseJson(text)).toMatchObject({ startedAt: '2026-01-01T00:00:00.000Z' });
   });
 });
