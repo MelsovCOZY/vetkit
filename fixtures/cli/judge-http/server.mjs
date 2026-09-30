@@ -55,7 +55,8 @@ const server = createServer((req, res) => {
     raw += chunk;
   });
   req.on('end', () => {
-    const url = req.url ?? '';
+    // Presets probe health with a query string (openrouter: ?output_modalities=all).
+    const url = new URL(req.url ?? '/', 'http://127.0.0.1').pathname;
     if (
       !(req.method === 'POST' && url === '/v1/systemone') &&
       !(req.method === 'GET' && url === '/v1/models')
