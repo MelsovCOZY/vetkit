@@ -19,8 +19,7 @@ beforeAll(async () => {
 
 function verdict(caseId: string, status: string, pass?: boolean): RunVerdict {
   // The verdict is a plain fixture; only the fields the renderer reads matter.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  return {
+  const fixture: unknown = {
     caseId,
     criterionId: 'tone',
     status,
@@ -35,10 +34,15 @@ function verdict(caseId: string, status: string, pass?: boolean): RunVerdict {
         }
       : {}),
     threshold: 0.5,
-  } as unknown as RunVerdict;
+  };
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  return fixture as RunVerdict;
 }
 
-function result(results: RunVerdict[], aborted = false): Parameters<typeof renderAnnotations>[0] {
+function runResult(
+  results: RunVerdict[],
+  aborted = false,
+): Parameters<typeof renderAnnotations>[0] {
   return { results, summary: { aborted } };
 }
 
@@ -47,7 +51,7 @@ const lines = (out: string[]): string[] => out.flatMap((l) => l.split('\n'));
 describe('renderAnnotations', () => {
   test('renderAnnotations emits one ::error per scored fail and one ::warning per unscored verdict, title=vetkit', () => {
     const out = renderAnnotations(
-      result([
+      runResult([
         verdict('c-pass', 'ok', true),
         verdict('c-fail', 'ok', false),
         verdict('c-down', 'unscored'),
@@ -71,7 +75,7 @@ describe('renderAnnotations', () => {
       ...Array.from({ length: 13 }, (_, i) => verdict(`f${String(i)}`, 'ok', false)),
       ...Array.from({ length: 12 }, (_, i) => verdict(`u${String(i)}`, 'unscored')),
     ];
-    const out = renderAnnotations(result(many), { env: {} });
+    const out = renderAnnotations(runResult(many), { env: {} });
     expect(out.filter((l) => l.startsWith('::error '))).toHaveLength(10);
     expect(out.filter((l) => l.startsWith('::warning '))).toHaveLength(10);
     const notices = out.filter((l) => l.startsWith('::notice '));
@@ -82,16 +86,16 @@ describe('renderAnnotations', () => {
   });
 
   test('renderAnnotations adds a run aborted warning when the run was aborted', () => {
-    const out = renderAnnotations(result([verdict('c', 'ok', true)], true), { env: {} });
+    const out = renderAnnotations(runResult([verdict('c', 'ok', true)], true), { env: {} });
     expect(out).toContain('::warning title=vetkit::run aborted');
   });
 
   test('renderAnnotations adds no line for a clean run', () => {
-    expect(renderAnnotations(result([verdict('c', 'ok', true)]), { env: {} })).toEqual([]);
+    expect(renderAnnotations(runResult([verdict('c', 'ok', true)]), { env: {} })).toEqual([]);
   });
 
   test('renderAnnotations escapes %, CR and LF in messages', () => {
-    const out = renderAnnotations(result([verdict('a%b\r\nc::d', 'ok', false)]), { env: {} });
+    const out = renderAnnotations(runResult([verdict('a%b\r\nc::d', 'ok', false)]), { env: {} });
     expect(out).toHaveLength(1);
     const line = out[0] ?? '';
     expect(line).toContain('a%25b%0D%0Ac::d');
@@ -102,7 +106,7 @@ describe('renderAnnotations', () => {
   test('renderAnnotations redacts a seeded key', () => {
     const env = { VETKIT_FIXTURE_KEY: 'seeded-value-9c1d2e' };
     const out = renderAnnotations(
-      result([
+      runResult([
         verdict('seeded-value-9c1d2e', 'ok', false),
         verdict('has-sk-abcdef123456-inside', 'unscored'),
       ]),
@@ -140,7 +144,7 @@ describe('writeGithubSummary', () => {
       env: {},
       fs: {
         appendFile: (path) => {
-          calls.push(String(path));
+          calls.push(path);
           return Promise.resolve();
         },
       },
