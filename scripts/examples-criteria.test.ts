@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SCHEMA_VERSIONS } from '../packages/core/src/schema-version.ts';
+import { SCHEMA_VERSIONS } from '@vetkit/core';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const EXAMPLES = join(ROOT, 'examples');
