@@ -36,3 +36,4 @@ docs/*
 !docs/watch.md
 !docs/contracts/
 !docs/guides/
+!docs/listings/

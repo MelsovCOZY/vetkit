@@ -24,6 +24,16 @@ bun install --frozen-lockfile
 bun run hooks:install
 ```
 
+## Repo layout for contributors
+
+Some top-level material is maintainer and internal tooling, not product surface. You can ignore it
+when contributing:
+
+- `AGENTS.md`, `.agents/` and `.claude/` — instructions and settings for coding agents.
+- `spike/` — throwaway experiments that are not built, tested or published.
+- `fixtures/` — recorded inputs for tests and smoke scripts.
+- `docs/contracts/` — internal specs between slices of the codebase, not user documentation.
+
 ## Scripts
 
 Every script below is declared in the root `package.json`; run any of them with `bun run <name>`.
@@ -182,7 +192,12 @@ list records the decision behind each rule.
   as the build's compiler.
 - **Node floor:** `engines.node >=22.12` (Node 20 is EOL). Use `module: node20` / `target: es2023`
   rather than floating `nodenext`/`esnext`, so emitted syntax matches the floor. Only the publish job
-  runs on Node 24 (trusted publishing needs Node >=22.14).
+  runs on Node 22, the `node-version` in `.github/workflows/release.yml` (trusted publishing needs
+  Node >=22.14).
+- **Env and keys:** Libraries (@vetkit/*) read process.env only and never read files; the vetkit CLI seeds process.env from ./.env and ./.env.local next to the resolved config (existing env wins) and never logs their values.
+- **Zero telemetry:** any new outbound call must go to a judge, generator or sink URL the user
+  configured. `packages/cli/src/zero-telemetry.test.ts` and `scripts/no-telemetry-deps.test.ts` fail on
+  any other host, analytics client or hard-coded update URL.
 - **Versioning:** changesets for version bumps and changelogs only; never its publish command. Pin
   `@changesets/cli` exactly to 3.x, use `changeset git-tag` (not `tag`), and treat `changeset version`
   exit code 1 as "nothing to release" in CI. The tarball check for leftover `workspace:`/`catalog:`

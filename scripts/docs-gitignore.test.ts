@@ -29,6 +29,7 @@ describe('docs/ ignore allowlist', () => {
     'docs/contracts/new-contract.md',
     'docs/guides/x.md',
     'docs/guides/otlp-http-json.md',
+    'docs/listings/marketplace.md',
   ])('keeps %s', (path) => {
     expect(isIgnored(path)).toBe(false);
   });
@@ -40,7 +41,7 @@ describe('docs/ ignore allowlist', () => {
       .filter((path) => path !== '')
       .filter(
         (path) =>
-          !/^docs\/(\.gitkeep|configuration\.md|sinks\.md|watch\.md|contracts\/.+|guides\/.+)$/.test(
+          !/^docs\/(\.gitkeep|configuration\.md|sinks\.md|watch\.md|contracts\/.+|guides\/.+|listings\/.+)$/.test(
             path,
           ),
       );

@@ -1,0 +1,56 @@
+name: Bug report
+description: Something in vetkit does not work as documented
+title: 'bug: '
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste API keys, tokens or judge request/response bodies. `vet doctor` prints only
+        whether a value is set, never the value.
+  - type: input
+    id: version
+    attributes:
+      label: vet --version
+      description: Output of `vet --version`.
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Node version
+      description: Output of `node --version`.
+    validations:
+      required: true
+  - type: input
+    id: preset
+    attributes:
+      label: Judge preset
+      description: The judge preset or transport in use (for example `vercel` or `openrouter`).
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: vet doctor output
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
