@@ -1,0 +1,117 @@
+name: Pages
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: '1.4.2'
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build packages
+        run: bun run build
+
+      - name: Stage the site
+        run: bun scripts/build-site.ts site-src
+
+      - name: Check the staged site
+        run: bun x vitest run scripts/build-site.test.ts
+
+      - name: Build with Jekyll
+        uses: actions/jekyll-build-pages@44a6e6beabd48582f863aeeb6cb2151cc1716697 # v1.0.13
+        with:
+          source: site-src
+          destination: _site
+
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: _site
+
+  # The Pages host resolves only for a public repository, so deploy and the live link check read
+  # the repository's visibility instead of assuming it.
+  visibility:
+    runs-on: ubuntu-24.04
+    outputs:
+      private: ${{ steps.visibility.outputs.private }}
+    steps:
+      - name: Read repository visibility
+        id: visibility
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: echo "private=$(gh api repos/MelsovCOZY/vetkit --jq .private)" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: [build, visibility]
+    if: needs.visibility.outputs.private == 'false'
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure Pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - name: Deploy to Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+  link-check:
+    needs: [visibility, deploy]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Skip while the repository is private
+        if: needs.visibility.outputs.private == 'true'
+        run: |
+          echo "link-check: skipped (repository is private; the Pages host resolves only after the repo is public)"
+
+      - name: Checkout
+        if: needs.visibility.outputs.private == 'false'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Bun
+        if: needs.visibility.outputs.private == 'false'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: '1.4.2'
+
+      - name: Install dependencies
+        if: needs.visibility.outputs.private == 'false'
+        run: bun install --frozen-lockfile
+
+      - name: Build packages
+        if: needs.visibility.outputs.private == 'false'
+        run: bun run build
+
+      - name: Request every Pages URL
+        if: needs.visibility.outputs.private == 'false'
+        run: bun scripts/build-site.ts --check-live
+
+      - name: Fail when visibility is unknown
+        if: needs.visibility.outputs.private != 'true' && needs.visibility.outputs.private != 'false'
+        run: |
+          echo "link-check: repository visibility could not be read"
+          exit 1
