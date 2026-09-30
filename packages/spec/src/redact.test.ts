@@ -77,7 +77,15 @@ describe('redactSecretsDeep', () => {
     const secrets = secretsFrom({ A_KEY: CANARY });
     const out = redactSecretsDeep({ a: [`x ${CANARY}`, { b: CANARY }], n: 3, z: null }, secrets);
     expect(out).toEqual({ a: ['x [redacted]', { b: '[redacted]' }], n: 3, z: null });
-    expect(JSON.parse(JSON.stringify(out))).toEqual(out);
+    expect(structuredClone(out)).toEqual(out);
+  });
+
+  test('shared references are not circular', () => {
+    const secrets = secretsFrom({ A_KEY: CANARY });
+    const model = { id: `m ${CANARY}`, pinned: false };
+    const out = redactSecretsDeep({ model, results: [{ model }, { model }] }, secrets);
+    const expected = { id: 'm [redacted]', pinned: false };
+    expect(out).toEqual({ model: expected, results: [{ model: expected }, { model: expected }] });
   });
 
   test('marks a circular reference instead of looping', () => {
