@@ -157,14 +157,16 @@ describe('served model identity', () => {
   });
 });
 
-// Criterion 'a' as it reads now; the lock below was written against `calibratedWording`.
-const CALIBRATED_WORDING: WordingFields = {
+// Criterion 'a' as the lock below was calibrated against: a boolean with this wording.
+const CALIBRATED_WORDING = {
   type: 'boolean',
   instructions: 'Is the reply polite?',
   escape: 'The reply has no tone.',
-};
+} as const satisfies WordingFields;
 
-function criterionA(wording: WordingFields = CALIBRATED_WORDING): Criterion {
+/** Criterion 'a' as it reads now. */
+function criterionA(instructions: string = CALIBRATED_WORDING.instructions): Criterion {
+  const wording = { ...CALIBRATED_WORDING, instructions };
   return {
     id: 'a',
     ...wording,
@@ -190,7 +192,7 @@ describe('lock staleness', () => {
   const policy = { requireCalibrated: true, allowUnpinned: false };
 
   test('a gated criterion whose wording changed since calibration refuses with exit 2, naming it and vet validate', () => {
-    const reworded = criterionA({ ...CALIBRATED_WORDING, instructions: 'Is the reply courteous?' });
+    const reworded = criterionA('Is the reply courteous?');
     const out = evaluateGate({
       verdicts: [served('j-1')],
       lock: calibratedLock(),
@@ -271,7 +273,7 @@ describe('lock staleness', () => {
   });
 
   test('an ungated verdict is never wording-checked', () => {
-    const reworded = criterionA({ ...CALIBRATED_WORDING, instructions: 'Is the reply courteous?' });
+    const reworded = criterionA('Is the reply courteous?');
     const out = evaluateGate({
       verdicts: [served('j-1', { gated: false })],
       lock: calibratedLock(),
