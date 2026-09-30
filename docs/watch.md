@@ -1,6 +1,7 @@
 # `vet watch`
 
-Leave `vet watch` running against your OTel collector: it samples live traces deterministically,
+`vet watch` binds its own OTLP/HTTP receiver on `--port` (default 4318); point your OTel exporter at it.
+It samples live traces deterministically,
 judges the sample, and turns every failing trace into a regression case automatically — gated
 behind human review before it counts toward any gate. Full contract: `docs/contracts/j7.md`.
 
@@ -16,8 +17,7 @@ Traces whose completeness flags exclude content-dependent criteria (see `docs/co
 `filtered:incomplete` or `filtered:no_content`.
 
 `--sample 0` records everything with `sampled: false` — a dry run that still writes the inclusion
-log. `--sample 1` judges everything. When `--upstream-sample-rate` (config `watch.upstreamSampleRate`)
-is given, `inclusionProbability = upstreamSampleRate × evaluatorRate`; otherwise both
+log. `--sample 1` judges everything. When `watch.upstreamSampleRate` is set in the config, `inclusionProbability = upstreamSampleRate × evaluatorRate`; otherwise both
 `upstreamRate` and `inclusionProbability` are `'unknown'`, and any coverage report built from the
 log must be labeled a biased sample, not a population estimate.
 
@@ -81,8 +81,10 @@ a long-running watch is its normal end, not an interruption:
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--sample <rate>` | — (required) | The sample rate, `0..1`. Outside that range: `WATCH_CONFIG`, exit 2. |
+| `--config <path>` | `vetkit.config.*` in the current directory | The config file to load. |
+| `--sample <rate>` | watch.sampleRate from the config | The sample rate, `0..1`. Outside that range, or unset with no config value: `WATCH_CONFIG`, exit 2. |
 | `--port <n>` | `4318` | The OTLP/HTTP receiver's port. |
 | `--max-in-flight <n>` | `4` | Concurrent judge calls in flight. |
+| `--sink [names]` | all configured sinks | Comma list of configured sinks to drain verdicts to; see `docs/sinks.md`. |
 | `--no-promote` | promotion on | Disables writing to `evals/cases/pending/`. |
 | `--json` | off | One JSON coverage-summary document on stdout instead of the human-readable form. |

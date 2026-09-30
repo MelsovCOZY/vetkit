@@ -74,6 +74,28 @@ The judge-failure rule: `error.type` is set and NO score attributes are emitted 
 | `comment` | explanation |
 | auth | basic auth `base64(pk:sk)` |
 
+## Enabling a sink
+
+A sink is off until `vetkit.config.ts` lists it under `sinks`. The CLI builds a `{ kind, *Env }`
+descriptor into a sink by reading the named env vars, so no secret appears in the config:
+
+```ts
+sinks: [{ kind: 'otel', endpoint: 'http://localhost:4318/v1/logs', headersEnv: 'OTEL_EXPORTER_OTLP_HEADERS' }],
+```
+
+Then name the sink on the command line:
+
+```sh
+vet run --sink otel
+vet watch --sink langfuse
+```
+
+`--sink` takes a comma list. A descriptor is named by its `kind` (`otel`, `langfuse`); an adapter
+object is named by its `id`, and a name also matches by the id's prefix before `/` when exactly one
+configured sink has it. A descriptor's built sink has a different outbox id (`otel/logs`), which is not the name
+`--sink` accepts for it. Without `--sink`, `vet watch` drains to every
+configured sink.
+
 ## Error codes
 
 | Code | Meaning |

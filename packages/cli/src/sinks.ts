@@ -19,6 +19,10 @@ export interface ResolvedSink {
   readonly sink: SinkV1;
 }
 
+/** The `kind` values a `{kind,*Env}` descriptor accepts; mirrors the schema's sinkRef. */
+export const SINK_DESCRIPTOR_KINDS = ['otel', 'langfuse'] as const;
+type SinkDescriptorKind = (typeof SINK_DESCRIPTOR_KINDS)[number];
+
 type SinkRef = ResolvedConfig['sinks'][number];
 type SinkDescriptor = Exclude<SinkRef, PluginRef>;
 type SinkConfig = Pick<ResolvedConfig, 'sinks'>;
@@ -136,7 +140,7 @@ function buildLangfuseSink(
 }
 
 function buildDescriptorSink(
-  descriptor: SinkDescriptor,
+  descriptor: SinkDescriptor & { readonly kind: SinkDescriptorKind },
   env: Readonly<Record<string, string | undefined>>,
   fetchImpl: typeof fetch | undefined,
 ): SinkV1 {

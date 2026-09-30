@@ -239,7 +239,7 @@ export const configSchema: JsonSchema = {
           type: 'string',
         },
         requestFormat: {
-          description: "Judge request format; 'raw' when omitted.",
+          description: "Judge request format; 'fenced-v1' when omitted.",
           enum: ['raw', 'fenced-v1'],
         },
         providerOptions: {
