@@ -279,11 +279,11 @@ function urlOf(input: string | URL | Request): string {
 }
 
 function recordingFetch(urls: string[], headers: unknown[] = []): typeof fetch {
-  return vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+  return vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
     urls.push(urlOf(input));
     headers.push(init?.headers);
     return new Response('{}', { status: 200 });
-  }) as unknown as typeof fetch;
+  });
 }
 
 function judgeConfig(fields: string): string {
@@ -342,12 +342,31 @@ describe('vet doctor health probe URL', () => {
   });
 });
 
-function valuesOf(stdout: string): { name: string; value: string; source: string }[] {
+interface ValueRow {
+  readonly name: string;
+  readonly value: string;
+  readonly source: string;
+}
+
+function isValueRow(row: unknown): row is ValueRow {
+  return (
+    typeof row === 'object' &&
+    row !== null &&
+    'name' in row &&
+    typeof row.name === 'string' &&
+    'value' in row &&
+    typeof row.value === 'string' &&
+    'source' in row &&
+    typeof row.source === 'string'
+  );
+}
+
+function valuesOf(stdout: string): ValueRow[] {
   const doc = parseJson(stdout);
   if (typeof doc !== 'object' || doc === null || !('values' in doc) || !Array.isArray(doc.values)) {
     throw new Error('doctor --json output has no values');
   }
-  return doc.values as { name: string; value: string; source: string }[];
+  return doc.values.filter(isValueRow);
 }
 
 function valueRow(stdout: string, name: string): { value: string; source: string } | undefined {
