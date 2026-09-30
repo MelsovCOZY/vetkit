@@ -13,12 +13,31 @@ export type JsonSchema = SchemaObject;
 
 export type ParseResult<T> = { ok: true; value: T } | { ok: false; error: VetError };
 
-const ajv = new Ajv2020({ strict: true, allErrors: false });
+export interface ValidateJsonOptions {
+  /**
+   * Collect every violation instead of stopping at the first. For files a developer
+   * writes by hand, where one pass should list everything to fix; leave it off for
+   * payloads from the network (ajv advises against allErrors on untrusted input).
+   */
+  readonly allErrors?: boolean;
+}
 
-const validatorCache = new WeakMap<JsonSchema, ValidateFunction>();
+interface Compiler {
+  readonly ajv: Ajv2020;
+  readonly cache: WeakMap<JsonSchema, ValidateFunction>;
+}
 
-function getValidator(schema: JsonSchema): ValidateFunction {
-  const cached = validatorCache.get(schema);
+const firstError: Compiler = {
+  ajv: new Ajv2020({ strict: true, allErrors: false }),
+  cache: new WeakMap(),
+};
+const everyError: Compiler = {
+  ajv: new Ajv2020({ strict: true, allErrors: true }),
+  cache: new WeakMap(),
+};
+
+function getValidator(schema: JsonSchema, { ajv, cache }: Compiler): ValidateFunction {
+  const cached = cache.get(schema);
   if (cached) return cached;
 
   let validator: ValidateFunction;
@@ -27,7 +46,7 @@ function getValidator(schema: JsonSchema): ValidateFunction {
   } catch (cause) {
     throw new VetError(CEV_ERROR_CODES.E_SCHEMA_INVALID, 'Invalid JSON schema', { cause });
   }
-  validatorCache.set(schema, validator);
+  cache.set(schema, validator);
   return validator;
 }
 
@@ -47,7 +66,11 @@ function hasProtoPollutionKey(value: unknown): boolean {
   return false;
 }
 
-export function validateJson<T>(value: unknown, schema: JsonSchema): ParseResult<T> {
+export function validateJson<T>(
+  value: unknown,
+  schema: JsonSchema,
+  options: ValidateJsonOptions = {},
+): ParseResult<T> {
   if (hasProtoPollutionKey(value)) {
     return {
       ok: false,
@@ -55,7 +78,7 @@ export function validateJson<T>(value: unknown, schema: JsonSchema): ParseResult
     };
   }
 
-  const validate = getValidator(schema);
+  const validate = getValidator(schema, options.allErrors === true ? everyError : firstError);
   if (validate(value)) {
     // schema is a plain JsonSchema (not JSONSchemaType<T>), so ajv cannot tie the
     // validated shape to T; this is the trusted boundary assertion.
