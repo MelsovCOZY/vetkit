@@ -123,6 +123,7 @@ runs:
           vet-junit.xml
           .vet/report.md
           .vet/report.html
+          .vet/badge.json
         include-hidden-files: true
         if-no-files-found: warn
 

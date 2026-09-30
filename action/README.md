@@ -1,6 +1,6 @@
 # vetkit action
 
-Runs your LLM evals (`vet run`) on every pull request, uploads the JUnit and Markdown reports as an
+Runs your LLM evals (`vet run`) on every pull request, uploads the reports and the badge file as one
 artifact, and keeps one sticky PR comment that says in its first line what happened.
 
 ## Prerequisites
@@ -68,6 +68,17 @@ the globs if your evals live in a subdirectory or in `.config/`.
 | `exitCode`     | The `vet run` exit code.                      |
 | `version`      | The vetkit version that ran.                  |
 | `baseline-key` | The cache key the baseline was restored with. |
+
+## The artifact
+
+The artifact named by `artifact-name` holds:
+
+- `vet-junit.xml`: the JUnit report.
+- `.vet/report.md` and `.vet/report.html`: the report as Markdown and as HTML.
+- `.vet/badge.json`: a badge in the shields.io endpoint format (`schemaVersion`, `label`, `message`,
+  `color`). Its message is the calibration state and the gate result, for example
+  `uncalibrated · pass`, and never a pass rate. To show it in a README, publish the file at a public
+  URL and point `https://img.shields.io/endpoint?url=` at it.
 
 ## The judge key
 
