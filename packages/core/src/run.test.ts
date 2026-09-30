@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, test, vi } from 'vitest';
@@ -558,6 +558,29 @@ describe('event bus', () => {
     const cached = rerun.responses;
     expect(cached).toHaveLength(2);
     for (const r of cached) expect(r.cacheHit).toBe(true);
+  });
+
+  test('runEvals with bypassCache never reads or writes the cache', async () => {
+    const paths = await suite([BOOL_YAML], [{ id: 'c1', input: { state: 'BYPASS-STATE' } }]);
+    const { judge, doJudge } = scriptedJudge({ 'BYPASS-STATE': { 'answers-question': yes(0.9) } });
+    const cacheDir = await mkdtemp(join(tmpdir(), 'vetkit-run-cache-'));
+    await runEvals({ config: { ...paths, judge, cacheDir } });
+    expect(doJudge).toHaveBeenCalledTimes(1);
+    const before = await readdir(cacheDir);
+    expect(before).toHaveLength(1);
+    const mtimeBefore = (await stat(join(cacheDir, before[0] ?? ''))).mtimeMs;
+
+    const rerun = record();
+    const result = await runEvals({
+      config: { ...paths, judge, cacheDir, bypassCache: true },
+      events: rerun.events,
+    });
+    expect(doJudge).toHaveBeenCalledTimes(2);
+    expect(result.results.length).toBeGreaterThan(0);
+    for (const v of result.results) expect(v.cacheHit).toBe(false);
+    for (const r of rerun.responses) expect(r.cacheHit).toBe(false);
+    expect(await readdir(cacheDir)).toEqual(before);
+    expect((await stat(join(cacheDir, before[0] ?? ''))).mtimeMs).toBe(mtimeBefore);
   });
 
   test('a transport HTTP error rides the real status on judge:response and status/errorType (never body or key) on verdict', async () => {
