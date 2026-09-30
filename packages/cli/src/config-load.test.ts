@@ -200,6 +200,42 @@ describe('loadVetConfig', () => {
     expect(fetchSpy.mock.calls[0]?.[0]).toBe('http://127.0.0.1:9/v1/systemone');
   });
 
+  test('loadVetConfig reports envFiles with applied names and judgeBaseURL (override > config > preset)', async () => {
+    const cwd = await project({
+      'vetkit.config.ts': descriptorConfig({
+        kind: 'typesafe-compatible',
+        baseURL: 'https://configured.example.test',
+        model: 'custom/jev',
+        apiKeyEnv: 'FIXTURE_JUDGE_KEY',
+      }),
+      '.env': 'FIXTURE_JUDGE_KEY=from-file\nFIXTURE_OTHER=x\n',
+    });
+    const env: Record<string, string | undefined> = {};
+    const loaded = await loadVetConfig({ cwd, env });
+    expect(env['FIXTURE_JUDGE_KEY']).toBe('from-file');
+    expect(loaded.envFiles).toEqual([
+      { path: join(cwd, '.env'), applied: ['FIXTURE_JUDGE_KEY', 'FIXTURE_OTHER'] },
+    ]);
+    expect(loaded.judgeBaseURL).toBe('https://configured.example.test');
+
+    const overridden = await loadVetConfig({
+      cwd,
+      env: { FIXTURE_JUDGE_KEY: 'k', CEV_JUDGE_BASE_URL: 'http://127.0.0.1:9' },
+    });
+    expect(overridden.judgeBaseURL).toBe('http://127.0.0.1:9');
+
+    const presetCwd = await project({
+      'vetkit.config.ts': descriptorConfig({
+        kind: 'typesafe-compatible',
+        preset: 'vercel',
+        apiKeyEnv: 'FIXTURE_JUDGE_KEY',
+      }),
+    });
+    const preset = await loadVetConfig({ cwd: presetCwd, env: { FIXTURE_JUDGE_KEY: 'k' } });
+    expect(preset.judgeBaseURL).toBe('https://ai-gateway.vercel.sh/typesafe');
+    expect(preset.envFiles).toEqual([]);
+  });
+
   test('an unknown descriptor kind is CONFIG_INVALID naming the kind', async () => {
     const cwd = await project({
       'vetkit.config.ts': descriptorConfig({
