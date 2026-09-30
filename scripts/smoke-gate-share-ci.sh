@@ -192,23 +192,44 @@ expect "gate: demo judge, validate --json" 2
 assert "gate: validate names GATE_REFUSED on stdout" 'grep -qF GATE_REFUSED "$OUT"'
 assert "gate: validate wrote no criteria.lock.json" '[ ! -e criteria.lock.json ]'
 
-# A calibrated lock for the fixture judge in pass mode.
+# A calibrated lock for the fixture judge in pass mode. The wording hash is the one the built core
+# computes for the fixture criterion, so the lock matches the way a validate-written one would.
 L="$(fresh)"
 cd "$L" || exit 1
-jq -n '{
+TONE_HASH="$(node -e '
+  import(process.argv[1]).then(async (core) => {
+    const loaded = await core.loadCriteria("evals/criteria.yaml");
+    if (!loaded.ok) process.exit(1);
+    process.stdout.write(loaded.criteria[0].wordingHash);
+  });
+' "$ROOT/packages/core/dist/index.js")"
+assert "gate: the built core hashes the fixture criterion" '[ "${#TONE_HASH}" -eq 64 ]'
+jq -n --arg hash "$TONE_HASH" '{
   lockVersion: 1,
   model: { requested: "fake-jev-pass", resolved: "fake-jev-pass-resolved", transport: "fake", pinned: false },
   criteria: { tone: {
-    wordingHash: ("a" * 64), status: "calibrated", threshold: 0.5, tolerance: 0,
+    wordingHash: $hash, status: "calibrated", threshold: 0.5, tolerance: 0,
     gauntlet: { paraphrase: "pass", polarity: "pass", injection: "pass", master_key: "pass",
       label_permutation: "pass", constant_output: "pass", position_swap: "pass", length: "pass" },
     reasons: [], labelCount: 120 } },
-  datasetHash: ("d" * 64)
+  datasetHash: ("d" * 64),
+  requestFormat: "fenced-v1"
 }' >criteria.lock.json
 run run --gate --allow-unpinned --json
 expect "gate: run --gate --allow-unpinned against a calibrated lock" 0
 assert "gate: the gate is calibrated for 1 criterion" \
   "jq -e '.gate.tier == \"calibrated\" and .gate.calibratedCriteria == 1' '$OUT'"
+# A reworded gated criterion is not the calibrated one: the gate refuses it the way vet check calls it stale.
+sed -i 's/^    instructions: Is the reply polite?$/    instructions: Is the reply courteous?/' evals/criteria.yaml
+run run --gate --allow-unpinned --json
+expect "gate: run --gate after the gated criterion's wording changed" 2
+assert "gate: the refusal names the criterion and vet validate" \
+  'grep -qF "criterion '"'"'tone'"'"' changed since calibration (wording); run \`vet validate\`" "$ERR"'
+assert "gate: the refused run reports tier uncalibrated" "jq -e '.gate.tier == \"uncalibrated\"' '$OUT'"
+run check
+expect "gate: vet check calls the reworded lock stale" 1
+assert "gate: vet check names wordingHash" 'grep -q "^stale: wordingHash" "$OUT"'
+sed -i 's/^    instructions: Is the reply courteous?$/    instructions: Is the reply polite?/' evals/criteria.yaml
 jq '.model.resolved = "someone-else"' criteria.lock.json >lock.tmp && mv lock.tmp criteria.lock.json
 run run --gate --allow-unpinned
 expect "gate: run --gate after the lock names another served model" 2

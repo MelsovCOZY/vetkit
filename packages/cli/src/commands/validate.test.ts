@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   assertLockGates,
+  computeWordingHash,
   createEvents,
   readLock,
   resolveConfig,
@@ -760,7 +761,8 @@ function runVet(args: readonly string[], cwd: string): Spawned {
   });
 }
 
-// The run fixture's in-process judge is unpinned (transport 'fake'), criterion 'tone'.
+// The run fixture's in-process judge is unpinned (transport 'fake'), criterion 'tone'; the planted
+// lock hashes the fixture's wording and names the default request format, as vet validate would.
 function runProject(status?: 'floating' | 'uncalibrated'): string {
   const dir = mkdtempSync(join(tmpdir(), 'vetkit-validate-run-'));
   cpSync(runFixture, dir, { recursive: true });
@@ -775,7 +777,11 @@ function runProject(status?: 'floating' | 'uncalibrated'): string {
       },
       criteria: {
         tone: {
-          wordingHash: 'a'.repeat(64),
+          wordingHash: computeWordingHash({
+            type: 'boolean',
+            instructions: 'Is the reply polite?',
+            escape: 'The reply has no discernible tone.',
+          }),
           status,
           threshold: 0.5,
           tolerance: 0.02,
@@ -794,6 +800,7 @@ function runProject(status?: 'floating' | 'uncalibrated'): string {
         },
       },
       datasetHash: 'b'.repeat(64),
+      requestFormat: 'fenced-v1',
     };
     writeFileSync(join(dir, 'criteria.lock.json'), JSON.stringify(lock));
   }

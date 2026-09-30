@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
-import type { GauntletResult, Lock, LockCriterion, Verdict } from '@vetkit/spec';
+import type { Criterion, GauntletResult, Lock, LockCriterion, Verdict } from '@vetkit/spec';
+import { computeWordingHash, type WordingFields } from './criteria/load.ts';
 import { evaluateGate } from './gate.ts';
 
 const PASS: GauntletResult = {
@@ -151,6 +152,133 @@ describe('served model identity', () => {
       ],
       lock: lock('calibrated', true),
       policy,
+    });
+    expect(out.reasons).toEqual([]);
+  });
+});
+
+// Criterion 'a' as the lock below was calibrated against: a boolean with this wording.
+const CALIBRATED_WORDING = {
+  type: 'boolean',
+  instructions: 'Is the reply polite?',
+  escape: 'The reply has no tone.',
+} as const satisfies WordingFields;
+
+/** Criterion 'a' as it reads now. */
+function criterionA(instructions: string = CALIBRATED_WORDING.instructions): Criterion {
+  const wording = { ...CALIBRATED_WORDING, instructions };
+  return {
+    id: 'a',
+    ...wording,
+    polarity: 'pass_when_true',
+    channel: 'quality',
+    provenance: { traceIds: [] },
+    wordingHash: computeWordingHash(wording),
+  };
+}
+
+function calibratedLock(over: Partial<Lock> = {}): Lock {
+  const base = lock('calibrated', true);
+  return {
+    ...base,
+    criteria: {
+      a: { ...entry('calibrated'), wordingHash: computeWordingHash(CALIBRATED_WORDING) },
+    },
+    ...over,
+  };
+}
+
+describe('lock staleness', () => {
+  const policy = { requireCalibrated: true, allowUnpinned: false };
+
+  test('a gated criterion whose wording changed since calibration refuses with exit 2, naming it and vet validate', () => {
+    const reworded = criterionA('Is the reply courteous?');
+    const out = evaluateGate({
+      verdicts: [served('j-1')],
+      lock: calibratedLock(),
+      policy,
+      criteria: [reworded],
+    });
+    expect(out.exitCode).toBe(2);
+    expect(out.reasons).toEqual([
+      "criterion 'a' changed since calibration (wording); run `vet validate`",
+    ]);
+  });
+
+  test('unchanged wording falls through to results', () => {
+    const out = evaluateGate({
+      verdicts: [served('j-1')],
+      lock: calibratedLock(),
+      policy,
+      criteria: [criterionA()],
+    });
+    expect(out).toEqual({ exitCode: 0, reasons: [] });
+  });
+
+  test('a request format other than the lock was written under refuses with one reason naming both', () => {
+    const rawLock = evaluateGate({
+      verdicts: [served('j-1')],
+      lock: calibratedLock(),
+      policy,
+      criteria: [criterionA()],
+      requestFormat: 'fenced-v1',
+    });
+    expect(rawLock.exitCode).toBe(2);
+    expect(rawLock.reasons).toHaveLength(1);
+    expect(rawLock.reasons[0]).toContain("request format 'fenced-v1'");
+    expect(rawLock.reasons[0]).toContain("'raw'");
+    expect(rawLock.reasons[0]).toContain('`vet validate`');
+
+    const fencedLock = evaluateGate({
+      verdicts: [served('j-1')],
+      lock: calibratedLock({ requestFormat: 'fenced-v1' }),
+      policy,
+      criteria: [criterionA()],
+      requestFormat: 'raw',
+    });
+    expect(fencedLock.exitCode).toBe(2);
+    expect(fencedLock.reasons).toHaveLength(1);
+    expect(fencedLock.reasons[0]).toContain("request format 'raw'");
+  });
+
+  test('the request format the lock was written under falls through to results', () => {
+    const out = evaluateGate({
+      verdicts: [served('j-1', { pass: false })],
+      lock: calibratedLock({ requestFormat: 'fenced-v1' }),
+      policy,
+      criteria: [criterionA()],
+      requestFormat: 'fenced-v1',
+    });
+    expect(out).toEqual({ exitCode: 1, reasons: [] });
+  });
+
+  test('a changed case set (datasetHash) never refuses the gate', () => {
+    const out = evaluateGate({
+      verdicts: [served('j-1')],
+      lock: calibratedLock({ datasetHash: 'e'.repeat(64) }),
+      policy,
+      criteria: [criterionA()],
+      requestFormat: 'raw',
+    });
+    expect(out).toEqual({ exitCode: 0, reasons: [] });
+  });
+
+  test('absent current criteria and request format are not checked', () => {
+    const out = evaluateGate({
+      verdicts: [served('j-1')],
+      lock: calibratedLock({ criteria: { a: entry('calibrated') }, requestFormat: 'fenced-v1' }),
+      policy,
+    });
+    expect(out).toEqual({ exitCode: 0, reasons: [] });
+  });
+
+  test('an ungated verdict is never wording-checked', () => {
+    const reworded = criterionA('Is the reply courteous?');
+    const out = evaluateGate({
+      verdicts: [served('j-1', { gated: false })],
+      lock: calibratedLock(),
+      policy,
+      criteria: [reworded],
     });
     expect(out.reasons).toEqual([]);
   });

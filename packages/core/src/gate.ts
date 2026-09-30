@@ -1,8 +1,15 @@
 // Exit-code decision and gate policy: `vet run --gate` calls evaluateGate.
-// Exit codes: 0 all gated verdicts pass, 1 any gated verdict fails or is unscored, 2 the gate refuses (no lock, uncalibrated gated criterion, unpinned transport),
+// Exit codes: 0 all gated verdicts pass, 1 any gated verdict fails or is unscored, 2 the gate refuses (no lock, uncalibrated gated criterion, unpinned transport,
+// a served model, gated criterion wording or request format other than the lock was calibrated against),
 // 130 aborted. Verdicts with gated:false (score criteria, uncalibrated languages) never count.
-import type { Lock, Verdict } from '@vetkit/spec';
-import { LOCK_FILE, lockEntryGateable } from './validate/lock.ts';
+import type { Criterion, Lock, RequestFormat, Verdict } from '@vetkit/spec';
+import {
+  LOCK_FILE,
+  lockEntryGateable,
+  lockRequestFormat,
+  requestFormatChanged,
+  wordingChanged,
+} from './validate/lock.ts';
 
 export interface GatePolicy {
   /** Minimum pass rate (0..1) over counted verdicts; absent means every one must pass. */
@@ -37,6 +44,10 @@ export interface EvaluateGateInput {
   readonly verdicts: readonly Verdict[];
   readonly lock: Lock | null;
   readonly policy: GatePolicy;
+  /** The criteria as they read now; absent means their wording is not checked against the lock. */
+  readonly criteria?: readonly Criterion[];
+  /** The request format the judge sends now; absent means it is not checked against the lock. */
+  readonly requestFormat?: RequestFormat;
 }
 
 export interface GateResult {
@@ -76,15 +87,26 @@ export function evaluateGate(input: EvaluateGateInput): GateResult {
       `served model '${id}' differs from the lock's '${lock.model.resolved}' (run \`vet validate\` against the current judge)`,
     );
   }
+  const gated = new Set(input.verdicts.filter((v) => v.gated !== false).map((v) => v.criterionId));
   if (policy.requireCalibrated) {
-    const gated = new Set(
-      input.verdicts.filter((v) => v.gated !== false).map((v) => v.criterionId),
-    );
     for (const id of gated) {
       if (!lockEntryGateable(lock.criteria[id], policy.allowUnpinned)) {
         reasons.push(`criterion '${id}' is not calibrated in ${LOCK_FILE}`);
       }
     }
+  }
+  // A reworded criterion is not the one that was calibrated; the same comparison `vet check` makes.
+  // A changed case set never refuses: gating new outputs is the point.
+  for (const c of input.criteria ?? []) {
+    const entry = lock.criteria[c.id];
+    if (gated.has(c.id) && entry !== undefined && wordingChanged(entry, c)) {
+      reasons.push(`criterion '${c.id}' changed since calibration (wording); run \`vet validate\``);
+    }
+  }
+  if (input.requestFormat !== undefined && requestFormatChanged(lock, input.requestFormat)) {
+    reasons.push(
+      `request format '${input.requestFormat}' differs from the lock's '${lockRequestFormat(lock)}' (run \`vet validate\`)`,
+    );
   }
   if (reasons.length > 0) return { exitCode: 2, reasons };
 

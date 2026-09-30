@@ -18,7 +18,7 @@ import {
 import type { CachedJudgment, VerdictCache } from './judge/cache.ts';
 import type { Limiter } from './judge/pacing.ts';
 import { createEvents, EVENT_NAMES, type EventMap, type Events } from './events.ts';
-import { loadCriteria } from './criteria/load.ts';
+import { computeWordingHash, loadCriteria, type WordingFields } from './criteria/load.ts';
 import { estimateRun } from './estimate.ts';
 import { evaluateGate } from './gate.ts';
 import { runEvals, runJudge, verdictCause, type RunConfig, type RunVerdict } from './run.ts';
@@ -199,11 +199,49 @@ function lockCriterion(over: Partial<LockCriterion> = {}): LockCriterion {
   };
 }
 
+// The wording of the fixture criteria above, so a planted lock hashes like a validate-written one.
+const FIXTURE_WORDING: Record<string, WordingFields> = {
+  'answers-question': {
+    type: 'boolean',
+    instructions: 'Does the reply answer the question?',
+    escape: 'The reply is empty.',
+  },
+  'is-rude': { type: 'boolean', instructions: 'Is the reply rude?', escape: 'The reply is empty.' },
+  tone: {
+    type: 'choice',
+    instructions: 'Which tone does the reply take?',
+    criteria: { polite: 'The reply is courteous.', rude: 'The reply is insulting.' },
+    escape: 'The reply has no tone.',
+  },
+  helpfulness: {
+    type: 'score',
+    instructions: 'How helpful is the reply?',
+    criteria: ['not helpful', 'somewhat helpful', 'very helpful'],
+  },
+  'sum-correct': {
+    type: 'boolean',
+    instructions: 'Is the sum correct?',
+    escape: 'No number given.',
+  },
+};
+
+/** A lock over the fixture criteria; the placeholder wordingHash 'x' becomes the fixture's real hash. */
 function lockOf(criteria: Record<string, LockCriterion>, pinned = true): Lock {
+  const hashed = Object.fromEntries(
+    Object.entries(criteria).map(([id, entry]) => {
+      const wording = FIXTURE_WORDING[id];
+      return [
+        id,
+        entry.wordingHash === 'x' && wording !== undefined
+          ? { ...entry, wordingHash: computeWordingHash(wording) }
+          : entry,
+      ];
+    }),
+  );
   return {
     lockVersion: 1,
     model: { requested: 'fake/jev', resolved: 'fake/jev-1', transport: 'fake-transport', pinned },
-    criteria,
+    criteria: hashed,
     datasetHash: 'd',
   };
 }
@@ -487,6 +525,50 @@ describe('gate policy (exit 2)', () => {
       lock,
     });
     expect(bad.exitCode).toBe(1);
+  });
+
+  test('gate refuses a lock whose gated criterion wording changed since calibration; tier uncalibrated', async () => {
+    const paths = await suite([BOOL_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
+    const { judge } = scriptedJudge({ S1: { 'answers-question': yes(0.9) } });
+    const lock = lockOf({ 'answers-question': lockCriterion({ wordingHash: 'y'.repeat(64) }) });
+    const out = await runEvals({ config: { ...paths, judge, gate: true }, lock });
+
+    expect(out.exitCode).toBe(2);
+    expect(out.gateReasons).toEqual([
+      "criterion 'answers-question' changed since calibration (wording); run `vet validate`",
+    ]);
+    expect(out.gate.tier).toBe('uncalibrated');
+  });
+
+  test('gate refuses a lock written under another request format than the judge uses', async () => {
+    const paths = await suite([BOOL_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
+    // scriptedJudge reads the raw state; this lock was written under fenced-v1.
+    const { judge } = scriptedJudge({ S1: { 'answers-question': yes(0.9) } });
+    const lock: Lock = {
+      ...lockOf({ 'answers-question': lockCriterion() }),
+      requestFormat: 'fenced-v1',
+    };
+    const out = await runEvals({ config: { ...paths, judge, gate: true }, lock });
+
+    expect(out.exitCode).toBe(2);
+    expect(out.gateReasons).toHaveLength(1);
+    expect(out.gateReasons[0]).toContain("request format 'raw'");
+    expect(out.gateReasons[0]).toContain("'fenced-v1'");
+    expect(out.gate.tier).toBe('uncalibrated');
+  });
+
+  test('a changed case set (datasetHash) never refuses the gate: exit by results, tier calibrated', async () => {
+    const paths = await suite([BOOL_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
+    const { judge } = scriptedJudge({ S1: { 'answers-question': yes(0.9) } });
+    const lock: Lock = {
+      ...lockOf({ 'answers-question': lockCriterion() }),
+      datasetHash: 'z'.repeat(64),
+    };
+    const out = await runEvals({ config: { ...paths, judge, gate: true }, lock });
+
+    expect(out.exitCode).toBe(0);
+    expect(out.gateReasons).toEqual([]);
+    expect(out.gate.tier).toBe('calibrated');
   });
 
   test('evaluateGate with no lock returns exit 2 and reasons', () => {

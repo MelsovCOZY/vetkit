@@ -223,6 +223,6 @@ A lock written before the default changed has no `requestFormat`, which is read 
 `vet check` reports it stale until `vet validate` is re-run (or the judge sets `requestFormat: 'raw'`).
 
 Switching formats invalidates the verdict cache (the format is part of the cache key) and marks
-every lock stale: `vet check` reports the reason `requestFormat`. Re-run `vet validate` after the
-switch to write a fresh lock.
+every lock stale: `vet check` reports the reason `requestFormat`, and `vet run --gate` refuses the
+lock (exit 2) until it is rewritten. Re-run `vet validate` after the switch to write a fresh lock.
 <!-- manual:end -->

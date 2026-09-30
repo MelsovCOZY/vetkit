@@ -12,6 +12,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { computeWordingHash } from '@vetkit/core';
 import { JEV_CREDENTIAL_PRIORITY, JEV_PRESETS } from '@vetkit/judge-jev';
 import { runRecordSchema, safeParseJson, VetError } from '@vetkit/spec';
 import { beforeAll, describe, expect, test } from 'vitest';
@@ -641,8 +642,20 @@ const LOCK_NO_GATE_LINE =
   'gate: uncalibrated — criteria.lock.json present; pass --gate to enforce it';
 const CALIBRATED_LINE = 'gate: calibrated — 1/1 criteria calibrated (criteria.lock.json)';
 
-// A calibrated lock for the fixture judge in 'pass' mode (unpinned, so --allow-unpinned).
-function plantLock(project: string, resolved = 'fake-jev-pass-resolved'): string {
+// The fixture's `tone` criterion as written in evals/criteria.yaml; the lock must hash the same.
+const TONE_WORDING_HASH = computeWordingHash({
+  type: 'boolean',
+  instructions: 'Is the reply polite?',
+  escape: 'The reply has no discernible tone.',
+});
+
+// A calibrated lock for the fixture judge in 'pass' mode (unpinned, so --allow-unpinned), written
+// under the default request format.
+function plantLock(
+  project: string,
+  resolved = 'fake-jev-pass-resolved',
+  wordingHash = TONE_WORDING_HASH,
+): string {
   const lockPath = join(project, 'criteria.lock.json');
   const pass = 'pass';
   const lock = {
@@ -650,7 +663,7 @@ function plantLock(project: string, resolved = 'fake-jev-pass-resolved'): string
     model: { requested: 'fake-jev-pass', resolved, transport: 'fake', pinned: false },
     criteria: {
       tone: {
-        wordingHash: 'a'.repeat(64),
+        wordingHash,
         status: 'calibrated',
         threshold: 0.5,
         tolerance: 0,
@@ -669,6 +682,7 @@ function plantLock(project: string, resolved = 'fake-jev-pass-resolved'): string
       },
     },
     datasetHash: 'd'.repeat(64),
+    requestFormat: 'fenced-v1',
   };
   writeFileSync(lockPath, JSON.stringify(lock));
   return lockPath;
@@ -726,6 +740,25 @@ describe('vet run gate label', () => {
       exitCode: 2,
       gate: { tier: 'uncalibrated', lockPath: null },
     });
+  });
+
+  test('--gate --allow-unpinned refuses a lock whose gated criterion wording changed: exit 2, tier uncalibrated', () => {
+    const project = freshProject();
+    const lockPath = plantLock(project, undefined, 'a'.repeat(64));
+    const result = runVet(
+      ['run', '--json', '--gate', '--allow-unpinned'],
+      project,
+      fixtureEnv('pass'),
+    );
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain(
+      "gate refused: criterion 'tone' changed since calibration (wording); run `vet validate`",
+    );
+    expect(parseJson(result.stdout)).toMatchObject({
+      exitCode: 2,
+      gate: { tier: 'uncalibrated', lockPath },
+    });
+    expect(result.stdout).not.toContain('"tier":"calibrated"');
   });
 
   test('latest.json carries gate', () => {
