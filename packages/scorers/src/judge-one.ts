@@ -7,7 +7,7 @@
 // reused as-is so emitted scorer modules call the same math instead of
 // duplicating it; this module never reimplements the polarity/escape/threshold comparison.
 import { decideVerdict, judgeCase, type VerdictCache } from '@vetkit/core';
-import type { Answer, Case, Criterion, JudgeV1, Verdict } from '@vetkit/spec';
+import type { Answer, Case, Criterion, JudgeV1, Lock, Verdict } from '@vetkit/spec';
 
 /** Placeholder id: each call judges one throwaway Case, never persisted or looked up by id. */
 const CASE_ID = 'scorer-case';
@@ -18,16 +18,41 @@ export interface JudgeOneInput {
   readonly state: string;
   /** Reference answer for a `grader: {kind: 'reference'}` criterion; never entered into `state`. */
   readonly expected?: string;
-  /** Falls back to decideVerdict's own default (0.5, uncalibrated) when omitted. */
+  /**
+   * The project's criteria.lock.json, already read by the caller (this package never touches
+   * files). Its entry for the criterion supplies the threshold and tolerance.
+   */
+  readonly lock?: Lock;
+  /** Beats the lock entry's threshold; falls back to it, then to 0.5. */
   readonly threshold?: number;
   readonly cache?: VerdictCache;
 }
 
+/** The lock entry's status, or 'none' when no lock (or no entry for the criterion) was given. */
+export type Calibration = 'none' | 'calibrated' | 'uncalibrated' | 'floating';
+
 export interface JudgeOneResult {
   readonly verdict: Verdict;
+  readonly calibration: Calibration;
   readonly pass?: boolean;
   readonly threshold?: number;
   readonly borderline?: boolean;
+}
+
+const DEFAULT_THRESHOLD = 0.5;
+
+// Same resolution order as the CLI's decide() in @vetkit/core run.ts: lock entry, then default.
+function resolveThreshold(
+  criterionId: string,
+  lock: Lock | undefined,
+  explicit: number | undefined,
+): { threshold: number; tolerance: number; calibration: Calibration } {
+  const entry = lock?.criteria[criterionId];
+  return {
+    threshold: explicit ?? entry?.threshold ?? DEFAULT_THRESHOLD,
+    tolerance: entry?.tolerance ?? 0,
+    calibration: entry?.status ?? 'none',
+  };
 }
 
 export async function judgeOne(input: JudgeOneInput): Promise<JudgeOneResult> {
@@ -53,12 +78,16 @@ export async function judgeOne(input: JudgeOneInput): Promise<JudgeOneResult> {
   if (verdict === undefined) {
     throw new Error('judgeCase returned no verdict for the single criterion');
   }
+  const { threshold, tolerance, calibration } = resolveThreshold(
+    input.criterion.id,
+    input.lock,
+    input.threshold,
+  );
   if (verdict.status !== 'ok' || verdict.answer === undefined) {
-    return { verdict };
+    return { verdict, calibration };
   }
 
-  const threshold = input.threshold ?? 0.5;
-  const decided = decideVerdict(verdict, input.criterion, threshold);
+  const decided = decideVerdict(verdict, input.criterion, threshold, tolerance);
   const merged: Verdict =
     decided.status === undefined
       ? verdict
@@ -69,6 +98,7 @@ export async function judgeOne(input: JudgeOneInput): Promise<JudgeOneResult> {
         };
   return {
     verdict: merged,
+    calibration,
     ...(decided.pass === undefined ? {} : { pass: decided.pass }),
     ...(decided.threshold === undefined ? {} : { threshold: decided.threshold }),
     ...(decided.borderline === undefined ? {} : { borderline: decided.borderline }),

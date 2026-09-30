@@ -1,0 +1,9 @@
+criteria:
+  - id: promised_refund
+    type: boolean
+    instructions: Did the assistant promise or issue a refund? Answer unclear if the transcript does not say.
+    escape: unclear
+    polarity: pass_when_true
+    channel: outcome
+    provenance:
+      traceIds: []

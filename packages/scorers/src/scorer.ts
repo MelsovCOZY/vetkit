@@ -2,8 +2,14 @@
 // returning a number-or-null-ish shape; null is the sanctioned "skip this" signal for both
 // — never 0, which would read as a real fail.
 import type { VerdictCache } from '@vetkit/core';
-import type { Criterion, JudgeV1 } from '@vetkit/spec';
-import { confidenceOf, judgeOne, probabilityOf, resolveState } from './judge-one.ts';
+import type { Criterion, JudgeV1, Lock } from '@vetkit/spec';
+import {
+  confidenceOf,
+  type Calibration,
+  judgeOne,
+  probabilityOf,
+  resolveState,
+} from './judge-one.ts';
 
 export interface ScorerCase {
   readonly input?: string;
@@ -15,6 +21,7 @@ export interface ScorerMetadata {
   readonly probability?: number;
   readonly confidence?: number;
   readonly status: string;
+  readonly calibration: Calibration;
   readonly model: string;
   readonly warning?: string;
 }
@@ -29,6 +36,8 @@ export interface ScorerResult {
 export interface CreateScorerOptions {
   readonly judge: JudgeV1;
   readonly criterion: Criterion;
+  /** The project's criteria.lock.json (read by the caller); supplies threshold and tolerance. */
+  readonly lock?: Lock;
   readonly threshold?: number;
   readonly cache?: VerdictCache;
 }
@@ -38,10 +47,11 @@ export function createScorer(
 ): (evalCase: ScorerCase) => Promise<ScorerResult> {
   return async (evalCase) => {
     const { state, warning } = resolveState(evalCase.input, evalCase.output);
-    const { verdict, pass } = await judgeOne({
+    const { verdict, pass, calibration } = await judgeOne({
       judge: options.judge,
       criterion: options.criterion,
       state,
+      ...(options.lock === undefined ? {} : { lock: options.lock }),
       ...(options.threshold === undefined ? {} : { threshold: options.threshold }),
       ...(evalCase.expected === undefined ? {} : { expected: evalCase.expected }),
       ...(options.cache === undefined ? {} : { cache: options.cache }),
@@ -53,7 +63,12 @@ export function createScorer(
       return {
         name,
         score: null,
-        metadata: { status: verdict.status, model, ...(warning === undefined ? {} : { warning }) },
+        metadata: {
+          status: verdict.status,
+          calibration,
+          model,
+          ...(warning === undefined ? {} : { warning }),
+        },
       };
     }
     return {
@@ -63,6 +78,7 @@ export function createScorer(
         probability: probabilityOf(verdict.answer),
         confidence: confidenceOf(verdict.answer),
         status: verdict.status,
+        calibration,
         model,
         ...(warning === undefined ? {} : { warning }),
       },

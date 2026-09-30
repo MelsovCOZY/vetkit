@@ -1,10 +1,12 @@
 // vitest `expect.extend` matcher: `await expect(output).toPassCriterion(criterion, {input})`.
 import type { VerdictCache } from '@vetkit/core';
-import type { Criterion, JudgeV1 } from '@vetkit/spec';
+import type { Criterion, JudgeV1, Lock } from '@vetkit/spec';
 import { judgeOne, probabilityOf, resolveState } from './judge-one.ts';
 
 export interface VetMatchersOptions {
   readonly judge: JudgeV1;
+  /** The project's criteria.lock.json (read by the caller); supplies threshold and tolerance. */
+  readonly lock?: Lock;
   readonly threshold?: number;
   readonly cache?: VerdictCache;
 }
@@ -38,10 +40,11 @@ export function vetMatchers(options: VetMatchersOptions): VetMatchers {
   return {
     async toPassCriterion(received, criterion, matcherOptions = {}) {
       const { state, warning } = resolveState(matcherOptions.input, received);
-      const { verdict, pass, threshold } = await judgeOne({
+      const { verdict, pass, threshold, calibration } = await judgeOne({
         judge: options.judge,
         criterion,
         state,
+        ...(options.lock === undefined ? {} : { lock: options.lock }),
         ...(options.threshold === undefined ? {} : { threshold: options.threshold }),
         ...(options.cache === undefined ? {} : { cache: options.cache }),
       });
@@ -53,7 +56,7 @@ export function vetMatchers(options: VetMatchersOptions): VetMatchers {
         message: () =>
           [
             `expected output to ${passed ? 'not pass' : 'pass'} criterion "${criterion.id}" (status=${verdict.status})`,
-            `probability=${probability ?? 'n/a'} threshold=${threshold ?? 'n/a'} model=${model}`,
+            `probability=${probability ?? 'n/a'} threshold=${threshold ?? 'n/a'} calibration=${calibration} model=${model}`,
             warning,
           ]
             .filter((part): part is string => part !== undefined)
