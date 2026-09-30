@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vetkit.dev/schemas/config.schema.json",
+  "$id": "https://melsovcozy.github.io/vetkit/schemas/config.schema.json",
   "title": "ConfigDoc",
   "description": "Declarative shape of vetkit.config.ts. Adapter objects are checked as {specVersion, id, capabilities} projections; their methods are checked structurally in core.",
   "type": "object",

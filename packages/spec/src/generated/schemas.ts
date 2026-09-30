@@ -6,7 +6,7 @@ import type { JsonSchema } from '../json.ts';
 
 export const caseSchema: JsonSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
-  $id: 'https://vetkit.dev/schemas/case.schema.json',
+  $id: 'https://melsovcozy.github.io/vetkit/schemas/case.schema.json',
   title: 'Case',
   type: 'object',
   properties: {
@@ -61,7 +61,7 @@ export const caseSchema: JsonSchema = {
 
 export const configSchema: JsonSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
-  $id: 'https://vetkit.dev/schemas/config.schema.json',
+  $id: 'https://melsovcozy.github.io/vetkit/schemas/config.schema.json',
   title: 'ConfigDoc',
   description:
     'Declarative shape of vetkit.config.ts. Adapter objects are checked as {specVersion, id, capabilities} projections; their methods are checked structurally in core.',
@@ -625,7 +625,7 @@ export const criteriaSchema: JsonSchema = {
 
 export const criterionSchema: JsonSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
-  $id: 'https://vetkit.dev/schemas/criterion.schema.json',
+  $id: 'https://melsovcozy.github.io/vetkit/schemas/criterion.schema.json',
   title: 'Criterion',
   type: 'object',
   properties: {
@@ -852,7 +852,7 @@ export const criterionSchema: JsonSchema = {
 
 export const lockSchema: JsonSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
-  $id: 'https://vetkit.dev/schemas/lock.schema.json',
+  $id: 'https://melsovcozy.github.io/vetkit/schemas/lock.schema.json',
   title: 'Lock',
   type: 'object',
   $defs: {
@@ -1100,7 +1100,7 @@ export const lockSchema: JsonSchema = {
 
 export const runRecordSchema: JsonSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
-  $id: 'https://vetkit.dev/schemas/run-record.schema.json',
+  $id: 'https://melsovcozy.github.io/vetkit/schemas/run-record.schema.json',
   title: 'RunRecordDoc',
   type: 'object',
   properties: {
@@ -1159,7 +1159,7 @@ export const runRecordSchema: JsonSchema = {
 
 export const traceSchema: JsonSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
-  $id: 'https://vetkit.dev/schemas/trace.schema.json',
+  $id: 'https://melsovcozy.github.io/vetkit/schemas/trace.schema.json',
   title: 'NormalizedTrace',
   type: 'object',
   $defs: {
@@ -1358,7 +1358,7 @@ export const traceSchema: JsonSchema = {
 
 export const verdictSchema: JsonSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
-  $id: 'https://vetkit.dev/schemas/verdict.schema.json',
+  $id: 'https://melsovcozy.github.io/vetkit/schemas/verdict.schema.json',
   title: 'Verdict',
   type: 'object',
   $defs: {
@@ -1583,7 +1583,7 @@ export const verdictSchema: JsonSchema = {
 
 export const specVersionSchema: JsonSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
-  $id: 'https://vetkit.dev/schemas/version.schema.json',
+  $id: 'https://melsovcozy.github.io/vetkit/schemas/version.schema.json',
   title: 'SpecVersionDoc',
   type: 'object',
   properties: {

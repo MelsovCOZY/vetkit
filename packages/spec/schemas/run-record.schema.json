@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://vetkit.dev/schemas/run-record.schema.json",
+  "$id": "https://melsovcozy.github.io/vetkit/schemas/run-record.schema.json",
   "title": "RunRecordDoc",
   "type": "object",
   "properties": {

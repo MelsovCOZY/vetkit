@@ -51,7 +51,7 @@ export const DEFAULT_FORBIDDEN_WORDS: readonly string[] = [
   'properly',
 ];
 
-const DOCS = 'https://vetkit.dev/docs/lint';
+const DOCS = 'https://melsovcozy.github.io/vetkit/docs/lint.html';
 
 function rule(id: LintRuleId, severity: LintSeverity, why: string): LintRule {
   return { id, severity, why, docs: `${DOCS}#${id.toLowerCase().replaceAll('_', '-')}` };
