@@ -42,8 +42,11 @@ require_tool npm
 # No example may see a real key: every run is offline on the demo judge.
 unset AI_GATEWAY_API_KEY OPENROUTER_API_KEY TYPESAFE_API_KEY CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID
 
-MANIFEST="$(mktemp)"
-trap 'rm -f "$MANIFEST"' EXIT
+# One scratch root holds the tarball manifest and every example copy. It is removed on exit,
+# pass or fail.
+SCRATCH="$(mktemp -d)"
+trap 'rm -rf "$SCRATCH"' EXIT
+MANIFEST="$SCRATCH/manifest.json"
 
 node -e '
   const fs = require("node:fs");
@@ -62,12 +65,17 @@ node -e '
 # Rewrites the copied example's package.json: every tarball package becomes a `file:` dependency
 # (when the example depends on it) and an override, so an internal @vetkit/* range never falls
 # through to the registry (those packages are not published). Fails if scripts.test is missing.
+# vitest is forced to the version this repo is built with (the root package.json), as an override
+# and in the example's own spec (npm rejects an override that disagrees with a direct spec), so
+# the install does not depend on which vitest release is the newest: npm 10 crashes in its
+# resolver on an exact vitest spec older than the newest release unless it is also overridden.
 write_example_manifest() {
   node -e '
     const fs = require("node:fs");
     const path = require("node:path");
-    const [manifestPath, dir, name] = process.argv.slice(1);
+    const [manifestPath, rootManifest, dir, name] = process.argv.slice(1);
     const { packages } = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    const vitest = JSON.parse(fs.readFileSync(rootManifest, "utf8")).devDependencies.vitest;
     const file = path.join(dir, "package.json");
     const pkg = JSON.parse(fs.readFileSync(file, "utf8"));
     if (typeof pkg.scripts?.test !== "string") {
@@ -80,17 +88,18 @@ write_example_manifest() {
     for (const field of ["dependencies", "devDependencies"]) {
       for (const pkgName of Object.keys(pkg[field] ?? {})) {
         if (deps[pkgName] !== undefined) pkg[field][pkgName] = deps[pkgName];
+        if (pkgName === "vitest") pkg[field][pkgName] = vitest;
       }
     }
-    pkg.overrides = { ...pkg.overrides, ...deps };
+    pkg.overrides = { ...pkg.overrides, ...deps, vitest };
     fs.writeFileSync(file, JSON.stringify(pkg, null, 2));
-  ' "$MANIFEST" "$1" "$2"
+  ' "$MANIFEST" "$ROOT/package.json" "$1" "$2"
 }
 
 run_example() {
   local name="$1"
-  local dir
-  dir="$(mktemp -d)"
+  local dir="$SCRATCH/$name"
+  mkdir "$dir"
   cp -R "$ROOT/examples/$name/." "$dir/"
   write_example_manifest "$dir" "$name" || return 1
   (

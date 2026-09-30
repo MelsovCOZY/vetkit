@@ -22,11 +22,17 @@ describe('examples/vitest', () => {
     expect(exists('vitest/evals/cases/seed.jsonl')).toBe(true);
   });
 
-  test('scripts.test runs tsc --noEmit before vitest run; vitest pinned exactly and typecheck strict', () => {
+  test('scripts.test runs tsc --noEmit before vitest run; vitest declared as the peer range and typecheck strict', () => {
     const pkg = read('vitest/package.json');
     expect(pkg).toMatch(/"private":\s*true/);
     expect(pkg).toContain('"test": "tsc --noEmit -p tsconfig.json && vitest run"');
-    expect(pkg).toMatch(/"vitest":\s*"5\.0\.2"/);
+    // The example declares the range this package accepts as its optional vitest peer, so a
+    // plain install resolves the newest matching release, not one exact version.
+    const peerRange = /"peerDependencies":\s*\{\s*"vitest":\s*"(\^[^"]+)"/.exec(
+      readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+    )?.[1];
+    expect(peerRange).toBeDefined();
+    expect(pkg).toContain(`"vitest": "${peerRange ?? ''}"`);
     expect(pkg).toContain('"@vetkit/scorers"');
     expect(pkg).toMatch(/"typescript":\s*"\d+\.\d+\.\d+"/);
     const tsconfig = read('vitest/tsconfig.json');
