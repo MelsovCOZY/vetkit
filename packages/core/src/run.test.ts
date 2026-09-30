@@ -19,7 +19,7 @@ import type { Limiter } from './judge/pacing.ts';
 import { createEvents, EVENT_NAMES, type EventMap, type Events } from './events.ts';
 import { loadCriteria } from './criteria/load.ts';
 import { evaluateGate } from './gate.ts';
-import { runEvals, runJudge, type RunConfig, type RunVerdict } from './run.ts';
+import { runEvals, runJudge, verdictCause, type RunConfig, type RunVerdict } from './run.ts';
 import { calibrate, type CalibrationLabel } from './validate/calibrate.ts';
 import { buildLock, readLock, writeLockAtomic } from './validate/lock.ts';
 
@@ -327,6 +327,39 @@ describe('runEvals results and summary', () => {
     expect(out.exitCode).toBe(1);
   });
 
+  test('an invalid criteria file lists every issue with its JSON pointer', async () => {
+    const paths = await suite(
+      [
+        `  - id: first\n    type: boolean\n    instructions: Q1?\n    escape: none\n    channel: outcome\n    provenance: { traceIds: [] }\n`,
+        `  - id: second\n    type: boolean\n    instructions: Q2?\n    polarity: pass_when_true\n    channel: outcome\n    provenance: { traceIds: [] }\n`,
+      ],
+      [],
+    );
+    const { judge } = scriptedJudge({});
+    const err: unknown = await runEvals({ config: { ...paths, judge } }).catch((e: unknown) => e);
+    if (!VetError.isInstance(err)) throw new Error('expected a VetError');
+    const e = err;
+    expect(e.code).toBe(CEV_ERROR_CODES.CRITERIA_INVALID);
+    const lines = e.message.split('\n');
+    expect(lines[0]).toBe(`cannot load ${paths.criteriaPath}:`);
+    expect(lines.some((l) => l.startsWith(`${paths.criteriaPath}/criteria/0/polarity: `))).toBe(
+      true,
+    );
+    expect(lines.some((l) => l.startsWith(`${paths.criteriaPath}/criteria/1/escape: `))).toBe(true);
+  });
+
+  test('an invalid cases file lists every issue with file:line', async () => {
+    const paths = await suite([BOOL_YAML], []);
+    const file = join(paths.casesDir, 'cases.jsonl');
+    await writeFile(file, 'not json\n{"also": "bad"}\n');
+    const { judge } = scriptedJudge({});
+    const err: unknown = await runEvals({ config: { ...paths, judge } }).catch((e: unknown) => e);
+    if (!VetError.isInstance(err)) throw new Error('expected a VetError');
+    const lines = err.message.split('\n');
+    expect(lines.some((l) => l.startsWith(`${file}:1: `))).toBe(true);
+    expect(lines.some((l) => l.startsWith(`${file}:2: `))).toBe(true);
+  });
+
   test('an invalid criteria file throws a VetError', async () => {
     const paths = await suite([], []);
     const { judge } = scriptedJudge({});
@@ -632,11 +665,59 @@ describe('event bus', () => {
     expect(responses[0]?.status).toBe(403);
     expect(verdicts).toHaveLength(1);
     expect(verdicts[0]?.status).toBe('unscored');
-    expect(verdicts[0]?.cause).toEqual({ status: 403, errorType: 'no_providers_available' });
+    expect(verdicts[0]?.cause).toEqual({
+      code: 'JUDGE_UNAVAILABLE',
+      status: 403,
+      errorType: 'no_providers_available',
+    });
     const text = JSON.stringify(verdicts[0]);
     expect(text).not.toContain('secretEcho');
     expect(text).not.toContain(apiKey);
     expect(text).not.toContain('body');
+  });
+
+  test('a bare-string verdict cause reaches the verdict event as cause.code', async () => {
+    const plain: JudgeV1 = {
+      specVersion: 'v1',
+      id: 'fake',
+      capabilities: {
+        questionTypes: ['boolean', 'choice', 'score'],
+        maxStateTokens: 32_000,
+        pinned: true,
+        transport: 'fake-transport',
+        model: 'fake/jev',
+      },
+      doJudge: () => Promise.reject(new Error('boom')),
+    };
+    const events = createEvents();
+    const verdicts: EventMap['verdict'][] = [];
+    events.on('verdict', (p) => verdicts.push(p));
+    const criterion: Criterion = {
+      id: 'answers-question',
+      type: 'boolean',
+      instructions: 'Q?',
+      escape: 'empty',
+      polarity: 'pass_when_true',
+      channel: 'outcome',
+      provenance: { traceIds: [] },
+      wordingHash: 'h',
+    };
+    await runJudge({ cases: [mk('c1')], criteria: [criterion], judge: plain, events });
+    expect(verdicts[0]?.status).toBe('unscored');
+    expect(verdicts[0]?.cause).toEqual({ code: 'JUDGE_UNAVAILABLE' });
+  });
+
+  test('verdict cause never carries a body or key', () => {
+    const canary = 'sk-canary-12345678';
+    const payload = verdictCause({
+      code: 'X',
+      status: 403,
+      errorType: 'forbidden',
+      body: { k: canary },
+    });
+    expect(payload).toEqual({ code: 'X', status: 403, errorType: 'forbidden' });
+    expect(payload).not.toHaveProperty('body');
+    expect(JSON.stringify(payload)).not.toContain(canary);
   });
 });
 

@@ -106,12 +106,24 @@ export interface Project {
   readonly cases: Case[];
 }
 
-function loadError(
-  code: VetError['code'],
-  source: string,
-  issues: readonly { message: string }[],
-): VetError {
-  return new VetError(code, `cannot load ${source}: ${issues.map((i) => i.message).join('; ')}`);
+interface LoadIssue {
+  readonly message: string;
+  readonly path?: string;
+  readonly file?: string;
+  readonly line?: number;
+  readonly relatedPath?: string;
+}
+
+function loadError(code: VetError['code'], source: string, issues: readonly LoadIssue[]): VetError {
+  const lines = issues.map((i) => {
+    const where =
+      i.file === undefined
+        ? `${source}${i.path ?? ''}`
+        : `${i.file}${i.line === undefined || i.line === 0 ? '' : `:${String(i.line)}`}`;
+    const related = i.relatedPath === undefined ? '' : ` (also at ${i.relatedPath})`;
+    return `${where}: ${i.message}${related}`;
+  });
+  return new VetError(code, [`cannot load ${source}:`, ...lines].join('\n'));
 }
 
 export async function loadProject(

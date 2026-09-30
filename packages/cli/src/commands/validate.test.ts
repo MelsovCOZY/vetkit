@@ -484,6 +484,54 @@ describe('vet validate', () => {
     expect((await lockAt(root)).criteria['tone']?.gauntlet.paraphrase).not.toBe('skipped');
   });
 
+  test('an invalid criteria file lists every issue with its pointer', async () => {
+    const rows = standardRows();
+    const root = await project(rows);
+    const file = join(root, 'evals', 'criteria.yaml');
+    await writeFile(
+      file,
+      `criteria:
+  - id: first
+    type: boolean
+    instructions: Q1?
+    escape: none
+    channel: outcome
+    provenance: { traceIds: [] }
+  - id: second
+    type: boolean
+    instructions: Q2?
+    polarity: pass_when_true
+    channel: outcome
+    provenance: { traceIds: [] }
+`,
+    );
+    const events = createEvents();
+    const { judge } = countingJudge(rows, events);
+    const error = await rejection(vet(['validate'], depsFor(root, judge, events)));
+
+    expect(exitCodeOf(error)).toBe(2);
+    if (!VetError.isInstance(error)) throw new Error('expected a VetError');
+    const lines = error.message.split('\n');
+    expect(lines.some((l) => l.startsWith(`${file}/criteria/0/polarity: `))).toBe(true);
+    expect(lines.some((l) => l.startsWith(`${file}/criteria/1/escape: `))).toBe(true);
+  });
+
+  test('an invalid cases directory lists every issue with file:line', async () => {
+    const rows = standardRows();
+    const root = await project(rows);
+    const file = join(root, 'evals', 'cases', 'cases.jsonl');
+    await writeFile(file, 'not json\n{"also": "bad"}\n');
+    const events = createEvents();
+    const { judge } = countingJudge(rows, events);
+    const error = await rejection(vet(['validate'], depsFor(root, judge, events)));
+
+    expect(exitCodeOf(error)).toBe(2);
+    if (!VetError.isInstance(error)) throw new Error('expected a VetError');
+    const lines = error.message.split('\n');
+    expect(lines.some((l) => l.startsWith(`${file}:1: `))).toBe(true);
+    expect(lines.some((l) => l.startsWith(`${file}:2: `))).toBe(true);
+  });
+
   test('fewer than 100 labels: exits 2 LABELS_TOO_FEW with the count and writes no lock', async () => {
     const rows = standardRows().slice(0, 10);
     const root = await project(rows);
