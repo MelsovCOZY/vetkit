@@ -39,7 +39,7 @@ describe('scripts/repo-metadata.sh', () => {
     const { dir } = shim();
     const out = String(run(['--dry-run'], dir).stdout);
     expect(out).toContain('gh repo edit MelsovCOZY/vetkit --description');
-    expect(out).toContain(DESCRIPTION.replaceAll(' ', '\\ '));
+    expect(out).toContain(`--description "${DESCRIPTION}"`);
     expect(out).toContain('--homepage https://melsovcozy.github.io/vetkit/');
     expect(out).not.toContain('--visibility');
     expect(out).toContain(
