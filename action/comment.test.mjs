@@ -700,7 +700,7 @@ function redactedReport(reportMd, secret = FAKE_KEY) {
 // brackets and next to punctuation. Every form comes out as [redacted] and the surrounding text
 // is kept.
 const WHOLE_TOKEN_FORMS = [
-  ['a bare line', `${FAKE_KEY}`, '[redacted]'],
+  ['a bare line', FAKE_KEY, '[redacted]'],
   ['a Bearer header', `Authorization: Bearer ${FAKE_KEY}`, 'Authorization: Bearer [redacted]'],
   ['a key=value pair', `key=${FAKE_KEY}`, 'key=[redacted]'],
   ['double quotes', `header "${FAKE_KEY}" sent`, 'header "[redacted]" sent'],
