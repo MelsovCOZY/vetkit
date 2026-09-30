@@ -130,8 +130,10 @@ describe('vet migrate', () => {
     });
     const withoutLock = project('schemaVersion: 1\n');
     const other = parseJson(runMigrate(['--json'], withoutLock.dir).stdout);
-    expect(other).toMatchObject({ files: [{ format: 'criteria' }], migrated: 0 });
-    expect((other as { files: unknown[] }).files).toHaveLength(1);
+    expect(other).toEqual({
+      files: [expect.objectContaining({ format: 'criteria', action: 'up-to-date' })],
+      migrated: 0,
+    });
   });
 
   it('resolves the project through --config', () => {
