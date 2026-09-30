@@ -1,10 +1,13 @@
-// Local copy of judge-jev's redactDeep: adapters import only @vetkit/spec, so the helper
-// cannot be shared. Deep-redacts the literal API key out of any diagnostic value before it
-// is attached to a thrown VetError (message, details or cause chain), including a
-// server-echoed body or a network error's message.
+// Adapter over the shared sanitizer in @vetkit/spec: the literal API key is masked out of any
+// diagnostic value before it is attached to a thrown VetError (message, details or cause
+// chain), including a server-echoed body or a network error's message. Keys shorter than the
+// shared length floor are left alone, as everywhere else.
+import { redactSecrets, redactSecretsDeep, secretsFrom } from '@vetkit/spec';
+
+const mask = (): string => '[REDACTED]';
 
 export function redactApiKeyString(value: string, apiKey: string): string {
-  return apiKey === '' ? value : value.split(apiKey).join('[REDACTED]');
+  return redactSecrets(value, secretsFrom({}, [apiKey]), mask);
 }
 
 export function redactDeep(
@@ -12,19 +15,14 @@ export function redactDeep(
   apiKey: string,
   seen: WeakSet<object> = new WeakSet(),
 ): unknown {
-  if (typeof value === 'string') return redactApiKeyString(value, apiKey);
-  if (value === null || typeof value !== 'object') return value;
-  if (seen.has(value)) return '[circular]';
-  seen.add(value);
   if (value instanceof Error) {
+    if (seen.has(value)) return '[circular]';
+    seen.add(value);
     const cause = value.cause;
     return new Error(
       redactApiKeyString(value.message, apiKey),
       cause !== undefined ? { cause: redactDeep(cause, apiKey, seen) } : undefined,
     );
   }
-  if (Array.isArray(value)) return value.map((item) => redactDeep(item, apiKey, seen));
-  return Object.fromEntries(
-    Object.entries(value).map(([key, item]) => [key, redactDeep(item, apiKey, seen)]),
-  );
+  return redactSecretsDeep(value, secretsFrom({}, [apiKey]), mask, seen);
 }

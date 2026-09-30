@@ -5,7 +5,7 @@
 import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { safeParseJson } from '@vetkit/spec';
+import { redactSecretsDeep, safeParseJson, secretsFrom } from '@vetkit/spec';
 import type { RunEvalsResult } from './run.ts';
 
 export interface RunRecord extends RunEvalsResult {
@@ -34,7 +34,8 @@ export async function writeRunRecord(cacheDir: string, record: RunRecord): Promi
   await mkdir(join(cacheDir, 'runs'), { recursive: true });
   const tmp = `${path}.${String(process.pid)}.${randomBytes(4).toString('hex')}.tmp`;
   try {
-    await writeFile(tmp, `${JSON.stringify(record, null, 2)}\n`);
+    const safe = redactSecretsDeep(record, secretsFrom(process.env));
+    await writeFile(tmp, `${JSON.stringify(safe, null, 2)}\n`);
     await rename(tmp, path);
   } catch (error) {
     await rm(tmp, { force: true });
