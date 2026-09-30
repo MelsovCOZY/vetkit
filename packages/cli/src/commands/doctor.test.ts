@@ -167,7 +167,7 @@ describe('runDoctor', () => {
     );
     expect(row.detail).toContain('CLOUDFLARE_API_TOKEN+CLOUDFLARE_ACCOUNT_ID=<unset>');
     expect(row.detail).not.toContain('CLOUDFLARE_API_TOKEN=<unset>');
-    expect(row.detail).not.toContain('CLOUDFLARE_ACCOUNT_ID=<unset>');
+    expect(row.detail).not.toMatch(/(^|, )CLOUDFLARE_ACCOUNT_ID=<unset>/);
     expect(row.detail).toMatch(/set one of .*CLOUDFLARE_API_TOKEN\+CLOUDFLARE_ACCOUNT_ID/);
     expect(row.detail).not.toMatch(/CLOUDFLARE_API_TOKEN, /);
   });

@@ -325,7 +325,9 @@ describe('vet doctor health probe URL', () => {
 
   test('a custom endpoint probes <baseURL>/v1/models with the configured key', async () => {
     const cwd = await project({
-      'vetkit.config.ts': judgeConfig(`baseURL: 'https://custom.example.test/api'`),
+      'vetkit.config.ts': judgeConfig(
+        `baseURL: 'https://custom.example.test/api', model: 'custom-model'`,
+      ),
     });
     const urls: string[] = [];
     const headers: unknown[] = [];
