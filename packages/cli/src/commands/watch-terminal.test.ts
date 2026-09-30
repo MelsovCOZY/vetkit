@@ -93,10 +93,10 @@ interface Watch {
   kill(): void;
 }
 
-function spawnWatch(project: string): Watch {
+function spawnWatch(project: string, json = false): Watch {
   const child = spawn(
     process.execPath,
-    [binPath, 'watch', '--sample', '1', '--port', '0', '--json'],
+    [binPath, 'watch', '--sample', '1', '--port', '0', ...(json ? ['--json'] : [])],
     {
       cwd: project,
       env: { ...process.env, NO_COLOR: '1' },
@@ -107,7 +107,7 @@ function spawnWatch(project: string): Watch {
   child.stderr.setEncoding('utf8').on('data', (c: string) => (stderr += c));
   child.stdout.setEncoding('utf8').on('data', (c: string) => (stdout += c));
   const exited = new Promise<number | null>((resolvePromise) => {
-    child.on('exit', (code) => resolvePromise(code));
+    child.on('close', (code) => resolvePromise(code));
   });
   return {
     project,
@@ -162,7 +162,7 @@ describe('vet watch judge errors', () => {
   }, 60_000);
 
   test('retryable judge error keeps watching', async () => {
-    const w = spawnWatch(projectWithFailingJudge('JUDGE_UNAVAILABLE', 'retryable'));
+    const w = spawnWatch(projectWithFailingJudge('JUDGE_UNAVAILABLE', 'retryable'), true);
     const port = await portOf(w);
     await post(port, '22223333444455556666777788889999');
     const pending = join(w.project, '.vet', 'outbox', 'pending.jsonl');
