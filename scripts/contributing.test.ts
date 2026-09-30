@@ -6,11 +6,16 @@ import { fileURLToPath } from 'node:url';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CONTRIBUTING_PATH = join(ROOT, 'CONTRIBUTING.md');
 const PACKAGE_JSON_PATH = join(ROOT, 'package.json');
+const CLI_PACKAGE_JSON_PATH = join(ROOT, 'packages/cli/package.json');
 
 const contributing = readFileSync(CONTRIBUTING_PATH, 'utf8');
 
 interface RootPackageJson {
   scripts?: Record<string, string>;
+}
+
+interface CliPackageJson {
+  engines: { node: string };
 }
 
 function readPackageJson(path: string): RootPackageJson {
@@ -43,7 +48,8 @@ describe('CONTRIBUTING.md', () => {
 
   it('mentions the Bun and Node version floors', () => {
     expect(contributing).toContain('1.4');
-    expect(contributing).toContain('>=22.12');
+    const cli: CliPackageJson = JSON.parse(readFileSync(CLI_PACKAGE_JSON_PATH, 'utf8'));
+    expect(contributing).toContain(cli.engines.node);
   });
 
   it('documents skipping lefthook hooks with LEFTHOOK=0', () => {

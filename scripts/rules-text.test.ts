@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { existsSync, readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -32,8 +33,13 @@ describe('project rules text', () => {
     expect(flat).not.toContain('runs on Node 24');
   });
 
-  it('CLAUDE.md.bak does not exist', () => {
-    expect(existsSync(join(ROOT, 'CLAUDE.md.bak'))).toBe(false);
+  it('CLAUDE.md.bak is not tracked', () => {
+    const r = spawnSync('git', ['ls-files', '--', 'CLAUDE.md.bak'], {
+      cwd: ROOT,
+      encoding: 'utf8',
+    });
+    expect(r.status).toBe(0);
+    expect(r.stdout).toBe('');
   });
 
   it('CONTRIBUTING has a Repo layout for contributors section naming internal material', () => {
