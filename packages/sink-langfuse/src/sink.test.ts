@@ -94,6 +94,7 @@ describe('createLangfuseSink doWrite', () => {
       value: 1,
       dataType: 'BOOLEAN',
       comment: 'grounded: p=0.91 >= threshold 0.70 → pass',
+      metadata: expect.any(Object),
     });
     expect(calls[1]?.body['value']).toBe(0);
   });
@@ -282,7 +283,8 @@ describe('judge-identity metadata', () => {
   });
 
   it('metadata is sent when comment is absent', async () => {
-    const meta = await metaOf(verdict({ explanation: undefined }));
+    const { explanation: _dropped, ...noComment } = verdict();
+    const meta = await metaOf(noComment);
     expect(meta?.['model']).toBe('jev-1.13.0');
   });
 

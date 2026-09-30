@@ -270,17 +270,11 @@ describe('annotator_kind', () => {
   });
 
   test('an unscored verdict still carries annotator_kind', async () => {
-    const span = await spanFor(
-      verdict({
-        status: 'unscored',
-        answer: undefined,
-        pass: undefined,
-        cause: 'x',
-        model: codeModel,
-      }),
-    );
-    expect(attr(span, `${EV}.annotator_kind`)).toEqual({ stringValue: 'CODE' });
-    const llm = await spanFor(verdict({ status: 'unscored', answer: undefined, pass: undefined }));
+    const { answer: _a, pass: _p, ...rest } = verdict({ cause: 'x' });
+    const unscored: Verdict = { ...rest, status: 'unscored' };
+    const code = await spanFor({ ...unscored, model: codeModel });
+    expect(attr(code, `${EV}.annotator_kind`)).toEqual({ stringValue: 'CODE' });
+    const llm = await spanFor(unscored);
     expect(attr(llm, `${EV}.annotator_kind`)).toEqual({ stringValue: 'LLM' });
   });
 
