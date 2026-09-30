@@ -29,8 +29,12 @@ interface Doc {
 }
 
 const doc: Doc = parse(TEXT);
-const selftest = doc.jobs['selftest'] as Job;
-const baselineJob = doc.jobs['baseline-key'];
+function job(name: string): Job | undefined {
+  return doc.jobs[name];
+}
+
+const selftest: Job = job('selftest') ?? { steps: [] };
+const baselineJob: Job = job('baseline-key') ?? { steps: [] };
 
 function step(job: Job, fragment: string): Step {
   const found = job.steps.find((s) => s.name?.includes(fragment));
@@ -83,14 +87,14 @@ describe('.github/workflows/action-selftest.yml', () => {
   });
 
   it('a baseline-key job runs the action three times and asserts the key changes after a case edit and after a config edit', () => {
-    expect(baselineJob?.needs).toBe('pack');
-    const actionSteps = (baselineJob?.steps ?? []).filter((s) => s.uses === './');
+    expect(baselineJob.needs).toBe('pack');
+    const actionSteps = baselineJob.steps.filter((s) => s.uses === './');
     expect(actionSteps.map((s) => s.id)).toEqual(['a', 'b', 'c']);
     for (const s of actionSteps) expect(s.with?.['comment']).toBe('false');
-    const text = (baselineJob?.steps ?? []).map((s) => s.run ?? '').join('\n');
+    const text = baselineJob.steps.map((s) => s.run ?? '').join('\n');
     expect(text).toContain('cases.jsonl');
     expect(text).toContain('vetkit.config.ts');
-    const check = step(baselineJob as Job, 'Assert the baseline key');
+    const check = step(baselineJob, 'Assert the baseline key');
     expect(check.env?.['KEY_A']).toBe('${{ steps.a.outputs.baseline-key }}');
     expect(check.env?.['KEY_B']).toBe('${{ steps.b.outputs.baseline-key }}');
     expect(check.env?.['KEY_C']).toBe('${{ steps.c.outputs.baseline-key }}');
