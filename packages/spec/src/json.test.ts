@@ -91,6 +91,43 @@ describe('validateJson', () => {
   });
 });
 
+describe('validateJson allErrors', () => {
+  // Three violations: `name` is missing, `age` is not a number, `extra` is not allowed.
+  const broken = { age: 'old', extra: 1 };
+
+  test('allErrors: true returns every violation in the error cause', () => {
+    const result = validateJson(broken, personSchema, { allErrors: true });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('expected ok:false');
+    expect(result.error.code).toBe('E_SCHEMA_INVALID');
+    expect(result.error.cause).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ keyword: 'required', params: { missingProperty: 'name' } }),
+        expect.objectContaining({ keyword: 'type', instancePath: '/age' }),
+        expect.objectContaining({
+          keyword: 'additionalProperties',
+          params: { additionalProperty: 'extra' },
+        }),
+      ]),
+    );
+  });
+
+  test('without the option validation still stops at the first violation', () => {
+    const result = validateJson(broken, personSchema);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('expected ok:false');
+    expect(result.error.cause).toHaveLength(1);
+  });
+
+  test('allErrors: true accepts a valid value', () => {
+    const result = validateJson({ name: 'Ada' }, personSchema, { allErrors: true });
+
+    expect(result).toEqual({ ok: true, value: { name: 'Ada' } });
+  });
+});
+
 describe('ajv singleton and validator cache', () => {
   test('compiles a schema only once across repeated calls with the same schema object', () => {
     const compileSpy = vi.spyOn(Ajv2020.prototype, 'compile');

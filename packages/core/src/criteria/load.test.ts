@@ -20,6 +20,30 @@ async function tempFile(name: string, content: string): Promise<string> {
   return file;
 }
 
+const VALID_BOOLEAN = [
+  '  - id: answers-question',
+  '    type: boolean',
+  '    instructions: Does the reply answer the question?',
+  '    escape: The reply is empty.',
+  '    polarity: pass_when_true',
+  '    channel: outcome',
+  '    provenance: { traceIds: [] }',
+];
+
+// Second criterion has no `escape`, no `instructions` and a channel outside the enum.
+const THREE_ISSUES_IN_SECOND = [
+  'criteria:',
+  ...VALID_BOOLEAN,
+  '  - id: brief',
+  '    type: boolean',
+  '    polarity: pass_when_true',
+  '    channel: nonsense',
+  '    provenance: { traceIds: [] }',
+  '',
+].join('\n');
+
+const WRAPPER_MESSAGE = /oneOf|anyOf|"then"/;
+
 describe('loadCriteria', () => {
   test('loads a valid criteria.yaml into Criterion[]', async () => {
     const result = await loadCriteria(fixture('valid.yaml'));
@@ -262,6 +286,219 @@ describe('loadCriteria', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.issues[0]).toMatchObject({ code: 'CRITERIA_INVALID' });
+  });
+
+  test('a criterion with several schema issues reports each one under its own pointer', async () => {
+    const result = await loadCriteria(await tempFile('criteria.yaml', THREE_ISSUES_IN_SECOND));
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const paths = result.issues.map((i) => i.path);
+    expect(paths).toContain('/criteria/1/escape');
+    expect(paths).toContain('/criteria/1/instructions');
+    expect(paths).toContain('/criteria/1/channel');
+    expect(result.issues.every((i) => i.code === 'CRITERIA_INVALID')).toBe(true);
+  });
+
+  test('several issues in one criterion add no other-type, wrapper or duplicate lines', async () => {
+    const result = await loadCriteria(await tempFile('criteria.yaml', THREE_ISSUES_IN_SECOND));
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const paths = result.issues.map((i) => i.path);
+    expect(paths.length).toBeGreaterThanOrEqual(3);
+    // A boolean criterion takes neither `criteria` nor `passWhen`, and its `type` is valid.
+    expect(paths).not.toContain('/criteria/1/type');
+    expect(paths).not.toContain('/criteria/1/criteria');
+    expect(paths).not.toContain('/criteria/1/passWhen');
+    expect(paths).not.toContain('/criteria/1');
+    expect(result.issues.filter((i) => WRAPPER_MESSAGE.test(i.message))).toEqual([]);
+    const lines = result.issues.map((i) => `${i.path}: ${i.message}`);
+    expect(new Set(lines).size).toBe(lines.length);
+  });
+
+  test('a criterion with one schema issue still reports exactly that issue', async () => {
+    const result = await loadCriteria(fixture('missing-escape.yaml'));
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.issues.map((i) => i.path)).toEqual(['/criteria/0/escape']);
+  });
+
+  test('a criterion without a type reports the missing type once next to its other issues', async () => {
+    const file = await tempFile(
+      'criteria.yaml',
+      [
+        'criteria:',
+        '  - id: brief',
+        '    instructions: Is the reply brief?',
+        '    escape: The reply is empty.',
+        '    polarity: pass_when_true',
+        '    channel: nonsense',
+        '    provenance: { traceIds: [] }',
+        '',
+      ].join('\n'),
+    );
+
+    const result = await loadCriteria(file);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const paths = result.issues.map((i) => i.path);
+    expect(paths.filter((p) => p === '/criteria/0/type')).toHaveLength(1);
+    expect(paths).toContain('/criteria/0/channel');
+    // No type was chosen, so no type branch's requirements apply yet.
+    expect(paths).not.toContain('/criteria/0/criteria');
+    expect(paths).not.toContain('/criteria/0/passWhen');
+    expect(paths).not.toContain('/criteria/0');
+  });
+
+  test('a wrongly typed option in a choice criterion is reported once, next to its other issues', async () => {
+    const file = await tempFile(
+      'criteria.yaml',
+      [
+        'criteria:',
+        '  - id: tone',
+        '    type: choice',
+        '    instructions: Which tone does the reply take?',
+        '    criteria:',
+        '      polite: 1',
+        '      rude: The reply is insulting.',
+        '    passWhen: [polite]',
+        '    escape: The reply has no tone.',
+        '    polarity: pass_when_true',
+        '    channel: nonsense',
+        '    provenance: { traceIds: [] }',
+        '',
+      ].join('\n'),
+    );
+
+    const result = await loadCriteria(file);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const paths = result.issues.map((i) => i.path);
+    expect(paths.filter((p) => p === '/criteria/0/criteria/polite')).toHaveLength(1);
+    expect(paths).toContain('/criteria/0/channel');
+    // The map itself is fine: only the list form of `criteria` would object to it.
+    expect(paths).not.toContain('/criteria/0/criteria');
+    expect(result.issues.filter((i) => WRAPPER_MESSAGE.test(i.message))).toEqual([]);
+  });
+
+  test('a code grader on a score criterion is reported next to its other issues, without a wrapper line', async () => {
+    const file = await tempFile(
+      'criteria.yaml',
+      [
+        'criteria:',
+        '  - id: helpfulness',
+        '    type: score',
+        '    instructions: How helpful is the reply?',
+        '    criteria: [not helpful, very helpful]',
+        '    polarity: pass_when_true',
+        '    channel: nonsense',
+        '    grader: { kind: code, check: exact }',
+        '    provenance: { traceIds: [] }',
+        '',
+      ].join('\n'),
+    );
+
+    const result = await loadCriteria(file);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const paths = result.issues.map((i) => i.path);
+    expect(paths).toContain('/criteria/0/type');
+    expect(paths).toContain('/criteria/0/channel');
+    expect(paths).not.toContain('/criteria/0');
+    expect(result.issues.filter((i) => WRAPPER_MESSAGE.test(i.message))).toEqual([]);
+  });
+
+  test('a field a boolean criterion does not take is reported as not allowed, without lines about its shape', async () => {
+    const file = await tempFile(
+      'criteria.yaml',
+      [
+        'criteria:',
+        '  - id: brief',
+        '    type: boolean',
+        '    instructions: Is the reply brief?',
+        '    escape: The reply is empty.',
+        '    criteria: 5',
+        '    polarity: pass_when_true',
+        '    channel: nonsense',
+        '    provenance: { traceIds: [] }',
+        '',
+      ].join('\n'),
+    );
+
+    const result = await loadCriteria(file);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const paths = result.issues.map((i) => i.path);
+    expect(result.issues).toContainEqual(
+      expect.objectContaining({
+        path: '/criteria/0',
+        message: expect.stringContaining('not allowed'),
+      }),
+    );
+    expect(paths).toContain('/criteria/0/channel');
+    // Whether the forbidden value is a map or a list is beside the point.
+    expect(paths).not.toContain('/criteria/0/criteria');
+  });
+
+  test('a code grader without a check reports the missing check, not the other grader kinds', async () => {
+    const file = await tempFile(
+      'criteria.yaml',
+      [
+        'criteria:',
+        '  - id: brief',
+        '    type: boolean',
+        '    instructions: Is the reply brief?',
+        '    escape: The reply is empty.',
+        '    polarity: pass_when_true',
+        '    channel: nonsense',
+        '    grader: { kind: code }',
+        '    provenance: { traceIds: [] }',
+        '',
+      ].join('\n'),
+    );
+
+    const result = await loadCriteria(file);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const paths = result.issues.map((i) => i.path);
+    expect(paths).toContain('/criteria/0/grader/check');
+    expect(paths).toContain('/criteria/0/channel');
+    // `kind: code` is a valid kind; the judge and reference kinds have nothing to say here.
+    expect(paths).not.toContain('/criteria/0/grader/kind');
+    expect(result.issues.filter((i) => WRAPPER_MESSAGE.test(i.message))).toEqual([]);
+  });
+
+  test('an unknown grader kind is reported once, not once per known kind', async () => {
+    const file = await tempFile(
+      'criteria.yaml',
+      [
+        'criteria:',
+        '  - id: brief',
+        '    type: boolean',
+        '    instructions: Is the reply brief?',
+        '    escape: The reply is empty.',
+        '    polarity: pass_when_true',
+        '    channel: quality',
+        '    grader: { kind: bogus }',
+        '    provenance: { traceIds: [] }',
+        '',
+      ].join('\n'),
+    );
+
+    const result = await loadCriteria(file);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const lines = result.issues.map((i) => `${i.path}: ${i.message}`);
+    expect(result.issues.map((i) => i.path)).toContain('/criteria/0/grader/kind');
+    expect(new Set(lines).size).toBe(lines.length);
   });
 
   test('a document without a top-level criteria list is CRITERIA_INVALID at /criteria', async () => {

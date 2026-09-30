@@ -86,16 +86,40 @@ function isAjvError(value: unknown): value is AjvError {
   );
 }
 
-// The criterion schema is a oneOf over `type`; ajv reports every failed branch, so only
-// the branch whose `type` const matches the value is relevant to the developer.
-function branchIndexFor(type: unknown): number {
+// The criterion schema is a oneOf over `type`: the branch whose `type` const matches the
+// value is the one the developer meant (-1 when `type` is missing or not a known type).
+function typeBranches(): unknown[] {
   const branches: unknown = criterionSchema['oneOf'];
-  if (!Array.isArray(branches)) return -1;
-  return branches.findIndex((branch: unknown) => {
+  return Array.isArray(branches) ? branches : [];
+}
+
+function branchIndexFor(type: unknown): number {
+  return typeBranches().findIndex((branch: unknown) => {
     if (!isRecord(branch) || !isRecord(branch['properties'])) return false;
     const typeRule = branch['properties']['type'];
     return isRecord(typeRule) && typeRule['const'] === type;
   });
+}
+
+// Fields a type branch settles by itself: the ones it gives a schema of its own and the
+// ones it forbids (`not: { anyOf: [{ required: [field] }] }`). The rule shared by all
+// types can only repeat the branch there, or describe the shape of a field it forbids.
+function settledFields(branch: unknown): Set<string> {
+  const fields = new Set<string>();
+  if (!isRecord(branch)) return fields;
+  if (isRecord(branch['properties'])) {
+    for (const [field, rule] of Object.entries(branch['properties'])) {
+      if (rule !== true) fields.add(field);
+    }
+  }
+  const forbidden: unknown = isRecord(branch['not']) ? branch['not']['anyOf'] : undefined;
+  for (const rule of Array.isArray(forbidden) ? forbidden : []) {
+    const required: unknown = isRecord(rule) ? rule['required'] : undefined;
+    for (const field of Array.isArray(required) ? required : []) {
+      if (typeof field === 'string') fields.add(field);
+    }
+  }
+  return fields;
 }
 
 function errorPath(error: AjvError): string {
@@ -109,19 +133,67 @@ function errorPath(error: AjvError): string {
   return error.instancePath;
 }
 
+const TYPE_BRANCHES = '#/oneOf/';
+
+// A nested oneOf (the `criteria` map-or-list, the `grader` kinds) fails with errors from
+// every alternative. An alternative that rejects the value outright (wrong JSON type, or a
+// different `kind` constant) is not the one the developer wrote, so its errors are dropped
+// unless every alternative rejects it that way.
+function otherAlternatives(errors: readonly AjvError[]): Set<AjvError> {
+  const dropped = new Set<AjvError>();
+  for (const wrapper of errors) {
+    if (wrapper.keyword !== 'oneOf' || wrapper.schemaPath === '#/oneOf') continue;
+    const alternatives = new Map<string, AjvError[]>();
+    for (const error of errors) {
+      if (!error.schemaPath.startsWith(`${wrapper.schemaPath}/`)) continue;
+      const index = error.schemaPath.slice(wrapper.schemaPath.length + 1).split('/', 1)[0] ?? '';
+      alternatives.set(index, [...(alternatives.get(index) ?? []), error]);
+    }
+    const rejected = [...alternatives.values()].filter((group) =>
+      group.some(
+        (e) =>
+          e.keyword === 'const' ||
+          (e.keyword === 'type' && e.instancePath === wrapper.instancePath),
+      ),
+    );
+    if (rejected.length === alternatives.size) continue;
+    for (const error of rejected.flat()) dropped.add(error);
+  }
+  return dropped;
+}
+
+const SHARED_FIELD = /^#\/properties\/([^/]+)\//;
+
+// Every error is collected, so ajv also reports the type branches the criterion did not
+// pick, and a wrapper line ("must match exactly one schema in oneOf", 'must match "then"
+// schema') per failed combinator. Neither is something to act on: only the branch whose
+// `type` const matches, plus the rules shared by all types, reach the developer.
+function actionable(errors: readonly AjvError[], type: unknown): AjvError[] {
+  const index = branchIndexFor(type);
+  const own = `${TYPE_BRANCHES}${index}/`;
+  const settled = settledFields(typeBranches()[index]);
+  const other = otherAlternatives(errors);
+  return errors.filter(
+    (e) =>
+      (!e.schemaPath.startsWith(TYPE_BRANCHES) || e.schemaPath.startsWith(own)) &&
+      !settled.has(SHARED_FIELD.exec(e.schemaPath)?.[1] ?? '') &&
+      e.keyword !== 'oneOf' &&
+      e.keyword !== 'if' &&
+      !other.has(e),
+  );
+}
+
 function schemaIssues(base: string, item: Json, cause: unknown): CriteriaIssue[] {
   const errors = Array.isArray(cause) ? cause.filter((e: unknown) => isAjvError(e)) : [];
-  const branch = branchIndexFor(item['type']);
-  const prefix = `#/oneOf/${branch}/`;
-  const inBranch = errors.filter((e) => e.schemaPath.startsWith(prefix));
-  const relevant = inBranch.length > 0 ? inBranch : errors.filter((e) => e.keyword !== 'oneOf');
+  const relevant = actionable(errors, item['type']);
   const chosen = relevant.length > 0 ? relevant : errors;
   if (chosen.length === 0) {
     return [{ code: CEV_ERROR_CODES.CRITERIA_INVALID, path: base, message: 'invalid criterion' }];
   }
-  return chosen.map((error) => {
+  const seen = new Set<string>();
+  return chosen.flatMap((error) => {
     const message = error.message ?? 'invalid value';
-    return {
+    const issue = {
       code: CEV_ERROR_CODES.CRITERIA_INVALID,
       path: `${base}${errorPath(error)}`,
       message:
@@ -129,6 +201,12 @@ function schemaIssues(base: string, item: Json, cause: unknown): CriteriaIssue[]
           ? `field not allowed for a ${String(item['type'])} criterion (${message})`
           : message,
     };
+    // Alternatives of a nested oneOf can each raise the same line (an unknown grader kind
+    // fails the `kind` constant of every known kind).
+    const line = `${issue.path}\n${issue.message}`;
+    if (seen.has(line)) return [];
+    seen.add(line);
+    return [issue];
   });
 }
 
@@ -217,7 +295,7 @@ export async function loadCriteria(file: string): Promise<LoadCriteriaResult> {
 
     // A fresh object per entry: aliases share one parsed object.
     const candidate = { ...item, wordingHash: hashWording(item) };
-    const result = validateJson<Criterion>(candidate, criterionSchema);
+    const result = validateJson<Criterion>(candidate, criterionSchema, { allErrors: true });
     if (!result.ok) {
       issues.push(...schemaIssues(base, item, result.error.cause));
       continue;
