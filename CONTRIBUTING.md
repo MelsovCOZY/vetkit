@@ -14,7 +14,7 @@ state (`.vet/`, `criteria.lock.json`) that the CLI itself creates.
 
 - Bun 1.4.x, pinned via `packageManager` (`bun@1.4.2`) — install from https://bun.sh and
   check with `bun --version`.
-- Node >=22.12 (`engines.node`) — Bun runs the scripts and tests, but the release job and
+- Node `^22.18.0 || >=24.11.0` (`engines.node`) — Bun runs the scripts and tests, but the release job and
   some tooling still shell out to Node/npm, so a matching Node must be on `PATH`.
 
 Clone, then:
@@ -190,7 +190,7 @@ list records the decision behind each rule.
   it is the documented fix for TS2742. Exports need explicit return types. Declarations go through
   the oxc path, with TypeScript ^7 for `typecheck`; TS 6 is installed only as a matrix entry, never
   as the build's compiler.
-- **Node floor:** `engines.node >=22.12` (Node 20 is EOL). Use `module: node20` / `target: es2023`
+- **Node floor:** `engines.node` `^22.18.0 || >=24.11.0` (Node 20 is EOL). Use `module: node20` / `target: es2023`
   rather than floating `nodenext`/`esnext`, so emitted syntax matches the floor. Only the publish job
   runs on Node 22, the `node-version` in `.github/workflows/release.yml` (trusted publishing needs
   Node >=22.14).
