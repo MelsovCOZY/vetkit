@@ -1,3 +1,4 @@
+schemaVersion: 1
 $schema: 'https://melsovcozy.github.io/vetkit/schemas/criteria.schema.json'
 criteria:
   - id: refund-issued

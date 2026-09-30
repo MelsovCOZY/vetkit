@@ -13,7 +13,14 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { lintCriteria, loadCases, loadCriteria, runEvals } from '@vetkit/core';
+import {
+  lintCriteria,
+  loadCases,
+  loadCriteria,
+  parseCriteriaDocument,
+  runEvals,
+  SCHEMA_VERSIONS,
+} from '@vetkit/core';
 import { JEV_CREDENTIAL_PRIORITY, JEV_PRESETS } from '@vetkit/judge-jev';
 import { safeParseJson } from '@vetkit/spec';
 import { beforeAll, describe, expect, test } from 'vitest';
@@ -77,6 +84,11 @@ function read(dir: string, file: string): string {
   return readFileSync(join(dir, file), 'utf8');
 }
 
+// The first line that is neither blank nor a comment: the line the document's first key sits on.
+function firstKeyLine(text: string): string | undefined {
+  return text.split('\n').find((line) => line.trim() !== '' && !line.trimStart().startsWith('#'));
+}
+
 describe('vet init', () => {
   test('writes the config, criterion, cases and .gitignore into an empty directory', () => {
     const dir = tempDir();
@@ -116,6 +128,28 @@ describe('vet init', () => {
     expect(cases.ok).toBe(true);
     if (!cases.ok) return;
     expect(cases.cases).toHaveLength(3);
+  });
+
+  // A criteria.yaml the CLI writes carries the schema version it was written with, so a
+  // freshly scaffolded project has nothing for `vet migrate` to stamp.
+  test('vet init (scaffold) writes criteria.yaml whose first key is schemaVersion: 1', () => {
+    const dir = tempDir();
+    expect(runVet(['init'], dir).status).toBe(0);
+    const text = read(dir, 'evals/criteria.yaml');
+    expect(firstKeyLine(text)).toBe(`schemaVersion: ${String(SCHEMA_VERSIONS.criteria)}`);
+    const parsed = parseCriteriaDocument(text);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.doc.get('schemaVersion')).toBe(SCHEMA_VERSIONS.criteria);
+  });
+
+  test('vet migrate --check exits 0 immediately after vet init (scaffold)', () => {
+    const dir = tempDir();
+    expect(runVet(['init'], dir).status).toBe(0);
+    const result = runVet(['migrate', '--check'], dir);
+    expect(result.status).toBe(0);
+    expect(result.stdout).not.toContain('missing');
+    expect(result.stdout.trim()).toBe('up to date');
   });
 
   test('the template criterion passes lint: no ESCAPE_MISSING, no FORBIDDEN_WORD', async () => {

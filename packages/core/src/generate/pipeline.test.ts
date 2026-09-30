@@ -1,7 +1,7 @@
 // Tests for generateEvals (the pipeline: failure modes → criteria → Jev dedupe → lint →
 // cases). extractCases and dedupeCriteria have their own test files (cases.test.ts,
 // dedupe.test.ts).
-import { mkdtemp, readdir, rm, writeFile, mkdir } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -16,6 +16,7 @@ import {
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { loadCases } from '../cases/load.ts';
 import { loadCriteria } from '../criteria/load.ts';
+import { SCHEMA_VERSIONS } from '../schema-version.ts';
 import { generateEvals } from './pipeline.ts';
 import { CRITERIA_PROMPT } from './prompts.ts';
 
@@ -245,6 +246,25 @@ describe('generateEvals', () => {
     expect(doGenerate.mock.calls.length).toBeLessThanOrEqual(3 + Math.ceil(TRACES.length / 20));
     expect(doJudge.mock.calls.length).toBeLessThanOrEqual(Math.ceil(drafts().length / 50));
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  // The written file carries the schema version it was written with, as its first key, so
+  // `vet migrate --check` has nothing to stamp on a freshly generated --out.
+  test('writes criteria.yaml whose first key is schemaVersion: 1', async () => {
+    const { generator } = fakeGenerator();
+    const { judge } = fakeJudge(0.9);
+    const result = await generateEvals({
+      source: fakeSource(TRACES),
+      generator,
+      judge,
+      out,
+      overwrite: false,
+    });
+    expect(result.report.status).toBe('ok');
+    const text = await readFile(join(out, 'criteria.yaml'), 'utf8');
+    expect(text.split('\n')[0]).toBe(`schemaVersion: ${String(SCHEMA_VERSIONS.criteria)}`);
+    const loaded = await loadCriteria(join(out, 'criteria.yaml'));
+    expect(loaded.ok).toBe(true);
   });
 
   test('reports failure modes, dedupe merges, lint rejections and not_applicable traces', async () => {

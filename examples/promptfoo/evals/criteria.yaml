@@ -1,3 +1,4 @@
+schemaVersion: 1
 criteria:
   - id: promised_refund
     type: boolean

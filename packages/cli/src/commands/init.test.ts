@@ -13,7 +13,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { resolveConfig } from '@vetkit/core';
+import { parseCriteriaDocument, resolveConfig, SCHEMA_VERSIONS } from '@vetkit/core';
 import { safeParseJson } from '@vetkit/spec';
 import { beforeAll, describe, expect, test } from 'vitest';
 import { loadVetConfig } from '../config-load.ts';
@@ -63,7 +63,37 @@ function parseJson<T>(text: string): T {
   return result.value;
 }
 
+// The first line that is neither blank nor a comment: the line the document's first key sits on.
+function firstKeyLine(text: string): string | undefined {
+  return text.split('\n').find((line) => line.trim() !== '' && !line.trimStart().startsWith('#'));
+}
+
 describe('vet init --source', () => {
+  // A criteria.yaml the CLI writes carries the schema version it was written with, so a
+  // freshly generated --out has nothing for `vet migrate` to stamp.
+  test('vet init --source (generated) writes criteria.yaml whose first key is schemaVersion: 1', () => {
+    const project = freshProject();
+    const out = join(project, 'evals-out');
+    const result = runVet(['init', '--source', 'traces', '--out', out, '--json'], project);
+    expect(result.status).toBe(0);
+    const text = readFileSync(join(out, 'criteria.yaml'), 'utf8');
+    expect(firstKeyLine(text)).toBe(`schemaVersion: ${String(SCHEMA_VERSIONS.criteria)}`);
+    const parsed = parseCriteriaDocument(text);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.doc.get('schemaVersion')).toBe(SCHEMA_VERSIONS.criteria);
+  });
+
+  test('vet migrate --check exits 0 immediately after vet init --source', () => {
+    const project = freshProject();
+    const out = join(project, 'evals-out');
+    expect(runVet(['init', '--source', 'traces', '--out', out, '--json'], project).status).toBe(0);
+    const check = runVet(['migrate', '--check'], out);
+    expect(check.status).toBe(0);
+    expect(check.stdout).not.toContain('missing');
+    expect(check.stdout.trim()).toBe('up to date');
+  });
+
   test('--json prints one {criteria, cases, report} document and exits 0 when >= 5 criteria survive', () => {
     const project = freshProject();
     const out = join(project, 'evals-out');
