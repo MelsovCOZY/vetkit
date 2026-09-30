@@ -162,3 +162,92 @@ describe('renderEvents', () => {
     expect(lines).toEqual([]);
   });
 });
+
+describe('throttle summary', () => {
+  const throttle = (events: Events, n: number): void => {
+    for (let i = 1; i <= n; i += 1) {
+      events.diag('warn', 'JUDGE_THROTTLED', 'judge throttled, backing off', {
+        retryAfterMs: 1.5,
+        ceiling: 1,
+      });
+      events.diag('info', 'JUDGE_RETRY', 'retrying judge request', { attempt: i });
+    }
+  };
+  const bare = (line: string): string => line.replace(/^(debug|info|warn|error) /, '');
+
+  it('pretty mode aggregates JUDGE_THROTTLED/JUDGE_RETRY diags into one warn line at run:end', () => {
+    const { stream, lines } = sink();
+    const events = createEvents();
+    renderEvents(events, { options: {}, logger: createLogger({ stream, color: false }) });
+    events.emit('run:start', { cases: 1, criteria: 1 });
+    throttle(events, 7);
+    events.emit('run:end', { cases: 1, verdicts: 1, exitCode: 3, durationMs: 9 });
+    const summary = lines.filter((line) =>
+      /^judge throttled: 7 retries, waited 11ms \[JUDGE_THROTTLED\]$/.test(bare(line)),
+    );
+    expect(summary).toHaveLength(1);
+    expect(summary[0]).toMatch(/^warn /);
+    expect(lines.filter((line) => line.includes('[JUDGE_RETRY]'))).toHaveLength(0);
+    expect(lines.filter((line) => line.includes('backing off'))).toHaveLength(0);
+    const done = lines.findIndex((line) => line.includes('run done:'));
+    expect(lines.indexOf(summary[0] ?? '')).toBeLessThan(done);
+    expect(done).toBeGreaterThan(-1);
+  });
+
+  it('no throttle -> no summary line', () => {
+    const { stream, lines } = sink();
+    const events = createEvents();
+    renderEvents(events, { options: {}, logger: createLogger({ stream, color: false }) });
+    fakeRun(events);
+    expect(lines.filter((line) => line.includes('judge throttled'))).toHaveLength(0);
+  });
+
+  it('the summary is flushed by the unsubscribe function when run:end never fires', () => {
+    const { stream, lines } = sink();
+    const events = createEvents();
+    const stop = renderEvents(events, {
+      options: {},
+      logger: createLogger({ stream, color: false }),
+    });
+    throttle(events, 2);
+    stop();
+    expect(
+      lines.filter((line) => line.includes('judge throttled: 2 retries, waited 3ms')),
+    ).toHaveLength(1);
+  });
+
+  it('--verbose keeps the per-attempt lines at debug level', () => {
+    const { stream, lines } = sink();
+    const events = createEvents();
+    renderEvents(events, {
+      options: { verbose: true },
+      logger: createLogger({ stream, color: false, level: 'debug' }),
+    });
+    events.emit('run:start', { cases: 1, criteria: 1 });
+    throttle(events, 7);
+    events.emit('run:end', { cases: 1, verdicts: 1, exitCode: 3, durationMs: 9 });
+    expect(
+      lines.filter((line) => /^debug .*\[(JUDGE_THROTTLED|JUDGE_RETRY)\]/.test(line)),
+    ).toHaveLength(14);
+    expect(lines.filter((line) => line.includes('judge throttled: 7 retries'))).toHaveLength(1);
+  });
+
+  it('NDJSON mode is unchanged: every diag is its own line and no summary is added', () => {
+    const { stream, lines } = sink();
+    const events = createEvents();
+    renderEvents(events, { options: { verbose: true, json: true }, stream });
+    events.emit('run:start', { cases: 1, criteria: 1 });
+    throttle(events, 3);
+    events.emit('run:end', { cases: 1, verdicts: 1, exitCode: 3, durationMs: 9 });
+    expect(lines.filter((line) => line.includes('"event":"diag"'))).toHaveLength(6);
+    expect(lines.filter((line) => line.includes('judge throttled:'))).toHaveLength(0);
+  });
+
+  it('other diag codes still print immediately at their level', () => {
+    const { stream, lines } = sink();
+    const events = createEvents();
+    renderEvents(events, { options: {}, logger: createLogger({ stream, color: false }) });
+    events.diag('warn', 'NO_CASES', 'no cases found');
+    expect(lines).toEqual(['warn no cases found [NO_CASES]']);
+  });
+});

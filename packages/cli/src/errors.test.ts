@@ -368,6 +368,112 @@ describe('handleError exit override (withExitCode)', () => {
   });
 });
 
+describe('judge failures exit by details.kind', () => {
+  const lines = (text: string): string[] => text.split('\n').filter((l) => l !== '');
+  const billing = (): VetError =>
+    new VetError('JUDGE_UNAVAILABLE', 'judge account has no credit', {
+      details: { kind: 'terminal-billing', retryable: false },
+    });
+
+  test('JUDGE_UNAVAILABLE with details.kind terminal-billing exits 2 with the message verbatim', () => {
+    const result = run(billing());
+    expect(result.code).toBe(2);
+    const [first, hint] = lines(result.stderr);
+    expect(first).toBe('error JUDGE_UNAVAILABLE: judge account has no credit');
+    expect(hint).toMatch(/credit|billing/);
+  });
+
+  test('JUDGE_UNAVAILABLE with details.kind terminal-request exits 2', () => {
+    const err = new VetError('JUDGE_UNAVAILABLE', 'judge rejected the request', {
+      details: { kind: 'terminal-request', retryable: false },
+    });
+    expect(run(err).code).toBe(2);
+  });
+
+  test('JUDGE_UNAUTHORIZED with details.kind terminal-auth exits 2', () => {
+    const err = new VetError('JUDGE_UNAUTHORIZED', 'judge rejected the API key (request id: r1)', {
+      details: { kind: 'terminal-auth', retryable: false },
+    });
+    const result = run(err);
+    expect(result.code).toBe(2);
+    const [first, hint] = lines(result.stderr);
+    expect(first).toBe('error JUDGE_UNAUTHORIZED: judge rejected the API key (request id: r1)');
+    expect(hint).toContain('vet doctor');
+  });
+
+  test('JUDGE_UNAUTHORIZED without details still exits 2', () => {
+    expect(run(new VetError('JUDGE_UNAUTHORIZED', 'nope')).code).toBe(2);
+  });
+
+  test('JUDGE_UNAVAILABLE without a terminal kind exits 3', () => {
+    expect(run(new VetError('JUDGE_UNAVAILABLE', 'down')).code).toBe(3);
+  });
+
+  test('JUDGE_UNAVAILABLE with details.kind retryable exits 3', () => {
+    const err = new VetError('JUDGE_UNAVAILABLE', 'down', {
+      details: { kind: 'retryable', retryable: true },
+    });
+    expect(run(err).code).toBe(3);
+  });
+
+  test('JUDGE_TIMEOUT exits 3', () => {
+    const result = run(new VetError('JUDGE_TIMEOUT', 'slow'));
+    expect(result.code).toBe(3);
+    expect(lines(result.stderr)[1]).toContain('vet doctor');
+  });
+
+  test('--json carries kind', () => {
+    const result = run(billing(), { json: true });
+    const hint = lines(run(billing()).stderr)[1];
+    expect(result.stdout).toBe(
+      `${JSON.stringify({
+        error: {
+          code: 'JUDGE_UNAVAILABLE',
+          message: 'judge account has no credit',
+          hint,
+          kind: 'terminal-billing',
+        },
+      })}\n`,
+    );
+  });
+
+  test('--json without details.kind has no kind key', () => {
+    const result = run(new VetError('JUDGE_UNAVAILABLE', 'down'), { json: true });
+    expect(result.stdout).not.toContain('"kind"');
+  });
+});
+
+describe('handleError --verbose non-Error causes', () => {
+  test('--verbose renders an object cause as HTTP status only', () => {
+    const err = new VetError('JUDGE_UNAVAILABLE', 'no credit', {
+      cause: { status: 402, body: { secret: 'sk-canary-1234567890' } },
+    });
+    const result = run(err, { verbose: true });
+    expect(result.stderr).toContain('  caused by: HTTP 402\n');
+    expect(result.stderr).not.toContain('sk-canary');
+    expect(result.stderr).not.toContain('body');
+  });
+
+  test('--verbose renders a string cause as itself', () => {
+    const err = new VetError('JUDGE_UNAVAILABLE', 'down', { cause: 'JUDGE_UNAVAILABLE' });
+    expect(run(err, { verbose: true }).stderr).toContain('  caused by: JUDGE_UNAVAILABLE\n');
+  });
+
+  test('without --verbose no caused by line', () => {
+    const err = new VetError('JUDGE_UNAVAILABLE', 'down', { cause: { status: 402, body: 'x' } });
+    expect(run(err).stderr).not.toContain('caused by');
+  });
+
+  test('an object cause never puts its body in --json output', () => {
+    const err = new VetError('JUDGE_UNAVAILABLE', 'down', {
+      cause: { status: 402, body: { secret: 'sk-canary-1234567890' } },
+    });
+    const result = run(err, { json: true, verbose: true });
+    expect(result.stdout).not.toContain('sk-canary');
+    expect(result.stdout).not.toContain('"cause"');
+  });
+});
+
 const OLD_GENERIC_HINT = 'check your configuration and CLI flags, then retry.';
 const GLOBAL_FLAGS = ['--json', '--quiet', '--verbose', '--no-color'];
 

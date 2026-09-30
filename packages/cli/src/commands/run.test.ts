@@ -12,9 +12,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { JEV_CREDENTIAL_PRIORITY, JEV_PRESETS } from '@vetkit/judge-jev';
-import { safeParseJson } from '@vetkit/spec';
+import { safeParseJson, VetError } from '@vetkit/spec';
 import { beforeAll, describe, expect, test } from 'vitest';
 import { ensureCliBuilt } from '../test-support/build-cli.js';
+import { hintFor } from '../errors.ts';
 import { createProgram } from '../program.ts';
 
 const binPath = fileURLToPath(new URL('../../dist/bin.js', import.meta.url));
@@ -462,5 +463,93 @@ describe('vet run with the demo judge', () => {
     expect(doc).toMatchObject({ results: expect.any(Array) });
     const results: { cacheHit?: unknown }[] = isResults(doc) ? doc.results : [];
     expect(results.some((v) => v.cacheHit === true)).toBe(true);
+  });
+});
+
+describe('vet run exit 3 for unscored-only runs', () => {
+  test('a judge that throws on every case exits 3 with an UNSCORED_ONLY line', () => {
+    const result = runVet(['run'], freshProject(), fixtureEnv('down'));
+    expect(result.status).toBe(3);
+    expect(result.stderr).toContain('[UNSCORED_ONLY]');
+    expect(result.stderr).toContain(hintFor('UNSCORED_ONLY'));
+    expect(result.stdout).toContain('0 passed, 0 failed, 1 unscored of 1');
+  });
+
+  test('--json on an unscored-only run reports exitCode 3', () => {
+    const result = runVet(['run', '--json'], freshProject(), fixtureEnv('down'));
+    expect(result.status).toBe(3);
+    const doc = parseObject(result.stdout);
+    expect(doc['exitCode']).toBe(3);
+    expect(doc['summary']).toMatchObject({ unscored: 1, total: 1 });
+    for (const line of nonEmptyLines(result.stderr)) expect(line).not.toMatch(/^\s*[{[]/);
+  });
+
+  test('a scored failure still exits 1', () => {
+    expect(runVet(['run', '--json'], freshProject(), fixtureEnv('fail')).status).toBe(1);
+  });
+
+  test('a passing run still exits 0', () => {
+    expect(runVet(['run', '--json'], freshProject(), fixtureEnv('pass')).status).toBe(0);
+  });
+
+  test('a throttled judge that never recovers exits 3', () => {
+    const result = runVet(['run', '--json'], freshProject(), fixtureEnv('throttled'));
+    expect(result.status).toBe(3);
+    expect(parseObject(result.stdout)['exitCode']).toBe(3);
+  }, 60_000);
+
+  test('--sink downgrades an unscored-only run to 0, not a scored failure', () => {
+    const withSink = (mode: string): Result => {
+      const project = freshProject();
+      const configPath = join(project, 'vetkit.config.ts');
+      const sink =
+        "{ specVersion: 'v1', id: 'otel/logs', capabilities: { batch: 10, idempotent: true }, async doWrite(batch) { return { accepted: batch.map((v) => v.id), rejected: [] }; } }";
+      writeFileSync(
+        configPath,
+        readFileSync(configPath, 'utf8').replace(
+          'export default { judge };',
+          `export default { judge, sinks: [${sink}] };`,
+        ),
+      );
+      return runVet(['run', '--sink', 'otel', '--json'], project, fixtureEnv(mode));
+    };
+    expect(withSink('down').status).toBe(0);
+    expect(withSink('fail').status).toBe(1);
+  }, 60_000);
+
+  test('fixture failure modes throw marker errors with the documented code', async () => {
+    const expected = {
+      throttled: 'JUDGE_UNAVAILABLE',
+      unauthorized: 'JUDGE_UNAUTHORIZED',
+      'no-credit': 'JUDGE_UNAVAILABLE',
+    } as const;
+    const fixturePath = join(fixtureDir, 'vetkit.config.ts');
+    const previous = process.env['VETKIT_FIXTURE_MODE'];
+    try {
+      for (const [mode, code] of Object.entries(expected)) {
+        process.env['VETKIT_FIXTURE_MODE'] = mode;
+        const mod: unknown = await import(`${pathToFileURL(fixturePath).href}?mode=${mode}`);
+        const judge = (
+          mod as { default: { judge: { doJudge: (req: object) => Promise<unknown> } } }
+        ).default.judge;
+        const thrown: unknown = await judge
+          .doJudge({ questions: { q: {} } })
+          .catch((e: unknown) => e);
+        expect(VetError.isInstance(thrown), mode).toBe(true);
+        expect(thrown).toMatchObject({ code });
+      }
+      process.env['VETKIT_FIXTURE_MODE'] = 'down';
+      const down: unknown = await import(`${pathToFileURL(fixturePath).href}?mode=down`);
+      const thrown: unknown = await (
+        down as { default: { judge: { doJudge: (r: object) => Promise<unknown> } } }
+      ).default.judge
+        .doJudge({ questions: {} })
+        .catch((e: unknown) => e);
+      expect(thrown).toBeInstanceOf(Error);
+      expect(VetError.isInstance(thrown)).toBe(false);
+    } finally {
+      if (previous === undefined) delete process.env['VETKIT_FIXTURE_MODE'];
+      else process.env['VETKIT_FIXTURE_MODE'] = previous;
+    }
   });
 });
