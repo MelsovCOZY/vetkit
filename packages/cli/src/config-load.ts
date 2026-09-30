@@ -8,7 +8,11 @@ import { readFile } from 'node:fs/promises';
 import { dirname, extname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { readEnvName, resolveConfig, type ResolvedConfig } from '@vetkit/core';
-import { createJevJudgeFromEndpoint, type JevProviderOptions } from '@vetkit/judge-jev';
+import {
+  createJevJudgeFromEndpoint,
+  JEV_PRESETS,
+  type JevProviderOptions,
+} from '@vetkit/judge-jev';
 import {
   CEV_ERROR_CODES,
   safeParseJson,
@@ -17,15 +21,17 @@ import {
   type JudgeV1,
 } from '@vetkit/spec';
 import { diagEnabled, withJudgeDiag } from './diag.ts';
+import { applyEnvFiles, type EnvFileReport } from './env-file.ts';
+import { getLogger } from './output.ts';
 
-type Env = Readonly<Record<string, string | undefined>>;
+type Env = Record<string, string | undefined>;
 
 export interface LoadVetConfigOptions {
   /** Directory searched for vetkit.config.* and against which configPath resolves. */
   readonly cwd: string;
   /** Explicit config file (`--config`); skips discovery. */
   readonly configPath?: string;
-  /** Where descriptor apiKeyEnv names are read. Defaults to process.env. */
+  /** Where descriptor apiKeyEnv names are read and where .env files are merged. Defaults to process.env. */
   readonly env?: Env;
   /**
    * False resolves the config for an offline command (estimate, doctor --config): an unset
@@ -73,6 +79,10 @@ export interface LoadedVetConfig {
   /** The config file's directory: project-relative paths resolve against it. */
   readonly rootDir: string;
   readonly paths: ProjectPaths;
+  /** One report per .env file found next to the config: names applied, never values. */
+  readonly envFiles: readonly EnvFileReport[];
+  /** The base URL the descriptor judge talks to (override > config > preset); undefined for an adapter. */
+  readonly judgeBaseURL: string | undefined;
 }
 
 const CANDIDATES = ['ts', 'mts', 'js', 'mjs', 'json'].map((ext) => `vetkit.config.${ext}`);
@@ -222,13 +232,30 @@ async function importConfigFile(file: string): Promise<unknown> {
   }
 }
 
+function presetBaseURL(preset: string | undefined): string | undefined {
+  return Object.entries(JEV_PRESETS).find(([name]) => name === preset)?.[1].baseURL;
+}
+
+// Paths and counts only: variable names and values are never printed.
+function logEnvFiles(reports: readonly EnvFileReport[]): void {
+  const log = getLogger();
+  for (const report of reports) {
+    if (report.error !== undefined) log.warn(report.error);
+    else log.debug(`env files: ${report.path} (${report.applied.length} variables)`);
+  }
+}
+
 /** Loads, validates and resolves vetkit.config.*; throws VetError CONFIG_INVALID on any problem. */
 export async function loadVetConfig(options: LoadVetConfigOptions): Promise<LoadedVetConfig> {
   const { configFile, rootDir } = options.resolved ?? resolveConfigFile(options);
-  const { config, warnings } = resolveConfig(await importConfigFile(configFile));
   const env = options.env ?? process.env;
+  // Before the config is imported, so a top-level process.env read in it sees .env values.
+  const envFiles = applyEnvFiles({ dir: dirname(configFile), env });
+  logEnvFiles(envFiles);
+  const { config, warnings } = resolveConfig(await importConfigFile(configFile));
   const missingCredentials: string[] = [];
   let judge: JudgeV1;
+  let judgeBaseURL: string | undefined;
   if ('specVersion' in config.judge) {
     judge = config.judge;
   } else {
@@ -237,6 +264,7 @@ export async function loadVetConfig(options: LoadVetConfigOptions): Promise<Load
       baseURLOverride === undefined || baseURLOverride === ''
         ? config.judge
         : { ...config.judge, baseURL: baseURLOverride };
+    judgeBaseURL = endpoint.baseURL ?? presetBaseURL(endpoint.preset);
     const keyEnv = endpoint.apiKeyEnv;
     const value = env[keyEnv];
     if (options.requireCredentials === false && (value === undefined || value === '')) {
@@ -257,5 +285,7 @@ export async function loadVetConfig(options: LoadVetConfigOptions): Promise<Load
     configFile,
     rootDir,
     paths: projectPaths(rootDir, config.cacheDir),
+    envFiles,
+    judgeBaseURL,
   };
 }
