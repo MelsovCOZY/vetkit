@@ -231,3 +231,53 @@ describe('terminal screenshot', () => {
     expect(tape).not.toMatch(/\.(gif|mp4|webm)\b/);
   });
 });
+
+describe('report screenshot', () => {
+  const image = 'assets/vet-report.png';
+
+  it('assets/vet-report.png exists, is a PNG and is under 200 KB', () => {
+    expect(existsSync(join(ROOT, image))).toBe(true);
+    const bytes = readFileSync(join(ROOT, image));
+    expect(bytes.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
+    expect(bytes.length).toBeLessThan(200 * 1024);
+  });
+
+  it('both READMEs embed the report image with alt text that says it is the HTML report', () => {
+    const pairs = [
+      [cliReadme, `${RAW}${image}`],
+      [rootReadme, image],
+    ] as const;
+    for (const [text, url] of pairs) {
+      const match = new RegExp(
+        String.raw`!\[([^\]]{20,})\]\(${url.replaceAll('.', String.raw`\.`)}\)`,
+      ).exec(text);
+      expect(match, url).not.toBeNull();
+      expect(match?.[1] ?? '', url).toMatch(/HTML report/);
+    }
+  });
+
+  it('every image in the cli README has an absolute https URL', () => {
+    const urls = [...cliReadme.matchAll(/!\[[^\]]*\]\(([^)\s]+)\)/g)].map(
+      (match) => match[1] ?? '',
+    );
+    expect(urls.length).toBeGreaterThan(0);
+    for (const url of urls) expect(url, url).toMatch(/^https:\/\//);
+  });
+
+  it('the tape works in a directory with a fixed name, not a bare mktemp directory', () => {
+    const tape = read('assets/vet-run.tape');
+    expect(tape).not.toContain('cd $(mktemp -d)');
+    expect(tape).toContain('/my-app');
+  });
+
+  it('no file under assets/ and neither README names a /tmp/tmp. path', () => {
+    const paths = [
+      'README.md',
+      'packages/cli/README.md',
+      ...readdirSync(join(ROOT, 'assets')).map((name) => `assets/${name}`),
+    ];
+    for (const path of paths) {
+      expect(readFileSync(join(ROOT, path), 'latin1'), path).not.toContain('/tmp/tmp.');
+    }
+  });
+});

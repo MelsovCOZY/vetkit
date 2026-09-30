@@ -21,6 +21,8 @@ OPENROUTER_API_KEY=...
 
 ![Terminal capture of npx vetkit init followed by npx vetkit run: each case gets a verdict line marked demo, then a hint to set a judge key](assets/vet-run.png)
 
+![HTML report of a vetkit run, written by vet run --reporter html: the pass, fail and unscored counts, the calibration state, the judge model, a table per criterion and the failed cases](assets/vet-report.png)
+
 ## CI
 
 <!-- snippet: file=.github/workflows/vet.yml -->
