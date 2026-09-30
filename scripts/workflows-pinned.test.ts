@@ -160,6 +160,7 @@ const WRITE_ALLOWLIST: Record<string, string[]> = {
   'release.yml:action-tag': ['contents'],
   'action-selftest.yml:selftest': ['pull-requests'],
   'scorecard.yml:analysis': ['security-events', 'id-token'],
+  'pages.yml:deploy': ['pages', 'id-token'],
 };
 
 describe('workflow security audit', () => {
