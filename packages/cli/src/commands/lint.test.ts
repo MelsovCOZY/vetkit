@@ -141,6 +141,46 @@ describe('vet lint', () => {
     expect(messageLines.some((l) => l.startsWith(`${file}/criteria/1/escape: `))).toBe(true);
   });
 
+  test('several issues in one criterion are each printed on their own line with the pointer', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'vetkit-lint-invalid-'));
+    const file = join(dir, 'criteria.yaml');
+    // The second criterion has no escape, no instructions and a channel outside the enum.
+    writeFileSync(
+      file,
+      `criteria:
+  - id: tone
+    type: boolean
+    instructions: Is the reply polite?
+    escape: The reply has no discernible tone.
+    polarity: pass_when_true
+    channel: quality
+    provenance: { traceIds: [] }
+  - id: brief
+    type: boolean
+    polarity: pass_when_true
+    channel: nonsense
+    provenance: { traceIds: [] }
+`,
+    );
+    const pointers = ['/criteria/1/escape', '/criteria/1/instructions', '/criteria/1/channel'];
+
+    const result = runLint([file]);
+    expect(result.status).toBe(2);
+    const lines = result.stderr.split('\n');
+    for (const pointer of pointers) {
+      expect(lines.filter((l) => l.includes(`${file}${pointer}: `))).toHaveLength(1);
+    }
+
+    const json = runLint([file, '--json']);
+    expect(json.status).toBe(2);
+    const doc = parseJson<{ error: { code: string; message: string } }>(json.stdout);
+    expect(doc.error.code).toBe('CRITERIA_INVALID');
+    const messageLines = doc.error.message.split('\n');
+    for (const pointer of pointers) {
+      expect(messageLines.filter((l) => l.startsWith(`${file}${pointer}: `))).toHaveLength(1);
+    }
+  });
+
   test('the default path is evals/criteria.yaml, relative to cwd', () => {
     const dir = mkdtempSync(join(tmpdir(), 'vetkit-lint-'));
     mkdirSync(join(dir, 'evals'), { recursive: true });
