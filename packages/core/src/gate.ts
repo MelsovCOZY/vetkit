@@ -11,7 +11,7 @@ export interface GatePolicy {
   readonly allowUnpinned: boolean;
 }
 
-export type ExitCode = 0 | 1 | 2 | 130;
+export type ExitCode = 0 | 1 | 2 | 3 | 130;
 
 export interface DecideExitInput {
   readonly verdicts: readonly Verdict[];

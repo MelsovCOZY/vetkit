@@ -20,6 +20,7 @@ import { JEV_CREDENTIAL_PRIORITY, JEV_PRESETS } from '@vetkit/judge-jev';
 import type { Command } from 'commander';
 import { loadVetConfig } from '../config-load.ts';
 import { CEV_EXIT, emit, getLogger, type GlobalOptions } from '../output.ts';
+import { hintFor } from '../errors.ts';
 import { isDemoJudge } from '../demo-judge.ts';
 import { renderEvents } from '../render-events.ts';
 import { registerReporterFlag, writeReports, type ReporterSpec } from '../reporters/junit.ts';
@@ -209,13 +210,10 @@ async function runCommand(options: RunOptions & Readonly<Record<string, unknown>
       events: runEvalsEvents,
     });
 
-    // An exit of 1 from unscored verdicts alone never blocks a --sink run.
-    if (
-      options['sink'] !== undefined &&
-      result.exitCode === 1 &&
-      !hasScoredFailure(result.results)
-    ) {
-      result.exitCode = 0;
+    // An exit of 1 from unscored verdicts alone is not a scored failure: it exits 3
+    // (nothing could be judged), or 0 when --sink records the verdicts for a later drain.
+    if (result.exitCode === 1 && !hasScoredFailure(result.results)) {
+      result.exitCode = options['sink'] === undefined ? 3 : 0;
     }
 
     // Re-emit the buffered run:end (if any) with the now-final exitCode, while renderEvents
@@ -242,6 +240,13 @@ async function runCommand(options: RunOptions & Readonly<Record<string, unknown>
   await writeRunRecord(cacheDir, { ...result, ...extras, criteriaPath, casesPath, startedAt });
   if (demo) log.warn(demoHint());
   emit({ ...result, ...extras }, () => [render(result), ...lines].join('\n'));
+  if (result.exitCode === CEV_EXIT.UNSCORED_ONLY) {
+    const { unscored, total } = result.summary;
+    log.error(
+      `unscored only: ${String(unscored)} of ${String(total)} cases got no verdict; exit 3 [UNSCORED_ONLY]`,
+    );
+    log.error(hintFor('UNSCORED_ONLY'));
+  }
   process.exitCode = result.exitCode;
 }
 
