@@ -115,7 +115,7 @@ describe('guides', () => {
     expect(read(join(GUIDES, 'cli-json.md'))).toBe(renderJsonShapesMarkdown());
   });
 
-  it('the guides hold no key value and link no vetkit.dev page', () => {
+  it('the guides hold no key value and link no page on the old host', () => {
     for (const guide of [aiSdkGuide(), otlpGuide()]) {
       expect(guide).not.toMatch(/sk-[A-Za-z0-9_-]{16,}/);
       expect(guide).not.toContain(['vetkit', 'dev'].join('.'));
