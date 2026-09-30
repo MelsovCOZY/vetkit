@@ -140,14 +140,29 @@ describe('vet bin: check --outbox and lock refresh', () => {
   });
 });
 
-describe('vet bin: rerun --disputed', () => {
-  test('--help lists the rerun command; rerun --help lists --disputed', () => {
+describe('vet bin: rerun', () => {
+  test('--help lists the rerun command; rerun --help does not list --disputed', () => {
     const top = runBin(['--help']);
     expect(top.status).toBe(0);
     expect(top.stdout).toMatch(/^\s+rerun\b/m);
     const rerun = runBin(['rerun', '--help']);
     expect(rerun.status).toBe(0);
-    expect(rerun.stdout).toMatch(/--disputed\b/);
+    expect(rerun.stdout).not.toMatch(/--disputed\b/);
+  });
+});
+
+describe('vet bin: cases', () => {
+  test('cases --help describes dedupe, quarantine, promote and review', () => {
+    const result = runBin(['cases', '--help']);
+    expect(result.status).toBe(0);
+    for (const name of ['dedupe', 'quarantine', 'promote', 'review']) {
+      const line = result.stdout.split('\n').find((l) => new RegExp(`^  ${name}\\b`).test(l));
+      expect(line, `${name} has a Commands: line`).toBeDefined();
+      expect(line).toMatch(/^ {2}\S.*\S{2,}\s{2,}\S/);
+      expect(
+        line?.replace(/^ {2}\S+(\s+\[options\]|\s+<[^>]+>|\s+\[[^\]]+\])*/, '').trim(),
+      ).not.toBe('');
+    }
   });
 });
 
