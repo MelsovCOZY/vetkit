@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import { CEV_ERROR_CODES, VetError } from './errors.ts';
+import { CEV_ERROR_CODES, VetError, type VetErrorDetails, type VetErrorKind } from './errors.ts';
 
 describe('VetError', () => {
   test('carries the code, message and cause given to the constructor', () => {
@@ -205,5 +205,25 @@ describe('VetError', () => {
     const err = new VetError('CACHE_IO', 'cache write failed');
 
     expect(err.details).toBeUndefined();
+  });
+});
+
+describe('VetErrorDetails.kind', () => {
+  test('details.kind is typed and optional', () => {
+    const kinds: readonly VetErrorKind[] = [
+      'retryable',
+      'terminal-auth',
+      'terminal-billing',
+      'terminal-request',
+    ];
+    for (const kind of kinds) {
+      const err = new VetError('JUDGE_UNAVAILABLE', 'm', { details: { kind } });
+      expect(err.details?.kind).toBe(kind);
+    }
+    const bare = new VetError('JUDGE_UNAVAILABLE', 'm', { details: { retryable: true } });
+    expect(bare.details?.kind).toBeUndefined();
+    // @ts-expect-error kind is a closed union
+    const bad: VetErrorDetails = { kind: 'nonsense' };
+    expect(bad.kind).toBe('nonsense');
   });
 });
