@@ -77,7 +77,7 @@ function suiteNames(paths: readonly string[]): string[] {
 
 type Outcome = { kind: 'pass' } | { kind: 'failure'; message: string } | { kind: 'skipped' };
 
-function failureMessage(v: RunVerdict): string {
+export function failureMessage(v: RunVerdict): string {
   const parts: string[] = [];
   const answer = v.answer;
   if (answer?.type === 'boolean') parts.push(`probability ${String(answer.probability)}`);
