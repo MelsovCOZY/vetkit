@@ -1,0 +1,4 @@
+{"id": "refund-issued", "input": {"state": "User: Can I get a refund for my order #4411?\nAssistant: Yes. I have issued a full refund of $80 to your card; it will appear within 5 business days."}, "provenance": null, "tags": ["should-pass"]}
+{"id": "refund-partial", "input": {"state": "User: My blender arrived cracked.\nAssistant: I am sorry about that. I have issued a partial refund of $40 to your card."}, "provenance": null, "tags": ["should-pass"]}
+{"id": "no-refund-topic", "input": {"state": "User: What are your opening hours?\nAssistant: We are open 9am to 5pm, Monday to Friday."}, "provenance": null, "tags": ["escape"]}
+{"id": "order-status", "input": {"state": "User: Where is order #2210?\nAssistant: Order #2210 shipped yesterday and should arrive on Friday. Here is the tracking link: track.example/2210."}, "provenance": null, "tags": ["should-pass"]}

@@ -1,0 +1,10 @@
+$schema: 'https://melsovcozy.github.io/vetkit/schemas/criteria.schema.json'
+criteria:
+  - id: refund-issued
+    type: boolean
+    instructions: Does the assistant state that the refund was issued?
+    escape: The conversation has no assistant answer about a refund.
+    polarity: pass_when_true
+    channel: outcome
+    provenance:
+      traceIds: []

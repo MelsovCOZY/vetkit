@@ -27,6 +27,8 @@ describe('docs/ ignore allowlist', () => {
     'docs/watch.md',
     'docs/contracts/j3.md',
     'docs/contracts/new-contract.md',
+    'docs/guides/x.md',
+    'docs/guides/otlp-http-json.md',
   ])('keeps %s', (path) => {
     expect(isIgnored(path)).toBe(false);
   });
@@ -38,7 +40,9 @@ describe('docs/ ignore allowlist', () => {
       .filter((path) => path !== '')
       .filter(
         (path) =>
-          !/^docs\/(\.gitkeep|configuration\.md|sinks\.md|watch\.md|contracts\/.+)$/.test(path),
+          !/^docs\/(\.gitkeep|configuration\.md|sinks\.md|watch\.md|contracts\/.+|guides\/.+)$/.test(
+            path,
+          ),
       );
     expect(outside).toEqual([]);
   });

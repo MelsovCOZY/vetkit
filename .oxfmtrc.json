@@ -13,6 +13,7 @@
     "spike/data/**",
     "spike/REPORT.md",
     "**/package.json",
-    "scripts/fixtures/tsconfig-bad/**"
+    "scripts/fixtures/tsconfig-bad/**",
+    "examples/**"
   ]
 }
