@@ -1094,6 +1094,65 @@ export const lockSchema: JsonSchema = {
   additionalProperties: false,
 } as const;
 
+export const runRecordSchema: JsonSchema = {
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  $id: 'https://vetkit.dev/schemas/run-record.schema.json',
+  title: 'RunRecordDoc',
+  type: 'object',
+  properties: {
+    $schema: {
+      type: 'string',
+    },
+    results: {
+      type: 'array',
+    },
+    summary: {
+      type: 'object',
+    },
+    model: {
+      type: 'object',
+    },
+    exitCode: {
+      type: 'integer',
+      enum: [0, 1, 2, 3, 130],
+    },
+    gateReasons: {
+      type: 'array',
+      items: {
+        type: 'string',
+      },
+    },
+    criteriaPath: {
+      type: 'string',
+      pattern: '^(?!/)(?![A-Za-z]:[\\\\/])',
+    },
+    casesPath: {
+      type: 'string',
+      pattern: '^(?!/)(?![A-Za-z]:[\\\\/])',
+    },
+    startedAt: {
+      type: 'string',
+      pattern: '^\\d{4}-\\d{2}-\\d{2}T',
+    },
+    gateRequested: {
+      type: 'boolean',
+    },
+  },
+  required: [
+    '$schema',
+    'results',
+    'summary',
+    'model',
+    'exitCode',
+    'gateReasons',
+    'criteriaPath',
+    'casesPath',
+    'startedAt',
+    'gateRequested',
+  ],
+  additionalProperties: true,
+} as const;
+
 export const traceSchema: JsonSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   $id: 'https://vetkit.dev/schemas/trace.schema.json',

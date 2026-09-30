@@ -10,10 +10,10 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { JEV_CREDENTIAL_PRIORITY, JEV_PRESETS } from '@vetkit/judge-jev';
-import { safeParseJson, VetError } from '@vetkit/spec';
+import { runRecordSchema, safeParseJson, VetError } from '@vetkit/spec';
 import { beforeAll, describe, expect, test } from 'vitest';
 import { ensureCliBuilt } from '../test-support/build-cli.js';
 import { hintFor } from '../errors.ts';
@@ -251,7 +251,7 @@ function parseObject(text: string): Record<string, unknown> {
 }
 
 describe('vet run persists .vet/runs/latest.json', () => {
-  test('the record is the --json document plus criteriaPath, casesPath and startedAt', () => {
+  test('the record is the --json document plus $schema, relative criteriaPath/casesPath, startedAt and gateRequested', () => {
     const project = freshProject();
     const result = runVet(['run', '--json'], project, fixtureEnv('fail'));
     expect(result.status).toBe(1);
@@ -259,10 +259,70 @@ describe('vet run persists .vet/runs/latest.json', () => {
     const rec = parseObject(readFileSync(recordPath(project), 'utf8'));
     expect(rec).toEqual({
       ...doc,
-      criteriaPath: join(project, 'evals', 'criteria.yaml'),
-      casesPath: join(project, 'evals', 'cases'),
+      $schema: runRecordSchema.$id,
+      criteriaPath: 'evals/criteria.yaml',
+      casesPath: 'evals/cases',
       startedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      gateRequested: false,
     });
+  });
+
+  test('stdout --json carries no $schema, criteriaPath, casesPath or gateRequested keys', () => {
+    const doc = parseObject(runVet(['run', '--json'], freshProject(), fixtureEnv('pass')).stdout);
+    for (const key of ['$schema', 'criteriaPath', 'casesPath', 'gateRequested']) {
+      expect(doc).not.toHaveProperty(key);
+    }
+  });
+
+  test('a per-run file .vet/runs/<stamp>.json exists and equals latest.json', () => {
+    const project = freshProject();
+    runVet(['run', '--json'], project, fixtureEnv('pass'));
+    const runsDir = join(project, '.vet', 'runs');
+    const perRun = readdirSync(runsDir).filter((f) => f !== 'latest.json' && f.endsWith('.json'));
+    expect(perRun).toHaveLength(1);
+    const rec = parseObject(readFileSync(recordPath(project), 'utf8'));
+    const stamp = String(rec['startedAt']).replaceAll(/[:.]/g, '-');
+    expect(perRun[0]).toBe(`${stamp}.json`);
+    expect(readFileSync(join(runsDir, perRun[0] ?? ''), 'utf8')).toBe(
+      readFileSync(recordPath(project), 'utf8'),
+    );
+  });
+
+  test('--gate with no lock writes gateRequested: true and results: []', () => {
+    const project = freshProject();
+    const result = runVet(['run', '--json', '--gate'], project, fixtureEnv('pass'));
+    expect(result.status).toBe(2);
+    expect(parseObject(readFileSync(recordPath(project), 'utf8'))).toMatchObject({
+      gateRequested: true,
+      results: [],
+    });
+  });
+
+  test('--criteria outside the config directory is stored as a ../ relative path', () => {
+    const project = freshProject();
+    const outside = mkdtempSync(join(tmpdir(), 'vetkit-run-outside-'));
+    const criteria = join(outside, 'c.yaml');
+    cpSync(join(project, 'evals', 'criteria.yaml'), criteria);
+    const result = runVet(['run', '--json', '--criteria', criteria], project, fixtureEnv('pass'));
+    expect(result.status).toBe(0);
+    const rec = parseObject(readFileSync(recordPath(project), 'utf8'));
+    expect(rec['criteriaPath']).toBe(relative(project, criteria).split(sep).join('/'));
+    expect(String(rec['criteriaPath']).startsWith('../')).toBe(true);
+  });
+
+  test('a stale latest.json with absolute paths makes vet rerun and vet cases promote exit 2 with a message that names `vet run`', () => {
+    const project = freshProject();
+    runVet(['run', '--json'], project, fixtureEnv('pass'));
+    const stale = parseObject(readFileSync(recordPath(project), 'utf8'));
+    delete stale['$schema'];
+    stale['criteriaPath'] = join(project, 'evals', 'criteria.yaml');
+    stale['casesPath'] = join(project, 'evals', 'cases');
+    writeFileSync(recordPath(project), JSON.stringify(stale));
+    for (const args of [['rerun'], ['cases', 'promote', 'x:y']]) {
+      const result = runVet(args, project, fixtureEnv('pass'));
+      expect(result.status).toBe(2);
+      expect(result.stderr).toContain('vet run');
+    }
   });
 
   test('human mode writes the record too', () => {

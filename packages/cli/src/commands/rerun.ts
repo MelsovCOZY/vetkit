@@ -227,15 +227,17 @@ async function rerunCommand(options: RerunOptions, deps: ValidateDeps): Promise<
     return;
   }
 
-  const loadedCriteria = await loadCriteria(previousRecord.criteriaPath);
+  const criteriaPath = resolve(rootDir, previousRecord.criteriaPath);
+  const casesPath = resolve(rootDir, previousRecord.casesPath);
+  const loadedCriteria = await loadCriteria(criteriaPath);
   if (!loadedCriteria.ok) {
     const code = loadedCriteria.issues[0]?.code ?? CEV_ERROR_CODES.CRITERIA_INVALID;
-    throw loadError(code, previousRecord.criteriaPath, loadedCriteria.issues);
+    throw loadError(code, criteriaPath, loadedCriteria.issues);
   }
-  const loadedCases = await loadCases(previousRecord.casesPath);
+  const loadedCases = await loadCases(casesPath);
   if (!loadedCases.ok) {
     const code = loadedCases.issues[0]?.code ?? CEV_ERROR_CODES.CASE_INVALID;
-    throw loadError(code, previousRecord.casesPath, loadedCases.issues);
+    throw loadError(code, casesPath, loadedCases.issues);
   }
   const { criteria } = loadedCriteria;
   const { cases } = loadedCases;
@@ -274,7 +276,7 @@ async function rerunCommand(options: RerunOptions, deps: ValidateDeps): Promise<
   const model = pickModel(results, fallbackModel);
   const exitCode = decideExit({ verdicts: results });
   const startedAt = new Date().toISOString();
-  const record: RunRecord = {
+  const record: Omit<RunRecord, '$schema' | 'gateRequested'> = {
     results,
     summary,
     model,
@@ -284,7 +286,8 @@ async function rerunCommand(options: RerunOptions, deps: ValidateDeps): Promise<
     casesPath: previousRecord.casesPath,
     startedAt,
   };
-  await writeRunRecord(cacheDir, record);
+  // rerun never gates; the record-only fields ($schema, gateRequested) stay out of the --json document.
+  await writeRunRecord(cacheDir, { ...record, gateRequested: false });
 
   const comparison = buildComparison(criteria, cases, previousRecord.results, results, lock);
   const lines = [

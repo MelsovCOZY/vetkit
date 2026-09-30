@@ -15,7 +15,7 @@ import {
   type RunRecord,
   type RunVerdict,
 } from '@vetkit/core';
-import { safeParseJson, VetError, type JudgeV1, type Lock } from '@vetkit/spec';
+import { runRecordSchema, safeParseJson, VetError, type JudgeV1, type Lock } from '@vetkit/spec';
 import { Command } from 'commander';
 import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest';
 import { ensureCliBuilt } from '../test-support/build-cli.js';
@@ -127,8 +127,10 @@ async function seedRecord(root: string, results: RunVerdict[]): Promise<void> {
     model: fakeModel(),
     exitCode: 0,
     gateReasons: [],
-    criteriaPath: join(root, 'evals', 'criteria.yaml'),
-    casesPath: join(root, 'evals', 'cases'),
+    $schema: 'https://vetkit.dev/schemas/run-record.schema.json',
+    gateRequested: false,
+    criteriaPath: 'evals/criteria.yaml',
+    casesPath: 'evals/cases',
     startedAt: new Date(0).toISOString(),
   };
   await writeRunRecord(join(root, '.vet'), record);
@@ -351,6 +353,28 @@ describe('vet rerun --disputed', () => {
     await vet(['rerun'], depsFor(root, makeJudge(passByCaseId, seen)));
 
     expect([...seen]).toEqual(['case-unsure']);
+  });
+
+  test("rerun resolves the record's relative paths against rootDir and rewrites a portable record", async () => {
+    const root = await project();
+    await writeCases(root, [{ id: 'case-1' }]);
+    await seedRecord(root, [verdict('case-1', { borderline: true, pass: false })]);
+    await writeLock(root);
+    const seen = new Set<string>();
+
+    await vet(['rerun'], depsFor(root, makeJudge(new Map([['case-1', true]]), seen)));
+
+    expect([...seen]).toEqual(['case-1']);
+    const record = await readRunRecord(join(root, '.vet'));
+    expect(record).toMatchObject({
+      $schema: runRecordSchema.$id,
+      criteriaPath: 'evals/criteria.yaml',
+      casesPath: 'evals/cases',
+      gateRequested: false,
+    });
+    const doc = report();
+    expect(doc).not.toHaveProperty('gateRequested');
+    expect(doc).not.toHaveProperty('$schema');
   });
 
   test('comparison: paired per-case pass differences, clustered SE ≥ naive SE (4 cases, 2 clusters)', async () => {

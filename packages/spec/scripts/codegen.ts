@@ -72,7 +72,11 @@ function exportedTypeNames(output: string): string[] {
 
 // version.schema.json's title is SpecVersionDoc, but the wire
 // name consumers ask safeParseJson for is specVersionSchema, not versionSchema.
-const SCHEMA_CONSTANT_NAME_OVERRIDES: Record<string, string> = { version: 'specVersion' };
+// run-record.schema.json would otherwise yield the invalid identifier `run-recordSchema`.
+const SCHEMA_CONSTANT_NAME_OVERRIDES: Record<string, string> = {
+  version: 'specVersion',
+  'run-record': 'runRecord',
+};
 
 function schemaConstantName(moduleName: string): string {
   return `${SCHEMA_CONSTANT_NAME_OVERRIDES[moduleName] ?? moduleName}Schema`;
