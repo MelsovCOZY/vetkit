@@ -254,8 +254,8 @@ is_true "integrate 1c: examples-run last line is 'examples-run: ok'" \
 bun scripts/readme-snippets.ts dist-tarballs >"$WORK/snippets.out" 2>&1
 exit_is "integrate 2a: readme-snippets.ts dist-tarballs" 0 $?
 LAST="$(tail -1 "$WORK/snippets.out")"
-blocks="$(sed -n 's/^readme-snippets: ok (\([0-9][0-9]*\) blocks in \([0-9][0-9]*\) files)$/\1/p' <<<"$LAST")"
-files="$(sed -n 's/^readme-snippets: ok (\([0-9][0-9]*\) blocks in \([0-9][0-9]*\) files)$/\2/p' <<<"$LAST")"
+blocks="$(sed -n 's/^readme-snippets: ok (\([0-9][0-9]*\) blocks in \([0-9][0-9]*\) files\(, [0-9][0-9]* skipped\)\{0,1\})$/\1/p' <<<"$LAST")"
+files="$(sed -n 's/^readme-snippets: ok (\([0-9][0-9]*\) blocks in \([0-9][0-9]*\) files\(, [0-9][0-9]* skipped\)\{0,1\})$/\2/p' <<<"$LAST")"
 is_true "integrate 2b: readme-snippets last line reports >= 6 blocks in >= 3 files" \
   "$([ -n "$blocks" ] && [ "$blocks" -ge 6 ] && [ "$files" -ge 3 ] && echo 0 || echo 1)" "$LAST"
 
