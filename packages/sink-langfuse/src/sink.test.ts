@@ -239,3 +239,70 @@ describe('createLangfuseSink doWrite', () => {
     });
   });
 });
+
+describe('judge-identity metadata', () => {
+  const choiceAnswer: Verdict['answer'] = {
+    type: 'choice',
+    choice: 'polite',
+    confidence: 0.8,
+    probabilities: { polite: 0.8, rude: 0.2 },
+  };
+  const scoreAnswer: Verdict['answer'] = {
+    type: 'score',
+    score: 2,
+    confidence: 0.6,
+    legend: { '0': 'bad', '1': 'ok', '2': 'good' },
+    probabilities: { '0': 0.1, '1': 0.3, '2': 0.6 },
+  };
+
+  async function metaOf(v: Verdict): Promise<Record<string, unknown> | undefined> {
+    const { fetch, calls } = fakeFetch(ok);
+    await sink(fetch).doWrite([v], {});
+    return calls[0]?.body['metadata'] as Record<string, unknown> | undefined;
+  }
+
+  it('boolean, choice and score posts each carry metadata {model, transport, pinned, sink}', async () => {
+    for (const answer of [undefined, choiceAnswer, scoreAnswer]) {
+      const v = answer === undefined ? verdict() : verdict({ answer });
+      expect(await metaOf(v)).toEqual({
+        model: 'jev-1.13.0',
+        transport: 'fake',
+        pinned: false,
+        sink: expect.any(String),
+      });
+    }
+  });
+
+  it("metadata.sink starts with '@vetkit/sink-langfuse@'", async () => {
+    const meta = await metaOf(verdict());
+    expect(meta?.['sink']).toMatch(/^@vetkit\/sink-langfuse@\d/);
+  });
+
+  it('metadata is sent when comment is absent', async () => {
+    const meta = await metaOf(verdict({ explanation: undefined }));
+    expect(meta?.['model']).toBe('jev-1.13.0');
+  });
+
+  it('metadata.model falls back to requested when resolved is empty', async () => {
+    const meta = await metaOf(
+      verdict({ model: { requested: 'jev', resolved: '', transport: 'fake', pinned: false } }),
+    );
+    expect(meta?.['model']).toBe('jev');
+  });
+
+  it('metadata.pinned mirrors verdict.model.pinned for true and false', async () => {
+    const base = { requested: 'jev', resolved: 'jev-1', transport: 'fake' };
+    expect((await metaOf(verdict({ model: { ...base, pinned: true } })))?.['pinned']).toBe(true);
+    expect((await metaOf(verdict({ model: { ...base, pinned: false } })))?.['pinned']).toBe(false);
+  });
+
+  it('the score id is a hash independent of metadata (stable across transport)', async () => {
+    const a = await idOf(verdict());
+    const b = await idOf(
+      verdict({
+        model: { requested: 'jev', resolved: 'jev-1.13.0', transport: 'other', pinned: true },
+      }),
+    );
+    expect(a).toBe(b);
+  });
+});

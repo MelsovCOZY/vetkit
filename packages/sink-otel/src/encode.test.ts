@@ -1,6 +1,6 @@
 import type { Verdict } from '@vetkit/spec';
 import { describe, expect, test } from 'vitest';
-import { type OtlpAttribute, verdictToLogRecord } from './encode.ts';
+import { type OtlpAttribute, VETKIT_ATTR, verdictToLogRecord } from './encode.ts';
 
 function verdict(overrides: Partial<Verdict> = {}): Verdict {
   return {
@@ -39,5 +39,30 @@ describe('verdictToLogRecord error.type', () => {
     const rec = verdictToLogRecord(verdict({ cause: 'JUDGE_UNAVAILABLE' }));
     expect(attr(rec.attributes, 'gen_ai.evaluation.score.value')).toBeUndefined();
     expect(attr(rec.attributes, 'gen_ai.evaluation.score.label')).toBeUndefined();
+  });
+});
+
+describe('vetkit namespace', () => {
+  test('log record extension attributes use the vetkit. namespace', () => {
+    const rec = verdictToLogRecord(
+      verdict({
+        model: { requested: 'judge', resolved: 'judge-2026', transport: 'test', pinned: true },
+        cacheHit: true,
+      }),
+    );
+    expect(attr(rec.attributes, 'vetkit.model.resolved')).toEqual({ stringValue: 'judge-2026' });
+    expect(attr(rec.attributes, 'vetkit.model.transport')).toEqual({ stringValue: 'test' });
+    expect(attr(rec.attributes, 'vetkit.model.pinned')).toEqual({ boolValue: true });
+    expect(attr(rec.attributes, 'vetkit.cache_hit')).toEqual({ boolValue: true });
+    expect(rec.attributes.filter((a) => a.key.startsWith('classified_evals.'))).toEqual([]);
+  });
+
+  test('VETKIT_ATTR lists the four extension keys', () => {
+    expect(VETKIT_ATTR).toEqual({
+      modelResolved: 'vetkit.model.resolved',
+      modelTransport: 'vetkit.model.transport',
+      modelPinned: 'vetkit.model.pinned',
+      cacheHit: 'vetkit.cache_hit',
+    });
   });
 });
