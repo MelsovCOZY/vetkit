@@ -66,6 +66,10 @@ function invalid(message: string): VetError {
   return new VetError(CEV_ERROR_CODES.CONFIG_INVALID, message);
 }
 
+function missingKeyMessage(keyEnv: string): string {
+  return `judge credential ${keyEnv} is not set; add ${keyEnv}=... to .env or export it`;
+}
+
 // Stands in for an unset key so the judge (and its capabilities) can still be built; the
 // judge wrapping it is never allowed to send a request.
 const UNSET_KEY_PLACEHOLDER = 'vetkit-unset-credential';
@@ -77,8 +81,7 @@ function offlineJudge(judge: JudgeV1, keyEnv: string): JudgeV1 {
     specVersion: judge.specVersion,
     id: judge.id,
     capabilities: judge.capabilities,
-    doJudge: () =>
-      Promise.reject(invalid(`judge credential ${keyEnv} is not set; cannot call the judge`)),
+    doJudge: () => Promise.reject(invalid(missingKeyMessage(keyEnv))),
   };
 }
 
@@ -118,7 +121,7 @@ export async function loadVetConfig(options: LoadVetConfigOptions): Promise<Load
   // oxlint-disable-next-line eslint/no-underscore-dangle
   const configFile = loaded._configFile;
   if (configFile === undefined) {
-    throw invalid(`no vetkit config found; searched ${searched}`);
+    throw invalid(`no vetkit config found; searched ${searched}; run: vet init`);
   }
   const { config, warnings } = resolveConfig(loaded.config);
   const env = options.env ?? process.env;
@@ -138,6 +141,7 @@ export async function loadVetConfig(options: LoadVetConfigOptions): Promise<Load
       missingCredentials.push(keyEnv);
       judge = offlineJudge(judgeFromEndpoint(endpoint, UNSET_KEY_PLACEHOLDER), keyEnv);
     } else {
+      if (value === undefined || value === '') throw invalid(missingKeyMessage(keyEnv));
       judge = judgeFromEndpoint(endpoint, readEnvName(keyEnv, env));
     }
   }
