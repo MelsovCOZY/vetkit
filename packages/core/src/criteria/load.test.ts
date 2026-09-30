@@ -413,6 +413,68 @@ describe('loadCriteria', () => {
     expect(result.issues.filter((i) => WRAPPER_MESSAGE.test(i.message))).toEqual([]);
   });
 
+  test('a field a boolean criterion does not take is reported as not allowed, without lines about its shape', async () => {
+    const file = await tempFile(
+      'criteria.yaml',
+      [
+        'criteria:',
+        '  - id: brief',
+        '    type: boolean',
+        '    instructions: Is the reply brief?',
+        '    escape: The reply is empty.',
+        '    criteria: 5',
+        '    polarity: pass_when_true',
+        '    channel: nonsense',
+        '    provenance: { traceIds: [] }',
+        '',
+      ].join('\n'),
+    );
+
+    const result = await loadCriteria(file);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const paths = result.issues.map((i) => i.path);
+    expect(result.issues).toContainEqual(
+      expect.objectContaining({
+        path: '/criteria/0',
+        message: expect.stringContaining('not allowed'),
+      }),
+    );
+    expect(paths).toContain('/criteria/0/channel');
+    // Whether the forbidden value is a map or a list is beside the point.
+    expect(paths).not.toContain('/criteria/0/criteria');
+  });
+
+  test('a code grader without a check reports the missing check, not the other grader kinds', async () => {
+    const file = await tempFile(
+      'criteria.yaml',
+      [
+        'criteria:',
+        '  - id: brief',
+        '    type: boolean',
+        '    instructions: Is the reply brief?',
+        '    escape: The reply is empty.',
+        '    polarity: pass_when_true',
+        '    channel: nonsense',
+        '    grader: { kind: code }',
+        '    provenance: { traceIds: [] }',
+        '',
+      ].join('\n'),
+    );
+
+    const result = await loadCriteria(file);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const paths = result.issues.map((i) => i.path);
+    expect(paths).toContain('/criteria/0/grader/check');
+    expect(paths).toContain('/criteria/0/channel');
+    // `kind: code` is a valid kind; the judge and reference kinds have nothing to say here.
+    expect(paths).not.toContain('/criteria/0/grader/kind');
+    expect(result.issues.filter((i) => WRAPPER_MESSAGE.test(i.message))).toEqual([]);
+  });
+
   test('a document without a top-level criteria list is CRITERIA_INVALID at /criteria', async () => {
     const file = await tempFile('criteria.yaml', 'other: 1\n');
 
