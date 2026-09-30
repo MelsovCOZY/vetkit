@@ -1,5 +1,6 @@
 import { Writable } from 'node:stream';
 import { describe, expect, test } from 'vitest';
+import { safeParseJson } from '@vetkit/spec';
 import { createLogger } from './logger.ts';
 import { redact } from './redact.ts';
 
@@ -12,6 +13,12 @@ function makeStream(): { stream: Writable; lines: string[] } {
     },
   });
   return { stream, lines };
+}
+
+function parseJson(text: string): unknown {
+  const result = safeParseJson<unknown>(text, {});
+  if (!result.ok) throw result.error;
+  return result.value;
 }
 
 describe('redact', () => {
@@ -103,7 +110,7 @@ describe('redact: shared sanitizer contract', () => {
       AI_GATEWAY_API_KEY: secret,
     });
     expect(out).not.toContain(secret);
-    expect(JSON.parse(out)).toEqual({ header: 'authorization: <redacted:23 chars>', n: 1 });
+    expect(parseJson(out)).toEqual({ header: 'authorization: <redacted:23 chars>', n: 1 });
   });
 
   test('a canary in a judge request header value never survives', () => {
