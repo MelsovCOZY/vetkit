@@ -258,6 +258,22 @@ describe('cacheKey', () => {
   });
 });
 
+function rejecting(code: CevErrorCode, details?: VetErrorDetails): FakeJudge {
+  return fakeJudge({
+    impl: () =>
+      Promise.reject(new VetError(code, `boom ${code}`, details === undefined ? {} : { details })),
+  });
+}
+
+async function thrownBy(judge: JudgeV1): Promise<unknown> {
+  try {
+    await judgeCase({ judge, case: evalCase, criteria });
+  } catch (err) {
+    return err;
+  }
+  throw new Error('expected judgeCase to throw');
+}
+
 describe('judgeCase', () => {
   test('makes exactly one doJudge call carrying N=3 questions keyed by criterion id', async () => {
     const { judge, doJudge } = fakeJudge();
@@ -425,24 +441,6 @@ describe('judgeCase', () => {
   });
 
   describe('terminal judge errors', () => {
-    function rejecting(code: CevErrorCode, details?: VetErrorDetails): FakeJudge {
-      return fakeJudge({
-        impl: () =>
-          Promise.reject(
-            new VetError(code, `boom ${code}`, details === undefined ? {} : { details }),
-          ),
-      });
-    }
-
-    async function thrownBy(judge: JudgeV1): Promise<unknown> {
-      try {
-        await judgeCase({ judge, case: evalCase, criteria });
-      } catch (err) {
-        return err;
-      }
-      throw new Error('expected judgeCase to throw');
-    }
-
     test.each([
       ['terminal-auth is rethrown', 'JUDGE_UNAUTHORIZED', 'terminal-auth'],
       ['terminal-billing is rethrown', 'JUDGE_UNAVAILABLE', 'terminal-billing'],
@@ -615,13 +613,13 @@ describe('requestFormat', () => {
   });
 });
 
+const terminal = (): VetError =>
+  new VetError('JUDGE_UNAUTHORIZED', 'judge rejected the API key', {
+    details: { kind: 'terminal-auth' },
+  });
+
 describe('runJudge on a terminal judge error', () => {
   const cases: Case[] = ['c1', 'c2', 'c3', 'c4', 'c5'].map((id) => ({ ...evalCase, id }));
-  const terminal = (): VetError =>
-    new VetError('JUDGE_UNAUTHORIZED', 'judge rejected the API key', {
-      details: { kind: 'terminal-auth' },
-    });
-
   test('terminal error stops after one call', async () => {
     const { judge, doJudge } = fakeJudge({ impl: () => Promise.reject(terminal()) });
     const limiter = createLimiter({ maxInFlight: 1 });

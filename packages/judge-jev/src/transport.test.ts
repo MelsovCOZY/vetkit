@@ -861,11 +861,11 @@ describe('judge error kind', () => {
   });
 });
 
-describe('judge retry-after and quota classification', () => {
-  function retryAfterErr(headers: Record<string, string>, body: unknown = {}): Promise<VetError> {
-    return judgeErrorFor(() => jsonResponse(body, { status: 429, headers }));
-  }
+function retryAfterErr(headers: Record<string, string>, body: unknown = {}): Promise<VetError> {
+  return judgeErrorFor(() => jsonResponse(body, { status: 429, headers }));
+}
 
+describe('judge retry-after and quota classification', () => {
   test('Retry-After as an HTTP date 5 s ahead -> retryAfterMs within [4000, 5000]', async () => {
     const date = new Date(Date.now() + 5000).toUTCString();
     const err = await retryAfterErr({ 'retry-after': date });
