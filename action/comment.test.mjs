@@ -1,6 +1,7 @@
 // Plain Node test runner: `node --test action/comment.test.mjs`. No network: `gh` is a stub.
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -242,6 +243,46 @@ void test('main posts on a pull_request event with the baseline file', async () 
   assert.equal(result, 'created');
   assert.ok(calls[1]?.args.includes('repos/o/r/issues/9/comments'));
   assert.match(calls[1]?.stdin ?? '', /still-failing/);
+});
+
+void test('runGh survives a gh that exits without reading stdin', () => {
+  const dir = workspace({
+    'run.json': JSON.stringify(current),
+    'event.json': JSON.stringify({ pull_request: { number: 9 } }),
+    // Quotes double in JSON, so the POST payload outgrows the pipe buffer and cannot be written at once.
+    'report.md': '"'.repeat(60_000),
+  });
+  const bin = join(dir, 'gh');
+  const log = join(dir, 'gh.log');
+  // Records its arguments, closes stdin at once and exits 0 without reading it: the parent's write hits a closed pipe.
+  writeFileSync(bin, `#!/bin/sh\necho "$@" >> '${log}'\nexec 0<&-\nexit 0\n`);
+  chmodSync(bin, 0o755);
+  // A child process: an unhandled EPIPE crashes the process, which in-process would only fail asynchronously.
+  const child = spawnSync(
+    process.execPath,
+    [
+      join(import.meta.dirname, 'comment.mjs'),
+      'comment',
+      join(dir, 'run.json'),
+      join(dir, 'missing.json'),
+    ],
+    {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${dir}:${process.env.PATH}`,
+        GITHUB_EVENT_NAME: 'pull_request',
+        GITHUB_REPOSITORY: 'o/r',
+        GITHUB_EVENT_PATH: join(dir, 'event.json'),
+        REPORT_MD: join(dir, 'report.md'),
+      },
+    },
+  );
+  assert.doesNotMatch(child.stderr, /EPIPE/);
+  assert.equal(child.status, 0, child.stderr);
+  const calls = readFileSync(log, 'utf8').trim().split('\n');
+  assert.equal(calls.length, 2, 'the list and then the POST reach the stub');
+  assert.match(calls[1] ?? '', /-X POST repos\/o\/r\/issues\/9\/comments/);
 });
 
 const HEADLINE = {
