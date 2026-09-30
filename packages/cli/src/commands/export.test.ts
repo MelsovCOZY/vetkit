@@ -30,6 +30,22 @@ const CRITERIA_YAML = `criteria:
       traceIds: []
 `;
 
+// Two issues in two different criteria: the first lacks polarity, the second lacks escape.
+const INVALID_CRITERIA_YAML = `criteria:
+  - id: first
+    type: boolean
+    instructions: Q1?
+    escape: none
+    channel: outcome
+    provenance: { traceIds: [] }
+  - id: second
+    type: boolean
+    instructions: Q2?
+    polarity: pass_when_true
+    channel: outcome
+    provenance: { traceIds: [] }
+`;
+
 async function project(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'vetkit-export-'));
   await mkdir(join(root, 'evals', 'cases'), { recursive: true });
@@ -171,6 +187,23 @@ describe('vet export', () => {
     expect(exitCodeOf(error)).toBe(2);
     if (!VetError.isInstance(error)) throw new Error('expected a VetError');
     expect(error.code).toBe(CEV_ERROR_CODES.EXPORT_NO_LOCK);
+  });
+
+  test('invalid criteria: every load issue is listed with its pointer, exit 2', async () => {
+    const root = await project();
+    const file = join(root, 'evals', 'criteria.yaml');
+    await writeFile(file, INVALID_CRITERIA_YAML);
+    registerExporter('fake-invalid-criteria', fakeExporter('fake-invalid-criteria'));
+
+    const error = await rejection(vet(['export', '--to', 'fake-invalid-criteria'], depsFor(root)));
+
+    expect(exitCodeOf(error)).toBe(2);
+    if (!VetError.isInstance(error)) throw new Error('expected a VetError');
+    expect(error.code).toBe(CEV_ERROR_CODES.CRITERIA_INVALID);
+    const lines = error.message.split('\n');
+    expect(lines[0]).toBe(`cannot load ${file}:`);
+    expect(lines.some((l) => l.startsWith(`${file}/criteria/0/polarity: `))).toBe(true);
+    expect(lines.some((l) => l.startsWith(`${file}/criteria/1/escape: `))).toBe(true);
   });
 
   test('a single --criteria file calls doExport with the output dir unchanged', async () => {

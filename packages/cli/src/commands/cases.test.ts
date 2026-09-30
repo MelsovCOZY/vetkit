@@ -197,6 +197,21 @@ describe('vet cases dedupe', () => {
     // --write only removes exact-hash duplicates; both near-duplicates survive.
     expect(await readCases(join(p.cases, 'a.jsonl'))).toHaveLength(2);
   });
+
+  test('reports every case load issue with its file and line, exit 2', async () => {
+    const p = await project();
+    await writeFile(join(p.cases, 'a.jsonl'), '{"id":"only-an-id"}\n');
+    await writeFile(join(p.cases, 'b.jsonl'), '{"input":{"state":"no id"}}\n');
+
+    const error = await rejection(vet(['dedupe', '--cases', p.cases]));
+
+    expect(exitCodeOf(error)).toBe(2);
+    if (!VetError.isInstance(error)) throw new Error('expected a VetError');
+    const lines = error.message.split('\n');
+    expect(lines[0]).toBe(`cannot load ${p.cases}:`);
+    expect(lines.some((l) => l.startsWith(`${join(p.cases, 'a.jsonl')}:1: `))).toBe(true);
+    expect(lines.some((l) => l.startsWith(`${join(p.cases, 'b.jsonl')}:1: `))).toBe(true);
+  });
 });
 
 describe('vet cases quarantine', () => {
