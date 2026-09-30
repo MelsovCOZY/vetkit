@@ -115,8 +115,9 @@ describe('run record', () => {
     mkdirSync(join(cacheDir, 'runs'));
     writeFileSync(join(cacheDir, 'runs', 'latest.json'), JSON.stringify(record()));
     const error = await readRunRecord(cacheDir).catch((e: unknown) => e);
-    expect(error).toBeInstanceOf(Error);
-    expect((error as Error).message.endsWith('run `vet run` to write a current record')).toBe(true);
+    expect(error instanceof Error && error.message).toMatch(
+      /run `vet run` to write a current record$/,
+    );
   });
 
   it('runRecordSchema accepts a minimal portable record and additional properties', () => {
