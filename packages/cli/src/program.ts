@@ -34,8 +34,9 @@ const EXIT_CODES_HELP = `
 Exit codes:
   ${CEV_EXIT.OK}    success
   ${CEV_EXIT.FAILED}    evaluation failed the threshold or gate
-  ${CEV_EXIT.USAGE}    usage or config error (including a missing input with no TTY)
-  ${CEV_EXIT.UNSCORED_ONLY}    unscored-only run: nothing could be judged
+  ${CEV_EXIT.USAGE}    usage, config, auth or billing error (including a missing input with no TTY)
+  ${CEV_EXIT.UNSCORED_ONLY}    unscored-only run: no case could be judged (judge down or throttled)
+  ${CEV_EXIT.INTERNAL}   internal error (bug or unreadable environment); rerun with --verbose and file an issue
   ${CEV_EXIT.SIGINT}  interrupted (SIGINT); the first SIGINT to \`vet watch\` stops it with exit code 0`;
 
 // The argv of the current invocation, set by execute() before parsing.

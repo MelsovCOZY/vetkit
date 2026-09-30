@@ -32,7 +32,14 @@ function runVet(args: string[]) {
 
 describe('CEV_EXIT', () => {
   test('names the documented exit codes', () => {
-    expect(CEV_EXIT).toMatchObject({ OK: 0, FAILED: 1, USAGE: 2, UNSCORED_ONLY: 3, SIGINT: 130 });
+    expect(CEV_EXIT).toEqual({
+      OK: 0,
+      FAILED: 1,
+      USAGE: 2,
+      UNSCORED_ONLY: 3,
+      INTERNAL: 70,
+      SIGINT: 130,
+    });
   });
 });
 
@@ -41,9 +48,23 @@ describe('vet exit codes', () => {
     const result = runVet(['--help']);
     expect(result.status).toBe(0);
     expect(result.stdout).toMatch(/exit code/i);
-    for (const code of ['0', '1', '2', '3', '130']) {
+    for (const code of ['0', '1', '2', '3', '70', '130']) {
       expect(result.stdout).toMatch(new RegExp(`^\\s+${code}\\s`, 'm'));
     }
+  });
+
+  test('--help explains 70 as internal', () => {
+    const line = runVet(['--help'])
+      .stdout.split('\n')
+      .find((l) => /^\s+70\s/.test(l));
+    expect(line).toContain('internal');
+    expect(line).toContain('--verbose');
+  });
+
+  test('--help names the outage cause for 3 and auth or billing for 2', () => {
+    const lines = runVet(['--help']).stdout.split('\n');
+    expect(lines.find((l) => /^\s+3\s/.test(l))).toContain('judge down or throttled');
+    expect(lines.find((l) => /^\s+2\s/.test(l))).toContain('auth or billing');
   });
 
   test('an unknown option is a usage error (exit 2)', () => {
@@ -53,6 +74,26 @@ describe('vet exit codes', () => {
   test('a failing doctor check exits 1', () => {
     // No judge credential in the child env: the judge credential row fails.
     expect(runVet(['doctor']).status).toBe(1);
+  });
+
+  test('an internal error exits 70 and its stderr names --verbose', () => {
+    const script = `
+      import { createProgram, run } from ${JSON.stringify(programUrl)};
+      const program = createProgram();
+      program.command('boom').action(() => {
+        throw new Error('boom');
+      });
+      run(['node', 'vet', 'boom'], program);
+    `;
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+      encoding: 'utf8',
+      env: childEnv(),
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: 10_000,
+    });
+    expect(result.status).toBe(70);
+    expect(result.stderr).toContain('error INTERNAL: boom');
+    expect(result.stderr).toContain('--verbose');
   });
 
   test('SIGINT exits 130', async () => {

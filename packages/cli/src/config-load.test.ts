@@ -289,3 +289,47 @@ describe('config-load vendor neutrality', () => {
     expect(code.match(/vercel|openrouter|cloudflare/gi) ?? []).toHaveLength(0);
   });
 });
+
+describe('loadVetConfig next-step messages', () => {
+  test("no config found: message ends with 'run: vet init'", async () => {
+    const cwd = await project({});
+    const error = await rejection(loadVetConfig({ cwd, env: {} }));
+    expect(VetError.isInstance(error) && error.code).toBe('CONFIG_INVALID');
+    expect(error instanceof Error && error.message).toMatch(/run: vet init$/);
+  });
+
+  test("missing judge key: message names the var and ends with 'add <VAR>=... to .env or export it'", async () => {
+    const cwd = await project({
+      'vetkit.config.ts': descriptorConfig({
+        kind: 'typesafe-compatible',
+        preset: 'openrouter',
+        apiKeyEnv: 'OPENROUTER_API_KEY',
+      }),
+    });
+    const error = await rejection(loadVetConfig({ cwd, env: {} }));
+    expect(VetError.isInstance(error) && error.code).toBe('CONFIG_INVALID');
+    const message = error instanceof Error ? error.message : '';
+    expect(message).toContain('OPENROUTER_API_KEY is not set');
+    expect(message.endsWith('add OPENROUTER_API_KEY=... to .env or export it')).toBe(true);
+  });
+
+  test('missing judge key: the lazy offlineJudge rejection carries the same string', async () => {
+    const cwd = await project({
+      'vetkit.config.ts': descriptorConfig({
+        kind: 'typesafe-compatible',
+        preset: 'openrouter',
+        apiKeyEnv: 'OPENROUTER_API_KEY',
+      }),
+    });
+    const loaded = await loadVetConfig({ cwd, env: {}, requireCredentials: false });
+    const error = await rejection(
+      loaded.judge.doJudge({
+        state: 's',
+        questions: { q: { type: 'boolean', instructions: 'is it?' } },
+      }),
+    );
+    const message = error instanceof Error ? error.message : '';
+    expect(message).toContain('OPENROUTER_API_KEY is not set');
+    expect(message.endsWith('add OPENROUTER_API_KEY=... to .env or export it')).toBe(true);
+  });
+});

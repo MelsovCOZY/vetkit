@@ -1,7 +1,14 @@
 import { isCancel, text } from '@clack/prompts';
 import { VetError } from '@vetkit/spec';
 import picocolors from 'picocolors';
-import { EXIT_FAILED, EXIT_OK, EXIT_SIGINT, EXIT_UNSCORED_ONLY, EXIT_USAGE } from './errors.ts';
+import {
+  EXIT_FAILED,
+  EXIT_INTERNAL,
+  EXIT_OK,
+  EXIT_SIGINT,
+  EXIT_UNSCORED_ONLY,
+  EXIT_USAGE,
+} from './errors.ts';
 import { createLogger, type Logger } from './logger.ts';
 
 type Env = Record<string, string | undefined>;
@@ -17,12 +24,14 @@ export const CEV_EXIT: {
   readonly FAILED: number;
   readonly USAGE: number;
   readonly UNSCORED_ONLY: number;
+  readonly INTERNAL: number;
   readonly SIGINT: number;
 } = {
   OK: EXIT_OK,
   FAILED: EXIT_FAILED,
   USAGE: EXIT_USAGE,
   UNSCORED_ONLY: EXIT_UNSCORED_ONLY,
+  INTERNAL: EXIT_INTERNAL,
   SIGINT: EXIT_SIGINT,
 } as const;
 

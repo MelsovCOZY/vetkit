@@ -6,7 +6,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { SourceV1 } from '@vetkit/spec';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { registerSourcePrefix, resolveSource } from './sources.ts';
 
 function tmpDirWithJsonl(): string {
@@ -92,5 +92,25 @@ describe('resolveSource', () => {
     const source = resolveSource('fake-prefix::4318');
     expect(source.id).toBe('fake-prefix/traces');
     expect(seenRest).toBe(':4318');
+  });
+});
+
+describe('unknown prefix', () => {
+  test('unknown prefix lists supported', async () => {
+    // Fresh module registry: earlier tests in this file register extra prefixes.
+    vi.resetModules();
+    const fresh = await import('./sources.ts');
+    const otlp = await import('./commands/init-otlp.ts');
+    otlp.registerOtlpSource();
+    let caught: unknown;
+    try {
+      fresh.resolveSource('langfuse:x');
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toMatchObject({ code: 'CONFIG_INVALID' });
+    expect(caught instanceof Error && caught.message).toContain(
+      'unknown source prefix langfuse; supported: jsonl, otlp',
+    );
   });
 });

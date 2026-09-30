@@ -1,6 +1,6 @@
 // Source string resolution for `vet init --source <path>`. A bare path or
 // `jsonl:<dir>` both resolve to a filesystem-backed source-jsonl SourceV1. Other prefixes
-// register through registerSourcePrefix (`otlp:`, `langfuse:`) without touching this
+// register through registerSourcePrefix (`otlp:`) without touching this
 // module's callers. A prefix that wants a pre-flight check on `rest` (jsonl's own stat +
 // isDirectory) passes a `validate` hook to registerSourcePrefix;
 // resolveSource runs only the matched prefix's own hook, so `otlp::4318` (rest ':4318', not a
@@ -76,7 +76,7 @@ export function resolveSource(spec: string, options?: SourceOptions): SourceV1 {
   if (entry === undefined) {
     throw new VetError(
       CEV_ERROR_CODES.CONFIG_INVALID,
-      `--source '${spec}': unknown source prefix '${prefix}'; registered: ${[...prefixes.keys()].join(', ')}`,
+      `--source '${spec}': unknown source prefix ${prefix}; supported: ${[...prefixes.keys()].join(', ')}`,
     );
   }
   entry.validate?.(rest);
