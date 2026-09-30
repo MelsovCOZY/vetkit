@@ -15,9 +15,11 @@ import {
   validateJson,
   verdictSchema,
 } from '@vetkit/spec';
+import type { CachedJudgment, VerdictCache } from './judge/cache.ts';
 import type { Limiter } from './judge/pacing.ts';
 import { createEvents, EVENT_NAMES, type EventMap, type Events } from './events.ts';
 import { loadCriteria } from './criteria/load.ts';
+import { estimateRun } from './estimate.ts';
 import { evaluateGate } from './gate.ts';
 import { runEvals, runJudge, verdictCause, type RunConfig, type RunVerdict } from './run.ts';
 import { calibrate, type CalibrationLabel } from './validate/calibrate.ts';
@@ -1541,5 +1543,183 @@ describe('disabled criteria (enabled: false)', () => {
 
     expect(out.gateReasons).toEqual([]);
     expect(out.exitCode).toBe(0);
+  });
+});
+
+// ---------- repeats: cache key, flaky state ----------
+
+/** One doJudge call per entry, in call order: a P(yes) for `answers-question`, or 'throw'. */
+function sequenceJudge(steps: readonly (number | 'throw')[]): {
+  judge: JudgeV1;
+  doJudge: ReturnType<typeof vi.fn<JudgeV1['doJudge']>>;
+} {
+  let call = 0;
+  const { judge, doJudge } = scriptedJudge({});
+  doJudge.mockImplementation((req) => {
+    const step = steps[Math.min(call, steps.length - 1)];
+    call += 1;
+    if (step === undefined || step === 'throw') {
+      return Promise.reject(new VetError(CEV_ERROR_CODES.JUDGE_UNAVAILABLE, 'down'));
+    }
+    const answers: Record<string, Answer> = {};
+    for (const key of Object.keys(req.questions)) answers[key] = yes(step);
+    return Promise.resolve({
+      answers,
+      usage: { inputTokens: 1, outputTokens: 0 },
+      model: {
+        requested: 'fake/jev',
+        resolved: 'fake/jev-1',
+        transport: 'fake-transport',
+        pinned: true,
+      },
+    });
+  });
+  return { judge, doJudge };
+}
+
+function memoryCache(): { cache: VerdictCache; entries: Map<string, CachedJudgment> } {
+  const entries = new Map<string, CachedJudgment>();
+  const cache: VerdictCache = {
+    get: (key) => Promise.resolve(entries.get(key)),
+    set: (key, entry) => {
+      entries.set(key, entry);
+      return Promise.resolve();
+    },
+  };
+  return { cache, entries };
+}
+
+const REPEAT_CRITERION: Criterion = {
+  id: 'answers-question',
+  type: 'boolean',
+  instructions: 'Q?',
+  escape: 'empty',
+  polarity: 'pass_when_true',
+  channel: 'outcome',
+  provenance: { traceIds: [] },
+  wordingHash: 'h',
+};
+
+describe('repeats and the cache', () => {
+  test('repeats:3 on a cold in-memory cache makes 3 calls and 3 entries', async () => {
+    const { judge, doJudge } = sequenceJudge([0.9]);
+    const { cache, entries } = memoryCache();
+    const verdicts = await runJudge({
+      cases: [mk('c1')],
+      criteria: [REPEAT_CRITERION],
+      judge,
+      cache,
+      repeats: 3,
+    });
+    expect(doJudge).toHaveBeenCalledTimes(3);
+    expect(entries.size).toBe(3);
+    expect(verdicts).toHaveLength(3);
+  });
+
+  test('a warm cache makes 0 calls and every verdict has cacheHit true', async () => {
+    const { cache } = memoryCache();
+    const cold = sequenceJudge([0.9]);
+    await runJudge({
+      cases: [mk('c1')],
+      criteria: [REPEAT_CRITERION],
+      judge: cold.judge,
+      cache,
+      repeats: 3,
+    });
+    const warm = sequenceJudge([0.9]);
+    const verdicts = await runJudge({
+      cases: [mk('c1')],
+      criteria: [REPEAT_CRITERION],
+      judge: warm.judge,
+      cache,
+      repeats: 3,
+    });
+    expect(warm.doJudge).not.toHaveBeenCalled();
+    expect(verdicts).toHaveLength(3);
+    expect(verdicts.every((v) => v.cacheHit)).toBe(true);
+  });
+
+  test('repeats:1 key equals the repeat-0 key estimateRun computes', async () => {
+    const { judge } = sequenceJudge([0.9]);
+    const { cache, entries } = memoryCache();
+    await runJudge({ cases: [mk('c1')], criteria: [REPEAT_CRITERION], judge, cache, repeats: 1 });
+    const [key] = [...entries.keys()];
+    const cacheDir = await mkdtemp(join(tmpdir(), 'vetkit-repeat-key-'));
+    await writeFile(join(cacheDir, `${String(key)}.json`), '{}');
+    const est = await estimateRun({
+      criteria: [REPEAT_CRITERION],
+      cases: [mk('c1')],
+      model: judge.capabilities.model,
+      transport: judge.capabilities.transport,
+      requestFormat: 'raw',
+      cacheDir,
+    });
+    expect(est.cacheHits).toBe(1);
+  });
+});
+
+async function runRepeated(
+  steps: readonly (number | 'throw')[],
+  over: { lock?: Lock; gate?: boolean; repeats?: number } = {},
+): Promise<Awaited<ReturnType<typeof runEvals>>> {
+  const paths = await suite([BOOL_YAML], [{ id: 'c1', input: { state: 'S1' } }]);
+  const { judge } = sequenceJudge(steps);
+  return runEvals({
+    config: { ...paths, judge, repeats: over.repeats ?? 3, gate: over.gate === true },
+    ...(over.lock === undefined ? {} : { lock: over.lock }),
+  });
+}
+
+describe('flaky repeats', () => {
+  test('disagreeing repeats outside the band mark the case flaky with its spread', async () => {
+    const out = await runRepeated([0.9, 0.1, 0.9]);
+    expect(out.results).toHaveLength(3);
+    expect(out.summary.flaky).toBe(1);
+    expect(out.summary.byCase?.['c1']?.outcome).toBe('flaky');
+    expect(out.summary.byCase?.['c1']?.spread).toBeCloseTo(0.8, 6);
+    expect(out.summary.failed).toBe(0);
+    expect(out.summary.passed).toBe(0);
+  });
+
+  test('disagreement inside the tolerance band is borderline, not flaky', async () => {
+    const lock = lockOf({ 'answers-question': lockCriterion({ threshold: 0.5, tolerance: 0.45 }) });
+    const out = await runRepeated([0.9, 0.1, 0.9], { lock });
+    expect(out.summary.flaky).toBe(0);
+    expect(out.summary.byCase?.['c1']?.outcome).toBe('fail');
+    expect(out.results.every((v) => v.borderline === true)).toBe(true);
+  });
+
+  test('agreeing repeats are not flaky and spread is the value range', async () => {
+    const out = await runRepeated([0.9, 0.8, 0.7]);
+    expect(out.summary.flaky).toBe(0);
+    expect(out.summary.byCase?.['c1']?.outcome).toBe('pass');
+    expect(out.summary.byCase?.['c1']?.spread).toBeCloseTo(0.2, 6);
+    expect(out.summary.passed).toBe(1);
+  });
+
+  test('an unscored repeat beside agreeing ok repeats is unscored', async () => {
+    const out = await runRepeated([0.9, 'throw', 0.9]);
+    expect(out.summary.flaky).toBe(0);
+    expect(out.summary.byCase?.['c1']?.outcome).toBe('unscored');
+  });
+
+  test('flaky is excluded from the exit without gate (exit 0)', async () => {
+    const out = await runRepeated([0.9, 0.1, 0.9]);
+    expect(out.summary.byCase?.['c1']?.outcome).toBe('flaky');
+    expect(out.exitCode).toBe(0);
+  });
+
+  test('flaky counts as fail under gate (exit 1)', async () => {
+    const lock = lockOf({ 'answers-question': lockCriterion() });
+    const out = await runRepeated([0.9, 0.1, 0.9], { lock, gate: true });
+    expect(out.summary.byCase?.['c1']?.outcome).toBe('flaky');
+    expect(out.exitCode).toBe(1);
+  });
+
+  test('repeats 1 gives spread 0 and flaky 0', async () => {
+    const out = await runRepeated([0.9], { repeats: 1 });
+    expect(out.summary.flaky).toBe(0);
+    expect(out.summary.byCase?.['c1']).toEqual({ outcome: 'pass', spread: 0 });
+    expect(out.repeats).toBe(1);
   });
 });

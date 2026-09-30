@@ -16,12 +16,14 @@ import {
   type RunVerdict,
   writeRunRecord,
 } from '@vetkit/core';
+import { CEV_ERROR_CODES, VetError, type JudgeV1 } from '@vetkit/spec';
 import { JEV_CREDENTIAL_PRIORITY, JEV_PRESETS } from '@vetkit/judge-jev';
 import type { Command } from 'commander';
 import { loadVetConfig } from '../config-load.ts';
 import { CEV_EXIT, emit, getLogger, type GlobalOptions } from '../output.ts';
 import { hintFor } from '../errors.ts';
 import { isDemoJudge } from '../demo-judge.ts';
+import { readCliVersion, recordingJudge, replayJudge } from '../judge-record.ts';
 import { renderEvents } from '../render-events.ts';
 import { registerReporterFlag, writeReports, type ReporterSpec } from '../reporters/junit.ts';
 
@@ -35,6 +37,9 @@ interface RunOptions extends GlobalOptions {
   // commander's negatable `--no-cache`: false when passed, otherwise true.
   readonly cache?: boolean;
   readonly reporter?: ReporterSpec;
+  readonly repeat?: string;
+  readonly record?: string;
+  readonly replay?: string;
 }
 
 // Hooks other commands' modules add to `vet run` (`--sink`). A hook runs after the
@@ -54,14 +59,26 @@ export type RunHookFinish = (result: RunEvalsResult) => Promise<RunHookOutput>;
 export type RunHook = (ctx: RunHookContext) => Promise<RunHookFinish | undefined>;
 export const runHooks: RunHook[] = [];
 
-type Outcome = 'pass' | 'fail' | 'unscored';
+// The rolled-up state of a case comes from core's summary; a case of only not_applicable
+// verdicts reads as passed, as it counts in summary.passed.
+function caseWord(result: RunEvalsResult, caseId: string): string {
+  const outcome = result.summary.byCase?.[caseId]?.outcome ?? 'unscored';
+  if (outcome === 'flaky') {
+    return `flaky ${caseId} (spread ${(result.summary.byCase?.[caseId]?.spread ?? 0).toFixed(2)})`;
+  }
+  return `${outcome === 'neutral' ? 'pass' : outcome} ${caseId}`;
+}
 
-// Same precedence as the core summary: any failed verdict fails the case, then any unscored.
-function caseOutcome(verdicts: readonly RunVerdict[]): Outcome {
-  const counted = verdicts.filter((v) => v.status !== 'not_applicable');
-  if (counted.some((v) => v.status === 'ok' && v.pass !== true)) return 'fail';
-  if (counted.some((v) => v.status !== 'ok')) return 'unscored';
-  return 'pass';
+function parseRepeat(raw: string | undefined): number {
+  if (raw === undefined) return 1;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1) {
+    throw new VetError(
+      CEV_ERROR_CODES.CONFIG_INVALID,
+      `--repeat must be a positive integer, got '${raw}'`,
+    );
+  }
+  return n;
 }
 
 // Core's exit mapping treats a judge failure (unscored) the same as
@@ -137,12 +154,12 @@ function gateLine({ gate }: RunEvalsResult): string {
 }
 
 function render(result: RunEvalsResult): string {
-  const byCase = new Map<string, RunVerdict[]>();
-  for (const v of result.results) byCase.set(v.caseId, [...(byCase.get(v.caseId) ?? []), v]);
-  const lines = [...byCase].map(([caseId, verdicts]) => `${caseOutcome(verdicts)} ${caseId}`);
+  const caseIds = new Set(result.results.map((v) => v.caseId));
+  const lines = [...caseIds].map((caseId) => caseWord(result, caseId));
   const { summary, model } = result;
+  const flaky = summary.flaky ?? 0;
   lines.push(
-    `${String(summary.passed)} passed, ${String(summary.failed)} failed, ${String(summary.unscored)} unscored of ${String(summary.total)}${summary.aborted ? ' (aborted)' : ''}`,
+    `${String(summary.passed)} passed, ${String(summary.failed)} failed, ${String(summary.unscored)} unscored of ${String(summary.total)}${flaky > 0 ? `, ${String(flaky)} flaky` : ''}${summary.aborted ? ' (aborted)' : ''}`,
     cacheLine(result),
     `model: ${model.resolved === '' ? model.requested : model.resolved} (transport ${model.transport}, pinned: ${String(model.pinned)})`,
     gateLine(result),
@@ -162,9 +179,16 @@ async function countPendingCases(casesPath: string): Promise<number> {
 async function runCommand(options: RunOptions & Readonly<Record<string, unknown>>): Promise<void> {
   const log = getLogger();
   const cwd = process.cwd();
+  const repeats = parseRepeat(options.repeat);
+  if (options.record !== undefined && options.replay !== undefined) {
+    throw new VetError(CEV_ERROR_CODES.CONFIG_INVALID, '--record and --replay are exclusive');
+  }
+  const replaying = options.replay !== undefined;
   const loaded = await loadVetConfig({
     cwd,
     ...(options.config === undefined ? {} : { configPath: options.config }),
+    // A replay answers from the recording, so the config's judge credential is never needed.
+    requireCredentials: !replaying,
   });
   for (const warning of loaded.warnings) log.warn(warning);
   const { config, rootDir } = loaded;
@@ -195,7 +219,18 @@ async function runCommand(options: RunOptions & Readonly<Record<string, unknown>
     `${String(pendingCount)} promoted case(s) pending review in ${join(casesPath, 'pending')} (run \`vet cases review\`)`,
   );
   const { cacheDir } = paths;
-  const demo = isDemoJudge(loaded.judge);
+  let judge: JudgeV1 = loaded.judge;
+  if (options.replay !== undefined) {
+    judge = replayJudge(resolve(cwd, options.replay), {
+      version: readCliVersion(),
+      onWarn: (message) => log.warn(message),
+    });
+  } else if (options.record !== undefined) {
+    judge = recordingJudge(loaded.judge, resolve(cwd, options.record), {
+      version: readCliVersion(),
+    });
+  }
+  const demo = isDemoJudge(judge);
   const startedAt = new Date().toISOString();
   const { events: runEvalsEvents, take: takeRunEnd } = deferRunEnd(events);
   let result: RunEvalsResult;
@@ -204,7 +239,8 @@ async function runCommand(options: RunOptions & Readonly<Record<string, unknown>
       config: {
         criteriaPath,
         casesDir: casesPath,
-        judge: loaded.judge,
+        judge,
+        repeats,
         threshold: config.thresholds.default,
         gate: options.gate === true,
         ci: options.ci === true,
@@ -215,7 +251,9 @@ async function runCommand(options: RunOptions & Readonly<Record<string, unknown>
         // Demo verdicts never enter the verdict cache; the run record below is still written.
         ...(demo ? {} : { cacheDir }),
         lockPath,
-        bypassCache: options.cache === false,
+        // A replay must not be masked by a warm cache, and a recording needs every call made.
+        bypassCache:
+          options.cache === false || options.replay !== undefined || options.record !== undefined,
       },
       lock,
       signal: controller.signal,
@@ -279,7 +317,16 @@ export function registerRun(program: Command): Command {
       .option('--gate', 'gate on calibrated thresholds from the lock; refuses (exit 2) without one')
       .option('--ci', 'CI gating: refuse (exit 2) a lock written against an unpinned transport')
       .option('--allow-unpinned', 'let --gate and --ci pass on an unpinned judge transport')
-      .option('--no-cache', 'judge every case afresh; neither read nor write the verdict cache'),
+      .option('--no-cache', 'judge every case afresh; neither read nor write the verdict cache')
+      .option(
+        '--repeat <n>',
+        'judge each case n times; a case whose repeats disagree beyond the tolerance band is flaky (default 1)',
+      )
+      .option('--record <dir>', 'also write every judge response under <dir> for a later --replay')
+      .option(
+        '--replay <dir>',
+        'answer from a --record directory: no judge credential, no network',
+      ),
   ).action(async (_options: unknown, command: Command) => {
     await runCommand(command.optsWithGlobals<RunOptions & Readonly<Record<string, unknown>>>());
   });

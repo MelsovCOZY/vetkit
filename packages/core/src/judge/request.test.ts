@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -251,6 +252,41 @@ describe('cacheKey', () => {
     expect(cacheKey(otherState, criteria, 'jev-1.13.0')).not.toBe(base);
   });
 
+  test('differs per repeat index', () => {
+    const base = cacheKey(evalCase, criteria, 'm');
+    expect(cacheKey(evalCase, criteria, 'm', { repeat: 0 })).toBe(base);
+    const one = cacheKey(evalCase, criteria, 'm', { repeat: 1 });
+    expect(one).not.toBe(base);
+    expect(cacheKey(evalCase, criteria, 'm', { repeat: 2 })).not.toBe(one);
+  });
+
+  test('differs per transport', () => {
+    expect(cacheKey(evalCase, criteria, 'm', { transport: 'a' })).not.toBe(
+      cacheKey(evalCase, criteria, 'm', { transport: 'b' }),
+    );
+  });
+
+  test('differs when the core version differs (inject via options.coreVersion for the test)', () => {
+    expect(cacheKey(evalCase, criteria, 'm', { coreVersion: '1.0.0' })).not.toBe(
+      cacheKey(evalCase, criteria, 'm', { coreVersion: '1.0.1' }),
+    );
+  });
+
+  test('raw and fenced-v1 keys differ and raw is no longer the bare material', () => {
+    const raw = cacheKey(evalCase, [booleanCriterion], 'm', { requestFormat: 'raw' });
+    expect(raw).not.toBe(
+      cacheKey(evalCase, [booleanCriterion], 'm', { requestFormat: 'fenced-v1' }),
+    );
+    const bare = JSON.stringify({
+      state: evalCase.input.state,
+      wording: [[booleanCriterion.id, booleanCriterion.wordingHash]],
+      model: 'm',
+      references: [[booleanCriterion.id, undefined]],
+      optionOrder: [[booleanCriterion.id, null]],
+    });
+    expect(raw).not.toBe(createHash('sha256').update(bare).digest('hex'));
+  });
+
   test('changing expected.value changes the key for a reference criterion', () => {
     const a = cacheKey(referenceCase, [referenceCriterion], 'jev-1.13.0');
     const other: Case = { ...referenceCase, expected: { value: 'Sydney', source: 'user' } };
@@ -342,8 +378,8 @@ describe('judgeCase', () => {
     });
     const keys = get.mock.calls.map((c) => c[0]);
     expect(keys).toHaveLength(2);
-    expect(keys[0]).toBe(cacheKey(evalCase, criteria, 'jev-1.13.0'));
-    expect(keys[1]).toBe(cacheKey(evalCase, criteria, 'jev-1.14.0'));
+    expect(keys[0]).toBe(cacheKey(evalCase, criteria, 'jev-1.13.0', { transport: 'fake' }));
+    expect(keys[1]).toBe(cacheKey(evalCase, criteria, 'jev-1.14.0', { transport: 'fake' }));
     expect(keys[0]).not.toBe(keys[1]);
   });
 
@@ -502,7 +538,7 @@ describe('createFileCache', () => {
   test('a corrupt cache file is a miss, emits a diag event, and is overwritten', async () => {
     const onDiag = vi.fn();
     const cache = createFileCache(dir, { onDiag });
-    const key = cacheKey(evalCase, criteria, 'jev-fake-model');
+    const key = cacheKey(evalCase, criteria, 'jev-fake-model', { transport: 'fake' });
     writeFileSync(join(dir, `${key}.json`), '{not json');
 
     const { judge, doJudge } = fakeJudge();
@@ -572,13 +608,11 @@ describe('requestFormat', () => {
   const RAW_REQUEST =
     '{"state":"hello <b>\\n\\"x\\"","questions":{"q":{"type":"choice","instructions":"Ok? Answer \\"escape\\" when: none","criteria":{"yes":"Yes.","no":"No.","escape":"none"}}}}';
 
-  test('raw request and cache key equal the pre-change values', () => {
+  test('raw request equals the pre-change value', () => {
     // Default switched to fenced-v1 after the request-format A/B; raw is now explicit.
     expect(JSON.stringify(buildRequest(fixedCase, fixedCriteria, { requestFormat: 'raw' }))).toBe(
       RAW_REQUEST,
     );
-    expect(cacheKey(fixedCase, fixedCriteria, 'm', { requestFormat: 'raw' })).toBe(RAW_KEY);
-    expect(cacheKey(fixedCase, fixedCriteria, 'm', { requestFormat: 'raw' })).toBe(RAW_KEY);
   });
 
   test('fenced-v1 sends the rendered state and keys differently from raw', () => {

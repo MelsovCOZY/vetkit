@@ -37,6 +37,8 @@ export interface EstimateRunInput {
   readonly callsPerMinute?: number;
   /** The judge's request format (capabilities.requestFormat); state size is measured after rendering. */
   readonly requestFormat?: RequestFormat;
+  /** The judge's `capabilities.transport`, part of the cache key: pass it to match `vet run`. */
+  readonly transport?: string;
 }
 
 export interface RunEstimate {
@@ -119,12 +121,12 @@ export async function estimateRun(input: EstimateRunInput): Promise<RunEstimate>
   let cacheHits = 0;
   let inputTokens = 0;
   for (const evalCase of cases) {
-    if (
-      cached.has(
-        `${cacheKey(evalCase, criteria, model, { requestFormat: input.requestFormat })}.json`,
-      )
-    )
-      cacheHits += 1;
+    // Repeat 0 is what a `vet run` without --repeat looks up.
+    const key = cacheKey(evalCase, criteria, model, {
+      requestFormat: input.requestFormat,
+      transport: input.transport,
+    });
+    if (cached.has(`${key}.json`)) cacheHits += 1;
     else inputTokens += caseTokens(evalCase, criteria, input.requestFormat);
   }
   const calls = cases.length - cacheHits;

@@ -107,6 +107,7 @@ async function estimateCommand(options: EstimateOptions): Promise<void> {
     criteria: active,
     cases: cases.cases,
     model: judge.capabilities.model,
+    transport: judge.capabilities.transport,
     cacheDir: paths.cacheDir,
     ...(requestFormat === undefined ? {} : { requestFormat }),
     ...(pricing === undefined ? {} : { pricing }),

@@ -20,6 +20,7 @@ import {
   type RequestFormat,
   type Verdict,
 } from '@vetkit/spec';
+import { CORE_VERSION } from '../version.ts';
 import type { CachedJudgment, VerdictCache } from './cache.ts';
 import { renderState } from './format.ts';
 import { renderReference } from './reference.ts';
@@ -37,6 +38,12 @@ export interface BuildRequestOptions {
   readonly optionOrder?: Readonly<Record<string, readonly string[]>>;
   /** How the case state is rendered into the request; absent is raw. */
   readonly requestFormat?: RequestFormat | undefined;
+  /** The judge's `capabilities.transport`; part of the cache key only. */
+  readonly transport?: string | undefined;
+  /** Which repeat this is (0-based, default 0); part of the cache key only. */
+  readonly repeat?: number | undefined;
+  /** Overrides the `@vetkit/core` version in the cache key; tests only. */
+  readonly coreVersion?: string | undefined;
 }
 
 function orderOptions(
@@ -104,7 +111,8 @@ export function buildRequest(
 
 /**
  * sha256 over (state, each criterion's wordingHash in id order, model, rendered reference text,
- * option order). `model` is the judge's declared model id (JudgeV1.capabilities.model) used for lookup —
+ * option order, request format, transport, `@vetkit/core` version, repeat index). `model` is the
+ * judge's declared model id (JudgeV1.capabilities.model) used for lookup —
  * `model.resolved` is only known after a call, so it is stored inside the entry instead;
  * a different declared model is a different key, hence a miss.
  */
@@ -121,11 +129,12 @@ export function cacheKey(
     model,
     references: sorted.map((c) => [c.id, renderReference(c, evalCase)]),
     optionOrder: sorted.map((c) => [c.id, options.optionOrder?.[c.id] ?? null]),
+    requestFormat: options.requestFormat ?? DEFAULT_REQUEST_FORMAT,
+    transport: options.transport ?? '',
+    coreVersion: options.coreVersion ?? CORE_VERSION,
+    repeat: options.repeat ?? 0,
   };
-  // Only a non-raw format enters the material, so raw keys stay identical to before it existed.
-  const requestFormat = options.requestFormat ?? DEFAULT_REQUEST_FORMAT;
-  const keyed = requestFormat === 'raw' ? material : { ...material, requestFormat };
-  return createHash('sha256').update(JSON.stringify(keyed)).digest('hex');
+  return createHash('sha256').update(JSON.stringify(material)).digest('hex');
 }
 
 export interface JudgeCaseInput extends BuildRequestOptions {
@@ -229,6 +238,7 @@ export async function judgeCase(input: JudgeCaseInput): Promise<Verdict[]> {
   const options: BuildRequestOptions = {
     ...input,
     requestFormat: input.judge.capabilities.requestFormat ?? DEFAULT_REQUEST_FORMAT,
+    transport: input.transport ?? input.judge.capabilities.transport,
   };
   const key = cacheKey(input.case, input.criteria, input.judge.capabilities.model, options);
   const cached = await input.cache?.get(key);
