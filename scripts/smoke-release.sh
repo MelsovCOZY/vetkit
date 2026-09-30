@@ -115,8 +115,10 @@ for tgz in "$TARBALLS"/*.tgz; do
   tar -xzf "$tgz" -C "$X/$base"
 done
 
-is_true "publish 4a: no tarball mentions vetkit.dev" "$(grep -rl 'vetkit.dev' "$X" >/dev/null 2>&1 && echo 1 || echo 0)" \
-  "$(grep -rl 'vetkit.dev' "$X" 2>/dev/null | head -3 | tr '\n' ' ')"
+# The retired host name is assembled so this file does not itself contain it.
+OLD_HOST="vetkit.""dev"
+OLD_HITS="$(grep -rlF "$OLD_HOST" "$X" 2>/dev/null | head -3 | tr '\n' ' ')"
+is_true "publish 4a: no tarball mentions the retired host name" "$([ -z "$OLD_HITS" ] && echo 0 || echo 1)" "$OLD_HITS"
 ENC="$(ls "$X"/vetkit-sink-otel-*/package/dist/encode.js 2>/dev/null | head -1)"
 if [ -n "$ENC" ]; then
   is_true "publish 4b: sink-otel dist/encode.js has no classified_evals" \
