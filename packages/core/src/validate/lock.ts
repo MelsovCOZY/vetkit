@@ -32,6 +32,7 @@ import { computeNormalizedWordingHash, wordingOf } from '../criteria/wording.ts'
 import type { Events } from '../events.ts';
 import type { GatePolicy } from '../gate.ts';
 import { referenceRequirement } from '../judge/reference.ts';
+import { SCHEMA_VERSIONS, checkSchemaVersion } from '../schema-version.ts';
 import type { CalibrationResult } from './calibrate.ts';
 
 const MIN_LABELS = 100;
@@ -334,6 +335,14 @@ export async function readLock(path: string): Promise<Lock | { error: VetError }
         `no lock at ${path}; run \`vet validate\` to write ${LOCK_FILE}`,
       ),
     };
+  }
+  const lenient = safeParseJson<{ lockVersion?: unknown }>(text, {});
+  const found = lenient.ok ? lenient.value.lockVersion : undefined;
+  if (typeof found === 'number' && found > SCHEMA_VERSIONS.lock) {
+    const version = checkSchemaVersion('lock', found);
+    if (!version.ok) {
+      return { error: new VetError(CEV_ERROR_CODES.CONFIG_INVALID, version.message) };
+    }
   }
   const parsed = safeParseJson<Lock>(text, lockSchema);
   return parsed.ok ? parsed.value : { error: parsed.error };

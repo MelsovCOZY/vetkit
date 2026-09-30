@@ -38,6 +38,7 @@
 - `vet cases`: secondary case-set actions: dedupe, quarantine, promote, review
 - `vet lint`: lint criteria.yaml against Jev wording weak spots (default: criteria.yaml next to the config, or under evals/ when that directory exists)
 - `vet export`: export criteria, cases and the lock to another eval runner
+- `vet migrate`: stamp schemaVersion into criteria.yaml and check the lock version (--check only reports)
 - `vet watch`: sample live OTel traces, judge them, and promote failures into regression cases
 
 Every command prints one JSON document under `--json`; the shapes are in [CLI JSON shapes](docs/guides/cli-json.md).

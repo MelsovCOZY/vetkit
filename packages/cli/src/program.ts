@@ -12,6 +12,7 @@ import { registerOtlpSource } from './commands/init-otlp.ts';
 import { registerLabel } from './commands/label.ts';
 import { registerLint } from './commands/lint.ts';
 import { registerLock } from './commands/lock.ts';
+import { registerMigrate } from './commands/migrate.ts';
 import { registerRerun } from './commands/rerun.ts';
 import { registerReport } from './commands/report.ts';
 import { registerRun } from './commands/run.ts';
@@ -91,6 +92,7 @@ export function createProgram(): Command {
   registerLint(program);
   registerExport(program);
   registerWatch(program);
+  registerMigrate(program);
   return program;
 }
 
