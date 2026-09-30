@@ -181,6 +181,12 @@ describe('vet bin: init --source and lint', () => {
     expect(result.stdout).toMatch(/^\s+lint\b/m);
   });
 
+  test('--help lists the migrate command', () => {
+    const result = runBin(['--help']);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toMatch(/^\s+migrate\b/m);
+  });
+
   test('init --help lists --source and --out', () => {
     const result = runBin(['init', '--help']);
     expect(result.status).toBe(0);
