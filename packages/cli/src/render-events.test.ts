@@ -163,18 +163,18 @@ describe('renderEvents', () => {
   });
 });
 
-describe('throttle summary', () => {
-  const throttle = (events: Events, n: number): void => {
-    for (let i = 1; i <= n; i += 1) {
-      events.diag('warn', 'JUDGE_THROTTLED', 'judge throttled, backing off', {
-        retryAfterMs: 1.5,
-        ceiling: 1,
-      });
-      events.diag('info', 'JUDGE_RETRY', 'retrying judge request', { attempt: i });
-    }
-  };
-  const bare = (line: string): string => line.replace(/^(debug|info|warn|error) /, '');
+const throttle = (events: Events, n: number): void => {
+  for (let i = 1; i <= n; i += 1) {
+    events.diag('warn', 'JUDGE_THROTTLED', 'judge throttled, backing off', {
+      retryAfterMs: 1.5,
+      ceiling: 1,
+    });
+    events.diag('info', 'JUDGE_RETRY', 'retrying judge request', { attempt: i });
+  }
+};
+const bare = (line: string): string => line.replace(/^(debug|info|warn|error) /, '');
 
+describe('throttle summary', () => {
   it('pretty mode aggregates JUDGE_THROTTLED/JUDGE_RETRY diags into one warn line at run:end', () => {
     const { stream, lines } = sink();
     const events = createEvents();

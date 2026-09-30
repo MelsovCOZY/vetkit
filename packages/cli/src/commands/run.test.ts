@@ -466,6 +466,43 @@ describe('vet run with the demo judge', () => {
   });
 });
 
+async function fixtureRejection(mode: string): Promise<unknown> {
+  process.env['VETKIT_FIXTURE_MODE'] = mode;
+  const href = `${pathToFileURL(join(fixtureDir, 'vetkit.config.ts')).href}?mode=${mode}`;
+  const mod: unknown = await import(href);
+  const judge = getDoJudge(mod);
+  return judge({ questions: { q: {} } }).catch((e: unknown) => e);
+}
+
+function getDoJudge(mod: unknown): (req: object) => Promise<unknown> {
+  if (typeof mod === 'object' && mod !== null && 'default' in mod) {
+    const cfg = mod.default;
+    if (typeof cfg === 'object' && cfg !== null && 'judge' in cfg) {
+      const judge = cfg.judge;
+      if (typeof judge === 'object' && judge !== null && 'doJudge' in judge) {
+        const fn = judge.doJudge;
+        if (typeof fn === 'function') return (req) => Promise.resolve(fn.call(judge, req));
+      }
+    }
+  }
+  throw new Error('fixture has no default.judge.doJudge');
+}
+
+function withSink(mode: string): Result {
+  const project = freshProject();
+  const configPath = join(project, 'vetkit.config.ts');
+  const sink =
+    "{ specVersion: 'v1', id: 'otel/logs', capabilities: { batch: 10, idempotent: true }, async doWrite(batch) { return { accepted: batch.map((v) => v.id), rejected: [] }; } }";
+  writeFileSync(
+    configPath,
+    readFileSync(configPath, 'utf8').replace(
+      'export default { judge };',
+      `export default { judge, sinks: [${sink}] };`,
+    ),
+  );
+  return runVet(['run', '--sink', 'otel', '--json'], project, fixtureEnv(mode));
+}
+
 describe('vet run exit 3 for unscored-only runs', () => {
   test('a judge that throws on every case exits 3 with an UNSCORED_ONLY line', () => {
     const result = runVet(['run'], freshProject(), fixtureEnv('down'));
@@ -499,20 +536,6 @@ describe('vet run exit 3 for unscored-only runs', () => {
   }, 60_000);
 
   test('--sink downgrades an unscored-only run to 0, not a scored failure', () => {
-    const withSink = (mode: string): Result => {
-      const project = freshProject();
-      const configPath = join(project, 'vetkit.config.ts');
-      const sink =
-        "{ specVersion: 'v1', id: 'otel/logs', capabilities: { batch: 10, idempotent: true }, async doWrite(batch) { return { accepted: batch.map((v) => v.id), rejected: [] }; } }";
-      writeFileSync(
-        configPath,
-        readFileSync(configPath, 'utf8').replace(
-          'export default { judge };',
-          `export default { judge, sinks: [${sink}] };`,
-        ),
-      );
-      return runVet(['run', '--sink', 'otel', '--json'], project, fixtureEnv(mode));
-    };
     expect(withSink('down').status).toBe(0);
     expect(withSink('fail').status).toBe(1);
   }, 60_000);
@@ -523,30 +546,16 @@ describe('vet run exit 3 for unscored-only runs', () => {
       unauthorized: 'JUDGE_UNAUTHORIZED',
       'no-credit': 'JUDGE_UNAVAILABLE',
     } as const;
-    const fixturePath = join(fixtureDir, 'vetkit.config.ts');
     const previous = process.env['VETKIT_FIXTURE_MODE'];
     try {
       for (const [mode, code] of Object.entries(expected)) {
-        process.env['VETKIT_FIXTURE_MODE'] = mode;
-        const mod: unknown = await import(`${pathToFileURL(fixturePath).href}?mode=${mode}`);
-        const judge = (
-          mod as { default: { judge: { doJudge: (req: object) => Promise<unknown> } } }
-        ).default.judge;
-        const thrown: unknown = await judge
-          .doJudge({ questions: { q: {} } })
-          .catch((e: unknown) => e);
+        const thrown = await fixtureRejection(mode);
         expect(VetError.isInstance(thrown), mode).toBe(true);
         expect(thrown).toMatchObject({ code });
       }
-      process.env['VETKIT_FIXTURE_MODE'] = 'down';
-      const down: unknown = await import(`${pathToFileURL(fixturePath).href}?mode=down`);
-      const thrown: unknown = await (
-        down as { default: { judge: { doJudge: (r: object) => Promise<unknown> } } }
-      ).default.judge
-        .doJudge({ questions: {} })
-        .catch((e: unknown) => e);
-      expect(thrown).toBeInstanceOf(Error);
-      expect(VetError.isInstance(thrown)).toBe(false);
+      const down = await fixtureRejection('down');
+      expect(down).toBeInstanceOf(Error);
+      expect(VetError.isInstance(down)).toBe(false);
     } finally {
       if (previous === undefined) delete process.env['VETKIT_FIXTURE_MODE'];
       else process.env['VETKIT_FIXTURE_MODE'] = previous;

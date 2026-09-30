@@ -368,13 +368,13 @@ describe('handleError exit override (withExitCode)', () => {
   });
 });
 
-describe('judge failures exit by details.kind', () => {
-  const lines = (text: string): string[] => text.split('\n').filter((l) => l !== '');
-  const billing = (): VetError =>
-    new VetError('JUDGE_UNAVAILABLE', 'judge account has no credit', {
-      details: { kind: 'terminal-billing', retryable: false },
-    });
+const lines = (text: string): string[] => text.split('\n').filter((l) => l !== '');
+const billing = (): VetError =>
+  new VetError('JUDGE_UNAVAILABLE', 'judge account has no credit', {
+    details: { kind: 'terminal-billing', retryable: false },
+  });
 
+describe('judge failures exit by details.kind', () => {
   test('JUDGE_UNAVAILABLE with details.kind terminal-billing exits 2 with the message verbatim', () => {
     const result = run(billing());
     expect(result.code).toBe(2);
