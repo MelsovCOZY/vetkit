@@ -27,6 +27,7 @@
 - `vet label`: import human labels from CSV or collect them in a terminal loop
 - `vet run`: judge every case against the criteria and exit with the result
 - `vet rerun`: re-judge the disputed verdicts (borderline or judge failure) of the last vet run
+- `vet report`: render the last run as Markdown and HTML report files without judging
 - `vet validate`: calibrate every criterion against human labels and write criteria.lock.json
 - `vet estimate`: estimate judge calls, tokens, cost and minutes, with no network call
 - `vet init`: scaffold a runnable example, or generate criteria and cases from --source traces
