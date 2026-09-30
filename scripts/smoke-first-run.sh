@@ -16,7 +16,7 @@
 # Prerequisite: `bun run build && bun run pack`. Every judge credential is unset below; the
 # only network is `npm install` resolving registry dependencies.
 #
-# Usage: bash scripts/smoke-first-run.sh
+# Usage: bash scripts/smoke-first-run.sh   (env: VETKIT_SMOKE_DIR to choose and keep the scratch root)
 set -u
 
 ROOT="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)"
@@ -53,7 +53,10 @@ CANARY="vetkit-smoke-canary"
 FAKE_PID=""
 FAKE_LOG=""
 cleanup() { [ -n "$FAKE_PID" ] && kill "$FAKE_PID" 2>/dev/null; return 0; }
-trap cleanup EXIT
+# On exit, pass or fail: stop the fake judge, then remove the scratch root when this script
+# made it. A directory the caller named with VETKIT_SMOKE_DIR is the caller's to keep.
+on_exit() { cleanup; [ -z "${VETKIT_SMOKE_DIR:-}" ] && rm -rf "$WORK"; return 0; }
+trap on_exit EXIT
 
 command -v jq >/dev/null || { say "jq is required" >&2; exit 2; }
 [ -f "$BIN" ] || { say "missing $BIN: run bun run build first" >&2; exit 2; }
@@ -464,7 +467,11 @@ unset VETKIT_FIXTURE_KEY
 # ---------------------------------------------------------------- verdict
 cd "$ROOT" || exit 1
 if [ "$FAILED" -ne 0 ]; then
-  say "FAILED (scratch kept at $WORK)"
+  if [ -n "${VETKIT_SMOKE_DIR:-}" ]; then
+    say "FAILED (scratch kept at $WORK)"
+  else
+    say "FAILED (set VETKIT_SMOKE_DIR to keep the scratch dir)"
+  fi
   exit 1
 fi
 say ok
