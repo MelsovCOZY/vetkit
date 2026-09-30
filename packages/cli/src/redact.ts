@@ -1,4 +1,4 @@
-const SECRET_ENV_NAME = /(KEY|TOKEN|SECRET|PASSWORD)$/;
+import { redactSecrets, secretsFrom } from '@vetkit/spec';
 
 // Known-prefix / header-shaped secrets: always redacted, regardless of surrounding context.
 const KNOWN_PREFIX_PATTERN = new RegExp(
@@ -29,21 +29,8 @@ function isCaseId(match: string): boolean {
   return match.length === 64 && HEX_ONLY.test(match);
 }
 
-function secretEnvValues(env: Record<string, string | undefined>): readonly string[] {
-  return Object.entries(env)
-    .filter(
-      (entry): entry is [string, string] =>
-        SECRET_ENV_NAME.test(entry[0]) && typeof entry[1] === 'string' && entry[1].length > 0,
-    )
-    .map(([, value]) => value)
-    .toSorted((a, b) => b.length - a.length);
-}
-
 function redactString(value: string, secrets: readonly string[]): string {
-  const withoutEnvSecrets = secrets.reduce(
-    (acc, secret) => acc.split(secret).join(mask(secret)),
-    value,
-  );
+  const withoutEnvSecrets = redactSecrets(value, secrets, mask);
   const withoutKnownPrefixes = withoutEnvSecrets.replace(KNOWN_PREFIX_PATTERN, mask);
   return withoutKnownPrefixes.replace(
     HIGH_ENTROPY_PATTERN,
@@ -76,5 +63,5 @@ export function redact(
   value: unknown,
   env: Record<string, string | undefined> = process.env,
 ): unknown {
-  return walk(value, secretEnvValues(env), new WeakSet());
+  return walk(value, secretsFrom(env), new WeakSet());
 }

@@ -9,6 +9,7 @@ import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { hostname as osHostname } from 'node:os';
 import { basename, dirname, extname, resolve } from 'node:path';
 import type { RunEvalsResult, RunVerdict } from '@vetkit/core';
+import { redactSecrets, secretsFrom } from '@vetkit/spec';
 import { InvalidArgumentError, type Command } from 'commander';
 
 export const DEFAULT_JUNIT_PATH = '.vet/junit.xml';
@@ -187,10 +188,14 @@ export async function writeReports(
 ): Promise<string | undefined> {
   if (reporter === undefined) return undefined;
   const target = resolve(options.cwd, reporter.path);
-  const xml = renderJunit(suites, {
-    timestamp: options.timestamp ?? new Date(),
-    hostname: options.hostname ?? (osHostname() || 'localhost'),
-  });
+  // Env-secret pass only (no entropy heuristics), so hashes in test names stay intact.
+  const xml = redactSecrets(
+    renderJunit(suites, {
+      timestamp: options.timestamp ?? new Date(),
+      hostname: options.hostname ?? (osHostname() || 'localhost'),
+    }),
+    secretsFrom(process.env),
+  );
   await mkdir(dirname(target), { recursive: true });
   const temp = `${target}.${String(process.pid)}.tmp`;
   try {

@@ -4,6 +4,8 @@ export { CEV_ERROR_CODES, VetError } from './errors.ts';
 export type { CevErrorCode } from './errors.ts';
 
 export { safeParseJson, validateJson } from './json.ts';
+export type { SecretMask } from './redact.ts';
+export { MIN_SECRET_LENGTH, redactSecrets, redactSecretsDeep, secretsFrom } from './redact.ts';
 export type { JsonSchema, ParseResult } from './json.ts';
 
 export {
