@@ -347,7 +347,7 @@ ci_journey() { # <label> <mode> <expected exit> <headline>
   GITHUB_EVENT_NAME=pull_request GITHUB_EVENT_PATH="$CI/event.json" GITHUB_REPOSITORY=MelsovCOZY/vetkit \
     GITHUB_SERVER_URL=https://github.com GITHUB_RUN_ID=424242 ARTIFACT_URL=https://example.invalid/artifact \
     REPORT_MD=.vet/report.md COMMENT_ID=smoke \
-    node "$ROOT/action/comment.mjs" comment .vet/runs/latest.json .vet/baseline/latest.json >/dev/null 2>&1
+    node "$ROOT/action/comment.mjs" comment .vet/runs/latest.json .vet/baseline/latest.json .vet/raw.json >/dev/null 2>&1
   code=$?
   result "ci: $label comment.mjs posts through the stub gh" 0 "$code" "$code"
   jq -r .body "$STUB_COMMENT" >"$CI/body-$mode.txt" 2>/dev/null
@@ -358,6 +358,35 @@ ci_journey() { # <label> <mode> <expected exit> <headline>
     assert "ci: $label comment contains '$needle'" 'grep -qF -- "$needle" "$CI/body-$mode.txt"'
   done
   assert "ci: $label comment has no key" '! grep -qF sk-fake-smoke "$CI/body-$mode.txt"'
+}
+
+# One action run that errors before any verdict, plus its comment: vet writes no run record, so
+# the comment is built from the raw output alone and must never read as passed.
+ci_error_journey() { # <label> <name> <mode> <config> <headline> [needle]
+  local label="$1" name="$2" mode="$3" config="$4" headline="$5" needle="${6:-}" dir="$CI/project-$2" code
+  ci_project "$dir" "$mode"
+  INPUT_CONFIG="$config" INPUT_GATE=false INPUT_ALLOW_UNPINNED=false bash "$ROOT/action/run.sh" run 2>"$CI/stderr-$name.txt" >/dev/null
+  code=$?
+  result "ci: $label run.sh run exits 0 whatever vet returns" 0 "$code" "$code"
+  assert "ci: $label outputs carry exitCode=2" "grep -qx 'exitCode=2' '$GITHUB_OUTPUT'"
+  assert "ci: $label raw.json holds an error and no run record is written" \
+    "jq -e '.error.code | type == \"string\"' .vet/raw.json && [ ! -e .vet/runs/latest.json ]"
+
+  GITHUB_EVENT_NAME=pull_request GITHUB_EVENT_PATH="$CI/event.json" GITHUB_REPOSITORY=MelsovCOZY/vetkit \
+    GITHUB_SERVER_URL=https://github.com GITHUB_RUN_ID=424242 ARTIFACT_URL=https://example.invalid/artifact \
+    REPORT_MD=.vet/report.md COMMENT_ID=smoke \
+    node "$ROOT/action/comment.mjs" comment .vet/runs/latest.json .vet/baseline/latest.json .vet/raw.json >/dev/null 2>&1
+  code=$?
+  result "ci: $label comment.mjs posts through the stub gh" 0 "$code" "$code"
+  jq -r .body "$STUB_COMMENT" >"$CI/body-$name.txt" 2>/dev/null
+  assert "ci: $label comment body starts with the sticky marker" \
+    "[ \"\$(head -1 '$CI/body-$name.txt')\" = '<!-- vetkit-report:smoke -->' ]"
+  assert "ci: $label comment headline is '$headline'" "[ \"\$(sed -n 2p '$CI/body-$name.txt')\" = '$headline' ]"
+  assert "ci: $label comment does not say passed" "! grep -qF 'vetkit: passed' '$CI/body-$name.txt'"
+  if [ -n "$needle" ]; then
+    assert "ci: $label comment contains '$needle'" 'grep -qF -- "$needle" "$CI/body-$name.txt"'
+  fi
+  assert "ci: $label comment has no key" '! grep -qF sk-fake-smoke "$CI/body-$name.txt"'
 }
 
 # install: no project vet, then a project vet.
@@ -378,6 +407,8 @@ assert "ci: install records the project mode" 'grep -qF VETKIT_INSTALL_MODE=proj
 
 ci_journey "fail mode:" fail 1 '### vetkit: failed'
 ci_journey "pass mode:" pass 0 '### vetkit: passed'
+ci_error_journey "no-credit mode:" no-credit no-credit '' '### vetkit: unscored (judge unavailable)' 'JUDGE_UNAVAILABLE'
+ci_error_journey "missing config:" no-config pass nope.config.ts '### vetkit: failed' 'CONFIG_INVALID'
 
 cd "$ROOT" || exit 1
 unset CEV_E2E

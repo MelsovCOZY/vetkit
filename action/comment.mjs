@@ -1,11 +1,12 @@
 // The vetkit action's PR comment. Reads the `vet run --json`
 // document and, when present, the base branch's one, renders ONE markdown comment identified by
 // a hidden marker and upserts it through `gh api` (no npm dependencies). Only case ids, outcomes,
-// counts, the model and gate reasons are rendered: never verdict payloads or judge requests,
-// and any secret-looking env value is redacted as a second line of defence.
+// counts, the model, gate reasons and an error's code and message are rendered: never verdict
+// payloads or judge requests, and any secret-looking env value is redacted as a second line of
+// defence.
 //
 //   node comment.mjs comment <run.json> <baseline.json> [raw.json]   upsert the PR comment
-//     (raw.json is vet's stdout: it names an error such as a rejected key when no run result exists)
+//     (raw.json is vet's stdout: an error in it, such as a rejected key, is this run's outcome)
 //   env: COMMENT_ID (marker suffix), REPORT_MD (path of the Markdown report to embed),
 //        ARTIFACT_URL (report artifact link)
 //   node comment.mjs outputs <run.json>                   print passed=/failed=/unscored=/hasResult=
@@ -20,8 +21,21 @@ const MAX_BODY = 65_536;
 // Keeps the comment short enough to scan in a PR.
 const MAX_ROWS = 20;
 const MAX_ID = 100;
+const MAX_MESSAGE = 300;
 const SECRET_NAME = /KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i;
 const CHANGE_ORDER = ['new-fail', 'unscored', 'new-pass', 'still-failing'];
+// Error codes of the CLI (packages/cli/src/errors.ts) with the `E_` prefix stripped: the judge
+// rejected the key, and the judge could not answer (down, timed out, throttled, out of credit).
+const AUTH_CODES = new Set(['JUDGE_UNAUTHORIZED', 'AUTH']);
+const JUDGE_DOWN_CODES = new Set([
+  'JUDGE_UNAVAILABLE',
+  'JUDGE_TIMEOUT',
+  'UNSCORED_ONLY',
+  'NETWORK',
+  'TIMEOUT',
+  'RATE_LIMIT',
+]);
+const NO_RESULT = 'vet run produced no result: no run record and no readable `--json` output.';
 
 // Same precedence as the CLI and core summary: any failed verdict fails the case, then any
 // unscored one; not_applicable verdicts do not count.
@@ -75,8 +89,8 @@ function redactor(env) {
   return (text) => secrets.reduce((out, secret) => out.replaceAll(secret, '[redacted]'), text);
 }
 
-function cell(text) {
-  const clipped = text.length > MAX_ID ? `${text.slice(0, MAX_ID)}…` : text;
+function cell(text, max = MAX_ID) {
+  const clipped = text.length > max ? `${text.slice(0, max)}…` : text;
   return clipped.replaceAll('|', '\\|').replaceAll('`', "'").replaceAll(/\s+/g, ' ');
 }
 
@@ -108,18 +122,44 @@ export function markerFor(id, warn = annotate) {
   return `<!-- vetkit-report:${id} -->`;
 }
 
+function errorCode(doc) {
+  const code = doc?.error?.code;
+  return typeof code === 'string' && code !== '' ? code : 'UNKNOWN';
+}
+
 // Error before gate before unscored before failed: the first line says why the run is not green.
+// `passed` needs a run result with exit code 0 and no failed verdict; anything else is not green.
 function headline(doc) {
-  const { passed, failed, unscored } = runOutputs(doc);
-  if (doc?.error?.code === 'JUDGE_UNAUTHORIZED') {
-    return '### vetkit: auth error (the judge rejected the key named by the config)';
+  if (doc?.error !== undefined) {
+    const code = errorCode(doc).replace(/^E_/, '');
+    // The kind `terminal-auth` is a rejected credential under any code.
+    if (AUTH_CODES.has(code) || doc.error?.kind === 'terminal-auth') {
+      return '### vetkit: auth error (the judge rejected the key named by the config)';
+    }
+    if (JUDGE_DOWN_CODES.has(code)) return '### vetkit: unscored (judge unavailable)';
+    return '### vetkit: failed';
   }
+  const { passed, failed, unscored } = runOutputs(doc);
   if ((doc?.gateReasons ?? []).length > 0) return '### vetkit: gate refused';
   if (doc?.exitCode === 3 || (unscored > 0 && passed === 0 && failed === 0)) {
     return '### vetkit: unscored (judge unavailable)';
   }
-  if (doc?.exitCode === 1 || failed > 0) return '### vetkit: failed';
-  return '### vetkit: passed';
+  if (doc?.summary !== undefined && doc.exitCode === 0 && failed === 0) {
+    return '### vetkit: passed';
+  }
+  return '### vetkit: failed';
+}
+
+// The code, the judge failure kind when there is one, and the message on one line. The message
+// sits in a code span so markup in it stays inert.
+function errorLine(doc) {
+  const { kind, message } = typeof doc.error === 'object' && doc.error !== null ? doc.error : {};
+  const parts = [`Error \`${cell(errorCode(doc))}\``];
+  if (typeof kind === 'string' && kind !== '') parts.push(` (${cell(kind)})`);
+  if (typeof message === 'string' && message.trim() !== '') {
+    parts.push(`: \`${cell(message.trim(), MAX_MESSAGE)}\``);
+  }
+  return parts.join('');
 }
 
 function banners(doc) {
@@ -148,6 +188,8 @@ function links(env) {
 
 function statusLines(doc, env) {
   const lines = [headline(doc)];
+  if (doc?.error !== undefined) lines.push('', errorLine(doc));
+  else if (doc?.summary === undefined) lines.push('', NO_RESULT);
   const model = doc?.model;
   if (model !== undefined) {
     const name = model.resolved ? model.resolved : (model.requested ?? 'unknown');
@@ -174,7 +216,9 @@ export function renderComment({ current, baseline, env = process.env, reportMd, 
   const redact = redactor(env);
   const marker = markerFor(env.COMMENT_ID, warn);
   const status = statusLines(current, env);
-  if (typeof reportMd === 'string' && reportMd.trim() !== '') {
+  // A report on disk belongs to a run that produced a result: never to an error or to no result.
+  const hasResult = current?.error === undefined && current?.summary !== undefined;
+  if (hasResult && typeof reportMd === 'string' && reportMd.trim() !== '') {
     const head = [marker, ...status, '', ''].join('\n');
     const note = '\n\n_report truncated; see the artifact_';
     const room = MAX_BODY - head.length;
@@ -193,7 +237,7 @@ export function renderComment({ current, baseline, env = process.env, reportMd, 
       `**${String(passed)} passed · ${String(failed)} failed · ${String(unscored)} unscored** of ${String(summary.total)}${summary.aborted ? ' (aborted)' : ''} · exit ${String(current?.exitCode ?? '?')}`,
     );
   }
-  if (current?.summary === undefined) return redact(build(header, undefined, 0, 0));
+  if (!hasResult) return redact(build(header, undefined, 0, 0));
 
   if (baseline === undefined) {
     header.push('', '_No baseline: no `.vet/runs/latest.json` from the base branch in the cache._');
@@ -313,12 +357,14 @@ export async function main({ env = process.env, argv, gh = runGh, warn = console
   const event = env.GITHUB_EVENT_NAME;
   if (event !== 'pull_request' && event !== 'pull_request_target') return 'skipped';
   const issueNumber = readJson(env.GITHUB_EVENT_PATH)?.pull_request?.number;
-  // No run result on an error: the raw vet output (an error document) still states why.
-  const doc = current ?? readJson(rawPath);
-  if (doc === undefined || issueNumber === undefined || env.GITHUB_REPOSITORY === undefined) {
-    warn('vetkit: no run result or pull request number; skipping the PR comment');
+  if (issueNumber === undefined || env.GITHUB_REPOSITORY === undefined) {
+    warn('vetkit: no pull request number or repository; skipping the PR comment');
     return 'skipped';
   }
+  // An error in the raw vet output is this run's outcome: a run record next to it is from an
+  // earlier run. With neither a record nor a readable raw output the comment says so.
+  const raw = readJson(rawPath);
+  const doc = raw?.error === undefined ? (current ?? raw) : raw;
   const marker = markerFor(env.COMMENT_ID, warn);
   const body = renderComment({
     current: doc,
