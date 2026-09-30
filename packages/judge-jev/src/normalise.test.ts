@@ -232,3 +232,60 @@ describe('normalise() — bad shapes', () => {
     expect(err.code).toBe('JUDGE_BAD_RESPONSE');
   });
 });
+
+function gatewayBody(routing: unknown, model?: string): Record<string, unknown> {
+  return {
+    ...(model === undefined ? {} : { model }),
+    answers: { promised_refund: { type: 'noul', noul: 0.9 } },
+    usage: { input_tokens: 1, output_tokens: 1 },
+    provider_metadata: { gateway: { routing } },
+  };
+}
+
+describe('normalise() — served model id (model.resolved)', () => {
+  test('resolved is routing.canonicalSlug when it differs from the echoed model', () => {
+    const body = gatewayBody({ canonicalSlug: 'typesafe-ai/jev-1.13-20260917' }, 'typesafe-ai/jev');
+    const response = normalise(body, REQUESTED, 'vercel');
+    expect(response.model.resolved).toBe('typesafe-ai/jev-1.13-20260917');
+    expect(response.model.requested).toBe('typesafe-ai/jev');
+  });
+
+  test('resolved falls back to the wire model without routing metadata', () => {
+    const body = {
+      model: 'typesafe/jev-1.13-20260917',
+      answers: { promised_refund: { type: 'noul', noul: 0.9 } },
+      usage: { input_tokens: 1, output_tokens: 1 },
+    };
+    expect(normalise(body, REQUESTED, 'openrouter').model.resolved).toBe(
+      'typesafe/jev-1.13-20260917',
+    );
+  });
+
+  test('resolved falls back to the requested model when the body has neither', () => {
+    const body = gatewayBody({ finalProvider: 'typesafe-ai' });
+    expect(normalise(body, REQUESTED, 'vercel').model.resolved).toBe('typesafe-ai/jev');
+  });
+
+  test('an empty-string canonicalSlug is ignored', () => {
+    const body = gatewayBody({ canonicalSlug: '' }, 'typesafe-ai/jev-echo');
+    expect(normalise(body, REQUESTED, 'vercel').model.resolved).toBe('typesafe-ai/jev-echo');
+  });
+
+  test('the per-attempt modelAttempts canonicalSlug is not consulted', () => {
+    const body = gatewayBody(
+      { modelAttempts: [{ canonicalSlug: 'other/model' }] },
+      'typesafe-ai/jev-echo',
+    );
+    expect(normalise(body, REQUESTED, 'vercel').model.resolved).toBe('typesafe-ai/jev-echo');
+  });
+
+  test('the run1 gateway fixture resolves to its canonicalSlug', () => {
+    const run1 = loadFixture('2026-09-25-gateway-systemone-response-run1.json');
+    const routing = asMutableRecord(
+      asMutableRecord(asMutableRecord(run1)['provider_metadata'])['gateway'],
+    )['routing'];
+    const slug = asMutableRecord(routing)['canonicalSlug'];
+    expect(slug).toBe('typesafe-ai/jev');
+    expect(normalise(run1, REQUESTED, 'vercel').model.resolved).toBe(slug);
+  });
+});
