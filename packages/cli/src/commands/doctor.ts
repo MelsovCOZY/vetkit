@@ -2,6 +2,7 @@ import { describeConfig, type ResolvedConfig } from '@vetkit/core';
 import { JEV_CREDENTIAL_PRIORITY, JEV_PRESETS, type JevPresetName } from '@vetkit/judge-jev';
 import type { Command } from 'commander';
 import { findConfigFile, loadVetConfig, type LoadedVetConfig } from '../config-load.ts';
+import { NODE_FLOOR_RANGE, nodeFloorError } from '../node-floor.ts';
 import { colors } from '../output.ts';
 import { sinkRefName } from '../sinks.ts';
 
@@ -325,22 +326,13 @@ function redactConfig(value: unknown, env: Env): unknown {
   );
 }
 
+// The floor and its predicate are the start-up guard's own (node-floor.ts), so this row
+// cannot pass a version the CLI refuses to run on.
 function checkNode(nodeVersion: string): DoctorCheck {
-  const match = /^v?(\d+)\.(\d+)\.(\d+)/.exec(nodeVersion);
-  if (!match)
-    return {
-      name: 'node',
-      status: 'fail',
-      detail: `could not parse node version "${nodeVersion}"`,
-    };
-  const major = Number(match[1]);
-  const minor = Number(match[2]);
-  const meetsFloor = major > 22 || (major === 22 && minor >= 12);
-  return {
-    name: 'node',
-    status: meetsFloor ? 'pass' : 'fail',
-    detail: meetsFloor ? `${nodeVersion} >= 22.12` : `${nodeVersion} is below the 22.12 floor`,
-  };
+  const error = nodeFloorError(nodeVersion);
+  return error === undefined
+    ? { name: 'node', status: 'pass', detail: `${nodeVersion} satisfies ${NODE_FLOOR_RANGE}` }
+    : { name: 'node', status: 'fail', detail: error };
 }
 
 function checkConfig(configExists: boolean): DoctorCheck {
@@ -356,7 +348,7 @@ function checkGeneratorCredential(configExists: boolean): DoctorCheck {
     name: 'generator credential',
     status: 'warn',
     detail: configExists
-      ? 'config not resolved — pass --config to verify the generator credential'
+      ? 'config not resolved — pass --config <path> to verify the generator credential'
       : 'no vetkit.config.ts — cannot determine which generator credential is required',
   };
 }
@@ -366,7 +358,7 @@ function checkSinkCredentials(configExists: boolean): DoctorCheck {
     name: 'sink credentials',
     status: 'warn',
     detail: configExists
-      ? 'config not resolved — pass --config to verify sink credentials'
+      ? 'config not resolved — pass --config <path> to verify sink credentials'
       : 'no vetkit.config.ts — cannot determine which sink credentials are required',
   };
 }

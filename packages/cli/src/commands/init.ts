@@ -287,7 +287,15 @@ async function scaffoldExample(dir: string, force: boolean, env: Env): Promise<s
   return [...contents.map((c) => c.path), ...(gitignore === undefined ? [] : [GITIGNORE])];
 }
 
+// --out, --until and --seconds only reach the --source path; the scaffold writes into --dir.
+const SOURCE_ONLY_FLAGS = ['out', 'until', 'seconds'] as const;
+
 async function initCommand(options: InitOptions): Promise<void> {
+  for (const flag of SOURCE_ONLY_FLAGS) {
+    if (options[flag] !== undefined) {
+      throw invalid(`--${flag} only applies together with --source <spec>`);
+    }
+  }
   const dir = resolve(options.dir ?? '.');
   applyEnvFiles({ dir, env: process.env });
   const files = await scaffoldExample(dir, options.force === true, process.env);

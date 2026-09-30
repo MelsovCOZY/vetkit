@@ -86,9 +86,9 @@ const HINT_GENERATOR =
 // (--json, --quiet, --verbose, --no-color) may appear bare.
 export const HINTS_BY_CODE: Readonly<Record<string, string>> = {
   CONFIG_INVALID:
-    'run vet doctor --config to see the resolved config, fix the field named above, then retry.',
+    'run vet doctor --config <path> to see the resolved config, fix the field named above, then retry.',
   CONFIG:
-    'run vet doctor --config to see the resolved config, fix the field named above, then retry.',
+    'run vet doctor --config <path> to see the resolved config, fix the field named above, then retry.',
   CONFIG_UNKNOWN_SINK:
     'the sink name is not under sinks in vetkit.config.ts; add it there or pick a configured one.',
   CRITERIA_INVALID: 'fix the criteria file at the line named above; run vet lint to recheck it.',
