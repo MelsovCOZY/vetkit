@@ -183,6 +183,16 @@ describe('cloudflare errors', () => {
     expect(JSON.stringify(err.cause ?? null)).not.toContain(TOKEN);
   });
 
+  test('cloudflare 403 is terminal-auth', async () => {
+    const { fetch: fetchStub } = stubFetch(() => jsonResponse({}, { status: 403 }));
+
+    const err = await catchVetError(
+      cloudflareJudge(fetchStub).doJudge({ state: 's', questions: QUESTIONS }),
+    );
+
+    expect(err.details).toMatchObject({ kind: 'terminal-auth', retryable: false });
+  });
+
   test('a custom apiKeyEnv is the name reported on 403', async () => {
     const { fetch: fetchStub } = stubFetch(() => jsonResponse({}, { status: 403 }));
     const judge = createJevJudge({
