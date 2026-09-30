@@ -102,6 +102,24 @@ describe('vet validate: paths', () => {
   });
 });
 
+describe('vet check: lock path', () => {
+  test('check --lock requires a value (bare --lock exits 2 with a usage error)', () => {
+    const root = evalsProject();
+    const result = runVet(['check', '--lock'], root);
+    expect(result.stderr).toContain("option '--lock <path>' argument missing");
+    expect(result.status).toBe(2);
+  });
+
+  test('check --config <path> reads criteria.lock.json next to the config', () => {
+    const root = evalsProject();
+    const lockPath = join(root, 'criteria.lock.json');
+    writeFileSync(lockPath, JSON.stringify({ lockVersion: 0 }));
+    const result = runVet(['check', '--config', configOf(root)], scratch());
+    expect(result.stderr).toContain(`unsupported lockVersion 0 in ${lockPath}`);
+    expect(result.status).toBe(2);
+  });
+});
+
 describe('vet estimate, lock, export, watch: paths', () => {
   test('estimate: flat layout exits 0 and prints input tokens', () => {
     const root = flatProject();
