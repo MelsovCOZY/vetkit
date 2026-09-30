@@ -681,3 +681,16 @@ void test('main does not report a run record from an earlier run when the raw ou
   assert.doesNotMatch(posted, /Earlier report/);
   assert.doesNotMatch(posted, /typesafe-ai\/jev-served-1/);
 });
+
+void test("renderComment headline is '### vetkit: auth error (the judge rejected the key named by the config)' for a JUDGE_UNAVAILABLE error document of kind terminal-auth", () => {
+  const body = renderComment({
+    current: errorDoc('JUDGE_UNAVAILABLE', {
+      message: 'judge rejected the API key',
+      kind: 'terminal-auth',
+    }),
+    baseline: undefined,
+    env: {},
+  });
+  assert.equal(headlineOf(body), HEADLINE.auth);
+  assert.ok(body.includes('terminal-auth'), 'the kind is shown');
+});
