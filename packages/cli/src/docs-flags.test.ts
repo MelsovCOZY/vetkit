@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { Command } from 'commander';
+import { safeParseJson } from '@vetkit/spec';
+import type { Command } from 'commander';
 import { describe, expect, test } from 'vitest';
 import { createProgram } from './program.ts';
 import { SINK_DESCRIPTOR_KINDS } from './sinks.ts';
@@ -89,8 +90,9 @@ describe('docs flags', () => {
   });
 
   test("SINK_DESCRIPTOR_KINDS matches the kinds the schema's sinkRef accepts", () => {
-    // scripts and tests may parse trusted repo JSON directly; the ban is on packages/*/src.
-    const schema = JSON.parse(readFileSync(SCHEMA_PATH, 'utf8')) as SchemaShape;
+    const parsed = safeParseJson<SchemaShape>(readFileSync(SCHEMA_PATH, 'utf8'), {});
+    if (!parsed.ok) throw parsed.error;
+    const schema = parsed.value;
     const fromSchema = [
       schema.$defs['otelSinkDescriptor']?.properties.kind.const,
       schema.$defs['langfuseSinkDescriptor']?.properties.kind.const,
