@@ -406,9 +406,10 @@ describe('hints', () => {
 
   test('hints: the JSON error document keeps code, message and the per-code hint', () => {
     const out = run(markerError('LABELS_TOO_FEW', 'x'), { json: true }).stdout;
-    expect(JSON.parse(out)).toEqual({
+    const expected = {
       error: { code: 'LABELS_TOO_FEW', message: 'x', hint: hintFor('LABELS_TOO_FEW') },
-    });
+    };
+    expect(out).toBe(`${JSON.stringify(expected)}\n`);
   });
 
   test('hints: every flag a hint names exists on the command it names', () => {
