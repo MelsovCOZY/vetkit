@@ -4,3 +4,4 @@ export type { Logger, LoggerOptions, LogLevel } from './logger.ts';
 export { judgeOne } from './judge-one.ts';
 export type { JudgeOneCriterion, JudgeOneInput, JudgeOneOptions } from './judge-one.ts';
 export { decideVerdict } from '@vetkit/core';
+export { demoJudge } from './demo-judge.ts';

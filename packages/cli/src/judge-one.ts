@@ -13,6 +13,7 @@ import {
   type Verdict,
 } from '@vetkit/spec';
 import { loadVetConfig } from './config-load.ts';
+import { isDemoJudge } from './demo-judge.ts';
 
 // Re-exported so emit-scorer.test.ts's inline typecheck tsconfig (mapping the bare `vetkit`
 // specifier straight to this file) resolves decideVerdict the same way production resolution
@@ -89,7 +90,10 @@ export async function judgeOne(
     judge: loaded.judge,
     case: evalCase,
     criteria: [criterion],
-    cache: createFileCache(resolve(loaded.rootDir, loaded.config.cacheDir)),
+    // Demo verdicts are placeholders: they never touch the verdict cache.
+    ...(isDemoJudge(loaded.judge)
+      ? {}
+      : { cache: createFileCache(resolve(loaded.rootDir, loaded.config.cacheDir)) }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
   });
   if (verdict === undefined) throw new VetError(CEV_ERROR_CODES.JUDGE_BAD_RESPONSE, 'no verdict');
