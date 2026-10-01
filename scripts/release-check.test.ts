@@ -13,7 +13,12 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parse } from 'yaml';
-import { findNodeBinaries, inspectTarball, parseNpmQuery } from './release-check.ts';
+import {
+  findNodeBinaries,
+  inspectTarball,
+  parseNpmQuery,
+  relativeReadmeTargets,
+} from './release-check.ts';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PACKAGES_DIR = join(ROOT, 'packages');
@@ -110,8 +115,85 @@ describe('inspectTarball', () => {
     expect(wrongRepo.join('\n')).toMatch(/repository/);
   });
 
+  it('flags a packed README with a relative image or link target', () => {
+    const readme = '# fixture\n\n![logo](assets/logo.png)\n\nSee [the guide](docs/ci-gate.md).\n';
+    const findings = inspect({ extraFiles: { 'README.md': readme } });
+    expect(findings.join('\n')).toMatch(/README\.md.*assets\/logo\.png/);
+    expect(findings.join('\n')).toMatch(/README\.md.*docs\/ci-gate\.md/);
+  });
+
+  it('passes a packed README whose targets are absolute URLs', () => {
+    const readme =
+      '# fixture\n\n![logo](https://raw.githubusercontent.com/MelsovCOZY/vetkit/master/assets/logo.png)\n\nSee [the guide](https://github.com/MelsovCOZY/vetkit/blob/master/docs/ci-gate.md).\n';
+    expect(inspect({ extraFiles: { 'README.md': readme } })).toEqual([]);
+  });
+
   it('passes a clean tarball', () => {
     expect(inspect({})).toEqual([]);
+  });
+});
+
+// npm renders a package README on its own: a relative image or link target is not rewritten to
+// the repository, so it breaks on the package page.
+describe('relativeReadmeTargets', () => {
+  it('passes a README whose images and links are absolute URLs or in-page anchors', () => {
+    const readme = [
+      '<p align="center"><img src="https://raw.githubusercontent.com/MelsovCOZY/vetkit/master/assets/logo.png" alt="logo"></p>',
+      '# fixture',
+      'See [the docs](https://melsovcozy.github.io/vetkit/) and [usage](#usage).',
+      '<a href="https://github.com/MelsovCOZY/vetkit">repo</a> and <mailto:x@example.com>',
+      '```yaml',
+      'value: file://vetkit.assert.ts',
+      '[not a link](./inside-a-fence.md)',
+      '```',
+      'Inline code `](./also-not-a-link)` is ignored too.',
+    ].join('\n');
+    expect(relativeReadmeTargets(readme)).toEqual([]);
+  });
+
+  it('lists every relative image or link target, markdown and HTML', () => {
+    const readme = [
+      '![logo](assets/logo.png)',
+      '[guide](docs/ci-gate.md "title")',
+      '[here](./README.md) [up](../README.md)',
+      '<img src="assets/logo.png" width="192">',
+      '<a href="docs/sinks.md">sinks</a>',
+    ].join('\n');
+    expect(relativeReadmeTargets(readme)).toEqual([
+      'assets/logo.png',
+      'docs/ci-gate.md',
+      './README.md',
+      '../README.md',
+      'assets/logo.png',
+      'docs/sinks.md',
+    ]);
+  });
+});
+
+describe('manifests and READMEs as npm shows them', () => {
+  const REPOSITORY_URL = 'git+https://github.com/MelsovCOZY/vetkit.git';
+  const siblings = packageNames.filter((name) => name !== 'cli');
+
+  // npm provenance compares the manifest URL with the signed source URL character for character.
+  it.each(packageNames)('%s repository.url keeps the MelsovCOZY casing', (name) => {
+    const manifest: { repository?: { url?: string } } = JSON.parse(
+      readFileSync(join(PACKAGES_DIR, name, 'package.json'), 'utf8'),
+    );
+    expect(manifest.repository?.url).toBe(REPOSITORY_URL);
+    expect(manifest.repository?.url).toContain('/MelsovCOZY/');
+  });
+
+  it.each(packageNames)('%s README has no relative image or link target', (name) => {
+    const readme = readFileSync(join(PACKAGES_DIR, name, 'README.md'), 'utf8');
+    expect(relativeReadmeTargets(readme)).toEqual([]);
+  });
+
+  it.each(siblings)('%s README has an install line and links to the repo and the site', (name) => {
+    const readme = readFileSync(join(PACKAGES_DIR, name, 'README.md'), 'utf8');
+    expect(readme).toMatch(/^npm i -D /m);
+    expect(readme).toContain('https://github.com/MelsovCOZY/vetkit');
+    expect(readme).toContain('https://melsovcozy.github.io/vetkit/');
+    expect(readme).toMatch(/^```(sh|ts)\n/m);
   });
 });
 
