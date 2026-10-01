@@ -395,6 +395,71 @@ describe('.github/workflows/release.yml action-tag job', () => {
   });
 });
 
+describe('.github/workflows/release.yml action-tag release notes and assets', () => {
+  const rawText = readFileSync(WORKFLOW_PATH, 'utf8');
+  const job = loadWorkflow(WORKFLOW_PATH).jobs['action-tag'];
+  const steps = job?.steps ?? [];
+  const runs = steps.map((s) => s.run ?? '');
+  const releaseRun = runs.find((t) => t.includes('gh release create')) ?? '';
+  const createLine = releaseRun.split('\n').find((l) => l.includes('gh release create')) ?? '';
+
+  it('builds and packs the tarballs before the release step', () => {
+    const buildIdx = runs.findIndex((t) => t.trim() === 'bun run build');
+    const packIdx = runs.findIndex((t) => t.trim() === 'bun run pack');
+    const releaseIdx = runs.findIndex((t) => t.includes('gh release create'));
+    expect(buildIdx).toBeGreaterThanOrEqual(0);
+    expect(packIdx).toBeGreaterThan(buildIdx);
+    expect(releaseIdx).toBeGreaterThan(packIdx);
+  });
+
+  it('takes the notes from the released version section of packages/cli/CHANGELOG.md', () => {
+    expect(releaseRun).toContain('packages/cli/CHANGELOG.md');
+    expect(releaseRun).toMatch(/"## " v|## \$\{?VERSION\}?/);
+  });
+
+  it('falls back to "vetkit <version>" when the changelog has no such section', () => {
+    expect(releaseRun).toMatch(/-f "\$\{?CHANGELOG\}?"|-f packages\/cli\/CHANGELOG\.md/);
+    expect(releaseRun).toMatch(/vetkit (%s|\$\{?VERSION\}?)/);
+  });
+
+  it('passes the notes with --notes-file, never a literal --notes', () => {
+    expect(createLine).toMatch(/--notes-file "\$\{?NOTES\}?"/);
+    expect(createLine).not.toMatch(/--notes\s/);
+    expect(createLine).toMatch(/--title "vetkit \$\{?VERSION\}?"/);
+  });
+
+  it('attaches dist-tarballs/*.tgz in the same create call (releases are immutable)', () => {
+    expect(createLine).toMatch(/dist-tarballs\/\*\.tgz/);
+    expect(releaseRun).not.toMatch(/gh release upload/);
+    expect(releaseRun).toMatch(
+      /gh release view "v\$\{?VERSION\}?" >\/dev\/null 2>&1 \|\| gh release create/,
+    );
+  });
+
+  it('runs actions/attest-build-provenance over the tarballs, or says in a comment why not', () => {
+    const attest = steps.find((s) => (s.uses ?? '').startsWith('actions/attest-build-provenance@'));
+    if (attest) {
+      expect(attest.with?.['subject-path']).toMatch(/dist-tarballs/);
+      expect(job?.permissions?.['id-token']).toBe('write');
+      expect(job?.permissions?.['attestations']).toBe('write');
+      return;
+    }
+    const jobText = rawText.slice(rawText.indexOf('action-tag:'));
+    expect(jobText).toMatch(/^\s*#.*attest-build-provenance/m);
+  });
+
+  it('authenticates gh with github.token only; no NPM_TOKEN anywhere in the job', () => {
+    for (const step of steps) {
+      for (const [key, value] of Object.entries(step.env ?? {})) {
+        expect(key).not.toMatch(/NPM_TOKEN|NODE_AUTH_TOKEN/);
+        expect(value).not.toMatch(/NPM_TOKEN|NODE_AUTH_TOKEN/);
+      }
+    }
+    const release = steps.find((s) => (s.run ?? '').includes('gh release create'));
+    expect(release?.env).toEqual({ GH_TOKEN: '${{ github.token }}' });
+  });
+});
+
 // `changeset version` deletes the changesets it consumes, so .changeset/initial-release.md is
 // absent on the Version Packages PR and on master once it merges; each check applies to the tree
 // it describes and skips, saying why, on the other.
