@@ -120,7 +120,7 @@ describe('landing README', () => {
       expect(badges).toMatch(/npm\/v\/vetkit/);
       expect(badges).toMatch(/npm\/dm\/vetkit/);
       expect(badges).toContain(`${REPO}/actions/workflows/ci.yml/badge.svg`);
-      expect(badges).toMatch(/npm\/l\/vetkit/);
+      expect(badges).toContain('github/license/MelsovCOZY/vetkit');
       expect(badges).toContain('Apache-2.0');
     }
   });
