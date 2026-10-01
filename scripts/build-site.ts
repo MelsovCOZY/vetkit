@@ -28,9 +28,9 @@ const DESCRIPTION_MAX = 160;
 /** Pages whose source has no H1: the title and opening paragraph the site puts in front of them. */
 const SUPPLIED_PAGES: Record<string, { title: string; intro: string }> = {
   'docs/guides/cli-json.md': {
-    title: 'CLI JSON shapes (vet --json output)',
+    title: 'JSON output shapes of the vet CLI',
     intro:
-      'The JSON document each vet command prints under --json: an example and the field table for every shape.',
+      'The JSON document each vet command prints in JSON mode: an example and the field table for every shape.',
   },
 };
 
