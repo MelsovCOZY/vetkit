@@ -29,10 +29,16 @@ function lines(text: string): string[] {
   return text.split('\n');
 }
 
-/** The first non-blank line after the H1. */
+/** Index of the tagline: the first non-blank line after the H1 that is not raw HTML. */
+function taglineAt(rows: string[]): number {
+  const h1 = rows.findIndex((row) => row.startsWith('# '));
+  return rows.findIndex((row, at) => at > h1 && row.trim() !== '' && !row.startsWith('<'));
+}
+
+/** The first non-blank, non-HTML line after the H1. */
 function tagline(text: string): string {
   const rows = lines(text);
-  return rows.slice(1).find((row) => row.trim() !== '') ?? '';
+  return rows[taglineAt(rows)] ?? '';
 }
 
 /** Body of the `## <title>` section, up to the next H2. */
@@ -63,7 +69,7 @@ const H1 = '# vetkit — LLM evals from your production traces';
 /** The paragraph that starts at the tagline: its lines joined with a space, as rendered. */
 function firstParagraph(text: string): string {
   const rows = lines(text);
-  const start = rows.findIndex((row, at) => at > 0 && row.trim() !== '');
+  const start = taglineAt(rows);
   const paragraph: string[] = [];
   for (const row of rows.slice(start)) {
     if (row.trim() === '') break;
@@ -94,8 +100,8 @@ function normalise(text: string): string {
 
 describe('landing README', () => {
   it('both READMEs open with the H1 phrase and a tagline equal to the package description', () => {
-    expect(lines(cliReadme)[0]).toBe(H1);
-    expect(lines(rootReadme)[0]).toBe(H1);
+    expect(lines(cliReadme).find((row) => row.startsWith('# '))).toBe(H1);
+    expect(lines(rootReadme).find((row) => row.startsWith('# '))).toBe(H1);
     expect(tagline(cliReadme)).toBe(cliManifest.description);
     expect(tagline(rootReadme)).toBe(tagline(cliReadme));
   });
@@ -125,11 +131,29 @@ describe('landing README', () => {
     }
   });
 
-  it('the logo appears above Quickstart with alt text: relative in README.md, raw URL on npm', () => {
-    expect(head(rootReadme)).toMatch(/<img src="assets\/logo\.png" alt="[^"]{5,}"/);
-    expect(head(cliReadme)).toMatch(
-      new RegExp(String.raw`<img src="${RAW}assets/logo\.png" alt="[^"]{5,}"`),
+  it('the logo floats left on line 1 with alt text: relative in README.md, raw URL on npm', () => {
+    const alt = 'alt="vetkit logo: [^"]{5,}"';
+    expect(lines(rootReadme)[0]).toMatch(
+      new RegExp(String.raw`^<img align="left" width="\d+" src="assets/logo\.png" ${alt}>$`),
     );
+    expect(lines(cliReadme)[0]).toMatch(
+      new RegExp(String.raw`^<img align="left" width="\d+" src="${RAW}assets/logo\.png" ${alt}>$`),
+    );
+    for (const text of [cliReadme, rootReadme]) {
+      expect(text.match(/<img [^>]*logo\.png/g)).toHaveLength(1);
+    }
+  });
+
+  it('a <br clear="both"> after the Jev paragraph ends the float before the badges', () => {
+    for (const text of [cliReadme, rootReadme]) {
+      const rows = lines(text);
+      const br = rows.indexOf('<br clear="both">');
+      const jev = rows.findIndex((row) => row.includes('Jev, TypeSafe AI'));
+      const badge = rows.findIndex((row) => row.startsWith('[![npm version]'));
+      expect(jev).toBeGreaterThan(-1);
+      expect(br).toBeGreaterThan(jev);
+      expect(badge).toBeGreaterThan(br);
+    }
   });
 
   it('a nav line under the badges links Docs, Quickstart, Integrations, GitHub Action and llms.txt', () => {
