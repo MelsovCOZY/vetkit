@@ -1,6 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -32,8 +41,26 @@ const tracked = (...patterns: string[]): string[] =>
   execFileSync('git', ['ls-files', '-z', ...patterns], { cwd: ROOT, encoding: 'utf8' })
     .split('\0')
     .filter((path) => path !== '');
-const frontMatterTitle = (text: string): string | undefined =>
-  /^---\ntitle: (.+)\n---\n/.exec(text)?.[1];
+interface FrontMatter {
+  title?: unknown;
+  description?: unknown;
+}
+const frontMatter = (text: string): FrontMatter => {
+  const block = /^---\n([\s\S]*?)\n---\n/.exec(text)?.[1];
+  return block === undefined ? {} : parse(block);
+};
+const frontMatterTitle = (text: string): unknown => frontMatter(text).title;
+const pageBody = (text: string): string =>
+  text
+    .replace(/^---\n[\s\S]*?\n---\n/, '')
+    .replace(/^\{% raw %\}\n/, '')
+    .replace(/\{% endraw %\}\n$/, '');
+const cliDescription = (): string => {
+  const manifest: { description: string } = JSON.parse(
+    readFileSync(join(ROOT, 'packages/cli/package.json'), 'utf8'),
+  );
+  return manifest.description;
+};
 const idOf = (text: string): string => {
   const schema: { $id: string } = JSON.parse(text);
   return schema.$id;
@@ -47,14 +74,89 @@ function walk(dir: string): string[] {
   );
 }
 
+// A throwaway git repository holding the files staging always reads plus the given pages, so a
+// staging rule can be checked against a tree the real docs do not have.
+function fixtureRepo(pages: Record<string, string>): string {
+  const root = mkdtempSync(join(tmpdir(), 'vetkit-site-fixture-'));
+  const copied = [
+    'README.md',
+    'packages/cli/package.json',
+    'packages/source-otlp/src/reader/otlp.schema.json',
+    'assets/logo.png',
+    'assets/social-preview.png',
+  ];
+  for (const file of copied) {
+    mkdirSync(join(root, dirname(file)), { recursive: true });
+    copyFileSync(join(ROOT, file), join(root, file));
+  }
+  for (const [file, text] of Object.entries(pages)) {
+    mkdirSync(join(root, dirname(file)), { recursive: true });
+    writeFileSync(join(root, file), text);
+  }
+  execFileSync('git', ['init', '-q'], { cwd: root });
+  execFileSync('git', ['add', '-A'], { cwd: root });
+  return root;
+}
+
 describe('site staging', () => {
-  it('writes the Jekyll config', () => {
+  it('writes the Jekyll config with the seo and sitemap plugins, the logo and the social image', () => {
     const config: Record<string, unknown> = parse(staged('_config.yml'));
     expect(config).toMatchObject({
       title: 'vetkit',
       baseurl: '/vetkit',
       url: 'https://melsovcozy.github.io',
+      description: cliDescription(),
+      logo: `${PAGES}/assets/logo.png`,
+      plugins: ['jekyll-seo-tag', 'jekyll-sitemap'],
+      defaults: [{ scope: { path: '' }, values: { image: `${PAGES}/assets/social-preview.png` } }],
     });
+    expect(typeof config['tagline']).toBe('string');
+    expect(String(config['tagline']).trim()).not.toBe('');
+    expect(config).not.toHaveProperty('google_site_verification');
+  });
+
+  it('emits google_site_verification only when GOOGLE_SITE_VERIFICATION is set', () => {
+    const verified = mkdtempSync(join(tmpdir(), 'vetkit-site-verified-'));
+    process.env['GOOGLE_SITE_VERIFICATION'] = 'token-for-search-console';
+    try {
+      stageSite(ROOT, verified);
+      const config: Record<string, unknown> = parse(
+        readFileSync(join(verified, '_config.yml'), 'utf8'),
+      );
+      expect(config['google_site_verification']).toBe('token-for-search-console');
+    } finally {
+      delete process.env['GOOGLE_SITE_VERIFICATION'];
+      rmSync(verified, { recursive: true, force: true });
+    }
+  });
+
+  it('copies the logo and the social preview image under assets/', () => {
+    for (const file of ['assets/logo.png', 'assets/social-preview.png']) {
+      expect(readFileSync(join(out, file)).equals(readFileSync(join(ROOT, file))), file).toBe(true);
+    }
+  });
+
+  it('gives every staged page a title and a plain-text description of at most 160 chars taken from its first paragraph', () => {
+    const pages = walk(out).filter((path) => path.endsWith('.md'));
+    expect(pages.length).toBeGreaterThan(5);
+    for (const page of pages) {
+      const { title, description } = frontMatter(readFileSync(page, 'utf8'));
+      expect(typeof title, page).toBe('string');
+      expect(String(title).trim(), page).not.toBe('');
+      expect(typeof description, page).toBe('string');
+      const text = String(description);
+      expect(text.trim(), page).toBe(text);
+      expect(text.length, page).toBeGreaterThan(0);
+      expect(text.length, page).toBeLessThanOrEqual(160);
+      expect(text, page).not.toMatch(/[\n`<>]|\]\(|^#|\*\*/);
+    }
+    const readme = readFileSync(join(ROOT, 'README.md'), 'utf8').split('\n');
+    const paragraph = readme.find((line) => line.trim() !== '' && !/^[#<[!|]/.test(line));
+    expect(paragraph).toBeDefined();
+    expect(frontMatter(staged('index.md')).description).toBe(paragraph?.trim());
+    expect(frontMatter(staged('docs/sinks.md')).description).toMatch(
+      /^A sink writes verdicts back to an observability backend/,
+    );
   });
 
   it('stages README.md as index.md with front matter', () => {
@@ -91,9 +193,54 @@ describe('site staging', () => {
     expect(existsSync(join(out, 'docs/listings'))).toBe(false);
   });
 
-  it('takes the page title from the first heading, or the file name when there is none', () => {
-    expect(frontMatterTitle(staged('docs/watch.md'))).toBe(JSON.stringify('`vet watch`'));
-    expect(frontMatterTitle(staged('docs/guides/cli-json.md'))).toBe(JSON.stringify('cli-json'));
+  it('takes the page title from the first heading', () => {
+    expect(frontMatterTitle(staged('docs/watch.md'))).toBe('`vet watch`');
+  });
+
+  it('supplies the title and opening paragraph of a page that has no heading, so no title is ever a file name', () => {
+    for (const page of tracked('docs').filter((path) =>
+      /^docs\/(guides\/)?[^/]+\.md$/.test(path),
+    )) {
+      if (!existsSync(join(out, page))) continue;
+      expect(frontMatterTitle(staged(page)), page).not.toBe(posix.basename(page, '.md'));
+    }
+    const cliJson = staged('docs/guides/cli-json.md');
+    const title = String(frontMatterTitle(cliJson));
+    expect(title).toMatch(/\bvet\b/);
+    expect(title).toMatch(/JSON/);
+    const lines = pageBody(cliJson).split('\n');
+    expect(lines[0]).toBe(`# ${title}`);
+    expect(lines[1]).toBe('');
+    expect(lines[2]?.trim()).toBe(frontMatter(cliJson).description);
+    expect(lines.indexOf('## --version')).toBeGreaterThan(2);
+  });
+
+  it('refuses to stage a page that has neither a heading nor a supplied title', () => {
+    const root = fixtureRepo({ 'docs/untitled.md': 'Some words with no heading.\n' });
+    const dest = mkdtempSync(join(tmpdir(), 'vetkit-site-untitled-'));
+    try {
+      expect(() => stageSite(root, dest)).toThrow(/docs\/untitled\.md/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+      rmSync(dest, { recursive: true, force: true });
+    }
+  });
+
+  it('never stages docs/INDEX.md, which is an internal index', () => {
+    expect(existsSync(join(out, 'docs/INDEX.md'))).toBe(false);
+    const root = fixtureRepo({
+      'docs/INDEX.md': '# Index\n\nInternal map of the docs tree.\n',
+      'docs/kept.md': '# Kept\n\nA public page.\n',
+    });
+    const dest = mkdtempSync(join(tmpdir(), 'vetkit-site-index-'));
+    try {
+      stageSite(root, dest);
+      expect(existsSync(join(dest, 'docs/kept.md'))).toBe(true);
+      expect(existsSync(join(dest, 'docs/INDEX.md'))).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+      rmSync(dest, { recursive: true, force: true });
+    }
   });
 
   it('copies every spec schema and the otlp schema to the path its $id names', () => {
@@ -135,8 +282,31 @@ describe('site staging', () => {
     expect(MIGRATE_DOCS).toBe(`${PAGES}/docs/migrate.html`);
   });
 
-  it('copies the root llms.txt to the site root', () => {
-    expect(staged('llms.txt')).toBe(readFileSync(join(ROOT, 'llms.txt'), 'utf8'));
+  it('stages llms.txt unchanged apart from its links, which become absolute Pages or GitHub URLs', () => {
+    const source = readFileSync(join(ROOT, 'llms.txt'), 'utf8');
+    const stagedText = staged('llms.txt');
+    const link = /\]\(([^)\s]+)\)/g;
+    expect(stagedText.replace(link, '](#)')).toBe(source.replace(link, '](#)'));
+    const sourceTargets = [...source.matchAll(link)].map((m) => m[1] ?? '');
+    const stagedTargets = [...stagedText.matchAll(link)].map((m) => m[1] ?? '');
+    expect(sourceTargets.length).toBeGreaterThan(5);
+    expect(stagedTargets).toHaveLength(sourceTargets.length);
+    expect(sourceTargets.some((t) => t.startsWith('docs/'))).toBe(true);
+    expect(sourceTargets.some((t) => /^(packages|skills|examples)\//.test(t))).toBe(true);
+    const urls = collectPagesUrls(ROOT);
+    for (const [i, target] of sourceTargets.entries()) {
+      const rewritten = stagedTargets[i] ?? '';
+      if (/^https?:/.test(target)) {
+        expect(rewritten, target).toBe(target);
+      } else if (/^docs\/(guides\/)?[^/]+\.md$/.test(target)) {
+        expect(rewritten, target).toBe(`${PAGES}/${target.replace(/\.md$/, '.html')}`);
+        expect(urls, target).toContain(rewritten);
+      } else if (target === 'README.md') {
+        expect(rewritten, target).toBe(`${PAGES}/`);
+      } else {
+        expect(rewritten, target).toBe(`${GITHUB}/blob/master/${target}`);
+      }
+    }
   });
 
   it('every relative link in the staged tree resolves to a staged file', () => {
@@ -260,7 +430,13 @@ interface Job {
   if?: string;
   permissions?: Record<string, string>;
   outputs?: Record<string, string>;
-  steps?: { uses?: string; run?: string; if?: string; with?: Record<string, string> }[];
+  steps?: {
+    uses?: string;
+    run?: string;
+    if?: string;
+    with?: Record<string, string>;
+    env?: Record<string, string>;
+  }[];
 }
 interface Workflow {
   on?: { push?: { branches?: string[] } };
@@ -309,6 +485,12 @@ describe('pages workflow', () => {
     const jekyll = steps.find((s) => s.uses?.startsWith('actions/jekyll-build-pages@'));
     expect(jekyll?.with?.['source']).toBe('site-src');
     expect(steps.some((s) => s.uses?.startsWith('actions/upload-pages-artifact@'))).toBe(true);
+  });
+
+  it('the stage step receives the Search Console token from the GOOGLE_SITE_VERIFICATION variable', () => {
+    const steps = doc.jobs['build']?.steps ?? [];
+    const stage = steps.find((s) => s.run?.includes('bun scripts/build-site.ts site-src'));
+    expect(stage?.env?.['GOOGLE_SITE_VERIFICATION']).toBe('${{ vars.GOOGLE_SITE_VERIFICATION }}');
   });
 
   it('grants write permissions to the deploy job only', () => {
