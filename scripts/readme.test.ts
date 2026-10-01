@@ -57,27 +57,136 @@ function allReadmes(): string[] {
   return found;
 }
 
-const VS = '## vs promptfoo / evalite / DeepEval / Braintrust';
+const SITE = 'https://melsovcozy.github.io/vetkit/';
+const H1 = '# vetkit — LLM evals judged by typed decisions';
+
+/** The paragraph that starts at the tagline: its lines joined with a space, as rendered. */
+function firstParagraph(text: string): string {
+  const rows = lines(text);
+  const start = rows.findIndex((row, at) => at > 0 && row.trim() !== '');
+  const paragraph: string[] = [];
+  for (const row of rows.slice(start)) {
+    if (row.trim() === '') break;
+    paragraph.push(row.trim());
+  }
+  return paragraph.join(' ');
+}
+
+/** Everything above the Quickstart heading: logo, H1, pitch, badges and the nav line. */
+function head(text: string): string {
+  return text.slice(0, text.indexOf('\n## Quickstart'));
+}
+
+/** Link and image targets of a README: Markdown `](target)` and HTML src/href. */
+function targets(text: string): string[] {
+  const markdown = [...text.matchAll(/\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)].map((m) => m[1] ?? '');
+  const html = [...text.matchAll(/\b(?:src|href)="([^"]+)"/g)].map((m) => m[1] ?? '');
+  return [...markdown, ...html];
+}
+
+/** A cli README section with its absolute targets turned back into the repo-relative form. */
+function normalise(text: string): string {
+  return text
+    .replaceAll(RAW, '')
+    .replaceAll(BLOB, '')
+    .replaceAll(`${SITE}docs/ci-gate.html`, 'docs/ci-gate.md');
+}
 
 describe('landing README', () => {
-  it('cli README opens with # vetkit and its tagline equals README.md and the package description', () => {
-    expect(lines(cliReadme)[0]).toBe('# vetkit');
-    expect(lines(rootReadme)[0]).toBe('# vetkit');
+  it('both READMEs open with the H1 phrase and a tagline equal to the package description', () => {
+    expect(lines(cliReadme)[0]).toBe(H1);
+    expect(lines(rootReadme)[0]).toBe(H1);
     expect(tagline(cliReadme)).toBe(cliManifest.description);
     expect(tagline(rootReadme)).toBe(tagline(cliReadme));
-    const badges = cliReadme.slice(0, cliReadme.indexOf('\n## Quickstart'));
-    expect(badges).toContain(
-      'https://api.scorecard.dev/projects/github.com/MelsovCOZY/vetkit/badge',
-    );
-    expect(badges).toMatch(/npm\/v\/vetkit/);
   });
 
-  it('cli README has Quickstart, CI, vs and Trust sections in order', () => {
-    const order = ['## Quickstart', '## CI', VS, '## Trust'].map((title) =>
-      cliReadme.indexOf(`\n${title}\n`),
+  it('the first paragraph is under 300 chars and names the search terms and the keyless try-out', () => {
+    for (const text of [cliReadme, rootReadme]) {
+      const paragraph = firstParagraph(text);
+      expect(paragraph.length).toBeLessThan(300);
+      for (const term of ['LLM evals', 'LLM-as-a-judge', 'CI gate', 'vitest', 'TypeScript']) {
+        expect(paragraph, term).toContain(term);
+      }
+      expect(paragraph).toMatch(/no API key/i);
+    }
+  });
+
+  it('badges: npm version, npm downloads, CI workflow status, license and Scorecard', () => {
+    for (const text of [cliReadme, rootReadme]) {
+      const badges = head(text);
+      expect(badges).toContain(
+        'https://api.scorecard.dev/projects/github.com/MelsovCOZY/vetkit/badge',
+      );
+      expect(badges).toMatch(/npm\/v\/vetkit/);
+      expect(badges).toMatch(/npm\/dm\/vetkit/);
+      expect(badges).toContain(`${REPO}/actions/workflows/ci.yml/badge.svg`);
+      expect(badges).toMatch(/npm\/l\/vetkit/);
+      expect(badges).toContain('Apache-2.0');
+    }
+  });
+
+  it('the logo appears above Quickstart with alt text: relative in README.md, raw URL on npm', () => {
+    expect(head(rootReadme)).toMatch(/<img src="assets\/logo\.png" alt="[^"]{5,}"/);
+    expect(head(cliReadme)).toMatch(
+      new RegExp(String.raw`<img src="${RAW}assets/logo\.png" alt="[^"]{5,}"`),
     );
+  });
+
+  it('a nav line under the badges links Docs, Quickstart, Integrations, GitHub Action and llms.txt', () => {
+    const rootNav = lines(head(rootReadme)).find((row) => row.includes('[Docs](')) ?? '';
+    const cliNav = lines(head(cliReadme)).find((row) => row.includes('[Docs](')) ?? '';
+    for (const [nav, examples, action] of [
+      [rootNav, 'examples/', 'action/README.md'],
+      [cliNav, `${REPO}/tree/master/examples`, `${BLOB}action/README.md`],
+    ] as const) {
+      expect(nav).toContain(`[Docs](${SITE})`);
+      expect(nav).toContain('[Quickstart](#quickstart)');
+      expect(nav).toContain(`[Integrations](${examples})`);
+      expect(nav).toContain(`[GitHub Action](${action})`);
+      expect(nav).toContain(`[llms.txt](${SITE}llms.txt)`);
+    }
+    const badgeAt = rootReadme.indexOf('npm/v/vetkit');
+    expect(rootReadme.indexOf(rootNav)).toBeGreaterThan(badgeAt);
+  });
+
+  it('Jev is explained as the default typed-decision judge the first time it appears', () => {
+    for (const text of [cliReadme, rootReadme]) {
+      const at = text.indexOf('Jev');
+      expect(at).toBeGreaterThan(0);
+      const sentence = text.slice(at, text.indexOf('.', at) + 1);
+      expect(sentence).toMatch(/^Jev, TypeSafe AI's typed-decision judge/);
+      expect(sentence).toContain('default');
+    }
+  });
+
+  it('README.md has Quickstart, CI, How it compares, Trust, Coding agents and Packages in order', () => {
+    const order = [
+      '## Quickstart',
+      '## CI',
+      '## How it compares',
+      '## Trust',
+      '## Coding agents',
+      '## Packages',
+      '## Contributing',
+    ].map((title) => rootReadme.indexOf(`\n${title}\n`));
     expect(order.every((at) => at > 0)).toBe(true);
     expect(order).toEqual(order.toSorted((a, b) => a - b));
+  });
+
+  it('the npm page has Quickstart then CI and leaves the rest to the docs site', () => {
+    const order = ['## Quickstart', '## CI'].map((title) => cliReadme.indexOf(`\n${title}\n`));
+    expect(order.every((at) => at > 0)).toBe(true);
+    expect(order).toEqual(order.toSorted((a, b) => a - b));
+    for (const title of ['## Trust', '## Packages', '## How it compares', '## vs ']) {
+      expect(cliReadme, title).not.toContain(`\n${title}`);
+    }
+    expect(cliReadme.slice(cliReadme.indexOf('\n## CI\n'))).toContain(SITE);
+  });
+
+  it('every link and image target on the npm page is an https URL or a same-page anchor', () => {
+    const found = targets(cliReadme);
+    expect(found.length).toBeGreaterThan(10);
+    for (const target of found) expect(target, target).toMatch(/^(https:\/\/|#)/);
   });
 
   it('quickstart lists the three commands, demoJudge and the .env line, and never npx vet', () => {
@@ -111,7 +220,7 @@ describe('landing README', () => {
   });
 
   it('trust section names license, telemetry, install scripts, judge, pinned and drift', () => {
-    const trust = section(cliReadme, 'Trust');
+    const trust = section(rootReadme, 'Trust');
     for (const phrase of [
       'Apache-2.0',
       'zero telemetry',
@@ -127,30 +236,32 @@ describe('landing README', () => {
     expect(trust).toMatch(/release/i);
   });
 
-  it('vs table has a column per tool and the five comparison rows', () => {
-    const vs = section(cliReadme, VS.slice(3));
-    const rows = vs.split('\n').filter((row) => row.startsWith('|'));
-    const header = rows[0] ?? '';
-    for (const tool of ['vetkit', 'promptfoo', 'evalite', 'DeepEval', 'Braintrust']) {
-      expect(header, tool).toContain(tool);
+  it('the comparison is by category, keeps only cited vendor facts and has no unchecked cell', () => {
+    const compare = section(rootReadme, 'How it compares');
+    for (const phrase of ['typed-decision judge', 'calibrated', 'no key', 'prompt-based']) {
+      expect(compare, phrase).toContain(phrase);
     }
-    const labels = rows.slice(2).map((row) => row.split('|')[1]?.trim());
-    expect(labels).toEqual([
-      'First result without a key',
-      'Calibrated, pinned gate with a lock',
-      'Provider neutrality',
-      'Telemetry',
-      'Install scripts or native dependencies',
-    ]);
+    // Each vendor fact that stays is backed by the source line that already cited it.
+    expect(compare).toContain('https://www.promptfoo.dev/docs/configuration/telemetry/');
+    expect(compare).toContain('https://deepeval.com/docs/data-privacy');
+    expect(compare).toContain('https://www.npmjs.com/package/promptfoo');
+    for (const text of [cliReadme, rootReadme]) {
+      expect(text).not.toMatch(/not checked/i);
+      expect(text).not.toContain('## vs ');
+    }
   });
 
-  it('README.md mirrors the cli README after link normalisation', () => {
-    const packages = rootReadme.indexOf('\n## Packages\n');
-    expect(packages).toBeGreaterThan(0);
+  it('a Coding agents section points at llms.txt and the setup skill', () => {
+    const agents = section(rootReadme, 'Coding agents');
+    expect(agents).toContain(`${SITE}llms.txt`);
+    expect(agents).toContain('skills/vetkit-setup/SKILL.md');
+  });
+
+  it('the Quickstart and CI sections of the npm page equal README.md after link normalisation', () => {
+    for (const title of ['Quickstart', 'CI']) {
+      expect(normalise(section(cliReadme, title)), title).toBe(section(rootReadme, title));
+    }
     expect(rootReadme).toContain('\n## Contributing\n');
-    const mirrored = rootReadme.slice(0, packages + 1);
-    const normalised = cliReadme.replaceAll(RAW, '').replaceAll(BLOB, '');
-    expect(`${mirrored.trimEnd()}\n`).toBe(normalised.trimEnd() + '\n');
     expect(rootReadme).not.toContain('@vetkit/source-langfuse');
     expect(rootReadme).toContain('(packages/core)');
   });
