@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { safeParseJson } from '@vetkit/spec';
@@ -35,5 +35,17 @@ describe('docs/contracts/j0.md matches the manifests', () => {
   test('refers to the pinned vitest version instead of a version literal', () => {
     expect(j0).not.toMatch(/vitest@\d+\.\d+\.\d+/);
     expect(j0).toContain('pinned vitest version');
+  });
+});
+
+// The OTel LogRecord extension attributes shipped under the `vetkit.*` namespace; a contract that
+// still names the pre-rename `classified_evals.*` prefix describes attributes no sink emits.
+describe('docs/contracts/*.md use the vetkit OTel namespace', () => {
+  test('no contract mentions classified_evals', () => {
+    const dir = join(repoRoot, 'docs/contracts');
+    const stale = readdirSync(dir)
+      .filter((name) => name.endsWith('.md'))
+      .filter((name) => read(join('docs/contracts', name)).includes('classified_evals'));
+    expect(stale).toEqual([]);
   });
 });
