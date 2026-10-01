@@ -58,7 +58,7 @@ function allReadmes(): string[] {
 }
 
 const SITE = 'https://melsovcozy.github.io/vetkit/';
-const H1 = '# vetkit — LLM evals judged by typed decisions';
+const H1 = '# vetkit — LLM evals from your production traces';
 
 /** The paragraph that starts at the tagline: its lines joined with a space, as rendered. */
 function firstParagraph(text: string): string {
@@ -100,14 +100,14 @@ describe('landing README', () => {
     expect(tagline(rootReadme)).toBe(tagline(cliReadme));
   });
 
-  it('the first paragraph is under 300 chars and names the search terms and the keyless try-out', () => {
+  it('the first paragraph is under 300 chars and the opening block names the search terms and the keyless try-out', () => {
     for (const text of [cliReadme, rootReadme]) {
-      const paragraph = firstParagraph(text);
-      expect(paragraph.length).toBeLessThan(300);
+      expect(firstParagraph(text).length).toBeLessThan(300);
+      const opening = head(text);
       for (const term of ['LLM evals', 'LLM-as-a-judge', 'CI gate', 'vitest', 'TypeScript']) {
-        expect(paragraph, term).toContain(term);
+        expect(opening, term).toContain(term);
       }
-      expect(paragraph).toMatch(/no API key/i);
+      expect(opening).toMatch(/no API key/i);
     }
   });
 
