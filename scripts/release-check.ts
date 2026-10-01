@@ -6,8 +6,8 @@ import { fileURLToPath } from 'node:url';
 
 // Release check for the packed tarballs: the properties that only exist on the artifacts a
 // consumer installs (LICENSE and README present, no sourcemaps, exact license and repository,
-// no lifecycle scripts in the install closure, no native binaries). Never reads env keys and
-// installs with --ignore-scripts.
+// README targets absolute, no lifecycle scripts in the install closure, no native binaries).
+// Never reads env keys and installs with --ignore-scripts.
 
 const EXPECTED_LICENSE = 'Apache-2.0';
 const EXPECTED_REPOSITORY_URL = 'git+https://github.com/MelsovCOZY/vetkit.git';
@@ -31,6 +31,24 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
+const FENCED_CODE = /^```[^\n]*\n[\s\S]*?^```[ \t]*$/gm;
+const INLINE_CODE = /`[^`\n]*`/g;
+// A markdown link or image target, or an HTML src/href attribute.
+const LINK_TARGET = /(?:\]\(|\b(?:src|href)=")([^)\s"]+)/g;
+const ABSOLUTE_TARGET = /^(?:[a-z][a-z0-9+.-]*:|#)/i;
+
+/**
+ * Image and link targets of a README that are neither absolute URLs nor in-page anchors. npm
+ * renders a package README on its own and does not rewrite relative targets to the repository,
+ * so each one is a broken image or link on the package page.
+ */
+export function relativeReadmeTargets(markdown: string): string[] {
+  const prose = markdown.replaceAll(FENCED_CODE, '').replaceAll(INLINE_CODE, '');
+  return [...prose.matchAll(LINK_TARGET)]
+    .map((match) => match[1] ?? '')
+    .filter((target) => target !== '' && !ABSOLUTE_TARGET.test(target));
+}
+
 /** Reasons a single tarball fails the release check; empty when it is clean. */
 export function inspectTarball(tgzPath: string): string[] {
   const listing = tar(['-tzf', tgzPath]);
@@ -43,6 +61,13 @@ export function inspectTarball(tgzPath: string): string[] {
   }
   for (const entry of entries.filter((e) => e.endsWith('.map'))) {
     findings.push(`contains sourcemap ${entry}`);
+  }
+  if (entries.includes('package/README.md')) {
+    const readme = tar(['-xzOf', tgzPath, 'package/README.md']);
+    if (!readme.ok) findings.push('cannot read package/README.md');
+    for (const target of readme.ok ? relativeReadmeTargets(readme.stdout) : []) {
+      findings.push(`README.md has the relative target ${target}; npm needs an absolute URL`);
+    }
   }
 
   const manifestText = tar(['-xzOf', tgzPath, 'package/package.json']);

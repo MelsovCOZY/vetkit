@@ -1,12 +1,11 @@
 {
   "name": "@vetkit/spec",
   "version": "0.0.0",
-  "description": "Shared types, error codes, JSON validation and adapter contracts for vetkit",
+  "description": "Shared types, error codes, JSON validation and adapter contracts. Part of vetkit; install vetkit",
   "keywords": [
     "llm",
     "evals",
     "evaluation",
-    "jev",
     "typescript",
     "ci",
     "json-schema"

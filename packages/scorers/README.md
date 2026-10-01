@@ -13,6 +13,10 @@ uses, so cache keys and lock-fitted thresholds match). Zero external runtime dep
 Every adapter returns `null` (never `0`) for an unscored or escaped (`not_applicable`) result,
 so Braintrust, Evalite and autoevals skip it instead of counting it as a fail.
 
+```sh
+npm i -D @vetkit/scorers vetkit
+```
+
 ## Setup
 
 The snippets below share one judge and one criterion. The offline demo judge needs no key and
@@ -109,3 +113,8 @@ npx vitest run
 ```
 
 Omitting `input` scores the output alone and names that fallback in the failure message.
+
+---
+
+Part of [vetkit](https://github.com/MelsovCOZY/vetkit): source and issues on GitHub, docs at
+[melsovcozy.github.io/vetkit](https://melsovcozy.github.io/vetkit/).
