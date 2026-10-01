@@ -1,14 +1,24 @@
 {
   "name": "vetkit",
   "version": "0.0.0",
-  "description": "Generate, validate and run LLM evals judged by typed decisions",
+  "description": "LLM evals as a CI gate: LLM-as-a-judge with typed decisions, vitest export, TypeScript, no API key to try",
   "keywords": [
     "llm",
     "evals",
     "evaluation",
     "jev",
     "typescript",
-    "ci"
+    "ci",
+    "llm-evals",
+    "llm-evaluation",
+    "llm-as-a-judge",
+    "llm-judge",
+    "eval",
+    "prompt-testing",
+    "ai-testing",
+    "github-action",
+    "vitest",
+    "cli"
   ],
   "license": "Apache-2.0",
   "homepage": "https://melsovcozy.github.io/vetkit/",

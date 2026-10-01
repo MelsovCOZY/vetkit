@@ -23,8 +23,12 @@ const packageNames = existsSync(PACKAGES_DIR)
       .toSorted()
   : [];
 
-const TAGLINE = 'Generate, validate and run LLM evals judged by typed decisions';
-const SHARED_KEYWORDS = ['llm', 'evals', 'evaluation', 'jev', 'typescript', 'ci'];
+const TAGLINE =
+  'LLM evals as a CI gate: LLM-as-a-judge with typed decisions, vitest export, TypeScript, no API key to try';
+const SHARED_KEYWORDS = ['llm', 'evals', 'evaluation', 'typescript', 'ci'];
+// Only the CLI and the Jev adapter are about Jev; the judge name on every sibling would let a
+// search for it land on a package that cannot be installed on its own.
+const JEV_KEYWORD_PACKAGES = ['cli', 'judge-jev'];
 
 function load(dir: string): Manifest {
   return JSON.parse(readFileSync(join(PACKAGES_DIR, dir, 'package.json'), 'utf8'));
@@ -50,11 +54,18 @@ it.each(packageNames)('%s has a one-line description of at most 120 characters',
   expect(description).not.toMatch(/[\r\n]/);
 });
 
-it.each(packageNames)('%s lists the six shared keywords', (dir) => {
+it.each(packageNames)('%s lists the five shared keywords', (dir) => {
   const { keywords } = load(dir);
-  expect(keywords?.length).toBeGreaterThanOrEqual(6);
+  expect(keywords?.length).toBeGreaterThanOrEqual(5);
   expect(keywords).toEqual(expect.arrayContaining(SHARED_KEYWORDS));
 });
+
+it.each(packageNames)(
+  '%s has the jev keyword only when it is the CLI or the Jev adapter',
+  (dir) => {
+    expect(load(dir).keywords?.includes('jev')).toBe(JEV_KEYWORD_PACKAGES.includes(dir));
+  },
+);
 
 it.each(packageNames)('%s homepage is the Pages URL', (dir) => {
   expect(load(dir).homepage).toBe('https://melsovcozy.github.io/vetkit/');

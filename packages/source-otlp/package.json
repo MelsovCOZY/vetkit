@@ -1,16 +1,16 @@
 {
   "name": "@vetkit/source-otlp",
   "version": "0.0.0",
-  "description": "Trace source for vetkit that reads OTLP files",
+  "description": "Trace source that reads OTLP files or receives OTLP/HTTP spans. Part of vetkit; install vetkit",
   "keywords": [
     "llm",
     "evals",
     "evaluation",
-    "jev",
     "typescript",
     "ci",
     "otel",
-    "opentelemetry"
+    "opentelemetry",
+    "otlp"
   ],
   "license": "Apache-2.0",
   "homepage": "https://melsovcozy.github.io/vetkit/",

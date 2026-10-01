@@ -1,12 +1,11 @@
 {
   "name": "@vetkit/sink-langfuse",
   "version": "0.0.0",
-  "description": "Sink that writes vetkit verdicts as Langfuse scores",
+  "description": "Sink that writes verdicts as Langfuse scores. Part of vetkit; install vetkit",
   "keywords": [
     "llm",
     "evals",
     "evaluation",
-    "jev",
     "typescript",
     "ci",
     "langfuse"

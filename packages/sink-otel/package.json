@@ -1,16 +1,16 @@
 {
   "name": "@vetkit/sink-otel",
   "version": "0.0.0",
-  "description": "Sink that writes vetkit verdicts as OpenTelemetry logs and OpenInference spans",
+  "description": "Sink that writes verdicts as OpenTelemetry logs and OpenInference spans. Part of vetkit; install vetkit",
   "keywords": [
     "llm",
     "evals",
     "evaluation",
-    "jev",
     "typescript",
     "ci",
     "otel",
-    "opentelemetry"
+    "opentelemetry",
+    "openinference"
   ],
   "license": "Apache-2.0",
   "homepage": "https://melsovcozy.github.io/vetkit/",

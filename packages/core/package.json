@@ -1,14 +1,15 @@
 {
   "name": "@vetkit/core",
   "version": "0.0.0",
-  "description": "Criteria loading and editing, judging and verdict logic for vetkit",
+  "description": "Criteria loading, judging and verdict logic for LLM evals. Part of vetkit; install vetkit",
   "keywords": [
     "llm",
     "evals",
     "evaluation",
-    "jev",
     "typescript",
-    "ci"
+    "ci",
+    "llm-evals",
+    "llm-as-a-judge"
   ],
   "license": "Apache-2.0",
   "homepage": "https://melsovcozy.github.io/vetkit/",

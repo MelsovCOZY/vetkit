@@ -1,17 +1,18 @@
 {
   "name": "@vetkit/scorers",
   "version": "0.0.0",
-  "description": "Braintrust, autoevals and Evalite scorers, a promptfoo assertion and a vitest matcher for vetkit",
+  "description": "Braintrust, autoevals and Evalite scorers, a promptfoo assertion and a vitest matcher. Part of vetkit",
   "keywords": [
     "llm",
     "evals",
     "evaluation",
-    "jev",
     "typescript",
     "ci",
     "vitest",
     "promptfoo",
-    "braintrust"
+    "braintrust",
+    "evalite",
+    "llm-as-a-judge"
   ],
   "license": "Apache-2.0",
   "homepage": "https://melsovcozy.github.io/vetkit/",
