@@ -31,6 +31,8 @@ jobs:
         run: bun run build
 
       - name: Stage the site
+        env:
+          GOOGLE_SITE_VERIFICATION: ${{ vars.GOOGLE_SITE_VERIFICATION }}
         run: bun scripts/build-site.ts site-src
 
       - name: Check the staged site

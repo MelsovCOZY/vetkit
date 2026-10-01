@@ -5,11 +5,13 @@
 //   bun scripts/build-site.ts --check-live request every Pages URL; exit 1 on any non-200
 //
 // Staging copies and rewrites; it does not render. Jekyll (actions/jekyll-build-pages) renders.
+// GOOGLE_SITE_VERIFICATION, when set, goes into _config.yml for the Search Console meta tag.
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { LINT_RULES, MIGRATE_DOCS, SCHEMA_CHANGELOG, SCHEMA_VERSIONS } from '@vetkit/core';
+import { stringify } from 'yaml';
 
 const PAGES_HOST = 'https://melsovcozy.github.io';
 const PAGES_BASE = `${PAGES_HOST}/vetkit`;
@@ -19,6 +21,19 @@ const OTLP_SCHEMA = 'packages/source-otlp/src/reader/otlp.schema.json';
 const SKIPPED_MESSAGE =
   'link-check: skipped (repository is private; the Pages host resolves only after the repo is public)';
 
+const TAGLINE = 'Generate, validate and run LLM evals';
+/** Served from the site and named in _config.yml for the seo tag: the logo and the social image. */
+const ASSETS = ['assets/logo.png', 'assets/social-preview.png'];
+const DESCRIPTION_MAX = 160;
+/** Pages whose source has no H1: the title and opening paragraph the site puts in front of them. */
+const SUPPLIED_PAGES: Record<string, { title: string; intro: string }> = {
+  'docs/guides/cli-json.md': {
+    title: 'CLI JSON shapes (vet --json output)',
+    intro:
+      'The JSON document each vet command prints under --json: an example and the field table for every shape.',
+  },
+};
+
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 const gitFiles = (root: string, ...patterns: string[]): string[] =>
@@ -26,8 +41,12 @@ const gitFiles = (root: string, ...patterns: string[]): string[] =>
     .split('\0')
     .filter((path) => path !== '');
 
-/** Public docs pages: the top-level docs and the guides. Contracts and listings stay internal. */
-const isDocsPage = (path: string): boolean => /^docs\/(guides\/)?[^/]+\.md$/.test(path);
+/**
+ * Public docs pages: the top-level docs and the guides. Contracts, listings and the INDEX.md map of
+ * the docs tree stay internal.
+ */
+const isDocsPage = (path: string): boolean =>
+  /^docs\/(guides\/)?[^/]+\.md$/.test(path) && posix.basename(path) !== 'INDEX.md';
 
 /**
  * Maps a link found in the repo file `fromPath` to the link that works on the site. Pages of the
@@ -83,11 +102,74 @@ function rewriteMarkdownLinks(text: string, fromPath: string): string {
     .join('\n');
 }
 
-const frontMatter = (title: string): string => `---\ntitle: ${JSON.stringify(title)}\n---\n`;
+const frontMatter = (title: string, description: string): string =>
+  `---\ntitle: ${JSON.stringify(title)}\ndescription: ${JSON.stringify(description)}\n---\n`;
 
-function pageTitle(text: string, fallback: string): string {
-  const prose = text.replace(/^(```|~~~)[\s\S]*?^\1/gm, '');
-  return /^# (.+)$/m.exec(prose)?.[1]?.trim() ?? fallback;
+const withoutFences = (text: string): string => text.replace(/^(```|~~~)[\s\S]*?^\1/gm, '');
+
+const pageTitle = (text: string): string | undefined =>
+  /^# (.+)$/m.exec(withoutFences(text))?.[1]?.trim();
+
+/** The first prose paragraph as plain text, cut to the length a search result shows. */
+function firstParagraph(text: string): string | undefined {
+  const lines = withoutFences(text).split('\n');
+  const start = lines.findIndex((line) => line.trim() !== '' && !/^[#<[!|>-]/.test(line.trim()));
+  if (start === -1) return undefined;
+  const end = lines.findIndex((line, i) => i > start && line.trim() === '');
+  const plain = lines
+    .slice(start, end === -1 ? undefined : end)
+    .join(' ')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/<[^>]+>/g, '')
+    .replace(/[`*]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (plain === '') return undefined;
+  if (plain.length <= DESCRIPTION_MAX) return plain;
+  return `${plain.slice(0, DESCRIPTION_MAX - 3).replace(/\s+\S*$/, '')}...`;
+}
+
+/** Front matter plus the body of one page; a page the site cannot title or describe is an error. */
+function stagePage(path: string, text: string): string {
+  const supplied = SUPPLIED_PAGES[path];
+  const source = supplied ? `# ${supplied.title}\n\n${supplied.intro}\n\n${text}` : text;
+  const title = pageTitle(source);
+  if (title === undefined) throw new Error(`${path}: no H1 and no supplied title`);
+  const description = firstParagraph(source);
+  if (description === undefined) throw new Error(`${path}: no opening paragraph for a description`);
+  return wrapLiquid(`${frontMatter(title, description)}${rewriteMarkdownLinks(source, path)}`);
+}
+
+/** llms.txt is read off the site, so its repo-relative links become absolute Pages or GitHub URLs. */
+function llmsLink(href: string): string {
+  if (/^([a-z][a-z0-9+.-]*:|#|\/\/)/i.test(href)) return href;
+  if (href === 'README.md') return `${PAGES_BASE}/`;
+  if (isDocsPage(href)) return `${PAGES_BASE}/${href.replace(/\.md$/, '.html')}`;
+  return `${GITHUB}/blob/master/${href}`;
+}
+
+const rewriteLlms = (text: string): string =>
+  text.replace(/\]\(([^)\s]+)\)/g, (_m, href: string) => `](${llmsLink(href)})`);
+
+function jekyllConfig(root: string): string {
+  const manifest: { description: string } = JSON.parse(
+    readFileSync(join(root, 'packages/cli/package.json'), 'utf8'),
+  );
+  const verification = process.env['GOOGLE_SITE_VERIFICATION'];
+  return stringify({
+    title: 'vetkit',
+    tagline: TAGLINE,
+    description: manifest.description,
+    url: PAGES_HOST,
+    baseurl: '/vetkit',
+    logo: `${PAGES_BASE}/assets/logo.png`,
+    ...(verification ? { google_site_verification: verification } : {}),
+    plugins: ['jekyll-seo-tag', 'jekyll-sitemap'],
+    defaults: [
+      { scope: { path: '' }, values: { image: `${PAGES_BASE}/assets/social-preview.png` } },
+    ],
+  });
 }
 
 function lintPage(): string {
@@ -97,7 +179,7 @@ function lintPage(): string {
   });
   const intro =
     'Every rule `vet lint` applies to criteria.yaml, with its severity and the reason for it.\n';
-  return `${frontMatter('Lint rules')}# Lint rules\n\n${intro}\n${sections.join('\n')}`;
+  return `# Lint rules\n\n${intro}\n${sections.join('\n')}`;
 }
 
 function migratePage(): string {
@@ -108,7 +190,6 @@ function migratePage(): string {
     (change) => `- ${change.format} ${String(change.version)}: ${change.summary}`,
   );
   return [
-    frontMatter('Schema versions and vet migrate'),
     '# Schema versions and vet migrate\n',
     'Each versioned file format carries a version. A vetkit release reads the versions listed here and older ones.\n',
     '## Current versions\n',
@@ -143,25 +224,19 @@ function schemaFiles(root: string): SchemaFile[] {
 }
 
 /** Every file of the site, keyed by its path under the site root. */
-function planSite(root: string): Map<string, string> {
-  const site = new Map<string, string>();
-  site.set('_config.yml', `title: vetkit\nbaseurl: /vetkit\nurl: ${PAGES_HOST}\n`);
-  const readme = readFileSync(join(root, 'README.md'), 'utf8');
-  site.set(
-    'index.md',
-    wrapLiquid(`${frontMatter('vetkit')}${rewriteMarkdownLinks(readme, 'README.md')}`),
-  );
-  for (const path of gitFiles(root, 'docs').filter(isDocsPage)) {
-    const text = readFileSync(join(root, path), 'utf8');
-    const page = `${frontMatter(pageTitle(text, posix.basename(path, '.md')))}${rewriteMarkdownLinks(text, path)}`;
-    site.set(path, wrapLiquid(page));
-  }
-  site.set('docs/lint.md', wrapLiquid(lintPage()));
-  site.set('docs/migrate.md', wrapLiquid(migratePage()));
+function planSite(root: string): Map<string, string | Buffer> {
+  const site = new Map<string, string | Buffer>();
+  site.set('_config.yml', jekyllConfig(root));
+  site.set('index.md', stagePage('README.md', readFileSync(join(root, 'README.md'), 'utf8')));
+  for (const path of gitFiles(root, 'docs').filter(isDocsPage))
+    site.set(path, stagePage(path, readFileSync(join(root, path), 'utf8')));
+  site.set('docs/lint.md', stagePage('docs/lint.md', lintPage()));
+  site.set('docs/migrate.md', stagePage('docs/migrate.md', migratePage()));
   for (const schema of schemaFiles(root))
     site.set(schema.id.slice(PAGES_BASE.length + 1), schema.text);
+  for (const asset of ASSETS) site.set(asset, readFileSync(join(root, asset)));
   if (existsSync(join(root, 'llms.txt')))
-    site.set('llms.txt', readFileSync(join(root, 'llms.txt'), 'utf8'));
+    site.set('llms.txt', rewriteLlms(readFileSync(join(root, 'llms.txt'), 'utf8')));
   return site;
 }
 
