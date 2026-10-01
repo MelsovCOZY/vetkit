@@ -1,9 +1,18 @@
-# vetkit
+# vetkit — LLM evals judged by typed decisions
 
-Generate, validate and run LLM evals judged by typed decisions
+LLM evals as a CI gate: LLM-as-a-judge with typed decisions, vitest export, TypeScript, no API key to try
+
+A generator model drafts the criteria and cases; Jev, TypeSafe AI's typed-decision judge and the default judge, answers one typed choice or score question per criterion instead of writing free text; `vet run` turns the verdicts into a pass or fail for the build.
+
+<img src="https://raw.githubusercontent.com/MelsovCOZY/vetkit/master/assets/logo.png" alt="vetkit logo: a pixel-art cat in a vet coat holding a clipboard with a check mark" width="96">
 
 [![npm version](https://img.shields.io/npm/v/vetkit)](https://www.npmjs.com/package/vetkit)
+[![npm downloads](https://img.shields.io/npm/dm/vetkit)](https://www.npmjs.com/package/vetkit)
+[![CI](https://github.com/MelsovCOZY/vetkit/actions/workflows/ci.yml/badge.svg)](https://github.com/MelsovCOZY/vetkit/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/npm/l/vetkit)](https://github.com/MelsovCOZY/vetkit/blob/master/LICENSE)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/MelsovCOZY/vetkit/badge)](https://scorecard.dev/viewer/?uri=github.com/MelsovCOZY/vetkit)
+
+[Docs](https://melsovcozy.github.io/vetkit/) · [Quickstart](#quickstart) · [Integrations](https://github.com/MelsovCOZY/vetkit/tree/master/examples) · [GitHub Action](https://github.com/MelsovCOZY/vetkit/blob/master/action/README.md) · [llms.txt](https://melsovcozy.github.io/vetkit/llms.txt)
 
 ## Quickstart
 
@@ -47,25 +56,8 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 ```
 
-`vet run` is an uncalibrated threshold gate and `vet run --gate` is the calibrated one, which needs labels and a committed `criteria.lock.json`. The steps to the calibrated gate are in the [CI gate walkthrough](https://github.com/MelsovCOZY/vetkit/blob/master/docs/ci-gate.md); the action's inputs are in the [action README](https://github.com/MelsovCOZY/vetkit/blob/master/action/README.md).
+`vet run` is an uncalibrated threshold gate and `vet run --gate` is the calibrated one, which needs labels and a committed `criteria.lock.json`. The steps to the calibrated gate are in the [CI gate walkthrough](https://melsovcozy.github.io/vetkit/docs/ci-gate.html); the action's inputs are in the [action README](https://github.com/MelsovCOZY/vetkit/blob/master/action/README.md).
 
-## vs promptfoo / evalite / DeepEval / Braintrust
+## More
 
-| Question                               | vetkit                                                                        | promptfoo                                   | evalite                            | DeepEval                              | Braintrust           |
-| -------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------- | ---------------------------------- | ------------------------------------- | -------------------- |
-| First result without a key             | yes: `demoJudge` verdicts, marked `demo`                                      | not checked                                 | not checked                        | not checked                           | not checked          |
-| Calibrated, pinned gate with a lock    | yes: `vet validate` writes `criteria.lock.json`, `vet run --gate` enforces it | not checked                                 | not checked                        | not checked                           | not checked          |
-| Provider neutrality                    | any OpenAI-compatible generator; the judge transport is a config value        | not checked                                 | not checked                        | not checked                           | not checked          |
-| Telemetry                              | zero telemetry                                                                | on by default, opt out with an env variable | not checked                        | on by default, opt out                | not checked          |
-| Install scripts or native dependencies | no install scripts, no native dependencies                                    | no install script; native optional packages | native dependency (better-sqlite3) | Python package, not applicable to npm | `postinstall` script |
-
-"Not checked" means the fact was not verified for this table. Sources: the npm manifests of [promptfoo](https://www.npmjs.com/package/promptfoo), [evalite](https://www.npmjs.com/package/evalite) and [braintrust](https://www.npmjs.com/package/braintrust) as of promptfoo 0.123.1, evalite 0.19.0 and braintrust 3.35.0; the [promptfoo telemetry page](https://www.promptfoo.dev/docs/configuration/telemetry/); the [DeepEval data privacy page](https://deepeval.com/docs/data-privacy).
-
-## Trust
-
-- License: Apache-2.0.
-- vetkit has zero telemetry: it makes no network call except to the judge and generator endpoints you configure, and a test fails the build if analytics code appears in shipped sources.
-- The packages have no install scripts and no `postinstall`; the release check fails a tarball that has one.
-- The judge is Jev, which answers typed choice and score questions and cannot generate text. A gateway preset serves it only as the alias `typesafe-ai/jev`, so each judgment records the served model id and `pinned: false`; the `openrouter` and `typesafe` presets serve a fixed build and record `pinned: true`. `vet run --gate` refuses an unpinned judge unless you allow it.
-- Jev scores drift run to run, so thresholds use a tolerance band and at least 3 repeats. Never gate on `confidence` alone.
-- Maintenance: releases are cut from master through changesets when changes land, and a deprecated feature stays for at least one minor release, with a notice, before it is removed.
+Configuration, sinks, watch mode, the trust notes, the package list and the comparison with prompt-based judges are on the docs site: https://melsovcozy.github.io/vetkit/. Source and issues: https://github.com/MelsovCOZY/vetkit.
