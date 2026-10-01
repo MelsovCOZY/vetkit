@@ -1,6 +1,6 @@
 {
   "name": "vetkit",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "LLM evals from your production traces: generated, judged by cheap typed decisions, calibrated and gated in CI",
   "keywords": [
     "llm",

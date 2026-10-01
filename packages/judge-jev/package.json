@@ -1,6 +1,6 @@
 {
   "name": "@vetkit/judge-jev",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Jev LLM-as-a-judge client with configurable transport presets. Part of vetkit; install vetkit",
   "keywords": [
     "llm",

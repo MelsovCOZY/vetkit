@@ -1,6 +1,6 @@
 {
   "name": "@vetkit/source-otlp",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Trace source that reads OTLP files or receives OTLP/HTTP spans. Part of vetkit; install vetkit",
   "keywords": [
     "llm",

@@ -1,6 +1,6 @@
 {
   "name": "@vetkit/sink-otel",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Sink that writes verdicts as OpenTelemetry logs and OpenInference spans. Part of vetkit; install vetkit",
   "keywords": [
     "llm",
