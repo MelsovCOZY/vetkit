@@ -1,7 +1,8 @@
 # vetkit action
 
 Runs your LLM evals (`vet run`) on every pull request, uploads the reports and the badge file as one
-artifact, and keeps one sticky PR comment that says in its first line what happened.
+artifact, and keeps one sticky PR comment that says in its first line what happened. The guide
+[LLM evals as a GitHub Actions CI gate](../docs/guides/github-action.md) is the short version.
 
 ## Prerequisites
 
