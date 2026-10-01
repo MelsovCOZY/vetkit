@@ -1,6 +1,6 @@
 {
   "name": "@vetkit/core",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Criteria loading, judging and verdict logic for LLM evals. Part of vetkit; install vetkit",
   "keywords": [
     "llm",
