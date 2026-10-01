@@ -1,3 +1,5 @@
+<img align="left" width="112" src="https://raw.githubusercontent.com/MelsovCOZY/vetkit/master/assets/logo.png" alt="vetkit logo: a pixel-art cat in a vet coat holding a clipboard with a check mark">
+
 # vetkit — LLM evals from your production traces
 
 LLM evals from your production traces: generated, judged by cheap typed decisions, calibrated and gated in CI
@@ -6,7 +8,7 @@ It ships an LLM-as-a-judge with typed decisions, a CI gate, vitest export and Ty
 
 A generator model drafts the criteria and cases; Jev, TypeSafe AI's typed-decision judge and the default judge, answers one typed choice or score question per criterion instead of writing free text; `vet run` turns the verdicts into a pass or fail for the build.
 
-<img src="https://raw.githubusercontent.com/MelsovCOZY/vetkit/master/assets/logo.png" alt="vetkit logo: a pixel-art cat in a vet coat holding a clipboard with a check mark" width="96">
+<br clear="both">
 
 [![npm version](https://img.shields.io/npm/v/vetkit)](https://www.npmjs.com/package/vetkit)
 [![npm downloads](https://img.shields.io/npm/dm/vetkit)](https://www.npmjs.com/package/vetkit)
