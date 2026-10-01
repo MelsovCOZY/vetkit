@@ -251,3 +251,69 @@ ${RUN_JSON}
   assert.match(args, /junit=vet-junit\.xml/);
   assert.equal(JSON.parse(readFileSync(join(dir, '.vet/raw.json'), 'utf8')).summary.passed, 1);
 });
+
+// vet writes .vet/ next to the resolved config, while the --reporter paths are relative to the
+// working directory. With a config in a subdirectory, run.sh must keep every file it owns and ask
+// for the reports inside that subdirectory's .vet, never at the workspace root.
+function runDir(cwd, config) {
+  return spawnSync('bash', [RUN_SH, 'dir'], {
+    cwd,
+    env: { ...CHILD_ENV, GITHUB_OUTPUT: join(cwd, 'github_output.txt'), INPUT_CONFIG: config },
+    encoding: 'utf8',
+  });
+}
+
+void test('run.sh dir appends vetDir=<config directory>/.vet to GITHUB_OUTPUT', () => {
+  for (const [config, expected] of [
+    ['', '.vet'],
+    ['vetkit.config.ts', '.vet'],
+    ['./vetkit.config.ts', '.vet'],
+    ['app/vetkit.config.ts', 'app/.vet'],
+    ['fixtures/cli/run/vetkit.config.mjs', 'fixtures/cli/run/.vet'],
+  ]) {
+    const dir = scratch('vetkit-dir-');
+    const result = runDir(dir, config);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(readOr(join(dir, 'github_output.txt')), `vetDir=${expected}\n`, config);
+  }
+});
+
+void test('run.sh run keeps the run record, the baseline, the raw output and the reports under the .vet next to the config', () => {
+  const dir = projectWithVet(`#!/usr/bin/env bash
+if [ "\${1:-}" = "--version" ]; then echo 9.9.9; exit 0; fi
+echo "$*" > "\${PWD}/args.txt"
+${RUN_JSON}
+`);
+  mkdirSync(join(dir, 'app/.vet/runs'), { recursive: true });
+  writeFileSync(join(dir, 'app/vetkit.config.ts'), 'export default {};\n');
+  // The restored base-branch result sits where the cache step put it: next to the config.
+  writeFileSync(
+    join(dir, 'app/.vet/runs/latest.json'),
+    '{"summary":{"passed":7,"failed":0,"unscored":0}}',
+  );
+
+  const result = runProject(dir, {
+    VETKIT_INSTALL_MODE: 'project',
+    INPUT_CONFIG: 'app/vetkit.config.ts',
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  const args = readOr(join(dir, 'args.txt'));
+  assert.match(args, /--config app\/vetkit\.config\.ts/);
+  assert.match(args, /--reporter [^ ]*md=app\/\.vet\/report\.md/);
+  assert.match(args, /html=app\/\.vet\/report\.html/);
+  assert.match(args, /junit=vet-junit\.xml/);
+  const baseline = JSON.parse(readFileSync(join(dir, 'app/.vet/baseline/latest.json'), 'utf8'));
+  assert.equal(baseline.summary.passed, 7);
+  assert.equal(JSON.parse(readFileSync(join(dir, 'app/.vet/raw.json'), 'utf8')).summary.passed, 1);
+  assert.equal(
+    JSON.parse(readFileSync(join(dir, 'app/.vet/runs/latest.json'), 'utf8')).summary.passed,
+    1,
+  );
+  assert.equal(
+    existsSync(join(dir, '.vet')),
+    false,
+    'nothing may be written to .vet at the workspace root',
+  );
+  assert.match(readOr(join(dir, 'github_output.txt')), /^passed=1$/m);
+});

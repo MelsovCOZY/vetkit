@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync, readdirSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 import {
   checkNpmVersion,
+  initialChangesetState,
   topoSortPackages,
   tgzFilenameFor,
   type PackageManifest,
@@ -393,26 +395,76 @@ describe('.github/workflows/release.yml action-tag job', () => {
   });
 });
 
+// `changeset version` deletes the changesets it consumes, so .changeset/initial-release.md is
+// absent on the Version Packages PR and on master once it merges; each check applies to the tree
+// it describes and skips, saying why, on the other.
+const sortedNames = (names: string[]): string[] => names.toSorted((x, y) => x.localeCompare(y));
+
+function treeWith(files: Record<string, string>): string {
+  const root = mkdtempSync(join(tmpdir(), 'vetkit-changeset-state-'));
+  for (const [path, text] of Object.entries(files)) {
+    mkdirSync(dirname(join(root, path)), { recursive: true });
+    writeFileSync(join(root, path), text);
+  }
+  return root;
+}
+
 describe('.changeset entries', () => {
-  it('the initial changeset lists every package under packages/* as minor', () => {
-    const text = readFileSync(join(ROOT, '.changeset/initial-release.md'), 'utf8');
-    const front = /^---\n([\s\S]*?)\n---\n/.exec(text)?.[1] ?? '';
-    const parsed: unknown = parseYaml(front);
-    const entries: Record<string, unknown> =
-      typeof parsed === 'object' && parsed !== null
-        ? Object.fromEntries(Object.entries(parsed))
-        : {};
-    const names = readdirSync(PACKAGES_DIR, { withFileTypes: true })
-      .filter((d) => d.isDirectory())
-      .map((d): unknown => {
-        const manifest: { name?: unknown } = JSON.parse(
-          readFileSync(join(PACKAGES_DIR, d.name, 'package.json'), 'utf8'),
-        );
-        return manifest.name;
-      })
-      .toSorted((x, y) => String(x).localeCompare(String(y)));
-    expect(Object.keys(entries).toSorted((x, y) => x.localeCompare(y))).toEqual(names);
-    expect(new Set(Object.values(entries))).toEqual(new Set(['minor']));
+  const state = initialChangesetState(ROOT);
+
+  it('the initial changeset lists every package under packages/* as minor', (ctx) => {
+    if (state.entries === undefined) {
+      ctx.skip(
+        '.changeset/initial-release.md was consumed by changeset version; the versions are checked instead',
+      );
+      return;
+    }
+    const names = sortedNames(Object.keys(state.versions));
+    expect(sortedNames(Object.keys(state.entries))).toEqual(names);
+    expect(new Set(Object.values(state.entries))).toEqual(new Set(['minor']));
     expect(names).toHaveLength(12);
+  });
+
+  it('once the initial changeset is consumed, no package under packages/* is still 0.0.0', (ctx) => {
+    if (state.entries !== undefined) {
+      ctx.skip('.changeset/initial-release.md is still pending; its entries are checked instead');
+      return;
+    }
+    expect(Object.keys(state.versions)).toHaveLength(12);
+    for (const [name, version] of Object.entries(state.versions)) {
+      expect(version, name).not.toBe('0.0.0');
+    }
+  });
+
+  it('reports the entries and versions of a tree whose initial changeset is pending', () => {
+    const root = treeWith({
+      '.changeset/initial-release.md': "---\n'a': minor\n'@x/b': minor\n---\n\nFirst release.\n",
+      'packages/a/package.json': '{"name":"a","version":"0.0.0"}',
+      'packages/b/package.json': '{"name":"@x/b","version":"0.0.0"}',
+    });
+    try {
+      expect(initialChangesetState(root)).toEqual({
+        entries: { a: 'minor', '@x/b': 'minor' },
+        versions: { a: '0.0.0', '@x/b': '0.0.0' },
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reports no entries and the bumped versions of a tree whose initial changeset was consumed', () => {
+    const root = treeWith({
+      '.changeset/config.json': '{}',
+      'packages/a/package.json': '{"name":"a","version":"0.1.0"}',
+      'packages/b/package.json': '{"name":"@x/b","version":"0.1.0"}',
+    });
+    try {
+      expect(initialChangesetState(root)).toEqual({
+        entries: undefined,
+        versions: { a: '0.1.0', '@x/b': '0.1.0' },
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
