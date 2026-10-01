@@ -1,10 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
-import { extractSnippets, rewriteInstall } from './readme-snippets.ts';
+import {
+  extractSnippets,
+  populateNodeModules,
+  rewriteInstall,
+  sameInstall,
+  scratchManifest,
+} from './readme-snippets.ts';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const RUNNER = join(ROOT, 'scripts', 'examples-run.sh');
@@ -17,6 +34,25 @@ const KEY_VARS = [
   'CLOUDFLARE_API_TOKEN',
   'CLOUDFLARE_ACCOUNT_ID',
 ];
+
+/** A tiny template project with one dependency, a .bin link and npm's hidden lockfile. */
+function linkFixture(): { template: string; scratch: string } {
+  const base = mkdtempSync(join(tmpdir(), 'vetkit-link-test-'));
+  const template = join(base, 'template');
+  const scratch = join(base, 'scratch');
+  mkdirSync(join(template, 'node_modules', 'dep', 'nested'), { recursive: true });
+  mkdirSync(join(template, 'node_modules', '.bin'), { recursive: true });
+  writeFileSync(join(template, 'node_modules', 'dep', 'index.js'), 'module.exports = 1;\n');
+  writeFileSync(join(template, 'node_modules', 'dep', 'nested', 'deep.js'), 'deep\n');
+  writeFileSync(join(template, 'node_modules', '.package-lock.json'), '{"lock":true}\n');
+  symlinkSync('../dep/index.js', join(template, 'node_modules', '.bin', 'dep'));
+  mkdirSync(scratch);
+  return { template, scratch };
+}
+
+function inode(path: string): number {
+  return statSync(path).ino;
+}
 
 describe('examples-run.sh', () => {
   it('examples-run.sh fails fast naming a missing tarball dir', () => {
@@ -160,6 +196,70 @@ describe('readme-snippets', () => {
     expect(rewriteInstall('echo hello', tarballs)).toBe('echo hello');
     expect(() => rewriteInstall('npm i -D vetkit left-pad', tarballs)).toThrow('left-pad');
     expect(() => rewriteInstall('npm i ai', tarballs)).toThrow('ai');
+  });
+
+  it('readme-snippets: a scratch manifest with the template dependency set skips its own install', () => {
+    const tarballs = { vetkit: '/t/vetkit.tgz', '@vetkit/core': '/t/core.tgz' };
+    const template = scratchManifest({}, tarballs, '5.0.2');
+    expect(sameInstall(scratchManifest({}, tarballs, '5.0.2'), template)).toBe(true);
+    // Only what npm installs counts: a different name or scripts is still the same install.
+    const renamed = { ...template, name: 'other', scripts: { test: 'vet run' } };
+    expect(sameInstall(renamed, template)).toBe(true);
+    const extraDep = scratchManifest({ dependencies: { ai: '5.0.270' } }, tarballs, '5.0.2');
+    expect(sameInstall(extraDep, template)).toBe(false);
+    const extraDev = scratchManifest(
+      { devDependencies: { typescript: '7.0.2', vitest: '^5.0.2' } },
+      tarballs,
+      '5.0.2',
+    );
+    expect(sameInstall(extraDev, template)).toBe(false);
+    const otherTarballs = scratchManifest(
+      {},
+      { ...tarballs, '@vetkit/spec': '/t/spec.tgz' },
+      '5.0.2',
+    );
+    expect(sameInstall(otherTarballs, template)).toBe(false);
+  });
+
+  describe('populateNodeModules', () => {
+    it('hard-links every file of the template node_modules and copies the hidden lockfile', () => {
+      const { template, scratch } = linkFixture();
+      try {
+        expect(populateNodeModules(template, scratch)).toBe('linked');
+        const from = join(template, 'node_modules');
+        const to = join(scratch, 'node_modules');
+        expect(readFileSync(join(to, 'dep', 'index.js'), 'utf8')).toBe('module.exports = 1;\n');
+        expect(inode(join(to, 'dep', 'index.js'))).toBe(inode(join(from, 'dep', 'index.js')));
+        expect(inode(join(to, 'dep', 'nested', 'deep.js'))).toBe(
+          inode(join(from, 'dep', 'nested', 'deep.js')),
+        );
+        expect(readFileSync(join(to, '.bin', 'dep'), 'utf8')).toBe('module.exports = 1;\n');
+        // npm rewrites the hidden lockfile in place, so a shared inode would corrupt the template.
+        expect(readFileSync(join(to, '.package-lock.json'), 'utf8')).toBe('{"lock":true}\n');
+        expect(inode(join(to, '.package-lock.json'))).not.toBe(
+          inode(join(from, '.package-lock.json')),
+        );
+      } finally {
+        rmSync(dirname(template), { recursive: true, force: true });
+      }
+    });
+
+    it('falls back to a recursive copy when linking fails', () => {
+      const { template, scratch } = linkFixture();
+      const path = process.env['PATH'];
+      process.env['PATH'] = join(scratch, 'no-such-bin');
+      try {
+        expect(populateNodeModules(template, scratch)).toBe('copied');
+        const from = join(template, 'node_modules');
+        const to = join(scratch, 'node_modules');
+        expect(readFileSync(join(to, 'dep', 'nested', 'deep.js'), 'utf8')).toBe('deep\n');
+        expect(inode(join(to, 'dep', 'index.js'))).not.toBe(inode(join(from, 'dep', 'index.js')));
+        expect(readFileSync(join(to, '.package-lock.json'), 'utf8')).toBe('{"lock":true}\n');
+      } finally {
+        process.env['PATH'] = path;
+        rmSync(dirname(template), { recursive: true, force: true });
+      }
+    });
   });
 });
 
