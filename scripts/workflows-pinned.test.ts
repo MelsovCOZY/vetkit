@@ -123,6 +123,47 @@ describe('workflow supply-chain hardening', () => {
   });
 });
 
+const readCodeql = (): ScorecardDoc =>
+  parse(readFileSync(join(WORKFLOWS_DIR, 'codeql.yml'), 'utf8'));
+
+describe('codeql.yml (SAST)', () => {
+  it('runs on push to master, pull_request and a weekly schedule', () => {
+    const doc = readCodeql();
+    expect(doc.on.push?.branches).toEqual(['master']);
+    expect(doc.on).toHaveProperty('pull_request');
+    expect(doc.on.schedule?.[0]?.cron).toMatch(/^\S+ \S+ \* \* [0-6]$/);
+    expect(doc.permissions).toEqual({ contents: 'read' });
+  });
+
+  it('runs github/codeql-action init then analyze for javascript-typescript with security-events: write only', () => {
+    const doc = readCodeql();
+    const jobs = Object.values(doc.jobs);
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]?.permissions).toEqual({ 'security-events': 'write' });
+    const steps = jobs[0]?.steps ?? [];
+    const initIdx = steps.findIndex((st) => st.uses?.startsWith('github/codeql-action/init@'));
+    const analyzeIdx = steps.findIndex((st) =>
+      st.uses?.startsWith('github/codeql-action/analyze@'),
+    );
+    expect(initIdx).toBeGreaterThanOrEqual(0);
+    expect(analyzeIdx).toBeGreaterThan(initIdx);
+    expect(steps[initIdx]?.with?.['languages']).toBe('javascript-typescript');
+    const text = readFileSync(join(WORKFLOWS_DIR, 'codeql.yml'), 'utf8');
+    expect(text).toMatch(/github\/codeql-action\/init@[0-9a-f]{40} # v\d+\.\d+\.\d+/);
+    expect(text).toMatch(/github\/codeql-action\/analyze@[0-9a-f]{40} # v\d+\.\d+\.\d+/);
+    expect(text).not.toMatch(/secrets\./);
+  });
+});
+
+describe('.github/CODEOWNERS', () => {
+  it('assigns every path to @MelsovCOZY', () => {
+    const lines = readFileSync(join(ROOT, '.github/CODEOWNERS'), 'utf8')
+      .split('\n')
+      .filter((l) => l.trim() !== '' && !l.trimStart().startsWith('#'));
+    expect(lines).toEqual(['* @MelsovCOZY']);
+  });
+});
+
 // Audit rules (see the Nx s1ngularity chain: pull_request_target + title injection + write token).
 // Only `github.event.` and `inputs.` expressions are treated as attacker-controlled; github.ref_name,
 // github.event_name and steps.*.outputs.* from our own scripts are trusted. env: values are allowed.
@@ -158,6 +199,7 @@ const WRITE_ALLOWLIST: Record<string, string[]> = {
   'release.yml:version': ['contents', 'pull-requests'],
   'release.yml:publish': ['id-token'],
   'release.yml:action-tag': ['contents'],
+  'codeql.yml:analyze': ['security-events'],
   'action-selftest.yml:selftest': ['pull-requests'],
   'scorecard.yml:analysis': ['security-events', 'id-token'],
   'pages.yml:deploy': ['pages', 'id-token'],

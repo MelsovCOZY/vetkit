@@ -124,6 +124,14 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
+      # The tarballs attached to the release are packed again here from the commit the publish
+      # job released, before any tag is pushed, so a pack failure leaves nothing behind.
+      - name: Build
+        run: bun run build
+
+      - name: Pack
+        run: bun run pack
+
       - name: Tag packages (changeset git-tag, idempotent)
         run: |
           set -euo pipefail
@@ -133,6 +141,13 @@ jobs:
           if [ -z "$(git tag -l "vetkit@${VERSION}")" ]; then bunx changeset git-tag; fi
           git push origin --tags
 
+      # The notes are the released version's section of the changelog changesets writes for the
+      # vetkit package; before the first versioned release there is no changelog, so the notes
+      # fall back to the bare version. Releases are immutable once published, so the tarballs go
+      # in the same create call. actions/attest-build-provenance is not run here: this job is
+      # audited to hold contents: write only, and the id-token and attestations write scopes the
+      # action needs are not granted; npm publish --provenance already signs each tarball on the
+      # registry.
       - name: Release and major tag (idempotent)
         env:
           GH_TOKEN: ${{ github.token }}
@@ -140,6 +155,13 @@ jobs:
           set -euo pipefail
           VERSION="$(node -p "require('./packages/cli/package.json').version")"
           MAJOR=${VERSION%%.*}
-          gh release view "v$VERSION" >/dev/null 2>&1 || gh release create "v$VERSION" --target "$GITHUB_SHA" --title "vetkit $VERSION" --notes "vetkit $VERSION"
+          CHANGELOG=packages/cli/CHANGELOG.md
+          NOTES="$RUNNER_TEMP/release-notes.md"
+          : >"$NOTES"
+          if [ -f "$CHANGELOG" ]; then
+            awk -v v="$VERSION" 'BEGIN { h = "## " v } $0 == h { p = 1; next } /^## / { p = 0 } p' "$CHANGELOG" >"$NOTES"
+          fi
+          if [ ! -s "$NOTES" ]; then printf 'vetkit %s\n' "$VERSION" >"$NOTES"; fi
+          gh release view "v$VERSION" >/dev/null 2>&1 || gh release create "v$VERSION" --target "$GITHUB_SHA" --title "vetkit $VERSION" --notes-file "$NOTES" dist-tarballs/*.tgz
           git tag -f "v$MAJOR" "$GITHUB_SHA"
           git push --force origin "refs/tags/v$MAJOR"
