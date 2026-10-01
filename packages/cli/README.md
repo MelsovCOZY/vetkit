@@ -9,7 +9,7 @@ A generator model drafts the criteria and cases; Jev, TypeSafe AI's typed-decisi
 [![npm version](https://img.shields.io/npm/v/vetkit)](https://www.npmjs.com/package/vetkit)
 [![npm downloads](https://img.shields.io/npm/dm/vetkit)](https://www.npmjs.com/package/vetkit)
 [![CI](https://github.com/MelsovCOZY/vetkit/actions/workflows/ci.yml/badge.svg)](https://github.com/MelsovCOZY/vetkit/actions/workflows/ci.yml)
-[![License: Apache-2.0](https://img.shields.io/npm/l/vetkit)](https://github.com/MelsovCOZY/vetkit/blob/master/LICENSE)
+[![License: Apache-2.0](https://img.shields.io/github/license/MelsovCOZY/vetkit)](https://github.com/MelsovCOZY/vetkit/blob/master/LICENSE)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/MelsovCOZY/vetkit/badge)](https://scorecard.dev/viewer/?uri=github.com/MelsovCOZY/vetkit)
 
 [Docs](https://melsovcozy.github.io/vetkit/) · [Quickstart](#quickstart) · [Integrations](https://github.com/MelsovCOZY/vetkit/tree/master/examples) · [GitHub Action](https://github.com/MelsovCOZY/vetkit/blob/master/action/README.md) · [llms.txt](https://melsovcozy.github.io/vetkit/llms.txt)
