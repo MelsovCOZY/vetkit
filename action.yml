@@ -96,12 +96,21 @@ runs:
         INPUT_TARBALLS: ${{ inputs.tarballs }}
       run: bash "$GITHUB_ACTION_PATH/action/run.sh" install
 
+    # vet writes .vet/ next to the resolved config, so the cache, upload and comment steps take
+    # the directory from here rather than assuming the workspace root.
+    - name: Resolve the .vet directory
+      id: vet-dir
+      shell: bash
+      env:
+        INPUT_CONFIG: ${{ inputs.config }}
+      run: bash "$GITHUB_ACTION_PATH/action/run.sh" dir
+
     - name: Restore the base branch baseline
       id: restore
       if: startsWith(github.event_name, 'pull_request')
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
-        path: .vet/runs/latest.json
+        path: ${{ steps.vet-dir.outputs.vetDir }}/runs/latest.json
         key: vetkit-baseline-${{ github.base_ref }}-${{ hashFiles(inputs.criteria-files, inputs.cases-files, inputs.config-files) }}-
         restore-keys: vetkit-baseline-${{ github.base_ref }}-${{ hashFiles(inputs.criteria-files, inputs.cases-files, inputs.config-files) }}-
 
@@ -121,9 +130,9 @@ runs:
         name: ${{ inputs.artifact-name }}
         path: |
           vet-junit.xml
-          .vet/report.md
-          .vet/report.html
-          .vet/badge.json
+          ${{ steps.vet-dir.outputs.vetDir }}/report.md
+          ${{ steps.vet-dir.outputs.vetDir }}/report.html
+          ${{ steps.vet-dir.outputs.vetDir }}/badge.json
         include-hidden-files: true
         if-no-files-found: warn
 
@@ -134,16 +143,17 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.github-token }}
         ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
-        REPORT_MD: .vet/report.md
+        VET_DIR: ${{ steps.vet-dir.outputs.vetDir }}
+        REPORT_MD: ${{ steps.vet-dir.outputs.vetDir }}/report.md
         COMMENT_ID: ${{ inputs.comment-id }}
-      run: node "$GITHUB_ACTION_PATH/action/comment.mjs" comment .vet/runs/latest.json .vet/baseline/latest.json .vet/raw.json
+      run: node "$GITHUB_ACTION_PATH/action/comment.mjs" comment "$VET_DIR/runs/latest.json" "$VET_DIR/baseline/latest.json" "$VET_DIR/raw.json"
 
     # Pushes to a branch save its result as the baseline PRs against that branch diff against.
     - name: Save the baseline
-      if: "!startsWith(github.event_name, 'pull_request') && hashFiles('.vet/runs/latest.json') != ''"
+      if: "!startsWith(github.event_name, 'pull_request') && hashFiles(format('{0}/runs/latest.json', steps.vet-dir.outputs.vetDir)) != ''"
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
-        path: .vet/runs/latest.json
+        path: ${{ steps.vet-dir.outputs.vetDir }}/runs/latest.json
         key: vetkit-baseline-${{ github.ref_name }}-${{ hashFiles(inputs.criteria-files, inputs.cases-files, inputs.config-files) }}-${{ github.run_id }}-${{ github.run_attempt }}
 
     - name: Fail with the vet run exit code

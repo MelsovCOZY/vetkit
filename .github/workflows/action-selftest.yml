@@ -72,6 +72,7 @@ jobs:
             expect-exit: '0'
             expect-passed: '1'
             expect-failed: '0'
+            expect-unscored: '0'
           - name: fail
             mode: fail
             gate: 'false'
@@ -79,15 +80,17 @@ jobs:
             expect-exit: '1'
             expect-passed: '0'
             expect-failed: '1'
-          # No calibrated lock in the fixture: --gate must refuse (exit 2), and the action
-          # must fail the job with that code rather than swallow it.
+            expect-unscored: '0'
+          # No calibrated lock in the fixture: --gate refuses before judging (exit 2, the one case
+          # unscored), and the action must fail the job with that code rather than swallow it.
           - name: gate-refused
             mode: pass
             gate: 'true'
             comment: 'false'
             expect-exit: '2'
-            expect-passed: '1'
+            expect-passed: '0'
             expect-failed: '0'
+            expect-unscored: '1'
     name: selftest (${{ matrix.name }})
     env:
       VETKIT_FIXTURE_MODE: ${{ matrix.mode }}
@@ -125,6 +128,9 @@ jobs:
           EXPECT_EXIT: ${{ matrix.expect-exit }}
           EXPECT_PASSED: ${{ matrix.expect-passed }}
           EXPECT_FAILED: ${{ matrix.expect-failed }}
+          EXPECT_UNSCORED: ${{ matrix.expect-unscored }}
+          # vet writes .vet next to the config the action runs with, not at the workspace root.
+          VET_DIR: fixtures/cli/run/.vet
         run: |
           set -eu
           echo "outcome=$OUTCOME exitCode=$EXIT_CODE passed=$PASSED failed=$FAILED unscored=$UNSCORED"
@@ -138,10 +144,10 @@ jobs:
           if [ -n "$EXPECT_PASSED" ]; then
             [ "$PASSED" = "$EXPECT_PASSED" ] || fail "passed $PASSED, expected $EXPECT_PASSED"
             [ "$FAILED" = "$EXPECT_FAILED" ] || fail "failed $FAILED, expected $EXPECT_FAILED"
-            [ "$UNSCORED" = "0" ] || fail "unscored $UNSCORED, expected 0"
+            [ "$UNSCORED" = "$EXPECT_UNSCORED" ] || fail "unscored $UNSCORED, expected $EXPECT_UNSCORED"
             [ -s vet-junit.xml ] || fail "vet-junit.xml was not written"
           fi
-          if grep -rqF "$VETKIT_FIXTURE_KEY" vet-junit.xml .vet 2>/dev/null; then
+          if grep -rqF "$VETKIT_FIXTURE_KEY" vet-junit.xml "$VET_DIR" 2>/dev/null; then
             fail "the fixture key leaked into the action's files"
           fi
 
@@ -158,17 +164,19 @@ jobs:
       # the one ratio allowed is the calibrated count, which is stripped before the search.
       - name: Assert the badge
         if: matrix.expect-passed != ''
+        env:
+          VET_DIR: fixtures/cli/run/.vet
         run: |
           set -eu
           fail() { echo "::error::$1"; exit 1; }
-          [ -s .vet/badge.json ] || fail ".vet/badge.json was not written"
-          jq -e '.schemaVersion == 1 and .label == "vetkit" and (.message|type=="string") and (.color|type=="string")' .vet/badge.json >/dev/null ||
-            fail ".vet/badge.json is not a shields endpoint badge"
-          message="$(jq -r '.message | gsub("[0-9]+/[0-9]+ calibrated"; "")' .vet/badge.json)"
+          [ -s "$VET_DIR/badge.json" ] || fail "$VET_DIR/badge.json was not written"
+          jq -e '.schemaVersion == 1 and .label == "vetkit" and (.message|type=="string") and (.color|type=="string")' "$VET_DIR/badge.json" >/dev/null ||
+            fail "$VET_DIR/badge.json is not a shields endpoint badge"
+          message="$(jq -r '.message | gsub("[0-9]+/[0-9]+ calibrated"; "")' "$VET_DIR/badge.json")"
           if grep -Eq '%|[0-9]+ */ *[0-9]+|passed' <<<"$message"; then
             fail "the badge message holds a pass rate: $message"
           fi
-          cmp -s .vet/badge.json uploaded-reports/.vet/badge.json ||
+          cmp -s "$VET_DIR/badge.json" "uploaded-reports/$VET_DIR/badge.json" ||
             fail "the uploaded artifact does not hold the badge that vet run wrote"
 
       # The comment is the composite action's last word to the PR: assert its text through the
