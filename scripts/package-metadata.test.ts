@@ -24,7 +24,7 @@ const packageNames = existsSync(PACKAGES_DIR)
   : [];
 
 const TAGLINE =
-  'LLM evals as a CI gate: LLM-as-a-judge with typed decisions, vitest export, TypeScript, no API key to try';
+  'LLM evals from your production traces: generated, judged by cheap typed decisions, calibrated and gated in CI';
 const SHARED_KEYWORDS = ['llm', 'evals', 'evaluation', 'typescript', 'ci'];
 // Only the CLI and the Jev adapter are about Jev; the judge name on every sibling would let a
 // search for it land on a package that cannot be installed on its own.

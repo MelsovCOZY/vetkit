@@ -1,6 +1,8 @@
-# vetkit — LLM evals judged by typed decisions
+# vetkit — LLM evals from your production traces
 
-LLM evals as a CI gate: LLM-as-a-judge with typed decisions, vitest export, TypeScript, no API key to try
+LLM evals from your production traces: generated, judged by cheap typed decisions, calibrated and gated in CI
+
+It ships an LLM-as-a-judge with typed decisions, a CI gate, vitest export and TypeScript types, and the demo judge needs no API key to try it.
 
 A generator model drafts the criteria and cases; Jev, TypeSafe AI's typed-decision judge and the default judge, answers one typed choice or score question per criterion instead of writing free text; `vet run` turns the verdicts into a pass or fail for the build.
 

@@ -13,7 +13,7 @@ These are prep texts for the GitHub Marketplace listing; agents never submit the
 
 ## Tagline
 
-Generate, validate and run LLM evals judged by typed decisions.
+LLM evals from your production traces: generated, judged by cheap typed decisions, calibrated and gated in CI.
 
 ## Description
 

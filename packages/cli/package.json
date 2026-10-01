@@ -1,7 +1,7 @@
 {
   "name": "vetkit",
   "version": "0.0.0",
-  "description": "LLM evals as a CI gate: LLM-as-a-judge with typed decisions, vitest export, TypeScript, no API key to try",
+  "description": "LLM evals from your production traces: generated, judged by cheap typed decisions, calibrated and gated in CI",
   "keywords": [
     "llm",
     "evals",
