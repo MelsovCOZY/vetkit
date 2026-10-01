@@ -215,6 +215,14 @@ describe('site staging', () => {
     expect(lines.indexOf('## --version')).toBeGreaterThan(2);
   });
 
+  it('never gives a page a title with a double hyphen, since kramdown typography would print it as an en dash', () => {
+    const titles = walk(out)
+      .filter((path) => path.endsWith('.md'))
+      .map((path) => [path, String(frontMatterTitle(readFileSync(path, 'utf8')))]);
+    expect(titles.length).toBeGreaterThan(0);
+    for (const [path, title] of titles) expect(title, path).not.toContain('--');
+  });
+
   it('refuses to stage a page that has neither a heading nor a supplied title', () => {
     const root = fixtureRepo({ 'docs/untitled.md': 'Some words with no heading.\n' });
     const dest = mkdtempSync(join(tmpdir(), 'vetkit-site-untitled-'));
