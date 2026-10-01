@@ -43,6 +43,23 @@ describe('pr-title.yml conventional-commit regex', () => {
   ])('rejects non-conventional-commit title "%s"', (title) => {
     expect(titleRegex.test(title)).toBe(false);
   });
+
+  // The Version Packages PR is opened by changesets/action, so its title must pass this same check
+  // or the release chain stalls on the first PR it opens.
+  it('accepts the title and commit release.yml gives changesets/action for the Version Packages PR', () => {
+    const release = parseYaml(readFileSync(join(WORKFLOWS_DIR, 'release.yml'), 'utf8'));
+    const steps = Object.values<{ steps?: { uses?: string; with?: Record<string, string> }[] }>(
+      release.jobs,
+    ).flatMap((job) => job.steps ?? []);
+    const changesets = steps.find((step) => step.uses?.startsWith('changesets/action@') === true);
+    expect(changesets).toBeDefined();
+    const title = changesets?.with?.['title'];
+    const commit = changesets?.with?.['commit'];
+    expect(title).toBeDefined();
+    expect(titleRegex.test(title ?? '')).toBe(true);
+    expect(commit).toBeDefined();
+    expect(titleRegex.test(commit ?? '')).toBe(true);
+  });
 });
 
 describe('pkg-pr-new.yml step order', () => {
@@ -54,8 +71,14 @@ describe('pkg-pr-new.yml step order', () => {
     .map((step) => step.run)
     .filter((run): run is string => typeof run === 'string');
 
+  const buildIndex = runs.findIndex((run) => run.includes('bun run build'));
   const packIndex = runs.findIndex((run) => run.includes('bun run pack'));
   const publishIndex = runs.findIndex((run) => /pkg-pr-new(@\S+)? publish/.test(run));
+
+  it('runs build before pack (publint inside pack checks the dist/ files)', () => {
+    expect(buildIndex).toBeGreaterThanOrEqual(0);
+    expect(packIndex).toBeGreaterThan(buildIndex);
+  });
 
   it('runs pack before publishing previews', () => {
     expect(packIndex).toBeGreaterThanOrEqual(0);

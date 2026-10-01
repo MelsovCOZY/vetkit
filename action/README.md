@@ -71,7 +71,8 @@ the globs if your evals live in a subdirectory or in `.config/`.
 
 ## The artifact
 
-The artifact named by `artifact-name` holds:
+The artifact named by `artifact-name` holds (`.vet/` is next to the config given by `config`, or
+in the working directory when `config` is empty):
 
 - `vet-junit.xml`: the JUnit report.
 - `.vet/report.md` and `.vet/report.html`: the report as Markdown and as HTML.

@@ -53,6 +53,30 @@ describe('.github/workflows/action-selftest.yml', () => {
     expect(step(selftest, 'Run the action').with?.['comment-id']).toBe('${{ matrix.name }}');
   });
 
+  // vet run --gate refuses before judging when the fixture has no calibrated lock: exit 2 with no
+  // verdict passed or failed and the one case unscored. That contract is the one the row asserts.
+  it('the gate-refused row expects exit 2 with nothing passed or failed and one unscored verdict', () => {
+    const entries = selftest.strategy?.matrix?.include ?? [];
+    const byName = Object.fromEntries(entries.map((e) => [e['name'], e]));
+    expect(byName['gate-refused']).toMatchObject({
+      gate: 'true',
+      'expect-exit': '2',
+      'expect-passed': '0',
+      'expect-failed': '0',
+      'expect-unscored': '1',
+    });
+    expect(byName['pass']).toMatchObject({ 'expect-unscored': '0' });
+    expect(byName['fail']).toMatchObject({ 'expect-unscored': '0' });
+  });
+
+  it("the assert step compares unscored with the row's expect-unscored instead of a fixed 0", () => {
+    const assertStep = step(selftest, 'Assert outputs');
+    expect(assertStep.env?.['EXPECT_UNSCORED']).toBe('${{ matrix.expect-unscored }}');
+    const script = assertStep.run ?? '';
+    expect(script).toContain('[ "$UNSCORED" = "$EXPECT_UNSCORED" ]');
+    expect(script).not.toContain('[ "$UNSCORED" = "0" ]');
+  });
+
   it('the selftest asserts the PR comment headline, the uncalibrated banner, the pinned line and the run link via gh api', () => {
     const assertStep = step(selftest, 'Assert the PR comment');
     const script = assertStep.run ?? '';
@@ -106,16 +130,23 @@ describe('.github/workflows/action-selftest.yml', () => {
     const names = selftest.steps.map((s) => s.name ?? '');
     const runIndex = names.findIndex((n) => n.includes('Run the action'));
     const badgeIndex = names.findIndex((n) => n.includes('Assert the badge'));
-    const script = selftest.steps[badgeIndex]?.run ?? '';
+    const badgeStep = selftest.steps[badgeIndex];
+    const script = badgeStep?.run ?? '';
     const artifactName = selftest.steps[runIndex]?.with?.['artifact-name'];
+    // vet writes the badge next to the config the action runs with, not at the workspace root.
+    const config = selftest.steps[runIndex]?.with?.['config'] ?? '';
+    const vetDir = `${dirname(config)}/.vet`;
     const downloadIndex = selftest.steps.findIndex(
       (s) =>
         s.uses?.startsWith('actions/download-artifact@') === true &&
         s.with?.['name'] === artifactName,
     );
 
-    it('the selftest asserts .vet/badge.json exists and is a shields endpoint badge', () => {
-      expect(script).toMatch(/-s\s+\.vet\/badge\.json/);
+    it("the selftest asserts badge.json exists next to the action's config and is a shields endpoint badge", () => {
+      expect(vetDir).toBe('fixtures/cli/run/.vet');
+      expect(badgeStep?.env?.['VET_DIR']).toBe(vetDir);
+      expect(script).toMatch(/-s\s+"\$VET_DIR\/badge\.json"/);
+      expect(script).not.toMatch(/\s\.vet\/badge\.json/);
       expect(script).toContain(
         `jq -e '.schemaVersion == 1 and .label == "vetkit" and (.message|type=="string") and (.color|type=="string")'`,
       );
@@ -145,7 +176,7 @@ describe('.github/workflows/action-selftest.yml', () => {
       expect(downloadIndex).toBeGreaterThan(runIndex);
       const dir = selftest.steps[downloadIndex]?.with?.['path'] ?? '';
       expect(dir).not.toBe('');
-      expect(script).toContain(`cmp -s .vet/badge.json ${dir}/.vet/badge.json`);
+      expect(script).toContain(`cmp -s "$VET_DIR/badge.json" "${dir}/$VET_DIR/badge.json"`);
     });
 
     it('the badge is asserted after the download and before vet runs again', () => {

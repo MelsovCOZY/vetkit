@@ -3,7 +3,8 @@
 # adapter reads its own env vars inside `vet`.
 #   run.sh install   pick the vet to run: packed tarballs (the selftest), else an explicit published
 #                    version installed globally, else the project's own installed vetkit
-#   run.sh run       run `vet run --json`, keep the result as .vet/runs/latest.json, set outputs
+#   run.sh dir       print the .vet directory vet will write to as the vetDir= output
+#   run.sh run       run `vet run --json`, keep the result as <vetDir>/runs/latest.json, set outputs
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -58,20 +59,30 @@ vet_cmd() {
   fi
 }
 
-run_vet() {
-  local out code
-  mkdir -p .vet/runs .vet/baseline
-  # A restored base-branch result is the baseline, not this run's.
-  if [ -f .vet/runs/latest.json ]; then mv .vet/runs/latest.json .vet/baseline/latest.json; fi
+# vet writes .vet/ (the run record, the badge, the cache) next to the resolved config, while the
+# --reporter paths are relative to the working directory. Everything the action keeps or uploads
+# goes to that one directory: the config's, or .vet in the workspace when no config is given.
+vet_dir() {
+  local dir=.
+  if [ -n "${INPUT_CONFIG:-}" ]; then dir="$(dirname "$INPUT_CONFIG")"; fi
+  if [ "$dir" = . ]; then echo .vet; else echo "$dir/.vet"; fi
+}
 
-  local args=(run --json --reporter junit=vet-junit.xml,md=.vet/report.md,html=.vet/report.html)
+run_vet() {
+  local out code vet
+  vet="$(vet_dir)"
+  mkdir -p "$vet/runs" "$vet/baseline"
+  # A restored base-branch result is the baseline, not this run's.
+  if [ -f "$vet/runs/latest.json" ]; then mv "$vet/runs/latest.json" "$vet/baseline/latest.json"; fi
+
+  local args=(run --json --reporter "junit=vet-junit.xml,md=$vet/report.md,html=$vet/report.html")
   if [ -n "${INPUT_CONFIG:-}" ]; then args+=(--config "$INPUT_CONFIG"); fi
   if [ "${INPUT_GATE:-false}" = "true" ]; then args+=(--gate); fi
   if [ "${INPUT_ALLOW_UNPINNED:-false}" = "true" ]; then args+=(--allow-unpinned); fi
 
   # The raw stdout stays at a fixed path: an error document never becomes latest.json, and the
   # comment step still needs it to name the failure.
-  out=.vet/raw.json
+  out="$vet/raw.json"
   set +e
   vet_cmd "${args[@]}" >"$out"
   code=$?
@@ -79,10 +90,10 @@ run_vet() {
 
   local outputs
   outputs="$(node "$here/comment.mjs" outputs "$out")"
-  # vet is the single writer of .vet/runs/latest.json when it writes one; only
+  # vet is the single writer of runs/latest.json when it writes one; only
   # fall back to the --json stdout for older vetkit versions that never wrote the file themselves.
-  if grep -qx 'hasResult=true' <<<"$outputs" && [ ! -f .vet/runs/latest.json ]; then
-    cp "$out" .vet/runs/latest.json
+  if grep -qx 'hasResult=true' <<<"$outputs" && [ ! -f "$vet/runs/latest.json" ]; then
+    cp "$out" "$vet/runs/latest.json"
   fi
   {
     echo "exitCode=$code"
@@ -104,9 +115,10 @@ install)
     install_project
   fi
   ;;
+dir) echo "vetDir=$(vet_dir)" >>"$GITHUB_OUTPUT" ;;
 run) run_vet ;;
 *)
-  echo "usage: run.sh install|run" >&2
+  echo "usage: run.sh install|dir|run" >&2
   exit 64
   ;;
 esac

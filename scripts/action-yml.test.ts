@@ -32,6 +32,9 @@ function stepByName(fragment: string): ActionStep {
 }
 
 const THREE_HASH = 'hashFiles(inputs.criteria-files, inputs.cases-files, inputs.config-files)';
+// vet writes .vet/ next to the resolved config, so every step that reads or keeps a file there
+// takes the directory from the step that resolves it from the config input.
+const VET_DIR = '${{ steps.vet-dir.outputs.vetDir }}';
 
 describe('action.yml: the project vet', () => {
   it("action.yml version input defaults to empty (the project's installed vet)", () => {
@@ -54,31 +57,55 @@ describe('action.yml: the sticky comment', () => {
   it('the comment step receives ARTIFACT_URL from the upload step, REPORT_MD and COMMENT_ID', () => {
     const env = stepByName('PR comment').env ?? {};
     expect(env['ARTIFACT_URL']).toBe('${{ steps.upload.outputs.artifact-url }}');
-    expect(env['REPORT_MD']).toBe('.vet/report.md');
+    expect(env['REPORT_MD']).toBe(`${VET_DIR}/report.md`);
     expect(env['COMMENT_ID']).toBe('${{ inputs.comment-id }}');
     expect(action.inputs['comment-id']?.default).toBe('');
   });
 
-  it('the comment step passes the raw vet output as its third file', () => {
-    expect(stepByName('PR comment').run).toContain(
-      'comment .vet/runs/latest.json .vet/baseline/latest.json .vet/raw.json',
+  it('the comment step reads the run record, the baseline and the raw output from the resolved .vet directory', () => {
+    const comment = stepByName('PR comment');
+    expect(comment.env?.['VET_DIR']).toBe(VET_DIR);
+    expect(comment.run).toContain(
+      'comment "$VET_DIR/runs/latest.json" "$VET_DIR/baseline/latest.json" "$VET_DIR/raw.json"',
     );
   });
 
-  it('the upload step has id upload and lists vet-junit.xml and the .vet report files', () => {
+  it('the upload step has id upload and lists vet-junit.xml and the report files of the resolved .vet directory', () => {
     const upload = stepByName('Upload');
     expect(upload.id).toBe('upload');
     const paths = String(upload.with?.['path']).split('\n');
     expect(paths).toContain('vet-junit.xml');
-    expect(paths).toContain('.vet/report.md');
-    expect(paths).toContain('.vet/report.html');
+    expect(paths).toContain(`${VET_DIR}/report.md`);
+    expect(paths).toContain(`${VET_DIR}/report.html`);
     expect(String(upload.with?.['include-hidden-files'])).toBe('true');
   });
 
-  it('the upload step lists .vet/badge.json in the same artifact as the reports', () => {
+  it('the upload step lists badge.json of the resolved .vet directory in the same artifact as the reports', () => {
     const upload = stepByName('Upload');
     expect(upload.with?.['name']).toBe('${{ inputs.artifact-name }}');
-    expect(String(upload.with?.['path']).split('\n')).toContain('.vet/badge.json');
+    expect(String(upload.with?.['path']).split('\n')).toContain(`${VET_DIR}/badge.json`);
+  });
+});
+
+describe('action.yml: the .vet directory', () => {
+  const names = action.runs.steps.map((s) => s.name ?? '');
+  const index = (fragment: string): number => names.findIndex((n) => n.includes(fragment));
+
+  it('a step with id vet-dir resolves the directory from the config input through run.sh dir', () => {
+    const step = action.runs.steps.find((s) => s.id === 'vet-dir');
+    expect(step).toBeDefined();
+    expect(step?.env?.['INPUT_CONFIG']).toBe('${{ inputs.config }}');
+    expect(step?.run).toContain('action/run.sh" dir');
+  });
+
+  it('the directory is resolved before the baseline is restored, so the restore path can use it', () => {
+    const vetDirIndex = action.runs.steps.findIndex((s) => s.id === 'vet-dir');
+    expect(vetDirIndex).toBeGreaterThanOrEqual(0);
+    expect(vetDirIndex).toBeLessThan(index('Restore'));
+  });
+
+  it('the run step receives the config input, so it resolves the same directory', () => {
+    expect(stepByName('vet run').env?.['INPUT_CONFIG']).toBe('${{ inputs.config }}');
   });
 });
 
@@ -107,9 +134,17 @@ describe('action.yml: the baseline cache key', () => {
     expect(restore.if).not.toContain('inputs.comment');
   });
 
-  it('the cache paths stay .vet/runs/latest.json', () => {
-    expect(stepByName('Restore').with?.['path']).toBe('.vet/runs/latest.json');
-    expect(stepByName('Save the baseline').with?.['path']).toBe('.vet/runs/latest.json');
+  it('the cache paths are runs/latest.json inside the resolved .vet directory', () => {
+    expect(stepByName('Restore').with?.['path']).toBe(`${VET_DIR}/runs/latest.json`);
+    expect(stepByName('Save the baseline').with?.['path']).toBe(`${VET_DIR}/runs/latest.json`);
+  });
+
+  it('the save step runs only when runs/latest.json exists in the resolved .vet directory', () => {
+    const condition = String(stepByName('Save the baseline').if);
+    expect(condition).toContain(
+      "hashFiles(format('{0}/runs/latest.json', steps.vet-dir.outputs.vetDir)) != ''",
+    );
+    expect(condition).not.toContain("hashFiles('.vet/runs/latest.json')");
   });
 
   it('the baseline-key output reads steps.restore.outputs.cache-primary-key', () => {

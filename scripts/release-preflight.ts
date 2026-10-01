@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parse as parseYaml } from 'yaml';
 import { checkVersionSync, findForbiddenStrings } from './pack.ts';
 
 // Release-blocker checks: npm < 11.5.1 cannot do OIDC
@@ -78,6 +79,35 @@ export function topoSortPackages(manifests: Record<string, PackageManifest>): st
 }
 
 /** The filename `bun pm pack` gives a package's tarball: scope stripped, `/` -> `-`. */
+export interface InitialChangesetState {
+  /** Package name to bump from .changeset/initial-release.md; undefined once `changeset version` consumed it. */
+  entries: Record<string, string> | undefined;
+  /** Package name to version from packages/<dir>/package.json. */
+  versions: Record<string, string>;
+}
+
+/** What a tree says about its first release: the pending changeset's entries, or the bumped versions after it was consumed. */
+export function initialChangesetState(root: string): InitialChangesetState {
+  const packagesDir = join(root, 'packages');
+  const versions: Record<string, string> = {};
+  for (const entry of readdirSync(packagesDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const manifest: { name: string; version: string } = JSON.parse(
+      readFileSync(join(packagesDir, entry.name, 'package.json'), 'utf8'),
+    );
+    versions[manifest.name] = manifest.version;
+  }
+  const changesetPath = join(root, '.changeset/initial-release.md');
+  if (!existsSync(changesetPath)) return { entries: undefined, versions };
+  const front = /^---\n([\s\S]*?)\n---\n/.exec(readFileSync(changesetPath, 'utf8'))?.[1] ?? '';
+  const parsed: unknown = parseYaml(front);
+  const entries: Record<string, string> = {};
+  if (typeof parsed === 'object' && parsed !== null) {
+    for (const [name, bump] of Object.entries(parsed)) entries[name] = String(bump);
+  }
+  return { entries, versions };
+}
+
 export function tgzFilenameFor(pkg: { name: string; version: string }): string {
   const slug = pkg.name.replace(/^@/, '').replace(/\//g, '-');
   return `${slug}-${pkg.version}.tgz`;

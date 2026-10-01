@@ -436,6 +436,38 @@ assert "ci: install records the project mode" 'grep -qF VETKIT_INSTALL_MODE=proj
 
 ci_journey "fail mode:" fail 1 '### vetkit: failed'
 ci_journey "pass mode:" pass 0 '### vetkit: passed'
+
+# A config in a subdirectory of the workspace: vet writes .vet next to the config, so run.sh, the
+# cache paths and the comment step must find the run record, the badge and the reports there.
+SUB="$CI/project-subdir"
+rm -rf "$SUB"
+mkdir -p "$SUB/app"
+cp -r "$ROOT/fixtures/cli/run/." "$SUB/app"
+export GITHUB_WORKSPACE="$SUB" VETKIT_FIXTURE_MODE=pass
+cd "$SUB" || exit 1
+ci_reset
+INPUT_CONFIG=app/vetkit.config.ts bash "$ROOT/action/run.sh" dir >/dev/null 2>&1
+code=$?
+result "ci: subdir config: run.sh dir exits 0" 0 "$code" "$code"
+assert "ci: subdir config: run.sh dir outputs vetDir=app/.vet" "grep -qx 'vetDir=app/.vet' '$GITHUB_OUTPUT'"
+INPUT_CONFIG=app/vetkit.config.ts INPUT_GATE=false INPUT_ALLOW_UNPINNED=false bash "$ROOT/action/run.sh" run 2>"$CI/stderr-subdir.txt" >/dev/null
+code=$?
+result "ci: subdir config: run.sh run exits 0 whatever vet returns" 0 "$code" "$code"
+assert "ci: subdir config: outputs carry exitCode=0 and passed=1" \
+  "grep -qx 'exitCode=0' '$GITHUB_OUTPUT' && grep -qx 'passed=1' '$GITHUB_OUTPUT'"
+assert "ci: subdir config: latest.json, badge.json, raw.json, report.md and report.html are under app/.vet; vet-junit.xml at the root" \
+  '[ -s app/.vet/runs/latest.json ] && [ -s app/.vet/badge.json ] && [ -s app/.vet/raw.json ] && [ -s app/.vet/report.md ] && [ -s app/.vet/report.html ] && [ -s vet-junit.xml ]'
+assert "ci: subdir config: nothing is written to .vet at the workspace root" '[ ! -e .vet ]'
+assert "ci: subdir config: the fixture key is in no file under app/.vet" '! grep -rqF sk-fake-smoke app/.vet vet-junit.xml'
+GITHUB_EVENT_NAME=pull_request GITHUB_EVENT_PATH="$CI/event.json" GITHUB_REPOSITORY=MelsovCOZY/vetkit \
+  GITHUB_SERVER_URL=https://github.com GITHUB_RUN_ID=424242 ARTIFACT_URL=https://example.invalid/artifact \
+  REPORT_MD=app/.vet/report.md COMMENT_ID=smoke \
+  node "$ROOT/action/comment.mjs" comment app/.vet/runs/latest.json app/.vet/baseline/latest.json app/.vet/raw.json >/dev/null 2>&1
+code=$?
+result "ci: subdir config: comment.mjs posts through the stub gh" 0 "$code" "$code"
+jq -r .body "$STUB_COMMENT" >"$CI/body-subdir.txt" 2>/dev/null
+assert "ci: subdir config: comment says passed and embeds the report" \
+  "grep -qF '### vetkit: passed' '$CI/body-subdir.txt' && grep -qF 'Is the reply polite?' '$CI/body-subdir.txt'"
 ci_error_journey "no-credit mode:" no-credit no-credit '' '### vetkit: unscored (judge unavailable)' 'JUDGE_UNAVAILABLE'
 ci_error_journey "missing config:" no-config pass nope.config.ts '### vetkit: failed' 'CONFIG_INVALID'
 
