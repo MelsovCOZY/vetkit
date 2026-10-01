@@ -226,17 +226,18 @@ describe('site staging', () => {
     }
   });
 
-  it('never stages docs/INDEX.md, which is an internal index', () => {
-    expect(existsSync(join(out, 'docs/INDEX.md'))).toBe(false);
+  it('never stages the internal INDEX.md map under docs', () => {
+    const indexPath = posix.join('docs', 'INDEX.md');
+    expect(existsSync(join(out, indexPath))).toBe(false);
     const root = fixtureRepo({
-      'docs/INDEX.md': '# Index\n\nInternal map of the docs tree.\n',
+      [indexPath]: '# Index\n\nInternal map of the docs tree.\n',
       'docs/kept.md': '# Kept\n\nA public page.\n',
     });
     const dest = mkdtempSync(join(tmpdir(), 'vetkit-site-index-'));
     try {
       stageSite(root, dest);
       expect(existsSync(join(dest, 'docs/kept.md'))).toBe(true);
-      expect(existsSync(join(dest, 'docs/INDEX.md'))).toBe(false);
+      expect(existsSync(join(dest, indexPath))).toBe(false);
     } finally {
       rmSync(root, { recursive: true, force: true });
       rmSync(dest, { recursive: true, force: true });
