@@ -1,6 +1,6 @@
 {
   "name": "@vetkit/generator-openai-compatible",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Eval generator backed by any OpenAI-compatible chat endpoint. Part of vetkit; install vetkit",
   "keywords": [
     "llm",

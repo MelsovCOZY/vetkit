@@ -1,6 +1,6 @@
 {
   "name": "@vetkit/source-jsonl",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Trace source that reads JSONL files. Part of vetkit; install vetkit",
   "keywords": [
     "llm",

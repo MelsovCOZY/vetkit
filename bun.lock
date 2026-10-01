@@ -30,7 +30,7 @@
     },
     "packages/cli": {
       "name": "vetkit",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "bin": {
         "vet": "./dist/bin.js",
       },
@@ -51,7 +51,7 @@
     },
     "packages/core": {
       "name": "@vetkit/core",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@vetkit/spec": "workspace:^",
         "yaml": "^2.9.1",
@@ -59,7 +59,7 @@
     },
     "packages/export-vitest": {
       "name": "@vetkit/export-vitest",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@vetkit/spec": "workspace:^",
       },
@@ -75,14 +75,14 @@
     },
     "packages/generator-openai-compatible": {
       "name": "@vetkit/generator-openai-compatible",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@vetkit/spec": "workspace:^",
       },
     },
     "packages/judge-jev": {
       "name": "@vetkit/judge-jev",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@vetkit/spec": "workspace:^",
       },
@@ -92,7 +92,7 @@
     },
     "packages/scorers": {
       "name": "@vetkit/scorers",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@vetkit/core": "workspace:^",
         "@vetkit/spec": "workspace:^",
@@ -106,7 +106,7 @@
     },
     "packages/sink-langfuse": {
       "name": "@vetkit/sink-langfuse",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@vetkit/spec": "workspace:^",
       },
@@ -116,21 +116,21 @@
     },
     "packages/sink-otel": {
       "name": "@vetkit/sink-otel",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@vetkit/spec": "workspace:^",
       },
     },
     "packages/source-jsonl": {
       "name": "@vetkit/source-jsonl",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@vetkit/spec": "workspace:^",
       },
     },
     "packages/source-langfuse": {
       "name": "@vetkit/source-langfuse",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@vetkit/spec": "workspace:^",
       },
@@ -140,14 +140,14 @@
     },
     "packages/source-otlp": {
       "name": "@vetkit/source-otlp",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@vetkit/spec": "workspace:^",
       },
     },
     "packages/spec": {
       "name": "@vetkit/spec",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "ajv": "^8.20.0",
       },

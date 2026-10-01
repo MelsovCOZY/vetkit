@@ -1,6 +1,6 @@
 {
   "name": "@vetkit/export-vitest",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Exporter that emits a vitest scorer and test file from criteria. Part of vetkit; install vetkit",
   "keywords": [
     "llm",
